@@ -1,0 +1,40 @@
+name: Validate change
+
+# Die Validierung ist ein reines Pull-Request-Gate; direkte Pushes starten keinen zusätzlichen Prüflauf.
+'on':
+  pull_request:
+    branches:
+      - R260/Entwicklung
+      - R260/Abnahme
+      - R260/Bereitstellung
+      - R261/Entwicklung
+      - R261/Abnahme
+      - R261/Bereitstellung
+      - R270/Entwicklung
+      - R270/Abnahme
+      - R270/Bereitstellung
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate configuration and promotion
+    if: github.event.pull_request.draft == false
+    uses: j520730/mtext-actions/.github/workflows/reusable-validate-pr.yml@0000000000000000000000000000000000000000
+    with:
+      # Die Null-SHAs sperren den Entwurf bis zur kontrollierten Aktivierung der zentralen Automatisierung.
+      repository_name: ${{ github.event.repository.name }}
+      commit_sha: ${{ github.event.pull_request.head.sha }}
+      source_branch: ${{ github.head_ref }}
+      target_branch: ${{ github.base_ref }}
+      automation_repository: j520730/mtext-actions
+      automation_ref: 0000000000000000000000000000000000000000

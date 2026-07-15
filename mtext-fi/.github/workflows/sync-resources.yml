@@ -1,0 +1,68 @@
+name: Sync M/Text resources
+
+'on':
+  # Nur Änderungen auf den fachlichen Stufenbranches lösen automatisch eine Verteilung aus.
+  push:
+    branches:
+      - R260/Entwicklung
+      - R260/Abnahme
+      - R261/Entwicklung
+      - R261/Abnahme
+      - R270/Entwicklung
+      - R270/Abnahme
+  # Manuelle Wiederholungen verlangen einen exakten Commit und den dazugehörigen Stufenbranch.
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Exakter Commit-SHA, der erneut verteilt werden soll
+        required: true
+        type: string
+      source_branch:
+        description: Stufenbranch, in dem der Commit enthalten sein muss
+        required: true
+        type: choice
+        options:
+          - R260/Entwicklung
+          - R260/Abnahme
+          - R261/Entwicklung
+          - R261/Abnahme
+          - R270/Entwicklung
+          - R270/Abnahme
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mtext-sync-${{ github.repository }}-${{ inputs.source_branch || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  # Separate Jobs halten die Environment-Bindung explizit und verhindern frei eingegebene Zielstufen.
+  sync-entwicklung:
+    name: Sync to Entwicklung
+    if: >-
+      (github.event_name == 'push' && endsWith(github.ref_name, '/Entwicklung')) ||
+      (github.event_name == 'workflow_dispatch' && endsWith(inputs.source_branch, '/Entwicklung'))
+    uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
+    with:
+      # Die Null-SHAs bleiben bis zur kontrollierten Aktivierung als Sperre bestehen.
+      repository_name: ${{ github.event.repository.name }}
+      commit_sha: ${{ inputs.commit_sha || github.sha }}
+      source_branch: ${{ github.event_name == 'push' && github.ref_name || inputs.source_branch }}
+      target_environment: Entwicklung
+      automation_repository: j520730/mtext-actions
+      automation_ref: 0000000000000000000000000000000000000000
+
+  sync-abnahme:
+    name: Sync to Abnahme
+    if: >-
+      (github.event_name == 'push' && endsWith(github.ref_name, '/Abnahme')) ||
+      (github.event_name == 'workflow_dispatch' && endsWith(inputs.source_branch, '/Abnahme'))
+    uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
+    with:
+      repository_name: ${{ github.event.repository.name }}
+      commit_sha: ${{ inputs.commit_sha || github.sha }}
+      source_branch: ${{ github.event_name == 'push' && github.ref_name || inputs.source_branch }}
+      target_environment: Abnahme
+      automation_repository: j520730/mtext-actions
+      automation_ref: 0000000000000000000000000000000000000000

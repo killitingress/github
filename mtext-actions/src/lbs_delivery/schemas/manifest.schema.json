@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/lbs-delivery/manifest.schema.json",
+  "title": "M/Text release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository",
+    "mandant",
+    "release_tag",
+    "release_line",
+    "delivery_type",
+    "base_tag",
+    "base_sha",
+    "target_sha",
+    "previous_tag",
+    "previous_sha",
+    "artifacts",
+    "jcl"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "repository": {"type": "string", "minLength": 1, "maxLength": 128},
+    "mandant": {"type": "string", "pattern": "^[A-Z]{2}$"},
+    "release_tag": {"$ref": "#/$defs/release_tag"},
+    "release_line": {"type": "string", "pattern": "^R[0-9]{3}$"},
+    "delivery_type": {"enum": ["FULL", "DELTA"]},
+    "base_tag": {
+      "oneOf": [
+        {"$ref": "#/$defs/release_tag"},
+        {"type": "null"}
+      ]
+    },
+    "base_sha": {"$ref": "#/$defs/optional_sha"},
+    "target_sha": {"$ref": "#/$defs/sha"},
+    "previous_tag": {
+      "oneOf": [
+        {"$ref": "#/$defs/release_tag"},
+        {"type": "null"}
+      ]
+    },
+    "previous_sha": {"$ref": "#/$defs/optional_sha"},
+    "artifacts": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "oneOf": [
+          {"$ref": "#/$defs/package_artifact"},
+          {"$ref": "#/$defs/information_artifact"}
+        ]
+      },
+      "contains": {"$ref": "#/$defs/package_artifact"},
+      "minContains": 1
+    },
+    "jcl": {"$ref": "#/$defs/jcl"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"delivery_type": {"const": "FULL"}}},
+      "then": {
+        "properties": {
+          "base_tag": {"type": "null"},
+          "base_sha": {"type": "null"}
+        }
+      },
+      "else": {
+        "properties": {
+          "base_tag": {"$ref": "#/$defs/release_tag"},
+          "base_sha": {"$ref": "#/$defs/sha"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "release_tag": {"type": "string", "pattern": "^R[0-9]{3}\\.[0-9]{3}$"},
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "optional_sha": {
+      "oneOf": [
+        {"$ref": "#/$defs/sha"},
+        {"type": "null"}
+      ]
+    },
+    "artifact_base": {
+      "type": "object",
+      "required": ["kind", "path", "project", "size", "sha256"],
+      "properties": {
+        "kind": {"enum": ["package", "information"]},
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+        },
+        "project": {"type": "string", "minLength": 1, "maxLength": 128},
+        "size": {"type": "integer", "minimum": 0},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "package_artifact": {
+      "allOf": [
+        {"$ref": "#/$defs/artifact_base"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "path",
+            "project",
+            "size",
+            "sha256",
+            "member",
+            "package_code",
+            "deletion_list",
+            "deletion_count"
+          ],
+          "properties": {
+            "kind": {"const": "package"},
+            "path": true,
+            "project": true,
+            "size": true,
+            "sha256": true,
+            "member": {"type": "string", "pattern": "^[A-Z0-9]{1,8}$"},
+            "package_code": {"type": "string", "pattern": "^[A-Z0-9]{1,5}$"},
+            "deletion_list": {
+              "oneOf": [
+                {"type": "string", "minLength": 1, "maxLength": 128},
+                {"type": "null"}
+              ]
+            },
+            "deletion_count": {"type": "integer", "minimum": 0}
+          }
+        }
+      ]
+    },
+    "information_artifact": {
+      "allOf": [
+        {"$ref": "#/$defs/artifact_base"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "path", "project", "size", "sha256"],
+          "properties": {
+            "kind": {"const": "information"},
+            "path": true,
+            "project": true,
+            "size": true,
+            "sha256": true
+          }
+        }
+      ]
+    },
+    "jcl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ISPW", "LEVEL", "SUBSYS", "ASSIGNMENT"],
+      "properties": {
+        "ISPW": {"enum": ["T", "P"]},
+        "LEVEL": {"type": "string", "pattern": "^[A-Z0-9]{1,8}$"},
+        "SUBSYS": {"type": "string", "pattern": "^[A-Z0-9]{2,8}$"},
+        "ASSIGNMENT": {"type": "string", "pattern": "^[A-Z0-9]{1,12}$"}
+      }
+    }
+  }
+}

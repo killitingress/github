@@ -1,0 +1,162 @@
+name: Reusable release
+
+# Der Workflow trennt die lokale Paketerzeugung von der freizugebenden externen Veröffentlichung.
+'on':
+  workflow_call:
+    inputs:
+      repository_name:
+        required: true
+        type: string
+      release_tag:
+        required: true
+        type: string
+      trigger_sha:
+        required: false
+        default: ''
+        type: string
+      automation_repository:
+        required: true
+        type: string
+      automation_ref:
+        required: true
+        type: string
+      runner_label:
+        required: false
+        default: mtext-delivery
+        type: string
+      retention_days:
+        required: false
+        default: 30
+        type: number
+      serialize_publication:
+        description: Serialisiert Mainframe-Übergaben innerhalb eines Mandanten-Repositories
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  # Dieser Job besitzt keinen Zugriff auf Bereitstellungsdaten und erzeugt ausschließlich Release-Dateien.
+  build:
+    name: Build FULL or DELTA artifact
+    runs-on:
+      - self-hosted
+      - linux
+      - ${{ inputs.runner_label }}
+    timeout-minutes: 30
+    outputs:
+      artifact_name: ${{ steps.metadata.outputs.artifact_name }}
+    steps:
+      - name: Check out tagged mandant commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+          ref: refs/tags/${{ inputs.release_tag }}
+
+      - name: Check out pinned automation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ${{ inputs.automation_repository }}
+          ref: ${{ inputs.automation_ref }}
+          path: automation
+          persist-credentials: false
+
+      - name: Prepare approved Python runtime
+        id: runtime
+        env:
+          LBS_WHEELHOUSE: ${{ vars.LBS_WHEELHOUSE }}
+        run: automation/scripts/runner-preflight.sh automation/requirements.lock
+
+      - name: Build release and manifest
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+          INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}
+          INPUT_TRIGGER_SHA: ${{ inputs.trigger_sha }}
+          PYTHONPATH: automation/src
+        run: >-
+          "${{ steps.runtime.outputs.python }}" -m lbs_delivery build-release
+          --repository-root source
+          --mandant-config source/config/mandant.json
+          --mandant-schema automation/config/mandant.schema.json
+          --deployments-config automation/config/deployments.json
+          --deployments-schema automation/config/deployments.schema.json
+          --repository-name "$INPUT_REPOSITORY_NAME"
+          --tag "$INPUT_RELEASE_TAG"
+          --trigger-sha "$INPUT_TRIGGER_SHA"
+          --output dist
+
+      - name: Define artifact identity
+        id: metadata
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+          INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}
+        run: printf 'artifact_name=%s-%s\n' "$INPUT_REPOSITORY_NAME" "$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Store release artifact
+        # Die fest gepinnte Artefakt-Action ist mit der eingesetzten GHES-Version kompatibel.
+        uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de
+        with:
+          name: ${{ steps.metadata.outputs.artifact_name }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention_days }}
+          compression-level: 0
+
+  # Erst dieser Job bindet das geschützte Environment und darf externe Systeme ansprechen.
+  publish:
+    name: Verify and hand over artifact to Mainframe
+    needs: build
+    runs-on:
+      - self-hosted
+      - linux
+      - ${{ inputs.runner_label }}
+    environment: Bereitstellung
+    concurrency:
+      group: ${{ inputs.serialize_publication && format('mainframe-{0}', github.repository) || format('mainframe-{0}-{1}', github.repository, github.run_id) }}
+      cancel-in-progress: false
+    timeout-minutes: 30
+    steps:
+      - name: Check out pinned automation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ${{ inputs.automation_repository }}
+          ref: ${{ inputs.automation_ref }}
+          path: automation
+          persist-credentials: false
+
+      - name: Download exact release artifact
+        # Übergeben wird nur das im selben Lauf erzeugte und anschließend geprüfte Artefakt.
+        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: dist
+
+      - name: Prepare approved Python runtime
+        id: runtime
+        env:
+          LBS_WHEELHOUSE: ${{ vars.LBS_WHEELHOUSE }}
+        run: automation/scripts/runner-preflight.sh automation/requirements.lock
+
+      - name: Verify artifact, render JCL and submit FTP/JES
+        # Manifest und Prüfsummen werden vor Übertragung und Jobübergabe erneut validiert.
+        env:
+          MAINFRAME_DATASET: ${{ vars.MAINFRAME_DATASET }}
+          MAINFRAME_FTP_HOST: ${{ secrets.MAINFRAME_FTP_HOST }}
+          MAINFRAME_FTP_PASSWORD: ${{ secrets.MAINFRAME_FTP_PASSWORD }}
+          MAINFRAME_FTP_TIMEOUT: ${{ vars.MAINFRAME_FTP_TIMEOUT }}
+          MAINFRAME_FTP_USER: ${{ secrets.MAINFRAME_FTP_USER }}
+          MAINFRAME_JES_TARGET: ${{ vars.MAINFRAME_JES_TARGET }}
+          PYTHONPATH: automation/src
+        run: >-
+          "${{ steps.runtime.outputs.python }}" -m lbs_delivery publish-mainframe
+          --manifest dist/manifest.json
+          --artifact-root dist
+          --template automation/templates/mainframe-upload.jcl
+          --deployments-config automation/config/deployments.json
+          --deployments-schema automation/config/deployments.schema.json
+          --temporary-dir "$RUNNER_TEMP/jcl-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          --execute

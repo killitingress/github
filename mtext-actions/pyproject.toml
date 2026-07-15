@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lbs-delivery"
+version = "0.1.0"
+description = "Central automation for M/Text resource and Mainframe delivery"
+requires-python = ">=3.14,<3.15"
+dependencies = ["jsonschema==4.26.0"]
+
+[project.optional-dependencies]
+test = []
+
+[project.scripts]
+lbs-delivery = "lbs_delivery.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+lbs_delivery = ["schemas/*.json"]

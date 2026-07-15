@@ -1,0 +1,80 @@
+name: Reusable pull request validation
+
+# Dieser Workflow prüft einen konkreten Mandanten-Commit, ohne externe Systeme anzusprechen.
+'on':
+  workflow_call:
+    inputs:
+      repository_name:
+        required: true
+        type: string
+      commit_sha:
+        required: true
+        type: string
+      source_branch:
+        required: true
+        type: string
+      target_branch:
+        required: true
+        type: string
+      automation_repository:
+        required: true
+        type: string
+      automation_ref:
+        required: true
+        type: string
+      runner_label:
+        required: false
+        default: mtext-delivery
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate pull request configuration and promotion
+    runs-on:
+      - self-hosted
+      - linux
+      - ${{ inputs.runner_label }}
+    timeout-minutes: 20
+    steps:
+      # Quellstand und Automatisierung werden jeweils unveränderlich über ihre Referenz geladen.
+      - name: Check out mandant repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+          ref: ${{ inputs.commit_sha }}
+
+      - name: Check out pinned automation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: ${{ inputs.automation_repository }}
+          ref: ${{ inputs.automation_ref }}
+          path: automation
+          persist-credentials: false
+
+      - name: Prepare approved Python runtime
+        id: runtime
+        env:
+          LBS_WHEELHOUSE: ${{ vars.LBS_WHEELHOUSE }}
+        run: automation/scripts/runner-preflight.sh automation/requirements.lock
+
+      - name: Validate configuration and promotion
+        # Geprüft werden Konfiguration, Commit-Zuordnung und zulässige Promotionsrichtung.
+        env:
+          INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}
+          INPUT_SOURCE_BRANCH: ${{ inputs.source_branch }}
+          INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
+          PYTHONPATH: automation/src
+        run: >-
+          "${{ steps.runtime.outputs.python }}" -m lbs_delivery validate-pr
+          --mandant-config source/config/mandant.json
+          --mandant-schema automation/config/mandant.schema.json
+          --deployments-config automation/config/deployments.json
+          --deployments-schema automation/config/deployments.schema.json
+          --repository-name "$INPUT_REPOSITORY_NAME"
+          --source-branch "$INPUT_SOURCE_BRANCH"
+          --target-branch "$INPUT_TARGET_BRANCH"

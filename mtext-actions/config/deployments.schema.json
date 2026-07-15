@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/lbs-delivery/deployments.schema.json",
+  "title": "Shared deployment configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release_lines",
+    "environments",
+    "adapter",
+    "release",
+    "mainframe"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "release_lines": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^R[0-9]{3}$": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["line", "stage"],
+          "properties": {
+            "line": {
+              "type": "string",
+              "pattern": "^en[0-9]{2}$"
+            },
+            "stage": {
+              "enum": ["FKT", "JUR"]
+            }
+          }
+        }
+      }
+    },
+    "environments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["Entwicklung", "Abnahme", "Bereitstellung"],
+      "properties": {
+        "Entwicklung": {
+          "$ref": "#/$defs/sync_environment"
+        },
+        "Abnahme": {
+          "$ref": "#/$defs/sync_environment"
+        },
+        "Bereitstellung": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["logical_branch", "deploy_on_push", "release_on_tag"],
+          "properties": {
+            "logical_branch": {
+              "const": "Bereitstellung"
+            },
+            "deploy_on_push": {
+              "const": false
+            },
+            "release_on_tag": {
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_approved",
+        "server_sync_contract_approved",
+        "path",
+        "payload",
+        "server_sync_path_template",
+        "targets"
+      ],
+      "properties": {
+        "contract_approved": {"type": "boolean"},
+        "server_sync_contract_approved": {"type": "boolean"},
+        "path": {"const": "/vMtextAdapter/sync"},
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mandant", "institut"],
+          "properties": {
+            "mandant": {"type": "string", "minLength": 1, "maxLength": 32},
+            "institut": {"type": "string", "minLength": 1, "maxLength": 32}
+          }
+        },
+        "server_sync_path_template": {
+          "type": "string",
+          "pattern": "^/[^\\u0000]*\\{line\\}[^\\u0000]*\\{environment_code\\}[^\\u0000]*$"
+        },
+        "targets": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/adapter_target"
+          }
+        }
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "archive_name_template",
+        "deletion_list_name_template",
+        "info_name_template"
+      ],
+      "properties": {
+        "archive_name_template": {
+          "const": "{mandant}{package_code}{delivery_code}.tgz"
+        },
+        "deletion_list_name_template": {
+          "const": "{mandant}{package_code}D.txt"
+        },
+        "info_name_template": {
+          "const": "_INFO_{mandant}-{project}-{delivery_type}-{release}-{previous_release}.txt"
+        }
+      }
+    },
+    "mainframe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract_approved", "ispw"],
+      "properties": {
+        "contract_approved": {"type": "boolean"},
+        "ispw": {"enum": ["T", "P"]}
+      }
+    }
+  },
+  "$defs": {
+    "sync_environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "logical_branch", "deploy_on_push", "mtext_target_key"],
+      "properties": {
+        "code": {"enum": ["E", "A"]},
+        "logical_branch": {"enum": ["Entwicklung", "Abnahme"]},
+        "deploy_on_push": {"const": true},
+        "mtext_target_key": {"enum": ["entwicklung", "abnahme"]}
+      }
+    },
+    "adapter_target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entwicklung", "abnahme"],
+      "properties": {
+        "entwicklung": {"type": "string", "pattern": "^https://[^/]+$"},
+        "abnahme": {"type": "string", "pattern": "^https://[^/]+$"}
+      }
+    }
+  }
+}

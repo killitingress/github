@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "mandant": {
+    "code": "FI",
+    "repository": "mtext-fi",
+    "subsystem": "LOMS",
+    "projects": [
+      {"name": "Configuration", "source_path": "Configuration", "package_code": "CONFI"},
+      {"name": "Fonts", "source_path": "Fonts", "package_code": "FONTS"},
+      {"name": "LOMS_Framework", "source_path": "LOMS_Framework", "package_code": "FRAME"},
+      {"name": "LOMS_Basis", "source_path": "LOMS_Basis", "package_code": "BASIS"},
+      {"name": "LOMS_PKA", "source_path": "LOMS_PKA", "package_code": "PKA"}
+    ],
+    "stages": {
+      "FKT": {"assignment": "LOMS000066", "level": "FKTE"},
+      "JUR": {"assignment": "LOMS000067", "level": "JURP"}
+    },
+    "sync_overrides": []
+  }
+}
