@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/lbs-delivery/mandant.schema.json",
+  "title": "Mandant configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mandant"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "mandant": {
+      "$ref": "#/$defs/mandant"
+    }
+  },
+  "$defs": {
+    "mandant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "repository",
+        "subsystem",
+        "projects",
+        "stages",
+        "sync_overrides"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "FI",
+            "BY",
+            "LH",
+            "NW",
+            "OS",
+            "SA",
+            "IT"
+          ]
+        },
+        "repository": {
+          "type": "string",
+          "pattern": "^mtext-[a-z]{2}$"
+        },
+        "subsystem": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{2,8}$"
+        },
+        "projects": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/project"
+          }
+        },
+        "stages": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "FKT",
+            "JUR"
+          ],
+          "properties": {
+            "FKT": {
+              "$ref": "#/$defs/stage"
+            },
+            "JUR": {
+              "$ref": "#/$defs/stage"
+            }
+          }
+        },
+        "sync_overrides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sync_override"
+          }
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "source_path",
+        "package_code"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "source_path": {
+          "$ref": "#/$defs/relative_path"
+        },
+        "package_code": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{1,5}$"
+        }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assignment",
+        "level"
+      ],
+      "properties": {
+        "assignment": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{1,12}$"
+        },
+        "level": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{1,8}$"
+        }
+      }
+    },
+    "sync_override": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_line",
+        "environment",
+        "additional_projects"
+      ],
+      "properties": {
+        "release_line": {
+          "type": "string",
+          "pattern": "^R[0-9]{3}$"
+        },
+        "environment": {
+          "enum": [
+            "Entwicklung",
+            "Abnahme"
+          ]
+        },
+        "additional_projects": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/sync_project"
+          }
+        }
+      }
+    },
+    "sync_project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "source_path",
+        "sync_only"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "source_path": {
+          "$ref": "#/$defs/relative_path"
+        },
+        "sync_only": {
+          "const": true
+        }
+      }
+    },
+    "relative_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+    }
+  }
+}
