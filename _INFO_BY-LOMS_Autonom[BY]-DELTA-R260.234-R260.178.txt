@@ -1,0 +1,90 @@
+Subject: Bereitstellung BY - LOMS_Autonom[BY] - DELTA - Release R260.234
+
+Folgende DIFFs wurden beim Vergleich zwischen R260.178 und R260.234 fuer Mandant BY und das Projekt LOMS_Autonom[BY] in der Lieferung vom Typ DELTA erkannt:
+
+M       VORRELEASE/LOMS_Autonom[BY]/Bausteine/autonom/SG36/SW06/.BR01A.model.testcases
+M       VORRELEASE/LOMS_Autonom[BY]/Bausteine/autonom/SG36/SW06/BR01.model
+M       VORRELEASE/LOMS_Autonom[BY]/Bausteine/autonom/SG36/SW06/BR01A.model
+M       VORRELEASE/LOMS_Autonom[BY]/Bausteine/autonom/SG39/SW01/BR03A.model
+M       VORRELEASE/LOMS_Autonom[BY]/Daten/Modelle/autonom/SG21/SW15/BR06.form.io.json
+M       VORRELEASE/LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW06/BR01.datamodel
+A       VORRELEASE/LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW06/BR01.datamodel_fr_FR.translation
+A       VORRELEASE/LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW06/BR01.datamodel_nl_NL.translation
+M       VORRELEASE/LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW06/BR01.form.io.json
+M       VORRELEASE/LOMS_Autonom[BY]/Daten/Modelle/autonom/SG39/SW01/BR03.datamodel
+M       VORRELEASE/LOMS_Autonom[BY]/Daten/Modelle/autonom/SG39/SW01/BR03.datamodel_fr_FR.translation
+M       VORRELEASE/LOMS_Autonom[BY]/Daten/Modelle/autonom/SG39/SW01/BR03.datamodel_nl_NL.translation
+M       VORRELEASE/LOMS_Autonom[BY]/Daten/Modelle/autonom/SG39/SW01/BR03.form.io.json
+M       VORRELEASE/LOMS_Autonom[BY]/Daten/Modelle/autonom/SG40/SW26/BR02.form.io.json
+
+
+
+Folgender Inhalt ist im TAR-Archiv fuer Mandant BY und das Projekt LOMS_Autonom[BY] in der Lieferung vom Typ DELTA enthalten:
+
+-rw-r--r-- 1006/mtext      852 2026-07-15 09:52 BYAUTOND.txt
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG39/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG39/SW01/
+-rw-r--r-- 1006/mtext    15104 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG39/SW01/BR05.form.io.json
+-rw-r--r-- 1006/mtext     5897 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG39/SW01/BR03.datamodel
+-rw-r--r-- 1006/mtext    12171 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG39/SW01/BR03.form.io.json
+-rw-r--r-- 1006/mtext     1444 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG39/SW01/BR03.datamodel_nl_NL.translation
+-rw-r--r-- 1006/mtext     1444 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG39/SW01/BR03.datamodel_fr_FR.translation
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW06/
+-rw-r--r-- 1006/mtext     2045 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW06/BR01.datamodel
+-rw-r--r-- 1006/mtext     2190 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW06/BR01.form.io.json
+-rw-r--r-- 1006/mtext      112 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW06/BR01.datamodel_nl_NL.translation
+-rw-r--r-- 1006/mtext      112 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW06/BR01.datamodel_fr_FR.translation
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW01/
+-rw-r--r-- 1006/mtext     5102 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW01/BR03.datamodel
+-rw-r--r-- 1006/mtext     9410 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW01/BR03.form.io.json
+-rw-r--r-- 1006/mtext      294 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW01/BR03.datamodel_nl_NL.translation
+-rw-r--r-- 1006/mtext      294 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG36/SW01/BR03.datamodel_fr_FR.translation
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG12/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG12/SW01/
+-rw-r--r-- 1006/mtext    62703 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG12/SW01/BR04.form.io.json
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG06/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG06/SW03/
+-rw-r--r-- 1006/mtext    10259 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG06/SW03/BR01.datamodel
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG21/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG21/SW15/
+-rw-r--r-- 1006/mtext    27331 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG21/SW15/BR06.form.io.json
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG40/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG40/SW26/
+-rw-r--r-- 1006/mtext     8649 2026-07-15 09:52 LOMS_Autonom[BY]/Daten/Modelle/autonom/SG40/SW26/BR02.form.io.json
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:51 LOMS_Autonom[BY]/Bausteine/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG39/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG39/SW01/
+-rw-r--r-- 1006/mtext    48539 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG39/SW01/.BR05B.model.testcases
+-rw-r--r-- 1006/mtext    12076 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG39/SW01/BR03A.model
+-rw-r--r-- 1006/mtext     1947 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG39/SW01/BR05B.model
+-rw-r--r-- 1006/mtext     9855 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG39/SW01/BR04B.model
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG36/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG36/SW06/
+-rw-r--r-- 1006/mtext     4940 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG36/SW06/BR01A.model
+-rw-r--r-- 1006/mtext     3187 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG36/SW06/BR01.model
+-rw-r--r-- 1006/mtext    48812 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG36/SW06/.BR01A.model.testcases
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG36/SW01/
+-rw-r--r-- 1006/mtext    49679 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG36/SW01/.BR03A.model.testcases
+-rw-r--r-- 1006/mtext     5027 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG36/SW01/BR03A.model
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:51 LOMS_Autonom[BY]/Bausteine/autonom/SG12/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG12/SW01/
+-rw-r--r-- 1006/mtext     5675 2026-07-15 09:51 LOMS_Autonom[BY]/Bausteine/autonom/SG12/SW01/BR04.model
+-rw-r--r-- 1006/mtext     6022 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG12/SW01/BR04_Anlagen.model
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:51 LOMS_Autonom[BY]/Bausteine/autonom/SG06/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:51 LOMS_Autonom[BY]/Bausteine/autonom/SG06/SW03/
+-rw-r--r-- 1006/mtext    13060 2026-07-15 09:51 LOMS_Autonom[BY]/Bausteine/autonom/SG06/SW03/BR01A.model
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG21/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG21/SW02/
+-rw-r--r-- 1006/mtext     3855 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG21/SW02/BR29A.model
+-rw-r--r-- 1006/mtext     4804 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG21/SW02/BR29.model
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG40/
+drwxr-xr-x 1006/mtext        0 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG40/SW26/
+-rw-r--r-- 1006/mtext    14675 2026-07-15 09:52 LOMS_Autonom[BY]/Bausteine/autonom/SG40/SW26/BR02A.model
+
+
