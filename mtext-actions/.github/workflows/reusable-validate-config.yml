@@ -1,6 +1,6 @@
-name: Reusable M/Text resource sync
+name: Reusable mandant configuration validation
 
-# Der Aufrufer übergibt einen unveränderlichen Commit und eine fachlich festgelegte Zielstufe.
+# Dieser Workflow prüft Konfigurationen frühzeitig und spricht keine Zielsysteme an.
 'on':
   workflow_call:
     inputs:
@@ -8,12 +8,6 @@ name: Reusable M/Text resource sync
         required: true
         type: string
       commit_sha:
-        required: true
-        type: string
-      source_branch:
-        required: true
-        type: string
-      target_environment:
         required: true
         type: string
       automation_repository:
@@ -31,20 +25,17 @@ permissions:
   contents: read
 
 jobs:
-  sync:
-    name: Sync exact commit to M/Text
+  validate:
+    name: Validate mandant configuration
     runs-on:
       - self-hosted
       - linux
       - ${{ inputs.runner_label }}
-    # Das Environment liefert die stufenspezifische Konfiguration und begrenzt sie auf diesen Job.
-    environment: ${{ inputs.target_environment }}
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - name: Check out mandant repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          fetch-depth: 0
           path: source
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
@@ -63,24 +54,14 @@ jobs:
           LBS_WHEELHOUSE: ${{ vars.LBS_WHEELHOUSE }}
         run: automation/scripts/runner-preflight.sh automation/requirements.lock
 
-      - name: Stage, publish and synchronously call the adapter
-        # Die Python-Schicht prüft Konfiguration, Branch und Commit vor jedem externen Aufruf.
+      - name: Validate configuration without external access
         env:
-          INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}
           INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}
-          INPUT_SOURCE_BRANCH: ${{ inputs.source_branch }}
-          INPUT_TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
           PYTHONPATH: automation/src
         run: >-
-          "${{ steps.runtime.outputs.python }}" -m lbs_delivery sync-resources
-          --repository-root source
+          "${{ steps.runtime.outputs.python }}" -m lbs_delivery validate-config
           --mandant-config source/config/mandant.json
           --mandant-schema automation/config/mandant.schema.json
           --deployments-config automation/config/deployments.json
           --deployments-schema automation/config/deployments.schema.json
           --repository-name "$INPUT_REPOSITORY_NAME"
-          --commit "$INPUT_COMMIT_SHA"
-          --source-branch "$INPUT_SOURCE_BRANCH"
-          --environment "$INPUT_TARGET_ENVIRONMENT"
-          --staging-dir "$RUNNER_TEMP/resources-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          --execute

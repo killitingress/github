@@ -1,0 +1,27 @@
+name: Validate mandant configuration
+
+'on':
+  # Der Check liefert bei jeder Änderung der Mandantenkonfiguration frühes Feedback.
+  push:
+    branches:
+      - '**'
+    paths:
+      - config/mandant.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: config-validation-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate mandant configuration
+    uses: j520730/mtext-actions/.github/workflows/reusable-validate-config.yml@0000000000000000000000000000000000000000
+    with:
+      # Die Null-SHAs sind technische Platzhalter und werden vor dem ersten Integrationslauf ersetzt.
+      repository_name: ${{ github.event.repository.name }}
+      commit_sha: ${{ github.sha }}
+      automation_repository: j520730/mtext-actions
+      automation_ref: 0000000000000000000000000000000000000000

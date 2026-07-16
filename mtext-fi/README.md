@@ -24,11 +24,12 @@ mtext-fi/
   LOMS_Framework/
   LOMS_Basis/
   LOMS_PKA/
-  LOMS_Testdaten/        # Repositoryinhalt, nicht Teil der Delivery-Allowlist
+  LOMS_Testdaten/        # Repositoryinhalt, nicht Teil der Projekt-Allowlist
   config/
     mandant.json
   .github/
     workflows/
+      validate-config.yml
       sync-resources.yml
       release.yml
 ```
@@ -39,24 +40,40 @@ als gültiger Lieferstand erscheinen.
 
 FI ist der Master-Mandant für diese unfragmentierten Projekte.
 `LOMS_Testdaten` wird mit dem Repositoryinhalt migriert, bleibt aber wie bisher
-außerhalb der Synchronisations- und Paket-Allowlist in `config/mandant.json`.
+außerhalb der Projekt-Allowlist in `config/mandant.json`.
 Der redundante historische Sonderpfad `LOMS_Basis[FI]` wird nicht übernommen.
+
+## Bedeutung der Mandantenkonfiguration
+
+`config/mandant.json` ist kein allgemeiner Benutzerschalter. Sie gehört zum
+versionierten Lieferstand und legt verbindlich fest, welche Projekte
+synchronisiert und paketiert werden, welche Paketcodes gelten und welche
+Mainframe-Zuordnungen der Mandant verwendet. Repositoryinhalte, die nicht in
+der Projekt-Allowlist stehen, werden nicht ausgeliefert.
+
+Eine Änderung dieser Datei startet einen nebenwirkungsfreien Config-Check. Er
+prüft Schema, Repository-Identität und fachliche Eindeutigkeit, greift aber
+weder auf M/Text noch auf den Mainframe zu. Der Check liefert frühes Feedback
+und ist kein technisch erzwungenes Gate; Sync und Release validieren die
+Konfiguration erneut. Config-Änderungen werden mit den für den Mandanten
+benannten Verantwortlichen abgestimmt.
 
 ## Branch- und Releasefluss
 
 Für die gleichzeitig aktiven Linien existieren getrennte Stufenbranches, etwa
 `R261/Entwicklung`, `R261/Abnahme` und `R261/Bereitstellung`. Änderungen können
-bei Bedarf zunächst auf einem lokalen Feature-Branch entstehen; erst der direkte
-Push nach `R261/Entwicklung` löst die Automatisierung aus. Nach erfolgreicher
+bei Bedarf zunächst auf einem Feature-Branch entstehen; erst der direkte Push
+nach `R261/Entwicklung` löst die M/Text-Synchronisation aus. Nach erfolgreicher
 Prüfung kann ein fachlich freigegebener Commit direkt nach `R261/Abnahme`
-promoviert werden. Die jeweiligen Pushes verteilen ihren exakten Commit zum
+übernommen werden. Die jeweiligen Pushes verteilen ihren exakten Commit zum
 Entwicklungs- beziehungsweise Abnahmesystem.
 
 Ausgewählte abgenommene Änderungen werden direkt nach
 `R261/Bereitstellung` gepusht. Dieser Push erzeugt noch keine Lieferung. Erst
-ein vom Benutzer gesetzter Tag `Rnnn.nnn` prüft den Bereitstellungsstand und
-startet FULL oder DELTA. `.100` ist FULL; spätere Tags derselben Linie sind
-kumulative DELTAs gegen `.100`.
+ein vom Mandanten-Release-Team gesetzter Tag `Rnnn.nnn` prüft den
+Bereitstellungsstand und startet eine FULL- oder DELTA-Lieferung. `.100` ist
+FULL; andere gültige Tags derselben Linie sind kumulative DELTAs gegen `.100`.
+Bestehende Release-Tags sind gegen Änderung und Löschung geschützt.
 
 Aktuell ist `R261/Entwicklung` als Default Branch vorgesehen. Beim rollierenden
 Linienwechsel wird der Default Branch manuell auf den Entwicklungsbranch der
@@ -68,5 +85,5 @@ vorgesehen.
 Die Workflows referenzieren `j520730/mtext-actions`, aber absichtlich noch
 einen nicht auflösbaren Null-SHA als technischen Platzhalter. Vor dem ersten
 Integrationslauf wird er durch den vollständigen Commit-SHA der vorgesehenen
-zentralen Version ersetzt. Die erforderliche GitHub- und Runner-Einrichtung ist in
-`.github/workflows/README.md` dokumentiert.
+zentralen Version ersetzt. Die erforderliche GitHub- und Runner-Einrichtung ist
+im [Workflow-Vertrag](.github/workflows/README.md) dokumentiert.

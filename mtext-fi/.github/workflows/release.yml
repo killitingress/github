@@ -1,6 +1,7 @@
 name: Build and publish release
 
-# Ein Benutzer setzt den Tag; erst dessen Push startet Build und nachgelagerte Freigabe.
+# Das Mandanten-Release-Team setzt den Tag; erst dessen Push startet Build und
+# nachgelagerte Freigabe.
 'on':
   push:
     tags:

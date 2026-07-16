@@ -52,6 +52,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="lbs-delivery")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    validate = subparsers.add_parser("validate-config")
+    _common_config_arguments(validate)
+
     sync = subparsers.add_parser("sync-resources")
     _common_config_arguments(sync)
     sync.add_argument("--repository-root", default=".")
@@ -95,6 +98,24 @@ def _load_configs(
         arguments.deployments_config, arguments.deployments_schema
     )
     return mandant, deployments
+
+
+def _validate_config(arguments: argparse.Namespace) -> Status:
+    """Prüft Mandanten- und zentrale Deploymentkonfiguration ohne Nebenwirkungen."""
+
+    mandant, deployments = _load_configs(arguments)
+    print(
+        json.dumps(
+            {
+                "status": Status.CONFIG_VALIDATED.value,
+                "mandant": mandant["code"],
+                "repository": mandant["repository"],
+                "release_lines": sorted(deployments["release_lines"]),
+            },
+            sort_keys=True,
+        )
+    )
+    return Status.CONFIG_VALIDATED
 
 
 def _sync(arguments: argparse.Namespace) -> Status:
@@ -244,6 +265,7 @@ def run(arguments: argparse.Namespace) -> Status:
     """Leitet geparste Argumente an den passenden fachlichen Handler weiter."""
 
     handlers = {
+        "validate-config": _validate_config,
         "sync-resources": _sync,
         "build-release": _build_release,
         "publish-mainframe": _publish,

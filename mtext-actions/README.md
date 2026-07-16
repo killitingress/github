@@ -1,8 +1,8 @@
 # mtext-actions
 
 `mtext-actions` ist die zentrale, mandantenunabhängige Automatisierung für die
-Verteilung von M/Text-Ressourcen und die technische Übergabe von FULL-/DELTA-
-Lieferungen an den bestehenden Mainframe-Prozess.
+Verteilung von M/Text-Ressourcen und die technische Übergabe von FULL- und
+DELTA-Lieferungen an den bestehenden Mainframe-Prozess.
 
 Mandantenspezifische Ressourcen und Mappings bleiben in Repositories wie
 `mtext-fi`. Diese Repositories rufen die hier enthaltenen wiederverwendbaren
@@ -19,6 +19,7 @@ Workflows über einen unveränderlichen Commit-SHA auf.
 mtext-actions/
   .github/workflows/
     ci.yml
+    reusable-validate-config.yml
     reusable-sync-resources.yml
     reusable-release.yml
   config/
@@ -54,9 +55,17 @@ mtext-actions/
 
 ## Wiederverwendbare Workflows
 
+`reusable-validate-config.yml` prüft die Mandantenkonfiguration, das Schema,
+die Repository-Identität und die gemeinsame Deploymentkonfiguration. Der Job
+verwendet keine Secrets, kein GitHub Environment und keine externen
+Zielzugriffe. Er liefert frühes Feedback, ist aber kein technisch erzwungenes
+Gate; Sync und Release validieren die Konfiguration auf ihren
+Ausführungspfaden erneut.
+
 `reusable-sync-resources.yml` checkt einen exakten Commit aus, stellt die
-konfigurierten Projekte in einem laufbezogenen Verzeichnis bereit, veröffentlicht
-sie nach serverSync und ruft den bestehenden Adapter einmal synchron auf.
+konfigurierten Projekte in einem laufbezogenen Verzeichnis bereit,
+veröffentlicht sie nach serverSync und ruft den bestehenden Adapter einmal
+synchron auf.
 
 `reusable-release.yml` enthält zwei getrennte Jobs. `build` validiert Tag und
 Erreichbarkeit aus `<Releaselinie>/Bereitstellung`, erzeugt FULL oder
@@ -70,14 +79,15 @@ des Mainframe-Jobs.
 `ci.yml` führt die zentrale Testsuite nur bei Änderungen an `mtext-actions`
 aus.
 
-Alle verwendeten `actions/*`-Actions sind auf vollständige Commit-SHAs
+Alle verwendeten externen Actions sind auf vollständige Commit-SHAs
 festgelegt. Fachlogik liegt ausschließlich in Python.
 
 ## CLI
 
-Die drei vorgesehenen Kommandos sind implementiert:
+Die vier vorgesehenen Kommandos sind implementiert:
 
 ```bash
+python -m lbs_delivery validate-config ...
 python -m lbs_delivery sync-resources ...
 python -m lbs_delivery build-release ...
 python -m lbs_delivery publish-mainframe ...
@@ -86,7 +96,7 @@ python -m lbs_delivery publish-mainframe ...
 Die vollständigen Pflichtargumente der installierten Version liefert
 `python -m lbs_delivery <kommando> --help`. In GitHub Actions werden diese
 Argumente durch die wiederverwendbaren Workflows gesetzt; Benutzer müssen die
-CLI für den normalen Promotions- und Releaseablauf nicht direkt aufrufen.
+CLI für den normalen Weitergabe- und Releaseablauf nicht direkt aufrufen.
 
 `sync-resources` führt ohne `--execute` nur das lokale Staging aus.
 `publish-mainframe` verifiziert ohne `--execute` das Manifest und alle
@@ -97,14 +107,14 @@ Prüfsummen und rendert das JCL lokal, führt aber keine FTP-/JES-Übergabe aus.
 Das Beispiel-Repository `j517120/mtext-fi` verweist bereits auf
 `j520730/mtext-actions`, verwendet aber weiterhin den nicht auflösbaren
 Null-SHA als technischen Platzhalter. Vor dem ersten Integrationslauf wird er
-in beiden aufrufenden Workflows durch den vollständigen Commit-SHA der
+in allen aufrufenden Workflows durch den vollständigen Commit-SHA der
 vorgesehenen zentralen Version ersetzt. Zusätzliche versionierte
 Freigabeschalter für serverSync, Adapter oder Mainframe gibt es nicht; die
 Schnittstellen werden auf dem Entwicklungssystem praktisch geprüft.
 
 ## Runner-Vertrag
 
-Der Zielrunner ist ein gehärteter Linux-self-hosted-Runner mit den Labels
+Der Zielrunner ist ein gehärteter Self-hosted Linux-Runner mit den Labels
 `self-hosted`, `linux` und standardmäßig `mtext-delivery`. Benötigt werden Git,
 Python 3.14, ein frischer `RUNNER_TEMP`, Node.js-20-Action-Unterstützung und
 ein internes Wheelhouse.
@@ -129,7 +139,7 @@ ausführen kann.
 
 ## GitHub Environments und Secrets
 
-Die wiederverwendbaren Workflows erwarten die drei gemeinsamen GitHub
+Die Sync- und Release-Workflows erwarten die drei gemeinsamen GitHub
 Environments `Entwicklung`, `Abnahme` und `Bereitstellung`. Entwicklung und
 Abnahme laufen nach einem direkten Push ohne zusätzliche manuelle
 Environment-Freigabe. Die Mainframe-Übergabe im Environment `Bereitstellung`
@@ -142,7 +152,7 @@ Der Publish-Job liest im Environment `Bereitstellung`:
 - Variablen: `MAINFRAME_DATASET`, `MAINFRAME_JES_TARGET`,
   `MAINFRAME_FTP_TIMEOUT`.
 
-`LBS_WHEELHOUSE` wird bereits von Validate-, Sync- und Build-Jobs benötigt und
+`LBS_WHEELHOUSE` wird bereits für Config-Check, Sync und Build benötigt und
 muss daher als Repository- oder Organisationsvariable verfügbar sein; eine
 ausschließlich im Environment `Bereitstellung` hinterlegte Variable reicht
 nicht aus.
@@ -155,14 +165,15 @@ Da aufrufendes und zentrales Repository in unterschiedlichen Namespaces
 liegen, muss `j520730/mtext-actions` in den GitHub-Enterprise-Actions-
 Einstellungen für `j517120/mtext-fi` und die späteren Mandanten-Repositories
 freigegeben werden. Der lesende Checkout des zentralen Codes wird auf dem
-echten Enterprise-System verifiziert; ein gegebenenfalls erforderlicher
-kurzlebiger Installation-Token ist ein Betriebsparameter und wird nicht im
+echten Enterprise-System verifiziert. Falls dafür ein kurzlebiger
+Installation-Token erforderlich ist, muss der Workflowvertrag vor Aktivierung
+um dessen sichere Übergabe erweitert werden; der Token wird nicht im
 Repository hinterlegt.
 
 ## Linien und Adapterziele
 
-Die aktuell aktiven Linien sind `R261 -> en01`, `R270 -> en02` und
-`R260 -> en03`. Entwicklung und Abnahme verwenden je Linie getrennte Hosts,
+Die aktuell aktiven Linien sind `R260 -> en03`, `R261 -> en01` und
+`R270 -> en02`. Entwicklung und Abnahme verwenden je Linie getrennte Hosts,
 beispielsweise `en01e.ltoma.intern` und `en01a.ltoma.intern`; der vollständige
 Endpunkt endet auf `/vMtextAdapter/sync`. Der bestätigte Payload ist
 `{"mandant":"MAN","institut":"INR"}` und jeder 2xx-Status gilt als
@@ -185,12 +196,10 @@ Paketmember sowie Größe und SHA-256 jedes Pakets und jeder Informationsdatei.
 Vor FTP/JES werden sämtliche Dateien erneut gegen dieses Manifest geprüft.
 Das Manifest wird beim Schreiben und Lesen vollständig gegen das mit dem
 Python-Paket ausgelieferte Schema validiert. Konfigurationen und Manifest
-bleiben danach bewusst einfache JSON-Dokumente. Kleine Hilfsfunktionen bilden
-nur diejenigen fachlichen Querverweise ab, die JSON Schema nicht ausdrücken
-kann; eine zweite Dataclass- und Immutability-Schicht gibt es nicht.
+bleiben bewusst einfache JSON-Dokumente; kleine Hilfsfunktionen prüfen
+diejenigen fachlichen Querverweise, die JSON Schema nicht ausdrücken kann.
 Mainframe-Übergaben werden innerhalb eines Mandanten-Repositories
-standardmäßig serialisiert; unterschiedliche Mandanten können parallel
-publizieren. Die Serialisierung ist als Workflowinput abschaltbar.
+serialisiert; unterschiedliche Mandanten können parallel publizieren.
 
 ## Tests
 
@@ -206,14 +215,14 @@ PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
 Eine vorhandene `.venv` wird wiederverwendet und ist über `.gitignore` vom
 Repository ausgeschlossen.
 
-Abgedeckt sind Konfiguration und Schemas, Promotionen, Git-Diffs,
-reproduzierbarer FULL-/DELTA-Bau, kumulative Löschlisten, Manifestprüfung,
+Abgedeckt sind Konfiguration und Schemas, Branch- und Tagzuordnungen, Git-Diffs,
+reproduzierbarer Bau von FULL und DELTA, kumulative Löschlisten, Manifestprüfung,
 JCL-Rendering, Ressourcen-Staging, Adapterstatus und der unmittelbare FTP-/JES-
 Vertrag. Historische Referenzdateien gehören nicht zur Testsuite.
 
 Nichtproduktive Integrationsläufe gegen die vorgesehenen Entwicklungsziele
-und fachliche Abnahmen bleiben vor dem regulären Betrieb erforderlich. Ein M/Text- oder
-Mainframe-Job-Polling ist bewusst nicht implementiert.
+und fachliche Abnahmen bleiben vor dem regulären Betrieb erforderlich. Ein
+M/Text- oder Mainframe-Job-Polling ist bewusst nicht implementiert.
 
 Die Git-Prüfungen erwarten den von `actions/checkout` angelegten Remote
 `origin`. Ein abweichend benannter Remote ist für die Runner-Ausführung nicht

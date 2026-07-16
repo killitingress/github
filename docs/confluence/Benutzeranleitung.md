@@ -8,8 +8,8 @@
 Die Lösung führt M/Text-Ressourcen eines Mandanten über die drei Stufen
 `Entwicklung`, `Abnahme` und `Bereitstellung`. Pushes nach Entwicklung und
 Abnahme lösen die jeweilige M/Text-Synchronisation aus. Der Push nach
-Bereitstellung liefert noch nichts aus; erst ein Release-Tag startet eine FULL
-oder DELTA Lieferung via der nachgelagerten Mainframe-Übergabe an die IZE9.
+Bereitstellung liefert noch nichts aus; erst ein Release-Tag startet eine
+FULL- oder DELTA-Lieferung mit anschließender Mainframe-Übergabe an IZE9.
 
 ### Hinweis zur Einführung
 
@@ -17,15 +17,17 @@ Voraussichtlich ab November/Dezember 2026 steht die neue GitHub-Umgebung auf
 Basis eines Abzugs der SVN-Repositories zunächst für Tests zur Verfügung. In
 diesem Parallelbetrieb bleibt der bisherige Jenkins-/SVN-Prozess produktiv. Die
 Produktivsetzung ist ab Januar 2027 als harter Cutover geplant. Ab dann ist
-GitHub für den M/Text Tonic Lieferprozess das führende System.
+GitHub für den M/Text-Tonic-Lieferprozess das führende System.
 
 ### Abgrenzung
 
 Zu Themen wie technischer Einrichtung, Aktivierung und Cutover gibt es
 [Nächste Schritte](./Naechste_Schritte.md).
 
-Usermigration und Verwaltung, Rollen und Berechtigungsstruktur sind nicht
-Bestandteil dieser Dokumentation.
+Die konkrete Benutzerverwaltung erfolgt je Mandanten-Repository. Für
+`Bereitstellung` und das Setzen von Release-Tags benennt jeder Mandant einen
+kleinen Kreis von Release-Verantwortlichen. Andere Mitarbeiter können diese
+Schritte nur ausführen, wenn sie diesem Kreis angehören.
 
 ## 2. Begriffe und Namensregeln
 
@@ -75,8 +77,10 @@ Sie kann direkt auf dem passenden Entwicklungsbranch bearbeitet und gepusht
 werden. Ist die Arbeit auf einem Feature-Branch abgeschlossen, wird der
 gewünschte Commit nach `<Releaselinie>/Entwicklung` übernommen. Erst der Push
 dieses Entwicklungsbranches startet die M/Text-Synchronisation. Der
-Feature-Branch selbst bezeichnet keine Lieferstufe und löst keine Automation
-aus.
+Feature-Branch selbst bezeichnet keine Lieferstufe und löst weder eine
+M/Text-Synchronisation noch einen Release aus. Nur wenn
+`config/mandant.json` geändert wird, läuft dort der nebenwirkungsfreie
+Config-Check.
 
 ### Commit und SHA einfach erklärt
 
@@ -91,7 +95,7 @@ Ein Branchname wie `R261/Entwicklung` bezeichnet dagegen keinen dauerhaft
 festen Stand. Er zeigt auf den jeweils neuesten Commit des Branches und bewegt
 sich mit jedem weiteren Push. Wenn in dieser Anleitung vom „exakten Commit“
 die Rede ist, bedeutet das deshalb: Verarbeitet wird genau der Stand, der den
-Lauf ausgelöst hat - nicht ein möglicherweise inzwischen neuerer Stand auf
+Lauf ausgelöst hat – nicht ein möglicherweise inzwischen neuerer Stand auf
 demselben Branch. Bei einem normalen Push übernimmt GitHub diese Kennung
 automatisch; Benutzer müssen sie nur bei einer manuellen Wiederholung angeben.
 
@@ -109,6 +113,38 @@ Daneben kommen zwei ähnlich aussehende, aber anders verwendete Kennungen vor:
 - Eine SHA-256-Prüfsumme bestätigt, dass eine erzeugte Paketdatei nach dem Bau
   nicht verändert wurde. Sie bezeichnet keinen Git-Commit.
 
+### Was ist `config/mandant.json`?
+
+Die Datei `config/mandant.json` beschreibt den Mandanten und gehört wie die
+M/Text-Ressourcen zum versionierten Stand des Repositories. Sie legt
+insbesondere fest:
+
+- welche Projektverzeichnisse synchronisiert und in Releasepakete aufgenommen
+  werden;
+- welcher Paketcode je Projekt verwendet wird;
+- welches Subsystem sowie welche Assignments und Level für die
+  Mainframe-Lieferung gelten;
+- welche ausdrücklich vereinbarten zusätzlichen Sync-Projekte gelten.
+
+Ein Verzeichnis im Repository wird nicht allein dadurch ausgeliefert, dass es
+vorhanden ist. Nur Einträge unter `projects` werden synchronisiert und in
+Releasepakete aufgenommen. Einträge unter `sync_overrides` ergänzen die
+Synchronisation nur für die dort genannte Linie und Stufe; sie werden nicht
+paketiert. Eine falsche Änderung kann somit den Lieferumfang oder die
+Mainframe-Zuordnung verändern. Mitarbeiter ändern `config/mandant.json`
+deshalb nicht wie eine normale Briefressource, sondern stimmen jede Änderung
+mit den benannten Mandanten- und Betriebsverantwortlichen ab. Zugangsdaten
+oder andere Secrets gehören niemals in diese Datei.
+
+Ein Push mit einer Änderung an `config/mandant.json` startet automatisch
+**Validate mandant configuration**. Dieser Check prüft die Datei ohne Zugriff
+auf M/Text oder den Mainframe und liefert frühzeitig eine verständliche
+Fehlermeldung. `CONFIG_VALIDATED` bestätigt die technische Konsistenz, ersetzt
+aber weder die fachliche Freigabe der geänderten Zuordnungen noch erteilt es
+eine automatische Freigabe für die nächste Stufe. Der Check ist kein
+technisches Gate; Synchronisation und Release validieren die verwendete
+Konfiguration auf ihrem tatsächlichen Ausführungspfad erneut.
+
 ## 3. Änderung nach Entwicklung bringen
 
 1. Den aktuellen `<Releaselinie>/Entwicklung` auschecken; für länger laufende,
@@ -118,14 +154,15 @@ Daneben kommen zwei ähnlich aussehende, aber anders verwendete Kennungen vor:
 2. Fachlich vorgesehene Änderungen an den Brief-Ressourcen durchführen.
 3. Änderungen committen.
 4. Den Commit direkt nach `<Releaselinie>/Entwicklung` pushen.
-5. Im GitHub unter **Actions → Sync M/Text resources** den durch den Push
+5. In GitHub unter **Actions → Sync M/Text resources** den durch den Push
    ausgelösten Lauf kontrollieren.
 
-Der Push startet die Synchronisation des exakten Commits mit dem entsprechenden
-Tonic Server (`en01e` für `Entwicklung` und `en01a` für Abnahme). Ein erfolgreicher
+Der Push startet die Synchronisation des exakten Commits mit dem aus
+Releaselinie und Stufe zentral ermittelten M/Text-Ziel. Für `R261` sind dies
+beispielsweise `en01e` in Entwicklung und `en01a` in Abnahme. Ein erfolgreicher
 Lauf endet mit `ADAPTER_ACCEPTED`.
 
-## 4. Nach Abnahme promoten
+## 4. Stand zur Abnahme weitergeben
 
 1. Den in Entwicklung erfolgreich geprüften Commit ermitteln.
 2. Genau diesen Commit direkt nach `<Releaselinie>/Abnahme` pushen.
@@ -151,19 +188,25 @@ Entwicklungspush.
    Mainframe-Übergabe.
 
 Die Auswahl der Commits ist eine fachliche Verantwortung. Die verbindliche
-technische Prüfung erfolgt erst, wenn der Release-Tag gesetzt wird.
+Releaseprüfung erfolgt erst, wenn der Release-Tag gesetzt wird. Pushen darf hier
+nur das für den jeweiligen Mandanten benannte Release-Team. In der Pilotphase
+wird geprüft, ob dieser direkte Ablauf auch bei parallelen Bereitstellungen
+ausreichend übersichtlich bleibt.
 
-## 6. FULL oder DELTA Lieferung auslösen
+## 6. FULL- oder DELTA-Lieferung auslösen
 
 Vor dem Taggen müssen Releaselinie, Mandant, gewünschter Lieferungstyp und der
 exakte Commit auf `<Releaselinie>/Bereitstellung` fachlich bestätigt sein.
 
 - `Rnnn.100` erzeugt ein FULL mit dem vollständigen Stand jedes Projekts der
-  Delivery-Allowlist.
+  Projekt-Allowlist.
 - Jede andere gültige dreistellige Endung, zum Beispiel `R261.108`, erzeugt
   ein kumulatives DELTA von `R261.100` bis zum Zieltag.
 - Ein DELTA setzt voraus, dass der `.100`-Tag derselben Linie vorhanden und
   erreichbar ist.
+- Nur das benannte Release-Team darf einen neuen Release-Tag setzen. Ein
+  vorhandener Release-Tag ist die unveränderliche Release-Identität und darf
+  weder verschoben noch gelöscht werden.
 
 Zum Auslösen einen einfachen Git-Tag auf dem bestätigten Bereitstellungscommit
 setzen und pushen, zum Beispiel:
@@ -198,8 +241,8 @@ wird in Ausbaustufe 1 nicht abgefragt.
 Unter **Actions → Sync M/Text resources → Run workflow** angeben:
 
 - `commit_sha`: vollständiger 40-stelliger SHA des bereits geprüften Commits;
-- `source_branch`: der passende Branch `Rxxx/Entwicklung` oder
-  `Rxxx/Abnahme`.
+- `source_branch`: der passende Branch `Rnnn/Entwicklung` oder
+  `Rnnn/Abnahme`.
 
 Die Automation weist den Lauf zurück, wenn der Commit nicht aus dem gewählten
 Branch erreichbar ist. Das Zielsystem kann nicht frei eingegeben werden; es
@@ -221,7 +264,8 @@ fachlichen Endstatus.
 
 | Status oder sichtbares Symptom | Bedeutung | Nächste Prüfung |
 |---|---|---|
-| Workflow kann zentrale Datei am Null-SHA nicht laden | Technischer Platzhalter ist noch eingetragen | Vorgesehenen vollständigen Commit-SHA von `mtext-actions` in beiden Workflows eintragen |
+| Workflow kann zentrale Datei am Null-SHA nicht laden | Technischer Platzhalter ist noch eingetragen | Vorgesehenen vollständigen Commit-SHA von `mtext-actions` in allen Workflows eintragen |
+| `CONFIG_VALIDATED` | Mandanten- und Deploymentkonfiguration sind technisch konsistent | Fachliche Abstimmung fortsetzen; der Status ist keine automatische Freigabe für die nächste Stufe |
 | `VALIDATION_FAILED` | Input, Konfiguration, Schema, Branchrichtung oder JCL ungültig | Erste Fehlermeldung lesen; Branch-/Tagformat und Konfiguration prüfen |
 | `SOURCE_FAILED` | Commit oder Tag/Basisreferenz nicht auflösbar | SHA, Tag, `.100`-Basis und Branch-Erreichbarkeit prüfen |
 | `PACKAGE_FAILED` | Paket, Informationsdatei oder Manifest konnte nicht sicher gebaut werden | Fehlende Projektpfade, Symlinks, leeres/benutztes Ausgabeverzeichnis prüfen |
@@ -232,5 +276,6 @@ fachlichen Endstatus.
 | `MAINFRAME_TRANSFER_FAILED` | FTP-Upload oder JES-Submit unmittelbar fehlgeschlagen | Credentials, Dataset, JES-Ziel, Netzwerk und FTP-Antwort prüfen |
 | `MAINFRAME_SUBMITTED` | Unmittelbare FTP-/JES-Übergabe akzeptiert | Weiteren Status im Betriebsverfahren verfolgen |
 
-Logs dürfen keine Credentials enthalten. Zugangsdaten niemals in Pull
-Requests, Konfigurationsdateien, Workflow-Inputs oder Support-Tickets kopieren.
+Logs dürfen keine Credentials enthalten. Zugangsdaten niemals in
+Konfigurationsdateien, Workflow-Inputs, GitHub-Kommentare oder Support-Tickets
+kopieren.

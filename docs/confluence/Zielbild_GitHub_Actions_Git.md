@@ -122,8 +122,16 @@ Ein Mandanten-Repository enthält ausschließlich die Ressourcen und Angaben
 des jeweiligen Mandanten. Das zentrale Repository enthält keine
 Mandantenressourcen, sondern nur die gemeinsam verwendete Automatisierung.
 
+Die Berechtigungen werden je Mandanten-Repository vergeben. Jeder Mandant
+benennt ein Release-Team, das als einzige reguläre Gruppe direkt nach
+`Rnnn/Bereitstellung` pushen und neue Release-Tags anlegen darf. So können die
+Verantwortlichen je Mandant unterschiedlich sein, ohne die gemeinsame
+Automation zu verzweigen. Force-Pushes und das Löschen von Stufenbranches
+bleiben verboten. Bereits angelegte Release-Tags dürfen auch vom Release-Team
+nicht verändert oder gelöscht werden.
+
 Für jeden Lauf checkt GitHub Actions sowohl den ausgewählten Stand des
-Mandanten-Repositorys als auch eine festgelegte Version der zentralen
+Mandanten-Repositories als auch eine festgelegte Version der zentralen
 Automatisierung aus. Dadurch ist später nachvollziehbar, welche Quellen und
 welche Automatisierung verwendet wurden.
 
@@ -144,6 +152,7 @@ Ein Mandanten-Repository folgt diesem Grundaufbau:
 ```text
 mtext-<mandant>/
   .github/workflows/
+    validate-config.yml
     sync-resources.yml
     release.yml
   config/
@@ -171,8 +180,8 @@ jeweiligen Paketcodes. `LOMS_Testdaten` soll ebenfalls in das Repository
 übernommen werden, ist aber wie bisher nicht Bestandteil der Synchronisation
 oder der Releasepakete.
 
-Die Workflows im Mandanten-Repository legen nur Auslöser und Zielumgebungen
-fest. Die Verarbeitung erfolgt durch die zentralen Workflows aus
+Die Workflows im Mandanten-Repository legen nur Auslöser und explizite
+Zielstufen fest. Die Verarbeitung erfolgt durch die zentralen Workflows aus
 `mtext-actions`. Im aktuellen Entwicklungsstand enthalten die Verweise auf
 diese zentralen Workflows noch eine nicht lauffähige Folge aus Nullen als
 Platzhalter.
@@ -212,11 +221,23 @@ zusätzliche fachliche Stufe.
 Ein Push nach `Rnnn/Entwicklung` oder `Rnnn/Abnahme` startet automatisch die
 M/Text-Verteilung für die entsprechende Stufe. Beim Übergang zur nächsten
 Stufe wird derselbe Commit übernommen. Dadurch bleibt erkennbar, welcher
-geprüfte Stand weitergegeben wurde.
+geprüfte Stand weitergegeben wurde. Die Workflow-Trigger verwenden das
+allgemeine Namensmuster `Rnnn/<Stufe>`; ob eine konkrete Linie aktiv ist,
+entscheidet ausschließlich die zentrale Deploymentkonfiguration.
 
 Ein Push nach `Rnnn/Bereitstellung` erzeugt noch keine Lieferung. Erst ein Tag
 im Format `Rnnn.nnn` startet den Paketbau. Dabei wird geprüft, ob der Tag zur
 angegebenen Releaselinie gehört und vom Bereitstellungsbranch erreichbar ist.
+Der Tag ist danach die unveränderliche Identität dieser Lieferung und wird
+durch Tag-Rulesets gegen Änderung, Force-Push und Löschung geschützt.
+
+In der Pilotphase werden die fachlich ausgewählten Commits weiterhin direkt
+per Cherry-Pick nach `Rnnn/Bereitstellung` übernommen. Dabei wird insbesondere
+beobachtet, ob parallele Zusammenstellungen oder die Nachvollziehbarkeit der
+Auswahl Probleme verursachen. Falls dies im Betrieb erforderlich wird, kann
+später ein kurzlebiger Auswahlbranch mit einem normalen Pull Request nach
+`Rnnn/Bereitstellung` eingeführt werden. Dafür ist kein eigener fachlicher
+Validate-Workflow erforderlich.
 
 Die Mandanten-Repositories erhalten keinen zusätzlichen `main`-Branch. Als
 Default Branch dient der Entwicklungsbranch der aktuell führenden Linie,
@@ -241,6 +262,17 @@ unter anderem:
 - die Paketcodes sowie
 - die Mainframe-Zuordnungen des Mandanten.
 
+Diese `config/mandant.json` ist ein versionierter Bestandteil des fachlichen
+Lieferstands und keine frei veränderbare Laufzeitkonfiguration. `projects`
+bildet die Projekt-Allowlist für Synchronisation und Release. Optional
+definierte `sync_overrides` ergänzen nur die Synchronisation einer bestimmten
+Linie und Stufe; sie verändern den Paketinhalt nicht. Dadurch bleibt auch bei
+einem späteren Release eines älteren Tags nachvollziehbar, welche Projekte,
+Paketcodes, Assignments und Level zu genau diesem Stand gehörten. Eine
+Zentralisierung außerhalb des Mandanten-Repositories würde diese gemeinsame
+Versionierung von Ressourcen und Mandantenmapping auflösen und ist deshalb
+nicht vorgesehen.
+
 Die zentrale Konfiguration beschreibt die gemeinsamen Releaselinien,
 Zielstufen, M/Text-Adressen und Dateinamensregeln. Derzeit gelten folgende
 Zuordnungen:
@@ -256,6 +288,17 @@ geprüft. Unbekannte Mandanten, Releaselinien, Zielumgebungen oder zusätzliche
 Konfigurationsfelder führen zu einem Fehler. Es gibt keine stillschweigende
 Rückfallregel auf FI-Werte.
 
+Zusätzlich startet jede Änderung an `config/mandant.json` bereits beim Push
+einen nebenwirkungsfreien Config-Check. Er validiert Schema,
+Repository-Identität, fachliche Eindeutigkeit und interne Querverweise der
+Deploymentkonfiguration, verwendet aber weder Secrets noch Environments oder
+externe Zielzugriffe. Da der derzeitige Prozess keine Pull Requests
+voraussetzt, liefert der Check bewusst nur frühes Feedback und ist kein
+technisch erzwungenes Gate. Config-Änderungen werden fachlich mit den benannten
+Mandanten- und Betriebsverantwortlichen abgestimmt. Falls Config-Änderungen
+später über Pull Requests freigegeben werden, kann `config/mandant.json`
+zusätzlich einem verbindlichen Code-Owner-Verfahren unterstellt werden.
+
 FI ist für die unfragmentierten Basisprojekte maßgeblich, `mtext-autonom` für
 `LOMS_Autonom`. Die übrigen Mandanten enthalten Fragmentprojekte mit dem
 Mandantenkürzel in eckigen Klammern. Welche Projekte in einem Repository
@@ -270,12 +313,12 @@ freigegeben.
 ## 8. FULL- und DELTA-Lieferungen
 
 Ein Tag mit der Endung `.100`, zum Beispiel `R261.100`, erzeugt eine
-vollständige Lieferung aller für den Mandanten freigegebenen Projekte.
+vollständige Lieferung aller Projekte der Mandantenkonfiguration.
 
-Jeder spätere Tag derselben Releaselinie erzeugt ein kumulatives DELTA. Ein
-Tag `R261.108` enthält somit alle neuen, geänderten und gelöschten Dateien seit
-`R261.100`. Frühere DELTA-Lieferungen müssen nicht lückenlos eingespielt worden
-sein.
+Jeder andere gültige Release-Tag derselben Releaselinie erzeugt ein
+kumulatives DELTA gegen den `.100`-Tag. Ein Tag `R261.108` enthält somit alle
+neuen, geänderten und gelöschten Dateien seit `R261.100`. Frühere
+DELTA-Lieferungen müssen nicht lückenlos eingespielt worden sein.
 
 Zu jeder Lieferung wird ein Manifest erzeugt. Diese Begleitdatei nennt unter
 anderem Mandant, Release, Quellstand, enthaltene Dateien und deren Prüfsummen.
@@ -319,6 +362,7 @@ Die Lösung meldet nur den Status, den sie selbst sicher feststellen kann:
 
 | Status | Bedeutung |
 |---|---|
+| `CONFIG_VALIDATED` | Mandanten- und Deploymentkonfiguration wurden ohne externen Zielzugriff technisch geprüft. |
 | `VALIDATION_FAILED` | Eingaben oder Konfiguration sind ungültig. Es wurde noch kein Zielsystem angesprochen. |
 | `SOURCE_FAILED` | Der angegebene Commit, Branch oder Tag konnte nicht eindeutig aufgelöst werden. |
 | `RESOURCE_TRANSFER_FAILED` | Die Ressourcen konnten nicht in den Übergabebereich für M/Text geschrieben werden. |
@@ -334,7 +378,4 @@ Status zwischen 200 und 299 bestätigt nur die unmittelbare Annahme der
 Anfrage.
 
 Die erste Ausbaustufe fragt weder bei M/Text noch auf dem Mainframe nach dem
-späteren fachlichen Endstatus. Zunächst werden die normalen
-GitHub-Benachrichtigungen verwendet. Zusätzliche E-Mail-Benachrichtigungen
-können später ergänzt werden, ohne das fachliche Ergebnis eines Laufs zu
-verändern.
+späteren fachlichen Endstatus.

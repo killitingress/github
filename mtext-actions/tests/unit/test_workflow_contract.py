@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github/workflows"
 EXPECTED = {
     "ci.yml",
+    "reusable-validate-config.yml",
     "reusable-sync-resources.yml",
     "reusable-release.yml",
 }
@@ -49,6 +50,14 @@ class CentralWorkflowContractTests(unittest.TestCase):
         self.assertIn("environment: Bereitstellung", text)
         self.assertIn("secrets.MAINFRAME_FTP_PASSWORD", text)
         self.assertIn("--execute", text)
+
+    def test_config_validation_has_no_external_write_path(self) -> None:
+        text = (WORKFLOWS / "reusable-validate-config.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("validate-config", text)
+        for token in ("--execute", "environment:", "secrets.", "MAINFRAME_"):
+            self.assertNotIn(token, text)
 
     def test_release_uses_ghes_compatible_artifact_actions(self) -> None:
         text = (WORKFLOWS / "reusable-release.yml").read_text(encoding="utf-8")

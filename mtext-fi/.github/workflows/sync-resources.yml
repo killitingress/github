@@ -4,12 +4,8 @@ name: Sync M/Text resources
   # Nur Änderungen auf den fachlichen Stufenbranches lösen automatisch eine Verteilung aus.
   push:
     branches:
-      - R260/Entwicklung
-      - R260/Abnahme
-      - R261/Entwicklung
-      - R261/Abnahme
-      - R270/Entwicklung
-      - R270/Abnahme
+      - R[0-9][0-9][0-9]/Entwicklung
+      - R[0-9][0-9][0-9]/Abnahme
   # Manuelle Wiederholungen verlangen einen exakten Commit und den dazugehörigen Stufenbranch.
   workflow_dispatch:
     inputs:
@@ -18,16 +14,9 @@ name: Sync M/Text resources
         required: true
         type: string
       source_branch:
-        description: Stufenbranch, in dem der Commit enthalten sein muss
+        description: Stufenbranch im Format Rnnn/Entwicklung oder Rnnn/Abnahme
         required: true
-        type: choice
-        options:
-          - R260/Entwicklung
-          - R260/Abnahme
-          - R261/Entwicklung
-          - R261/Abnahme
-          - R270/Entwicklung
-          - R270/Abnahme
+        type: string
 
 permissions:
   contents: read

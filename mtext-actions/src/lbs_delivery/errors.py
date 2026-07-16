@@ -8,6 +8,7 @@ from enum import Enum
 class Status(str, Enum):
     """Benennt die technisch belegbaren Ergebnisse eines Delivery-Laufs."""
 
+    CONFIG_VALIDATED = "CONFIG_VALIDATED"
     VALIDATION_FAILED = "VALIDATION_FAILED"
     SOURCE_FAILED = "SOURCE_FAILED"
     PACKAGE_FAILED = "PACKAGE_FAILED"
