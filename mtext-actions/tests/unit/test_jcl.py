@@ -32,6 +32,24 @@ class JclRenderTests(unittest.TestCase):
         self.assertIn("PROJNO=LOMS000067", rendered)
         self.assertIn("$DEFINE_TSI", rendered)
 
+    def test_all_confirmed_stage_codes_are_accepted(self) -> None:
+        for stage in ("FKTE", "FKTF", "JURJ", "JURP", "SVTS", "VPTV"):
+            with self.subTest(stage=stage):
+                rendered = render_jcl(self.template, dict(VALID_VALUES, LEVEL=stage))
+                self.assertIn(f".BOAS.{stage}.TONICZ", rendered)
+
+    def test_only_test_and_production_ispw_values_are_accepted(self) -> None:
+        for ispw, expected_dataset in (("T", "IEA.ISPWT"), ("P", "IEA.ISPWP")):
+            with self.subTest(ispw=ispw):
+                rendered = render_jcl(self.template, dict(VALID_VALUES, ISPW=ispw))
+                self.assertIn(expected_dataset, rendered)
+
+        for ispw in ("E", "TEST", "PROD", ""):
+            with self.subTest(ispw=ispw), self.assertRaisesRegex(
+                JclRenderError, "invalid value for ISPW"
+            ):
+                render_jcl(self.template, dict(VALID_VALUES, ISPW=ispw))
+
     def test_missing_unknown_and_invalid_values_are_rejected(self) -> None:
         missing = dict(VALID_VALUES)
         missing.pop("MEMBER")

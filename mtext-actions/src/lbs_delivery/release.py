@@ -9,6 +9,7 @@ from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 from .config import DeploymentsConfig, MandantConfig
+from .delivery_names import project_code_for_name
 from .errors import DeliveryError, Status
 from .git_refs import GitChange, diff_name_status
 from .manifest import sha256_file, write_manifest
@@ -265,12 +266,12 @@ def build_release(
     for project in mandant["projects"]:
         project_name = project["name"]
         project_path = project["source_path"]
-        package_code = project["package_code"]
+        project_code = project_code_for_name(project_name)
         delivery_code = "F" if delivery_type == "FULL" else "D"
         release_config = deployments["release"]
         archive_name = release_config["archive_name_template"].format(
             mandant=mandant["code"],
-            package_code=package_code,
+            project_code=project_code,
             delivery_code=delivery_code,
         )
         deletion_name: str | None = None
@@ -281,7 +282,7 @@ def build_release(
         else:
             files, deletion_paths = delta_paths(cumulative_changes, project_path)
             deletion_name = release_config["deletion_list_name_template"].format(
-                mandant=mandant["code"], package_code=package_code
+                mandant=mandant["code"], project_code=project_code
             )
         archive_path = output / archive_name
         logical_names = create_archive(
@@ -311,7 +312,7 @@ def build_release(
             direct_changes=direct_changes,
             archive_names=logical_names,
         )
-        member = f"{mandant['code']}{package_code}{delivery_code}"
+        member = f"{mandant['code']}{project_code}{delivery_code}"
         artifacts.append(
             {
                 "kind": "package",
@@ -320,7 +321,7 @@ def build_release(
                 "size": archive_path.stat().st_size,
                 "sha256": sha256_file(archive_path),
                 "member": member,
-                "package_code": package_code,
+                "project_code": project_code,
                 "deletion_list": deletion_name,
                 "deletion_count": len(deletion_paths),
             }
@@ -335,8 +336,8 @@ def build_release(
             }
         )
     release_line = release_tag[:4]
-    stage_name = deployments["release_lines"][release_line]["stage"]
-    stage = mandant["stages"][stage_name]
+    profile_name = deployments["release_lines"][release_line]["handover_profile"]
+    profile = mandant["handover_profiles"][profile_name]
     manifest = {
         "schema_version": 1,
         "repository": repository_name,
@@ -352,9 +353,10 @@ def build_release(
         "artifacts": artifacts,
         "jcl": {
             "ISPW": deployments["mainframe"]["ispw"],
-            "LEVEL": stage["level"],
+            # Die bestehende JCL nennt den fachlichen Stage-Code historisch LEVEL.
+            "LEVEL": profile["stage"],
             "SUBSYS": mandant["subsystem"],
-            "ASSIGNMENT": stage["assignment"],
+            "ASSIGNMENT": profile["assignment"],
         },
     }
     manifest_path = output / "manifest.json"

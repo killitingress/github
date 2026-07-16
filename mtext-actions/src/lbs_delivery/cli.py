@@ -33,7 +33,7 @@ from .manifest import PackageArtifact, load_manifest, packages, verify_artifacts
 from .mtext_adapter import call_adapter
 from .paths import resolve_within
 from .release import base_tag, build_release, release_type
-from .resources import projects_for_sync, publish_server_sync, stage_resources
+from .resources import publish_server_sync, stage_resources
 
 
 def _common_config_arguments(parser: argparse.ArgumentParser) -> None:
@@ -129,7 +129,7 @@ def _sync(arguments: argparse.Namespace) -> Status:
     commit = require_full_sha(arguments.commit)
     require_head(arguments.repository_root, commit)
     require_commit_on_branch(arguments.repository_root, commit, arguments.source_branch)
-    projects = projects_for_sync(mandant, release_line, arguments.environment)
+    projects = list(mandant["projects"])
     staged = stage_resources(arguments.repository_root, arguments.staging_dir, projects)
     if not arguments.execute:
         print(json.dumps({"status": "STAGED", "projects": staged}, sort_keys=True))

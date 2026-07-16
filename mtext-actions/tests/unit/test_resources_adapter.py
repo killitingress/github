@@ -8,7 +8,6 @@ from pathlib import Path
 from lbs_delivery.errors import DeliveryError, Status
 from lbs_delivery.mtext_adapter import call_adapter
 from lbs_delivery.resources import (
-    projects_for_sync,
     publish_server_sync,
     stage_resources,
 )
@@ -35,22 +34,11 @@ class ResourceTests(unittest.TestCase):
             "code": "FI",
             "repository": "mtext-fi",
             "subsystem": "LOMS",
-            "projects": [
-                {"name": "Base", "source_path": "Base", "package_code": "BASE"}
-            ],
-            "stages": {
-                "FKT": {"assignment": "LOMS000066", "level": "FKTE"},
-                "JUR": {"assignment": "LOMS000067", "level": "JURP"},
+            "projects": [{"name": "Base", "source_path": "Base"}],
+            "handover_profiles": {
+                "FKT": {"assignment": "LOMS000066", "stage": "FKTE"},
+                "JUR": {"assignment": "LOMS000067", "stage": "JURP"},
             },
-            "sync_overrides": [
-                {
-                    "release_line": "R260",
-                    "environment": "Entwicklung",
-                    "additional_projects": [
-                        {"name": "Special", "source_path": "Special"}
-                    ],
-                }
-            ],
         }
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -59,16 +47,14 @@ class ResourceTests(unittest.TestCase):
             target = root / "serverSync"
             (source / "Base").mkdir(parents=True)
             (source / "Base/value.txt").write_text("new", encoding="utf-8")
-            (source / "Special").mkdir()
-            (source / "Special/value.txt").write_text("special", encoding="utf-8")
             (target / "Base").mkdir(parents=True)
             (target / "Base/value.txt").write_text("old", encoding="utf-8")
 
-            projects = projects_for_sync(config, "R260", "Entwicklung")
-            self.assertEqual(stage_resources(source, staging, projects), ["Base", "Special"])
+            self.assertEqual(
+                stage_resources(source, staging, config["projects"]), ["Base"]
+            )
             publish_server_sync(staging, target)
             self.assertEqual((target / "Base/value.txt").read_text(), "new")
-            self.assertEqual((target / "Special/value.txt").read_text(), "special")
             self.assertFalse(any(path.name.startswith(".Base.") for path in target.iterdir()))
 
 

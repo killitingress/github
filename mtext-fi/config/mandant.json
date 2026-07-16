@@ -7,40 +7,34 @@
     "projects": [
       {
         "name": "Configuration",
-        "source_path": "Configuration",
-        "package_code": "CONFI"
+        "source_path": "Configuration"
       },
       {
         "name": "Fonts",
-        "source_path": "Fonts",
-        "package_code": "FONTS"
+        "source_path": "Fonts"
       },
       {
         "name": "LOMS_Framework",
-        "source_path": "LOMS_Framework",
-        "package_code": "FRAME"
+        "source_path": "LOMS_Framework"
       },
       {
         "name": "LOMS_Basis",
-        "source_path": "LOMS_Basis",
-        "package_code": "BASIS"
+        "source_path": "LOMS_Basis"
       },
       {
         "name": "LOMS_PKA",
-        "source_path": "LOMS_PKA",
-        "package_code": "PKA"
+        "source_path": "LOMS_PKA"
       }
     ],
-    "stages": {
+    "handover_profiles": {
       "FKT": {
         "assignment": "LOMS000066",
-        "level": "FKTE"
+        "stage": "FKTE"
       },
       "JUR": {
         "assignment": "LOMS000067",
-        "level": "JURP"
+        "stage": "JURP"
       }
-    },
-    "sync_overrides": []
+    }
   }
 }

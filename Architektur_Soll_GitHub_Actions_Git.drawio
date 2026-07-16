@@ -15,7 +15,7 @@
         <mxCell id="lane-dev" value="1. Entwicklung" style="swimlane;html=1;horizontal=0;startSize=34;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=16;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="30" y="100" width="1820" height="220" as="geometry"/>
         </mxCell>
-        <mxCell id="dev-local" value="Lokale Änderung&#xa;.model, Text, Baustein" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
+        <mxCell id="dev-local" value="M/Text Workbench&#xa;Ressource ändern&#xa;integrierter Git-Client" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
           <mxGeometry x="80" y="170" width="170" height="75" as="geometry"/>
         </mxCell>
         <mxCell id="dev-feature" value="Push nach&#xa;Rnnn/Entwicklung" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
@@ -40,6 +40,9 @@
         <mxCell id="acc-source" value="Fachlich geprüfter Stand&#xa;aus Entwicklung" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366" vertex="1" parent="1">
           <mxGeometry x="175" y="420" width="155" height="70" as="geometry"/>
         </mxCell>
+        <mxCell id="acc-pick" value="Zusätzlicher Git-Client&#xa;Cherry-Pick der freigegebenen Änderung&#xa;neuer Commit / neue SHA&#xa;Quell-SHA dokumentieren&#xa;Produkt vor Pilot festlegen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="390" y="400" width="220" height="110" as="geometry"/>
+        </mxCell>
         <mxCell id="acc-branch" value="Push nach&#xa;Rnnn/Abnahme" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="680" y="415" width="185" height="80" as="geometry"/>
         </mxCell>
@@ -59,8 +62,8 @@
         <mxCell id="rel-base" value="Fachlich freigegebene&#xa;Commits aus Abnahme" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00" vertex="1" parent="1">
           <mxGeometry x="325" y="675" width="170" height="75" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-pick" value="Direkter Push nach&#xa;Rnnn/Bereitstellung&#xa;nur Mandanten-Release-Team&#xa;kein Force-Push / Löschen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
-          <mxGeometry x="540" y="660" width="205" height="100" as="geometry"/>
+        <mxCell id="rel-pick" value="Zusätzlicher Git-Client&#xa;Cherry-Pick nach Rnnn/Bereitstellung&#xa;Quell-SHA dokumentieren&#xa;nur Mandanten-Release-Team&#xa;Produkt vor Pilot festlegen&#xa;kein Force-Push / Löschen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="540" y="655" width="205" height="110" as="geometry"/>
         </mxCell>
         <mxCell id="rel-branch" value="Rnnn/Bereitstellung&#xa;noch keine Lieferung" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1015" y="675" width="180" height="75" as="geometry"/>
@@ -68,7 +71,7 @@
         <mxCell id="rel-tag" value="Release-Tag Rnnn.nnn&#xa;nur Mandanten-Release-Team&#xa;nach Erstellung unveränderlich&#xa;z. B. R261.100 / R261.108" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1475" y="660" width="250" height="100" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-pilot-option" value="Pilotbeobachtung: bei Bedarf später&#xa;Auswahlbranch + normaler Pull Request" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#d79b00;dashed=1;fontSize=11" vertex="1" parent="1">
+        <mxCell id="rel-pilot-option" value="GitHub-native Option:&#xa;Auswahlbranch + normaler Pull Request" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#d79b00;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="760" y="775" width="420" height="40" as="geometry"/>
         </mxCell>
 
@@ -106,7 +109,8 @@
         <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="dev-nfs" target="dev-mtext"><mxGeometry relative="1" as="geometry"/></mxCell>
 
         <mxCell id="e8" value="nach fachlicher Prüfung" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;exitX=0.5;exitY=1;entryX=0;entryY=0.5" edge="1" parent="1" source="dev-mtext" target="acc-source"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1780" y="335"/><mxPoint x="55" y="335"/><mxPoint x="55" y="455"/></Array></mxGeometry></mxCell>
-        <mxCell id="e9" value="push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="acc-source" target="acc-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" value="auswählen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="acc-source" target="acc-pick"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" value="push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="acc-pick" target="acc-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e12" value="löst aus" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="acc-branch" target="acc-sync"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="acc-sync" target="acc-nfs"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="acc-nfs" target="acc-mtext"><mxGeometry relative="1" as="geometry"/></mxCell>

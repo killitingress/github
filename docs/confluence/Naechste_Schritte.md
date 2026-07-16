@@ -17,13 +17,16 @@ offen ausgewiesen und vor dem jeweiligen Integrationslauf geklärt.
 
 | Status | Tätigkeit | Ort | Konkreter Wert beziehungsweise Ergebnis |
 |---|---|---|---|
-| offen | Zentrales Repository anlegen beziehungsweise lokalen Stand übernehmen | GitHub Enterprise: `j520730/mtext-actions` | Standardbranch und Freigabeprozess für die zentrale Automatisierung festlegen |
-| offen | FI-Repository anlegen beziehungsweise lokalen Stand übernehmen | GitHub Enterprise: `j517120/mtext-fi` | Ressourcen, `config/mandant.json` und dünne Workflows übernehmen |
+| offen | Zentrales Repository privat anlegen beziehungsweise lokalen Stand übernehmen | GitHub Enterprise: `j520730/mtext-actions` | Nur das zentrale Automatisierungsteam erhält direkten Lese- oder Schreibzugriff; Standardbranch und Freigabeprozess festlegen |
+| offen | Privates FI-Repository anlegen beziehungsweise lokalen Stand übernehmen | GitHub Enterprise: `j517120/mtext-fi` | Ressourcen, `config/mandant.json` und dünne Workflows übernehmen; private Sichtbarkeit als Voraussetzung für den Aufruf des privaten zentralen Workflows bestätigen |
 | offen | Aktive Stufenbranches anlegen | `j517120/mtext-fi` | Je `R260`, `R261`, `R270`: `Entwicklung`, `Abnahme`, `Bereitstellung` |
 | offen | Aktuellen Default Branch setzen | Repository Settings → Default branch | Zunächst `R261/Entwicklung`; beim rollierenden Linienwechsel manuell umstellen |
 | offen | Zentrale Workflowversion pinnen | Alle Dateien unter `mtext-fi/.github/workflows/` in jeder aktiven Linie | Null-SHA durch denselben freigegebenen 40-stelligen Commit-SHA aus `mtext-actions` ersetzen |
-| offen | Repositoryübergreifenden Actions-Zugriff aktivieren | `j520730/mtext-actions` → Settings → Actions → General → Access | Nutzung durch `j517120/mtext-fi` und spätere Mandanten-Repositories erlauben |
+| offen | Repositoryübergreifenden Actions-Zugriff aktivieren | `j520730/mtext-actions` → Settings → Actions → General → Access | Ausschließlich den vorgesehenen Mandanten-Repositories die Ausführung der wiederverwendbaren Workflows erlauben; Text-Entwickler der Mandanten nicht als Repositorymitglieder aufnehmen |
 | offen | Zentralen Code-Checkout praktisch prüfen | Nichtproduktiver Config-, Sync- oder Release-Lauf | Prüfen, ob die Enterprise-Freigabe den Checkout über beide Namespaces ermöglicht; falls ein Installation-Token erforderlich ist, den Workflowvertrag vor Aktivierung um dessen sichere Übergabe erweitern |
+| offen | Mandantensichtbare Logs prüfen | Nichtproduktive Läufe in einem Mandanten-Repository | Sicherstellen, dass Logs keine vertraulichen zentralen Implementierungsdetails, Tokens, Secrets oder internen Dateiinhalte offenlegen |
+| offen | Integrierten Git-Client der M/Text Workbench abnehmen | Repräsentativer Arbeitsplatz und `mtext-fi` | Authentifizierung, Branchwechsel, Commit und Push auf einen Entwicklungsbranch praktisch prüfen und verständlich dokumentieren |
+| offen | Zusätzlichen Git-Client für die Stufenweitergabe auswählen und bereitstellen | Arbeitsplätze der berechtigten Text-Entwickler und Release-Verantwortlichen | Produkt, Installation, Aktualisierung, Authentifizierung und Support festlegen; Cherry-Pick zwischen den Stufenbranches praktisch abnehmen |
 | bestätigt | GitHub-Plattform festhalten | Betriebsdokumentation | GitHub Enterprise Server 3.20.4 |
 
 ## 2. Branch- und Environment-Regeln konfigurieren
@@ -31,13 +34,17 @@ offen ausgewiesen und vor dem jeweiligen Integrationslauf geklärt.
 | Status | Tätigkeit | Ort | Konkreter Wert beziehungsweise Ergebnis |
 |---|---|---|---|
 | offen | Mandantenspezifische Verantwortliche benennen | Je Mandanten-Repository | Team für Ressourcenarbeit sowie kleines Release-Team für `R*/Bereitstellung` und neue Release-Tags festlegen |
-| offen | Direkte Pushes auf Entwicklung und Abnahme zulassen | Branchschutz für `R*/Entwicklung`, `R*/Abnahme` | Berechtigten Mitarbeiterkreis je Mandant festlegen; Force-Pushes und Löschen verbieten |
+| offen | Direkte Pushes auf Entwicklung und Abnahme zulassen | Branchschutz für `R*/Entwicklung`, `R*/Abnahme` | Kreis berechtigter Text-Entwickler je Mandant festlegen; Force-Pushes und Löschen verbieten |
 | offen | Pushes nach Bereitstellung begrenzen | Branchschutz für `R*/Bereitstellung` | Nur das benannte Release-Team darf direkt pushen; Force-Pushes und Löschen bleiben verboten |
+| offen | Zentrale Aufrufdateien im Mandanten-Repository schützen | Push-Ruleset für `.github/workflows/**/*` | Änderungen durch Text-Entwickler des Mandanten auf allen Branches blockieren; Bypass nur für die zentralen Automatisierungsverantwortlichen vorsehen und auf GHES 3.20.4 praktisch prüfen |
+| offen | Mandantenkonfiguration gegen normale Ressourcen-Pushes schützen | Push-Ruleset für `config/mandant.json` | Änderungen nur dem ausdrücklich benannten technischen Verantwortlichenkreis erlauben; normale Workbench-Pushes dürfen die Datei nicht verändern |
 | offen | GitHub Environment anlegen | Repository Settings → Environments | Gemeinsame Environments `Entwicklung`, `Abnahme`, `Bereitstellung` |
 | offen | Environment-Regeln setzen | Environments | Keine zusätzliche Freigabe für Entwicklung und Abnahme; manuelle Freigabe vor Mainframe-Übergabe in `Bereitstellung` |
 | offen | Zulässige Deploymentbranches eintragen | Environments | Generische Muster `R*/Entwicklung`, `R*/Abnahme` und für die Freigabe `R*/Bereitstellung` verwenden; die aktive Linie wird zentral validiert |
 | offen | Erstellung von Release-Tags begrenzen | Tag-Ruleset für `R[0-9][0-9][0-9].[0-9][0-9][0-9]` | Nur das je Mandant benannte Release-Team darf neue passende Tags anlegen |
 | offen | Release-Tags unveränderlich schützen | Separates Tag-Ruleset für dasselbe Muster | Updates, Force-Pushes und Löschungen ohne regulären Bypass verbieten; einen gegebenenfalls notwendigen administrativen Notfallweg separat festlegen |
+| offen | Cherry-Pick-Bedienweg für Abnahme und Bereitstellung festlegen | Zusätzlicher Git-Client und Pilotprozess je Mandant | Auswahl nach SHA, Aktualisierung des Zielbranches, Dokumentation der vollständigen Quell-SHA im neuen Ziel-Commit, Reihenfolge mehrerer Commits, Konfliktbehandlung, Prüfung und Push verständlich dokumentieren; die GitHub-Weboberfläche allein unterstützt diesen Ablauf nicht |
+| offen | Release-Tag in GitHub praktisch prüfen | GitHub-Weboberfläche und nichtproduktiver Bereitstellungsbranch | Tag auf dem bestätigten Bereitstellungsstand anlegen, Ruleset-Wirkung und einmaligen Start des Release-Workflows prüfen |
 
 ## 3. Runner und Abhängigkeiten bereitstellen
 
@@ -67,6 +74,7 @@ offen ausgewiesen und vor dem jeweiligen Integrationslauf geklärt.
 |---|---|---|---|
 | offen | FTP-Secrets hinterlegen | GitHub Environment `Bereitstellung` | `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER`, `MAINFRAME_FTP_PASSWORD` |
 | offen | Mainframe-Variablen hinterlegen | Repository-/Environment-Variablen | `MAINFRAME_DATASET=IEA.LOMS.TONICZ`, `MAINFRAME_JES_TARGET=LIT9028A`, `MAINFRAME_FTP_TIMEOUT=60` |
+| bestätigt | Historischen JCL-Eingabevertrag fachlich bestätigen | Bestehendes Verfahren und versioniertes JCL-Template | Der mandantenspezifische Zielcode wird wie bisher über genau einen vorhandenen JCL-Platzhalter eingesetzt; der getrennte zentrale Test-/Produktionswert ist auf `T` und `P` begrenzt; ein zusätzlicher Zielparameter wird nicht eingeführt |
 | offen | JCL und unmittelbare Übergabe nichtproduktiv prüfen | Freigegebener Mainframe-Testweg | FTP-Antworten, `SITE FILETYPE=JES`, Submit und gerendertes JCL abnehmen |
 
 Die Mainframe-Übergabe wartet im Environment `Bereitstellung` auf manuelle
@@ -94,7 +102,7 @@ Cutover wird der dann freigegebene aktuelle SVN-Stand abschließend nach Git
 |---|---|---|---|
 | geplant November/Dezember 2026 | Ersten SVN-Abzug für den Test-Parallelbetrieb erstellen | Alle Mandanten-Repositories | GitHub-Testumgebung mit einem dokumentierten SVN-Ausgangsstand bereitstellen; Jenkins/SVN bleiben produktiv |
 | offen | Import-Allowlist erstellen | Migrationskonfiguration je SVN-Repository | Aktive Linien `R260`, `R261`, `R270` und die drei fachlichen Stufen |
-| offen | Projektmatrix inventarisieren und freigeben | Je Mandant und gegebenenfalls je Releaselinie | Repositoryinhalt, Projekt-Allowlist und Paketcode getrennt dokumentieren; nicht allein aus einer globalen Projektliste ableiten |
+| offen | Projektmatrix inventarisieren und freigeben | Je Mandant und gegebenenfalls je Releaselinie | Repositoryinhalt, Projekt-Allowlist und historisch festgelegte Lieferdateinamen getrennt dokumentieren; nicht allein aus einer globalen Projektliste ableiten |
 | erforderlich | Release-Basis importieren | Git-Tags je Mandanten-Repository | Je aktiver Linie mindestens `.100` und alle danach entstandenen Tags importieren |
 | offen | SVN-Pfade auf Git abbilden | Migrationsskript/-konfiguration | `branches/Entwicklung/R260.100_MText/<Projekt>` → Branch `R260/Entwicklung`, Pfad `<Projekt>` |
 | offen | Tagnamen normalisieren | Migrationsskript/-konfiguration | `R260.101_MText` → `R260.101`; Entfernung von `_MText` protokollieren |
@@ -168,8 +176,9 @@ auszuführen:
    `Rnnn/Entwicklung` einbringen und anschließend normal nach Abnahme und
    Bereitstellung übernehmen. Es gibt keine automatisch schreibende
    branchübergreifende Verwaltungsautomation.
-5. Assignment und Level bei betrieblichen Änderungen ausschließlich in
-   `config/mandant.json` des betroffenen Mandanten anpassen.
+5. Mandantenspezifische technische Übergabewerte bei betrieblichen Änderungen
+   ausschließlich in `config/mandant.json` des betroffenen Mandanten anpassen;
+   die zentral abgeleiteten Lieferdateinamen sind dort nicht konfigurierbar.
 
 Die dünnen Sync-Workflows enthalten keine Liste aktiver Releaselinien mehr.
 Ihre generischen Branchmuster bleiben bei einem Linienwechsel unverändert;
@@ -181,8 +190,5 @@ unbekannte Linien werden durch `deployments.json` abgewiesen.
 - optional mehr historische SVN-Tags und Elementhistorie;
 - bei einer späteren PR-basierten Config-Pflege verbindliche Code-Owner- und
   Freigaberegel für Änderungen an `config/mandant.json`;
-- bei entsprechendem Ergebnis der Pilotphase kurzlebiger Auswahlbranch mit
-  normalem Pull Request nach `Rnnn/Bereitstellung`, ohne eigenen
-  zusätzlichen Workflow für diesen Auswahlbranch;
 - optionales M/Text- oder Mainframe-Status-Polling als eigener Ausbau, nicht
   als Voraussetzung für die erste Produktivsetzung.

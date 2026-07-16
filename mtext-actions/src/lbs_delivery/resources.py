@@ -13,21 +13,6 @@ from .errors import DeliveryError, Status
 from .paths import reject_symlinks, resolve_within
 
 
-def projects_for_sync(
-    mandant: Mapping[str, Any], release_line: str, environment: str
-) -> list[dict[str, Any]]:
-    """Ermittelt die Basisprojekte und passende linienbezogene Erweiterungen."""
-
-    projects = list(mandant["projects"])
-    for override in mandant["sync_overrides"]:
-        if (
-            override["release_line"] == release_line
-            and override["environment"] == environment
-        ):
-            projects.extend(override["additional_projects"])
-    return projects
-
-
 def stage_resources(
     source_root: str | Path,
     staging_root: str | Path,

@@ -74,7 +74,7 @@ def release_manifest(root: Path) -> dict:
                 "size": package.stat().st_size,
                 "sha256": sha256_file(package),
                 "member": "FIBASISF",
-                "package_code": "BASIS",
+                "project_code": "BASIS",
                 "deletion_list": None,
                 "deletion_count": 0,
             },

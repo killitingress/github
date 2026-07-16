@@ -17,8 +17,10 @@ class JclRenderError(ValueError):
 
 _MARKER_RE = re.compile(r"@@([A-Z][A-Z0-9_]*)@@")
 _FIELD_PATTERNS = {
+    # Historischer JCL-Parameter: ausschließlich T (Test) oder P (Produktion).
     "ISPW": re.compile(r"[TP]"),
-    "LEVEL": re.compile(r"[A-Z0-9]{1,8}"),
+    # Historischer JCL-Feldname; fachlich enthält dieser Wert den Stage-Code.
+    "LEVEL": re.compile(r"(?:FKTE|FKTF|JURJ|JURP|SVTS|VPTV)"),
     "SUBSYS": re.compile(r"[A-Z0-9]{1,8}"),
     "MEMBER": re.compile(r"[A-Z0-9]{1,8}"),
     "ASSIGNMENT": re.compile(r"[A-Z0-9]{1,12}"),

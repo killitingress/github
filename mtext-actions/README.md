@@ -8,6 +8,27 @@ Mandantenspezifische Ressourcen und Mappings bleiben in Repositories wie
 `mtext-fi`. Diese Repositories rufen die hier enthaltenen wiederverwendbaren
 Workflows über einen unveränderlichen Commit-SHA auf.
 
+Das Zielrepository ist privat. Nur das zentrale Automatisierungsteam erhält
+direkten Lese- oder Schreibzugriff. Text-Entwickler der Mandanten arbeiten
+ausschließlich in ihrem Mandanten-Repository. Dessen Workflows dürfen die freigegebenen
+wiederverwendbaren Workflows über die GitHub-Actions-Zugriffsrichtlinie
+aufrufen; dafür werden die Text-Entwickler nicht als Mitglieder von
+`mtext-actions` berechtigt. Jobausgaben sind im aufrufenden Repository
+sichtbar und dürfen daher keine Secrets oder unnötigen internen Details
+enthalten.
+
+Auf GitHub Enterprise Server 3.20 kann ein privates aufrufendes Repository
+Workflows aus einem freigegebenen privaten Repository verwenden. Die
+Mandanten-Repositories werden deshalb ebenfalls privat angelegt; die konkrete
+repositoryübergreifende Freigabe über beide Namespaces wird vor Aktivierung
+praktisch bestätigt.
+
+In jedem Mandanten-Repository schützt ein Push-Ruleset den vollständigen Pfad
+`.github/workflows/**/*`. Text-Entwickler der Mandanten können dadurch weder die
+zentralen Aufrufe verändern noch einen neuen Workflow anlegen, der die
+technische Freigabe zweckentfremdet. Nur die zentralen
+Automatisierungsverantwortlichen erhalten einen kontrollierten Bypass.
+
 Übergreifende Dokumentation: [Technisches Zielbild](../docs/confluence/Zielbild_GitHub_Actions_Git.md),
 [Benutzeranleitung](../docs/confluence/Benutzeranleitung.md),
 [Nächste Schritte](../docs/confluence/Naechste_Schritte.md) und
@@ -32,6 +53,7 @@ mtext-actions/
     __main__.py
     cli.py
     config.py
+    delivery_names.py
     errors.py
     git_refs.py
     jcl.py
@@ -164,7 +186,9 @@ Manifest, JCL noch Logausgaben geschrieben.
 Da aufrufendes und zentrales Repository in unterschiedlichen Namespaces
 liegen, muss `j520730/mtext-actions` in den GitHub-Enterprise-Actions-
 Einstellungen für `j517120/mtext-fi` und die späteren Mandanten-Repositories
-freigegeben werden. Der lesende Checkout des zentralen Codes wird auf dem
+mit dem kleinstmöglichen unterstützten Geltungsbereich freigegeben werden.
+Diese Actions-Freigabe ersetzt keine direkte Benutzerberechtigung. Der lesende
+Checkout des zentralen Codes wird auf dem
 echten Enterprise-System verifiziert. Falls dafür ein kurzlebiger
 Installation-Token erforderlich ist, muss der Workflowvertrag vor Aktivierung
 um dessen sichere Übergabe erweitert werden; der Token wird nicht im

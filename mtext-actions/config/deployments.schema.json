@@ -24,13 +24,13 @@
         "^R[0-9]{3}$": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["line", "stage"],
+          "required": ["line", "handover_profile"],
           "properties": {
             "line": {
               "type": "string",
               "pattern": "^en[0-9]{2}$"
             },
-            "stage": {
+            "handover_profile": {
               "enum": ["FKT", "JUR"]
             }
           }
@@ -109,10 +109,10 @@
       ],
       "properties": {
         "archive_name_template": {
-          "const": "{mandant}{package_code}{delivery_code}.tgz"
+          "const": "{mandant}{project_code}{delivery_code}.tgz"
         },
         "deletion_list_name_template": {
-          "const": "{mandant}{package_code}D.txt"
+          "const": "{mandant}{project_code}D.txt"
         },
         "info_name_template": {
           "const": "_INFO_{mandant}-{project}-{delivery_type}-{release}-{previous_release}.txt"
@@ -124,7 +124,10 @@
       "additionalProperties": false,
       "required": ["ispw"],
       "properties": {
-        "ispw": {"enum": ["T", "P"]}
+        "ispw": {
+          "description": "Wert für den historischen JCL-Platzhalter ISPW: T für Test oder P für Produktion.",
+          "enum": ["T", "P"]
+        }
       }
     }
   },

@@ -47,9 +47,11 @@ Der redundante historische Sonderpfad `LOMS_Basis[FI]` wird nicht übernommen.
 
 `config/mandant.json` ist kein allgemeiner Benutzerschalter. Sie gehört zum
 versionierten Lieferstand und legt verbindlich fest, welche Projekte
-synchronisiert und paketiert werden, welche Paketcodes gelten und welche
-Mainframe-Zuordnungen der Mandant verwendet. Repositoryinhalte, die nicht in
-der Projekt-Allowlist stehen, werden nicht ausgeliefert.
+synchronisiert und paketiert werden und welche mandantenspezifischen Werte für
+die bestehende technische Übergabe gelten. Die historischen Lieferdateinamen
+werden zentral aus dem Projektnamen abgeleitet und sind hier nicht
+konfigurierbar. Repositoryinhalte, die nicht in der Projekt-Allowlist stehen,
+werden nicht ausgeliefert.
 
 Eine Änderung dieser Datei startet einen nebenwirkungsfreien Config-Check. Er
 prüft Schema, Repository-Identität und fachliche Eindeutigkeit, greift aber
@@ -65,11 +67,14 @@ Für die gleichzeitig aktiven Linien existieren getrennte Stufenbranches, etwa
 bei Bedarf zunächst auf einem Feature-Branch entstehen; erst der direkte Push
 nach `R261/Entwicklung` löst die M/Text-Synchronisation aus. Nach erfolgreicher
 Prüfung kann ein fachlich freigegebener Commit direkt nach `R261/Abnahme`
-übernommen werden. Die jeweiligen Pushes verteilen ihren exakten Commit zum
-Entwicklungs- beziehungsweise Abnahmesystem.
+per Cherry-Pick übernommen werden. Dabei entsteht auf dem Abnahmebranch ein
+neuer Commit mit eigener SHA; seine Commit-Nachricht dokumentiert die
+vollständige Quell-SHA. Die jeweiligen Pushes verteilen den exakten Stand ihres
+Zielbranches zum Entwicklungs- beziehungsweise Abnahmesystem.
 
-Ausgewählte abgenommene Änderungen werden direkt nach
-`R261/Bereitstellung` gepusht. Dieser Push erzeugt noch keine Lieferung. Erst
+Ausgewählte abgenommene Änderungen werden mit dem zusätzlich bereitgestellten
+Git-Client per Cherry-Pick nach `R261/Bereitstellung` übernommen und gepusht.
+Dieser Push erzeugt noch keine Lieferung. Erst
 ein vom Mandanten-Release-Team gesetzter Tag `Rnnn.nnn` prüft den
 Bereitstellungsstand und startet eine FULL- oder DELTA-Lieferung. `.100` ist
 FULL; andere gültige Tags derselben Linie sind kumulative DELTAs gegen `.100`.

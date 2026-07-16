@@ -10,6 +10,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 
+from .delivery_names import project_code_for_name
 from .errors import DeliveryError, Status
 
 
@@ -97,12 +98,20 @@ def load_mandant_config(
             Status.VALIDATION_FAILED,
             "mandant repository does not match the triggering repository",
         )
-    for field in ("name", "source_path", "package_code"):
+    for field in ("name", "source_path"):
         values = [project[field] for project in mandant["projects"]]
         if len(values) != len(set(values)):
             raise DeliveryError(
                 Status.VALIDATION_FAILED, f"project field {field} must be unique"
             )
+    project_codes = [
+        project_code_for_name(project["name"]) for project in mandant["projects"]
+    ]
+    if len(project_codes) != len(set(project_codes)):
+        raise DeliveryError(
+            Status.VALIDATION_FAILED,
+            "regular projects must have unique approved delivery name mappings",
+        )
     return mandant
 
 

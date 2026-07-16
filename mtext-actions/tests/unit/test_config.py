@@ -15,6 +15,7 @@ from lbs_delivery.config import (
     resolve_adapter_url,
     validate_release_tag,
 )
+from lbs_delivery.delivery_names import project_code_for_name
 from lbs_delivery.errors import DeliveryError, Status
 
 
@@ -56,7 +57,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(self.mandant["subsystem"], "LOMS")
         self.assertEqual(
             {
-                project["name"]: project["package_code"]
+                project["name"]: project_code_for_name(project["name"])
                 for project in self.mandant["projects"]
             },
             {
@@ -67,7 +68,15 @@ class ConfigTests(unittest.TestCase):
                 "LOMS_PKA": "PKA",
             },
         )
-        self.assertEqual(self.mandant["sync_overrides"], [])
+    def test_delivery_names_are_fixed_centrally(self) -> None:
+        self.assertEqual(project_code_for_name("LOMS_Autonom[BY]"), "AUTON")
+        with self.assertRaises(DeliveryError):
+            project_code_for_name("LOMS_Unbekannt")
+
+        with_tenant_override = copy.deepcopy(self.mandant_document)
+        with_tenant_override["mandant"]["projects"][0]["project_code"] = "OTHER"
+        with self.assertRaises(ValidationError):
+            Draft202012Validator(self.mandant_schema).validate(with_tenant_override)
 
     def test_schema_rejects_unknown_keys_and_unknown_mandants(self) -> None:
         with_unknown_key = copy.deepcopy(self.mandant_document)
@@ -80,13 +89,25 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             Draft202012Validator(self.mandant_schema).validate(with_unknown_mandant)
 
+        with_unknown_stage = copy.deepcopy(self.mandant_document)
+        with_unknown_stage["mandant"]["handover_profiles"]["FKT"]["stage"] = "OTHER"
+        with self.assertRaises(ValidationError):
+            Draft202012Validator(self.mandant_schema).validate(with_unknown_stage)
+
+        with_removed_sync_override = copy.deepcopy(self.mandant_document)
+        with_removed_sync_override["mandant"]["sync_overrides"] = []
+        with self.assertRaises(ValidationError):
+            Draft202012Validator(self.mandant_schema).validate(
+                with_removed_sync_override
+            )
+
     def test_only_inventory_backed_release_lines_are_configured(self) -> None:
         self.assertEqual(
             self.deployments["release_lines"],
             {
-                "R260": {"line": "en03", "stage": "JUR"},
-                "R261": {"line": "en01", "stage": "FKT"},
-                "R270": {"line": "en02", "stage": "JUR"},
+                "R260": {"line": "en03", "handover_profile": "JUR"},
+                "R261": {"line": "en01", "handover_profile": "FKT"},
+                "R270": {"line": "en02", "handover_profile": "JUR"},
             },
         )
         self.assertNotIn("default", self.deployments["release_lines"])

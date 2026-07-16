@@ -60,11 +60,15 @@ ist nicht Bestandteil dieser ersten Ausbaustufe.
 - Das bisherige Jenkins-Skript wird nicht weiterentwickelt oder technisch
   portiert. Nur die weiterhin benötigten Regeln, Zuordnungen und
   Übergabeverfahren werden übernommen.
-- Jeder Mandant erhält ein eigenes GitHub-Repository. Namen und grundsätzlicher
-  Aufbau orientieren sich an den bisherigen Mandantenstrukturen.
+- Jeder Mandant erhält ein eigenes privates GitHub-Repository. Namen und
+  grundsätzlicher Aufbau orientieren sich an den bisherigen
+  Mandantenstrukturen.
 - Die gemeinsame Automatisierung wird zentral durch die FI verwaltet und von
   den Mandanten-Repositories in einer ausdrücklich festgelegten Version
   verwendet.
+- `mtext-actions` ist ein privates Repository. Direkten Zugriff erhalten nur
+  die zentralen Automatisierungsverantwortlichen; Text-Entwickler der
+  Mandanten werden dort nicht als Repositorymitglieder berechtigt.
 - Jeder Lauf verarbeitet genau einen eindeutig bestimmten Git-Stand. Seine
   technische Kennung ist der Commit-SHA.
 - Der Mandant ergibt sich aus dem Repository und seiner Konfiguration. Er kann
@@ -91,10 +95,12 @@ mit einem frisch ausgecheckten, eindeutig bestimmten Git-Stand.
 
 Die bisherigen Lieferdateien geben folgende Kompatibilitätsregeln vor:
 
-- FULL-Pakete heißen `<Mandant><Paketcode>F.tgz`, DELTA-Pakete entsprechend
-  `<Mandant><Paketcode>D.tgz`.
+- FULL- und DELTA-Pakete behalten ihre historisch festgelegten Dateinamen. Die
+  dafür benötigte Projektkennung wird zentral aus dem freigegebenen
+  Projektnamen abgeleitet und kann nicht im Mandanten-Repository geändert
+  werden.
 - Ein DELTA-Paket enthält eine Löschliste mit dem Namen
-  `<Mandant><Paketcode>D.txt`.
+  entsprechend der bisherigen Namensregel.
 - Ressourcen behalten ihre fachlichen Projektpfade. Bei Fragmentprojekten
   gehört das Mandantenkürzel in eckigen Klammern zum Projektnamen, zum Beispiel
   `LOMS_Autonom[BY]`.
@@ -113,7 +119,7 @@ Die Lösung besteht aus vier Bereichen:
 
 | Bereich | Verantwortung |
 |---|---|
-| Mandanten-Repository | M/Text-Ressourcen, Projektzuordnungen, Paketcodes und mandantenspezifische Workflows |
+| Mandanten-Repository | M/Text-Ressourcen, Projektzuordnungen, mandantenspezifische technische Übergabewerte und dünne Workflows |
 | Zentrales Repository `mtext-actions` | Gemeinsame Prüfungen, Synchronisation, Paketbau und Mainframe-Übergabe |
 | GitHub Actions | Ausführung der Abläufe, Freigaben und Protokollierung |
 | Self-hosted Runner | Ausführung innerhalb des internen Netzes und Zugriff auf M/Text, Netzlaufwerk und Mainframe |
@@ -121,6 +127,34 @@ Die Lösung besteht aus vier Bereichen:
 Ein Mandanten-Repository enthält ausschließlich die Ressourcen und Angaben
 des jeweiligen Mandanten. Das zentrale Repository enthält keine
 Mandantenressourcen, sondern nur die gemeinsam verwendete Automatisierung.
+
+Mandanten-Repositories dürfen die freigegebenen wiederverwendbaren Workflows
+über die GitHub-Actions-Zugriffsrichtlinie aufrufen. Diese technische Freigabe
+erteilt ihren Benutzern keinen direkten Zugriff auf `mtext-actions`. Die
+Ausgaben der aufgerufenen Jobs erscheinen jedoch in den Workflow-Logs des
+Mandanten-Repositories. Deshalb werden Logs grundsätzlich als
+mandantensichtbar behandelt und enthalten weder Secrets noch unnötige interne
+Details.
+
+Damit die technische Freigabe nicht über veränderte aufrufende Workflows
+zweckentfremdet werden kann, dürfen Text-Entwickler der Mandanten keine Dateien
+unter `.github/workflows/` ändern oder neu anlegen. Ein Push-Ruleset schützt
+diesen Pfad auf allen Branches; nur die zentralen
+Automatisierungsverantwortlichen erhalten einen kontrollierten Bypass.
+`config/mandant.json` wird ebenfalls von der normalen Ressourcenpflege
+getrennt und darf nur durch den benannten technischen Verantwortlichenkreis
+geändert werden.
+
+Die Text-Entwickler bearbeiten Briefressourcen in der M/Text Workbench und
+verwenden deren integrierten Git-Client für Commit und Push. GitHub im Browser
+dient der Laufkontrolle, manuellen Wiederholungen, Freigaben, Release-Tags und
+den weitergehenden Verwaltungsaufgaben. Die tägliche Ressourcenarbeit setzt
+keine Git-Kommandozeile voraus.
+
+Für die gezielte Übernahme einzelner Änderungen zwischen den Stufen erhalten
+die dafür berechtigten Text-Entwickler zusätzlich einen geeigneten Git-Client.
+Das konkrete Produkt, seine Bereitstellung und der verbindliche Bedienweg
+werden vor dem Pilotbetrieb festgelegt und abgenommen.
 
 Die Berechtigungen werden je Mandanten-Repository vergeben. Jeder Mandant
 benennt ein Release-Team, das als einzige reguläre Gruppe direkt nach
@@ -175,10 +209,9 @@ mtext-actions/
 
 `mtext-fi` dient als Muster für die Mandanten-Repositories. In
 `config/mandant.json` sind derzeit die fünf FI-Projekte aufgeführt, die
-synchronisiert und in Releasepakete aufgenommen werden, einschließlich ihrer
-jeweiligen Paketcodes. `LOMS_Testdaten` soll ebenfalls in das Repository
-übernommen werden, ist aber wie bisher nicht Bestandteil der Synchronisation
-oder der Releasepakete.
+synchronisiert und in Releasepakete aufgenommen werden. `LOMS_Testdaten` soll
+ebenfalls in das Repository übernommen werden, ist aber wie bisher nicht
+Bestandteil der Synchronisation oder der Releasepakete.
 
 Die Workflows im Mandanten-Repository legen nur Auslöser und explizite
 Zielstufen fest. Die Verarbeitung erfolgt durch die zentralen Workflows aus
@@ -197,7 +230,8 @@ Vor dem ersten Integrationslauf wird der Platzhalter in allen
 Mandanten-Workflows durch die vollständige Kennung einer freigegebenen Version
 von `mtext-actions` ersetzt. GitHub Enterprise muss den
 Mandanten-Repositories außerdem den Zugriff auf die zentralen Workflows
-erlauben. Beides wird mit einem nichtproduktiven Lauf geprüft.
+erlauben, ohne deren Benutzer direkt am zentralen Repository zu berechtigen.
+Beides wird mit einem nichtproduktiven Lauf geprüft.
 
 ## 6. Branches, Weitergabe und Auslöser
 
@@ -220,10 +254,13 @@ zusätzliche fachliche Stufe.
 
 Ein Push nach `Rnnn/Entwicklung` oder `Rnnn/Abnahme` startet automatisch die
 M/Text-Verteilung für die entsprechende Stufe. Beim Übergang zur nächsten
-Stufe wird derselbe Commit übernommen. Dadurch bleibt erkennbar, welcher
-geprüfte Stand weitergegeben wurde. Die Workflow-Trigger verwenden das
-allgemeine Namensmuster `Rnnn/<Stufe>`; ob eine konkrete Linie aktiv ist,
-entscheidet ausschließlich die zentrale Deploymentkonfiguration.
+Stufe wird eine fachlich ausgewählte Änderung per Cherry-Pick übernommen. Der
+Cherry-Pick erzeugt auf dem Zielbranch einen neuen Commit mit einer neuen SHA;
+weitergegeben wird dieselbe Änderung, nicht derselbe Commit. Die
+vollständige Quell-SHA wird nach einer verbindlichen Konvention im neuen
+Ziel-Commit dokumentiert. Die Workflow-Trigger verwenden das allgemeine
+Namensmuster `Rnnn/<Stufe>`; ob eine konkrete Linie aktiv ist, entscheidet
+ausschließlich die zentrale Deploymentkonfiguration.
 
 Ein Push nach `Rnnn/Bereitstellung` erzeugt noch keine Lieferung. Erst ein Tag
 im Format `Rnnn.nnn` startet den Paketbau. Dabei wird geprüft, ob der Tag zur
@@ -231,13 +268,15 @@ angegebenen Releaselinie gehört und vom Bereitstellungsbranch erreichbar ist.
 Der Tag ist danach die unveränderliche Identität dieser Lieferung und wird
 durch Tag-Rulesets gegen Änderung, Force-Push und Löschung geschützt.
 
-In der Pilotphase werden die fachlich ausgewählten Commits weiterhin direkt
-per Cherry-Pick nach `Rnnn/Bereitstellung` übernommen. Dabei wird insbesondere
-beobachtet, ob parallele Zusammenstellungen oder die Nachvollziehbarkeit der
-Auswahl Probleme verursachen. Falls dies im Betrieb erforderlich wird, kann
-später ein kurzlebiger Auswahlbranch mit einem normalen Pull Request nach
-`Rnnn/Bereitstellung` eingeführt werden. Dafür ist kein eigener fachlicher
-Validate-Workflow erforderlich.
+Der zusätzliche Git-Client für die Auswahl und Übernahme einzelner Änderungen
+nach Abnahme und Bereitstellung wird vor dem Pilotbetrieb ausgewählt,
+bereitgestellt und praktisch abgenommen. Ein direkter Cherry-Pick ist über die
+GitHub-Weboberfläche allein nicht verfügbar. Soll der erweiterte Ablauf später
+vollständig im Browser stattfinden, ist ein kurzlebiger Auswahlbranch mit
+einem normalen Pull Request der bevorzugte GitHub-native Weg. Dafür ist kein
+eigener fachlicher Validate-Workflow erforderlich. Eine alternativ eingeführte
+schreibende Automation müsste einen eigenen, ausdrücklich freizugebenden
+Sicherheitsvertrag erhalten.
 
 Die Mandanten-Repositories erhalten keinen zusätzlichen `main`-Branch. Als
 Default Branch dient der Entwicklungsbranch der aktuell führenden Linie,
@@ -259,29 +298,34 @@ unter anderem:
 
 - den Mandanten und das zugehörige Repository,
 - die zu verarbeitenden Projekte,
-- die Paketcodes sowie
-- die Mainframe-Zuordnungen des Mandanten.
+- die für den Mandanten variablen technischen Übergabewerte.
 
 Diese `config/mandant.json` ist ein versionierter Bestandteil des fachlichen
 Lieferstands und keine frei veränderbare Laufzeitkonfiguration. `projects`
-bildet die Projekt-Allowlist für Synchronisation und Release. Optional
-definierte `sync_overrides` ergänzen nur die Synchronisation einer bestimmten
-Linie und Stufe; sie verändern den Paketinhalt nicht. Dadurch bleibt auch bei
-einem späteren Release eines älteren Tags nachvollziehbar, welche Projekte,
-Paketcodes, Assignments und Level zu genau diesem Stand gehörten. Eine
-Zentralisierung außerhalb des Mandanten-Repositories würde diese gemeinsame
-Versionierung von Ressourcen und Mandantenmapping auflösen und ist deshalb
-nicht vorgesehen.
+bildet die gemeinsame Projekt-Allowlist für Synchronisation und Release;
+linien- oder stufenspezifische Zusatzprojekte sind nicht vorgesehen. Dadurch
+bleibt auch bei einem späteren Release eines älteren Tags nachvollziehbar,
+welche Projekte und technischen Übergabewerte zu genau diesem Stand gehörten.
+Eine Zentralisierung außerhalb des Mandanten-Repositories würde diese
+gemeinsame Versionierung von Ressourcen und Mandantenmapping auflösen und ist
+deshalb nicht vorgesehen.
+
+Zu den mandantenspezifischen Übergabewerten gehören das Subsystem sowie je
+Übergabeprofil Assignment und fachlicher Stage-Code. Die bestehende JCL nennt
+diesen Stage-Code historisch `LEVEL`; ein zusätzlicher Levelwert wird nicht
+eingeführt. Diese Werte dürfen bei einer fachlich bestätigten Änderung der
+Mandantenzuordnung versioniert in `mandant.json` angepasst werden. Der zentral
+verwaltete Test-/Produktionswert und Zugangsdaten gehören nicht in diese Datei.
 
 Die zentrale Konfiguration beschreibt die gemeinsamen Releaselinien,
 Zielstufen, M/Text-Adressen und Dateinamensregeln. Derzeit gelten folgende
 Zuordnungen:
 
-| Releaselinie | Technische Linie | Mainframe-Stufe |
-|---|---|---|
-| `R260` | `en03` | `JUR` |
-| `R261` | `en01` | `FKT` |
-| `R270` | `en02` | `JUR` |
+| Releaselinie | Technische M/Text-Linie |
+|---|---|
+| `R260` | `en03` |
+| `R261` | `en01` |
+| `R270` | `en02` |
 
 Vor einer Verteilung oder Lieferung wird die gesamte benötigte Konfiguration
 geprüft. Unbekannte Mandanten, Releaselinien, Zielumgebungen oder zusätzliche
@@ -342,11 +386,12 @@ Die JCL liegt künftig als eigene versionierte Template-Datei vor. Änderungen
 an der Mainframe-Ansteuerung sind dadurch sichtbar und können unabhängig vom
 Programmcode geprüft werden.
 
-Für jede Übergabe werden ausschließlich geprüfte Werte für ISPW-Instanz,
-Level, Subsystem, Member und Assignment in das Template eingesetzt. Fehlende,
-unbekannte oder syntaktisch unzulässige Werte führen vor der Übergabe zu einem
-Fehler. Zugangsdaten werden weder in die JCL noch in die Protokolle
-geschrieben.
+Für jede Übergabe werden ausschließlich die im bisherigen Verfahren
+benötigten, geprüften Werte in das Template eingesetzt. Historisch feste Werte
+bleiben fest; nur tatsächlich mandantenspezifische Zuordnungen werden aus der
+Mandantenkonfiguration übernommen. Fehlende, unbekannte oder syntaktisch
+unzulässige Werte führen vor der Übergabe zu einem Fehler. Zugangsdaten werden
+weder in die JCL noch in die Protokolle geschrieben.
 
 Der Release-Workflow trennt den Paketbau von der Mainframe-Übergabe. Der
 Paketbau benötigt keinen Zugriff auf das Zielsystem. Erst der Übergabeschritt

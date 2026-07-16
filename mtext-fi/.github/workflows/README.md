@@ -97,7 +97,10 @@ Einrichtung sind im
 [Nächste Schritte](../../../docs/confluence/Naechste_Schritte.md) beschrieben.
 Für den Zugriff von `j517120/mtext-fi` auf
 `j520730/mtext-actions` muss außerdem die GitHub-Enterprise-Actions-Freigabe
-des zentralen Repositories eingerichtet und praktisch geprüft werden.
+des zentralen Repositories eingerichtet und praktisch geprüft werden. Die
+Benutzer von `mtext-fi` benötigen dafür keinen direkten Zugriff auf
+`mtext-actions`; die Freigabe gilt für den Workflowaufruf, nicht für
+Repositorymitgliedschaften.
 
 Die Zielplattform ist GitHub Enterprise Server 3.20.4. Der zentrale
 Release-Workflow verwendet daher die offiziellen Node-20-v3-Varianten der
@@ -115,6 +118,11 @@ erzwungen werden:
   berechtigten Mitarbeiter zulassen;
 - direkte Pushes nach `Rnnn/Bereitstellung` auf das je Mandant benannte
   Release-Team begrenzen; Force-Pushes und Löschen bleiben verboten;
+- `.github/workflows/**/*` per Push-Ruleset auf allen Branches gegen Änderungen
+  durch Mandantenmitarbeiter schützen; Bypass nur für die zentralen
+  Automatisierungsverantwortlichen;
+- `config/mandant.json` von normalen Ressourcen-Pushes ausschließen und nur
+  dem benannten technischen Verantwortlichenkreis zur Änderung erlauben;
 - neue Tags `Rnnn.nnn` nur durch das Release-Team zulassen und bestehende
   Release-Tags gegen Änderung, Force-Push und Löschung schützen;
 - freigegebene Actions und wiederverwendbare Workflows;
