@@ -6,11 +6,12 @@ name: Sync M/Text resources
     branches:
       - R[0-9][0-9][0-9]/Entwicklung
       - R[0-9][0-9][0-9]/Abnahme
-  # Manuelle Wiederholungen verlangen einen exakten Commit und den dazugehörigen Stufenbranch.
+  # Initiale Vollsynchronisationen und Wiederholungen verlangen einen exakten
+  # Commit und den dazugehörigen Stufenbranch.
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: Exakter Commit-SHA, der erneut verteilt werden soll
+        description: Exakter Commit-SHA für initiale Vollsynchronisation oder Wiederholung
         required: true
         type: string
       source_branch:

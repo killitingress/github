@@ -304,7 +304,64 @@ gewählt wurden. Der Status ersetzt deshalb keine fachliche Freigabe und ist
 kein technisches Gate. Synchronisation und Release validieren die verwendete
 Konfiguration auf ihrem tatsächlichen Ausführungspfad erneut.
 
-## 3. Änderung nach Entwicklung bringen
+## 3. Neue Releaselinie initial in M/Text bereitstellen
+
+Bei einem Releaselinienwechsel müssen die Ressourcen nicht erst geändert
+werden, damit sie in den neuen M/Text-Umgebungen verfügbar sind. Vor der
+fachlichen Nutzung der neuen Linie führt der benannte Verantwortlichenkreis je
+Mandant eine initiale Vollsynchronisation für Entwicklung und Abnahme durch.
+
+Ausgangspunkt ist immer der letzte tatsächlich ausgelieferte Release-Tag der
+bisherigen Linie. Der Commit dieses unveränderlichen Tags bildet die Basis der
+neuen Stufenbranches und der initialen M/Text-Synchronisation. Entscheidend ist
+damit der bestätigte letzte Liefertag, nicht lediglich der numerisch höchste
+vorhandene Tag. Diese Auswahl kann die Automation nicht sicher selbst treffen,
+weil sie den Abschluss im nachgelagerten Betriebsverfahren nicht abfragt.
+
+Dabei wird nicht jede technische Datei des Git-Repositories übertragen. Die
+Automation synchronisiert den vollständigen Stand aller Projekte aus der
+Projekt-Allowlist in `config/mandant.json`. Bewusst ausgeschlossene
+Testdatenprojekte sowie `.github` und `config` bleiben außen vor. Diese
+M/Text-Vollsynchronisation ist außerdem nicht die FULL-Lieferung an den
+Mainframe; letztere entsteht erst durch einen Release-Tag mit der Endung
+`.100`.
+
+Der Verantwortlichenkreis führt den Linienwechsel in dieser Reihenfolge aus:
+
+1. Den letzten tatsächlich ausgelieferten Release-Tag der bisherigen Linie
+   und dessen vollständige Commit-SHA feststellen. Der erfolgreiche
+   technische und betriebliche Abschluss der Lieferung muss nach dem
+   vereinbarten Verfahren bestätigt sein.
+2. Die drei neuen Branches `Rnnn/Entwicklung`, `Rnnn/Abnahme` und
+   `Rnnn/Bereitstellung` von genau diesem Tag-Commit anlegen.
+3. Die neue Releaselinie in der zentralen Deploymentkonfiguration freigeben
+   und prüfen, dass ihre M/Text-Ziele korrekt zugeordnet sind.
+4. Unter **Actions → Sync M/Text resources → Run workflow** zunächst für
+   Entwicklung und anschließend für Abnahme die folgenden Werte angeben.
+
+- `commit_sha`: bei beiden Läufen dieselbe vollständige 40-stellige SHA des
+  letzten Liefertags der bisherigen Linie;
+- `source_branch`: passender Branch `Rnnn/Entwicklung` beziehungsweise
+  `Rnnn/Abnahme`.
+
+Die Automation prüft, dass der Tag-Commit aus dem angegebenen neuen Branch
+erreichbar ist, ermittelt das Zielsystem zentral, überträgt alle
+konfigurierten Projekte und ruft den Adapter auf. Ein leerer Commit oder eine
+Scheinänderung zum Auslösen ist nicht notwendig. Beide Läufe, der zugrunde
+liegende letzte Liefertag und die verwendete Commit-SHA werden für den
+Linienwechsel dokumentiert.
+
+Auch wenn der letzte Liefertag eine DELTA-Lieferung an den Mainframe ausgelöst
+hat, wird M/Text vollständig initialisiert: Der Tag verweist auf einen
+vollständigen Repository-Stand, aus dem die Synchronisation alle Projekte der
+Projekt-Allowlist überträgt.
+
+`ADAPTER_ACCEPTED` bestätigt nur, dass der Adapter den Aufruf angenommen hat.
+Vor der fachlichen Freigabe der neuen Linie muss deshalb der vereinbarte
+Smoke-Test in M/Text erfolgreich sein. Schlägt ein Lauf fehl, wird derselbe
+Commit nach Behebung der technischen Ursache kontrolliert erneut gestartet.
+
+## 4. Änderung nach Entwicklung bringen
 
 1. In der M/Text Workbench prüfen, dass der aktuelle
    `<Releaselinie>/Entwicklung` geöffnet ist. Für länger laufende oder
@@ -322,7 +379,7 @@ Releaselinie und Stufe zentral ermittelten M/Text-Ziel. Für `R261` sind dies
 beispielsweise `en01e` in Entwicklung und `en01a` in Abnahme. Ein erfolgreicher
 Lauf endet mit `ADAPTER_ACCEPTED`.
 
-## 4. Stand zur Abnahme weitergeben
+## 5. Stand zur Abnahme weitergeben
 
 1. Den in Entwicklung erfolgreich geprüften Commit ermitteln.
 2. Im zusätzlichen Git-Client den aktuellen Zielbranch
@@ -342,7 +399,7 @@ Mainframe-Paket. Die Auswahl der übernommenen Änderung ist eine fachliche
 Verantwortlichkeit. Der Workflow prüft nicht automatisch, aus welchem
 Entwicklungs-Commit sie hervorgegangen ist.
 
-## 5. Ausgewählte Änderungen bereitstellen
+## 6. Ausgewählte Änderungen bereitstellen
 
 1. In GitHub die fachlich freigegebenen Commits aus Abnahme bestimmen und ihre
    Reihenfolge festhalten.
@@ -364,7 +421,7 @@ nur das für den jeweiligen Mandanten benannte Release-Team. In der Pilotphase
 wird geprüft, ob dieser direkte Ablauf auch bei parallelen Bereitstellungen
 ausreichend übersichtlich bleibt.
 
-## 6. FULL- oder DELTA-Lieferung auslösen
+## 7. FULL- oder DELTA-Lieferung auslösen
 
 Vor dem Taggen müssen Releaselinie, Mandant, gewünschter Lieferungstyp und der
 exakte Commit auf `<Releaselinie>/Bereitstellung` fachlich bestätigt sein.
@@ -406,7 +463,7 @@ Danach unter **Actions → Build and publish release** prüfen:
 FTP-/JES-Übergabe akzeptiert wurde. Der fachliche Abschluss des Mainframe-Jobs
 wird in Ausbaustufe 1 nicht abgefragt.
 
-## 7. Einen Lauf kontrolliert wiederholen
+## 8. Einen Lauf kontrolliert wiederholen
 
 Ein noch verfügbarer Workflow-Lauf kann in GitHub über **Actions**, den
 betroffenen Lauf und **Re-run jobs** mit demselben Commit und derselben
@@ -414,7 +471,7 @@ Git-Referenz wiederholt werden. Die folgenden manuellen Starts sind für Fälle
 gedacht, in denen ein neuer kontrollierter Lauf mit ausdrücklich angegebenem
 Commit oder Tag erforderlich ist.
 
-### M/Text-Synchronisation wiederholen
+### M/Text-Vollsynchronisation initial starten oder wiederholen
 
 Unter **Actions → Sync M/Text resources → Run workflow** angeben:
 
@@ -425,7 +482,10 @@ Unter **Actions → Sync M/Text resources → Run workflow** angeben:
 Die Automation weist den Lauf zurück, wenn der Commit nicht aus dem gewählten
 Branch erreichbar ist. Das Zielsystem kann nicht frei eingegeben werden; es
 wird aus Branch und zentraler Konfiguration abgeleitet. Eine allgemeine
-Erklärung zu Commits und SHAs steht unter „Begriffe und Namensregeln“.
+Erklärung zu Commits und SHAs steht unter „Begriffe und Namensregeln“. Dieser
+manuelle Einstieg dient sowohl der initialen Vollsynchronisation beim
+Releaselinienwechsel als auch dem technischen Wiederanlauf eines bereits
+verteilten Stands.
 
 ### Release-Lauf wiederholen
 
@@ -438,7 +498,7 @@ Vor jedem Wiederanlauf klären, ob das Zielsystem die vorherige Übergabe bereit
 angenommen hat. GitHub Actions kennt ohne Status-Polling keinen nachgelagerten
 fachlichen Endstatus.
 
-## 8. Status und Fehlerbilder verstehen
+## 9. Status und Fehlerbilder verstehen
 
 | Status oder sichtbares Symptom | Bedeutung | Nächste Prüfung |
 |---|---|---|
@@ -447,7 +507,7 @@ fachlichen Endstatus.
 | `VALIDATION_FAILED` | Input, Konfiguration, Schema, Branchrichtung oder JCL ungültig | Erste Fehlermeldung lesen; Branch-/Tagformat und Konfiguration prüfen |
 | `SOURCE_FAILED` | Commit oder Tag/Basisreferenz nicht auflösbar | SHA, Tag, `.100`-Basis und Branch-Erreichbarkeit prüfen |
 | `PACKAGE_FAILED` | Paket, Informationsdatei oder Manifest konnte nicht sicher gebaut werden | Fehlende Projektpfade, Symlinks, leeres/benutztes Ausgabeverzeichnis prüfen |
-| `RESOURCE_TRANSFER_FAILED` | Veröffentlichung nach serverSync/NFS fehlgeschlagen | Mount, Rechte, Zielpfad und Runnerzugriff prüfen; Adapter wurde nicht aufgerufen |
+| `RESOURCE_TRANSFER_FAILED` | Veröffentlichung nach `serverSync` fehlgeschlagen | Fehler des gewählten Transportwegs prüfen; bis zur Transportentscheidung bildet der aktuelle Code die Share-/NFS-Variante ab |
 | `ADAPTER_FAILED` | Transportfehler oder Nicht-2xx vom Adapter | HTTP-Status und bereinigten Response-Body im Log prüfen |
 | `ADAPTER_ACCEPTED` | Unmittelbare Adapterannahme erfolgreich | Kein Beleg für einen nachgelagerten M/Text-Endstatus |
 | `ARTIFACT_READY` | Releaseartefakt lokal gebaut und geprüft | Publish-Freigabe beziehungsweise nächsten Job prüfen |

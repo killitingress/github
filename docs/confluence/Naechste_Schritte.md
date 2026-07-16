@@ -56,15 +56,20 @@ offen ausgewiesen und vor dem jeweiligen Integrationslauf geklärt.
 | offen | Action-Runtime des Runners prüfen | Vorgesehener Self-hosted Runner | Ausführung von Node-20-Actions mit den fest gepinnten Artefakt-SHAs bestätigen |
 | offen | Internes Wheelhouse bereitstellen | Runner und Repository-/Organisationsvariable | `LBS_WHEELHOUSE` auf freigegebenen lokalen Pfad setzen; Installation bleibt `--no-index` |
 | offen | Interne CA prüfen | Vorgesehener Runner | TLS-Aufruf gegen `https://en01e.ltoma.intern/vMtextAdapter/sync` testen; fehlende CA in den Truststore aufnehmen, TLS-Prüfung nicht deaktivieren |
-| offen | Netzwerkpfade freigeben | Runner/Netzwerk | Zugriff auf serverSync-Share, `*.ltoma.intern`, Mainframe-FTP und JES ermöglichen |
+| offen | Netzwerkpfade nach Transportentscheidung freigeben | Runner, Adapter, M/Text und Netzwerk | Immer benötigte Zugriffe auf Adapter beziehungsweise M/Text sowie Mainframe-FTP und JES ermöglichen; Share- oder GitHub-Zugriff nur für die gewählte M/Text-Transportvariante freigeben |
 
 ## 4. M/Text-Konfiguration vervollständigen und abnehmen
 
 | Status | Tätigkeit | Ort | Konkreter Wert beziehungsweise Ergebnis |
 |---|---|---|---|
 | bestätigt | Linien- und URL-Mapping | `mtext-actions/config/deployments.json` | `R260→en03`, `R261→en01`, `R270→en02`; Hosts jeweils `enXXe` und `enXXa` |
-| bestätigt | Adaptervertrag | Dieselbe Datei | POST auf `/vMtextAdapter/sync`, Payload `MAN`/`INR`, kein Auth-Header, jeder 2xx-Status erfolgreich, kein Polling |
-| offen | serverSync-Sharepfad bestätigen | `adapter.server_sync_path_template` in `mtext-actions/config/deployments.json` | Vorläufiges Template durch den tatsächlich gemounteten Pfad bestätigen oder ersetzen |
+| bestätigt | Heutigen Adaptervertrag als Ausgangslage festhalten | Bestehender Jenkins-/SVN-Prozess und `mtext-actions` | Der aktuelle Ablauf schreibt zuerst nach `serverSync` und sendet danach einen POST auf `/vMtextAdapter/sync` mit `MAN`/`INR`; dies ist noch keine Entscheidung für den Zieltransport |
+| offen | Transportweg nach `serverSync` entscheiden | Architektur, Adapterbetrieb, M/Text-Betrieb, Netzwerk und GitHub-Enterprise-Betrieb | Drei Varianten verbindlich bewerten: PUT der Ressourcendaten an den Adapter, direkter NFS-/Sharezugriff des Runners oder Download eines GitHub-Actions-Artefakts durch Adapter beziehungsweise M/Text |
+| offen | Gemeinsame Kompatibilitätsanforderung nachweisen | Repräsentativer Jenkins-/SVN-Stand und nichtproduktives `serverSync` | Für jede ernsthaft betrachtete Variante nachweisen, dass nach der Übertragung derselbe Verzeichnisbaum mit identischen relativen Pfaden, Dateinamen und Dateiinhalten entsteht; Transportdateien und technische Metadaten dürfen nicht im von M/Text ausgewerteten Bestand verbleiben |
+| offen | Variante 1: PUT an den Adapter konkretisieren | M/Text-Adapter und `mtext-actions` | Vertrag für einen PUT auf `/vMtextAdapter/sync` mit `MAN`, `INR` und Ressourcendaten festlegen; Adapter schreibt zunächst in einen temporären Bereich, veröffentlicht vollständig nach `serverSync` und startet direkt den internen Synchronisationsprozess; Authentifizierung, Größenlimits, Prüfsummen, Wiederholung, Parallelität und Erfolgsstatus festlegen |
+| offen | Variante 2: Sharezugriff des Runners konkretisieren | Runner, NFS-/Sharebetrieb und `mtext-actions` | Verfügbarkeit des Shares in der neuen Umgebung, Mountpfad, Rechte, Kapazität, atomare Veröffentlichung, Parallelität und Wiederanlauf prüfen; `adapter.server_sync_path_template` erst bei Auswahl dieser Variante als Zielkonfiguration bestätigen |
+| offen | Variante 3: Actions-Artefakt herunterladen | Adapter oder M/Text, GitHub Enterprise und `mtext-actions` | Den bereits für `serverSync` zusammengestellten Verzeichnisbaum ohne zusätzliches inneres M/Text-Paket als eigenes Sync-Artefakt hochladen; Download über die GitHub-Actions-Artefakt-API ohne Git-Checkout prüfen; Übergabe von Repository, Lauf-/Artefakt-ID und Prüfsumme, `Actions: read`-Berechtigung, technische Identität, Erreichbarkeit, Aufbewahrungsfrist, temporäres Entpacken, Veröffentlichung nach `serverSync` und Wiederanlauf festlegen; klar von FULL-/DELTA-Releaseartefakten abgrenzen |
+| offen | Zielvertrag und Verantwortlichkeiten festschreiben | Zielbild, Deploymentkonfiguration, Workflows und Betriebsdokumentation | Nach der Entscheidung nur die gewählte Variante implementieren und keine vorgezogene generische Transportschicht bauen; festlegen, welches System Übertragung, Prüfung, Schreiben nach `serverSync`, Start der internen Synchronisation und Fehlerbehandlung verantwortet |
 | offen | Nebenwirkungsfreien Config-Check prüfen | Push mit Änderung an `config/mandant.json` | `CONFIG_VALIDATED` ohne Environment, Secrets, serverSync-, Adapter- oder Mainframe-Zugriff bestätigen |
 | offen | Nichtproduktiven Synchronisationslauf durchführen | Freigegebener Runner und nichtproduktive Ziele | Vollständigen Projektstand bereitstellen, Adapterantwort und Wiederanlauf prüfen |
 
@@ -164,25 +169,21 @@ mindestens folgende Kriterien erfüllt sind:
 
 ## 8. Wiederkehrende Konfigurationsarbeiten
 
-Bei einer rollierenden Releaselinie sind folgende Änderungen abgestimmt
-auszuführen:
+Der verbindliche Bedienablauf für den Linienwechsel und die initiale
+Vollsynchronisation steht ausschließlich in der
+[Benutzeranleitung](./Benutzeranleitung.md#3-neue-releaselinie-initial-in-mtext-bereitstellen).
+Hier verbleiben nur die administrativen Prüfpunkte:
 
-1. Linienmapping und Adapterziele in
-   `mtext-actions/config/deployments.json` aktualisieren.
-2. Neue `<Releaselinie>/Entwicklung`, `/Abnahme` und `/Bereitstellung` anlegen
-   und die ausgeschiedene Linie gemäß Aufbewahrungsregel stilllegen.
-3. Default Branch auf den Entwicklungsbranch der neuen führenden Linie setzen.
-4. Workflow- und Konfigurationsänderungen je aktiver Linie nach
-   `Rnnn/Entwicklung` einbringen und anschließend normal nach Abnahme und
-   Bereitstellung übernehmen. Es gibt keine automatisch schreibende
-   branchübergreifende Verwaltungsautomation.
-5. Mandantenspezifische technische Übergabewerte bei betrieblichen Änderungen
-   ausschließlich in `config/mandant.json` des betroffenen Mandanten anpassen;
-   die zentral abgeleiteten Lieferdateinamen sind dort nicht konfigurierbar.
+| Status | Tätigkeit | Ergebnis |
+|---|---|---|
+| offen | Ausgangsstand je Mandant bestätigen | Letzten tatsächlich ausgelieferten Tag und vollständige Commit-SHA gemäß Benutzeranleitung dokumentieren |
+| offen | Neue Stufenbranches administrativ einrichten | Entwicklung, Abnahme und Bereitstellung basieren auf dem bestätigten Tag-Commit; ausgeschiedene Linie gemäß Aufbewahrungsregel stilllegen |
+| offen | Zentrale Linienkonfiguration aktualisieren | Linienmapping und Adapterziele in `mtext-actions/config/deployments.json` sind geprüft und freigegeben |
+| offen | Repositoryeinstellungen nachführen | Default Branch zeigt auf die neue führende Entwicklungslinie; Workflow- und Konfigurationsstand ist auf allen aktiven Linien korrekt |
+| offen | Initialisierung je Mandant abnehmen | Bedienablauf aus der Benutzeranleitung wurde durchgeführt; Läufe und fachliche Smoke-Tests sind dokumentiert |
 
-Die dünnen Sync-Workflows enthalten keine Liste aktiver Releaselinien mehr.
-Ihre generischen Branchmuster bleiben bei einem Linienwechsel unverändert;
-unbekannte Linien werden durch `deployments.json` abgewiesen.
+Die dünnen Sync-Workflows bleiben beim Linienwechsel unverändert. Unbekannte
+Linien werden zentral durch `deployments.json` abgewiesen.
 
 ## 9. Spätere Erweiterungen
 

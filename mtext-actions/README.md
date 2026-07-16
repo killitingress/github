@@ -84,10 +84,13 @@ Zielzugriffe. Er liefert frühes Feedback, ist aber kein technisch erzwungenes
 Gate; Sync und Release validieren die Konfiguration auf ihren
 Ausführungspfaden erneut.
 
-`reusable-sync-resources.yml` checkt einen exakten Commit aus, stellt die
-konfigurierten Projekte in einem laufbezogenen Verzeichnis bereit,
-veröffentlicht sie nach serverSync und ruft den bestehenden Adapter einmal
-synchron auf.
+`reusable-sync-resources.yml` checkt einen exakten Commit aus und stellt die
+konfigurierten Projekte in einem laufbezogenen Verzeichnis bereit. Im aktuellen
+Implementierungsstand veröffentlicht der Workflow sie anschließend nach
+`serverSync` und ruft den bestehenden Adapter einmal synchron auf. Der Ablauf
+überträgt bei jedem Start den vollständigen Stand der Projekt-Allowlist. Er
+wird deshalb unverändert auch für die initiale Vollsynchronisation einer neuen
+Releaselinie verwendet; einen M/Text-DELTA-Modus gibt es nicht.
 
 `reusable-release.yml` enthält zwei getrennte Jobs. `build` validiert Tag und
 Erreichbarkeit aus `<Releaselinie>/Bereitstellung`, erzeugt FULL oder
@@ -147,8 +150,13 @@ ausschließlich mit `--no-index` aus `requirements.lock`. Ein Download aus
 öffentlichen Paketquellen findet im Workflow nicht statt.
 
 Für Validierung und Releasebau sind keine internen Zielzugriffe erforderlich.
-Die Sync- und Publish-Jobs benötigen die fachlich freigegebenen NFS-, Adapter-
-beziehungsweise FTP/JES-Netzwerkpfade.
+Der Sync-Job bildet bis zur offenen Transportentscheidung den aktuellen
+Implementierungsstand ab: Er veröffentlicht über einen Filesystem-/NFS-Pfad
+nach `serverSync` und ruft danach den Adapter per POST auf. Diese vorläufige
+Implementierung ist keine Festlegung des Zieltransports; PUT an den Adapter
+und Download eines Actions-Artefakts durch Adapter beziehungsweise M/Text
+bleiben ebenfalls zu prüfen. Der Publish-Job benötigt weiterhin die fachlich
+freigegebenen FTP-/JES-Netzwerkpfade.
 
 Die Zielplattform ist GitHub Enterprise Server 3.20.4. Für den
 Artefakttransport sind deshalb die von GitHub für GHES vorgesehenen
@@ -198,15 +206,19 @@ Repository hinterlegt.
 
 Die aktuell aktiven Linien sind `R260 -> en03`, `R261 -> en01` und
 `R270 -> en02`. Entwicklung und Abnahme verwenden je Linie getrennte Hosts,
-beispielsweise `en01e.ltoma.intern` und `en01a.ltoma.intern`; der vollständige
-Endpunkt endet auf `/vMtextAdapter/sync`. Der bestätigte Payload ist
-`{"mandant":"MAN","institut":"INR"}` und jeder 2xx-Status gilt als
-unmittelbare Annahme. Authentifizierung und nachgelagertes Status-Polling sind
-in der ersten Ausbaustufe nicht vorgesehen.
+beispielsweise `en01e.ltoma.intern` und `en01a.ltoma.intern`. Im aktuellen
+Implementierungsstand endet der Adapterendpunkt auf `/vMtextAdapter/sync`; der
+Payload ist `{"mandant":"MAN","institut":"INR"}` und jeder 2xx-Status gilt
+als unmittelbare Annahme. Dieser POST-Vertrag ist die dokumentierte
+Ausgangslage und sendet derzeit keinen Authentifizierungsheader. Er wird nach
+der Transportentscheidung entweder bestätigt oder gezielt ersetzt.
+Nachgelagertes Status-Polling ist in der ersten Ausbaustufe nicht vorgesehen.
 
-Der `serverSync`-Sharepfad ist noch nicht bestätigt und wird beim
-nichtproduktiven Integrationslauf auf dem vorgesehenen Runner praktisch
-geprüft.
+Der konfigurierte `serverSync`-Sharepfad gehört zum vorläufig implementierten
+Filesystem-/NFS-Weg. Er wird nur dann als Zielkonfiguration bestätigt und auf
+dem vorgesehenen Runner praktisch geprüft, wenn diese Transportvariante
+ausgewählt wird. Andernfalls werden Konfiguration und Implementierung nach der
+Transportentscheidung gezielt auf die gewählte Variante umgestellt.
 
 ## Releaseverhalten
 

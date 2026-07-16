@@ -85,6 +85,16 @@ Linienwechsel wird der Default Branch manuell auf den Entwicklungsbranch der
 neuen führenden Linie umgestellt. Ein zusätzlicher `main`-Branch ist nicht
 vorgesehen.
 
+Bevor eine neu eingerichtete Releaselinie fachlich verwendet wird, wird ihr
+vollständiger konfigurierter Ressourcenstand einmal nach Entwicklung und
+einmal nach Abnahme synchronisiert. Basis ist immer der Commit des letzten
+tatsächlich ausgelieferten Release-Tags der bisherigen Linie; von ihm werden
+auch die neuen Stufenbranches abgeleitet. Für beide Zielstufen wird der
+vorhandene manuelle Start von **Sync M/Text resources** mit derselben
+Basis-SHA und dem jeweils neuen Stufenbranch verwendet. Diese initiale
+Vollsynchronisation ist eine M/Text-Bereitstellung und nicht mit der durch
+einen `.100`-Tag erzeugten FULL-Lieferung an den Mainframe zu verwechseln.
+
 ## Stand des Entwicklungssystems
 
 Die Workflows referenzieren `j520730/mtext-actions`, aber absichtlich noch

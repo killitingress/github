@@ -46,11 +46,17 @@ Bereitstellung:
 4. Erst ein Release-Tag wie `R261.108` baut die Lieferung. Vor der technischen
    Übergabe an den Mainframe ist eine manuelle Freigabe erforderlich.
 
-Die bestehenden Schnittstellen bleiben zunächst erhalten: M/Text wird über
-den vorhandenen Adapter angesprochen, die Mainframe-Übergabe erfolgt weiterhin
-per FTP und JES. GitHub Actions kann dabei nur die unmittelbare Annahme durch
-die Schnittstelle bestätigen. Der spätere fachliche Abschluss im Zielsystem
-ist nicht Bestandteil dieser ersten Ausbaustufe.
+Der vorhandene M/Text-Adapter bleibt die zentrale technische Schnittstelle;
+der Transport der Ressourcen nach `serverSync` ist jedoch noch festzulegen.
+Zur Wahl stehen ein PUT mit den Ressourcendaten an den Adapter, der direkte
+Sharezugriff des Runners und der Download eines GitHub-Actions-Artefakts durch
+den Adapter oder M/Text. Dieses Artefakt enthält unmittelbar den für
+`serverSync` zusammengestellten Verzeichnisbaum und kein zusätzliches
+fachliches M/Text-Paket; ein Git-Checkout durch das Zielsystem ist nicht
+erforderlich. Die Mainframe-Übergabe erfolgt weiterhin per FTP und JES. GitHub
+Actions kann jeweils nur den unmittelbar durch die Schnittstelle bestätigten
+Status melden. Der spätere fachliche Abschluss im Zielsystem ist nicht
+Bestandteil dieser ersten Ausbaustufe.
 
 ## 2. Verbindliche Rahmenbedingungen
 
@@ -122,7 +128,7 @@ Die Lösung besteht aus vier Bereichen:
 | Mandanten-Repository | M/Text-Ressourcen, Projektzuordnungen, mandantenspezifische technische Übergabewerte und dünne Workflows |
 | Zentrales Repository `mtext-actions` | Gemeinsame Prüfungen, Synchronisation, Paketbau und Mainframe-Übergabe |
 | GitHub Actions | Ausführung der Abläufe, Freigaben und Protokollierung |
-| Self-hosted Runner | Ausführung innerhalb des internen Netzes und Zugriff auf M/Text, Netzlaufwerk und Mainframe |
+| Self-hosted Runner | Ausführung innerhalb des internen Netzes und, abhängig vom noch festzulegenden M/Text-Transportweg, Zugriff auf Adapter oder Netzlaufwerk sowie auf den Mainframe |
 
 Ein Mandanten-Repository enthält ausschließlich die Ressourcen und Angaben
 des jeweiligen Mandanten. Das zentrale Repository enthält keine
@@ -173,11 +179,23 @@ Die Verteilung nach Entwicklung oder Abnahme überträgt immer den vollständige
 konfigurierten Projektstand des ausgewählten Commits. FULL und DELTA betreffen
 nur die spätere Mainframe-Lieferung und nicht die M/Text-Synchronisation.
 
-Der M/Text-Adapter und der bestehende Prozess auf dem Mainframe-Zielsystem
-IZE9 bleiben zunächst unverändert. Mit der bestätigten technischen Übergabe
-endet der hier beschriebene GitHub-Prozess. Das anschließende
-KM-Bereitstellungsverfahren bis zur Produktion liegt außerhalb dieses
-Zielbilds.
+Unabhängig vom gewählten Transportweg muss auf `serverSync` derselbe
+Verzeichnisbaum mit denselben relativen Pfaden und Dateiinhalten entstehen wie
+im bisherigen Jenkins-/SVN-Verfahren. Bei der Downloadvariante dient das
+GitHub-Actions-Artefakt ausschließlich als technischer Transportbehälter für
+diesen Verzeichnisbaum. Nach dem Entpacken verbleiben weder die ZIP-Datei noch
+technische Metadaten im von M/Text ausgewerteten Bestand. Dieses
+Sync-Artefakt ist von den FULL-/DELTA-Releaseartefakten für den Mainframe zu
+unterscheiden. Die Entscheidung zwischen den drei M/Text-Transportwegen und
+der daraus folgende Adaptervertrag sind vor dem nichtproduktiven
+Integrationslauf verbindlich zu treffen.
+
+Der M/Text-Adapter bleibt Bestandteil der Lösung; abhängig vom gewählten
+Transportweg kann sein Vertrag erweitert werden. Der bestehende Prozess auf
+dem Mainframe-Zielsystem IZE9 bleibt zunächst unverändert. Mit der bestätigten
+technischen Übergabe endet der hier beschriebene GitHub-Prozess. Das
+anschließende KM-Bereitstellungsverfahren bis zur Produktion liegt außerhalb
+dieses Zielbilds.
 
 ## 5. Repositories und aktueller Entwicklungsstand
 
@@ -286,6 +304,23 @@ Einstellung manuell angepasst.
 Manuelle Wiederholungen sind möglich, müssen aber denselben Commit verwenden.
 Vor einer erneuten M/Text-Verteilung prüft der Workflow, ob dieser Commit zum
 ausgewählten Stufenbranch gehört.
+
+### Initiale Vollsynchronisation bei einer neuen Releaselinie
+
+Eine neue Releaselinie basiert je Mandant auf dem unveränderlichen Commit des
+letzten tatsächlich ausgelieferten Release-Tags der bisherigen Linie. Dieser
+bestätigte Tag und nicht lediglich der numerisch höchste vorhandene Tag bildet
+die Basis der neuen Stufenbranches.
+
+Für Entwicklung und Abnahme wird der bestehende Sync-Ablauf mit diesem Commit
+je einmal verwendet. Er überträgt den vollständigen Stand der Projekt-Allowlist;
+ein eigener M/Text-FULL-Pakettyp und ein künstlicher Änderungscommit sind nicht
+erforderlich. `ADAPTER_ACCEPTED` ersetzt nicht den anschließenden fachlichen
+Smoke-Test in M/Text.
+
+Der verbindliche Bedienablauf einschließlich Verantwortlichkeiten,
+Workflow-Inputs, Dokumentation und Wiederanlauf steht in der
+[Benutzeranleitung](./Benutzeranleitung.md#3-neue-releaselinie-initial-in-mtext-bereitstellen).
 
 Die Zielplattform ist GitHub Enterprise Server 3.20.4. Die verwendeten
 GitHub-Actions-Bausteine und der interne Runner müssen vor der Aktivierung auf

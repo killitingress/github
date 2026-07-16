@@ -42,12 +42,23 @@ verwendete Konfiguration auf ihrem eigenen Ausführungspfad erneut.
 
 Ein Push auf einen Branch `Rnnn/Entwicklung` oder `Rnnn/Abnahme` ruft die
 zentrale Ressourcensynchronisation für genau die zugehörige M/Text-Umgebung
-auf. Die manuelle Wiederholung verlangt einen exakten Commit-SHA und einen
-expliziten Stufenbranch. Die zentrale Implementierung leitet Releaselinie und
-Zielumgebung aus diesem Branch ab, gleicht die Releaselinie mit der zentralen
-Konfiguration ab und weist den Lauf zurück, wenn Linie oder Commit nicht
-zulässig sind. Die Workflow-Trigger enthalten daher keine einzeln gepflegte
-Liste aktiver Linien.
+auf. Derselbe manuelle Einstieg dient sowohl der initialen Vollsynchronisation
+bei einem Releaselinienwechsel als auch einer kontrollierten Wiederholung. Er
+verlangt einen exakten Commit-SHA und einen expliziten Stufenbranch. Die
+zentrale Implementierung leitet Releaselinie und Zielumgebung aus diesem
+Branch ab, gleicht die Releaselinie mit der zentralen Konfiguration ab und
+weist den Lauf zurück, wenn Linie oder Commit nicht zulässig sind. Die
+Workflow-Trigger enthalten daher keine einzeln gepflegte Liste aktiver Linien.
+
+Jede Synchronisation überträgt den vollständigen Stand aller Projekte aus
+`config/mandant.json`; technisch gibt es keinen DELTA-Modus für M/Text. Eine
+initiale Vollsynchronisation benötigt deshalb keinen eigenen zentralen
+Workflow und keinen künstlichen Quellcommit. Sie wird für Entwicklung und
+Abnahme getrennt gestartet, weil beide Stufen eigene Zielsysteme besitzen.
+Repositoryinhalte außerhalb der Projekt-Allowlist, beispielsweise
+`LOMS_Testdaten`, sowie `.github` und `config` werden nicht nach M/Text
+kopiert.
+
 Zwei Schreibvorgänge auf dasselbe
 Mandanten-/Linien-/Stufen-Ziel werden durch Concurrency serialisiert.
 
