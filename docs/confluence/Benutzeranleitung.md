@@ -61,6 +61,37 @@ Automatisierung sind nur Pushes auf die Stufenbranches. Groß-/Kleinschreibung
 der Stufen ist verbindlich. Aktive Linien sind derzeit `R260`, `R261` und
 `R270`.
 
+### Commit und SHA einfach erklärt
+
+Ein **Commit** ist ein gespeicherter Stand im Git-Repository. Jeder Commit hat
+eine eindeutige technische Kennung, den **Commit-SHA**. Sie besteht in diesem
+Repository aus 40 Zeichen, zum Beispiel
+`8f3a1c2d4e5f67890123456789abcdef01234567`. Meist genügt in der Oberfläche
+eine verkürzte Darstellung; für einen manuellen Wiederanlauf verlangt die
+Automation jedoch die vollständige Kennung.
+
+Ein Branchname wie `R261/Entwicklung` bezeichnet dagegen keinen dauerhaft
+festen Stand. Er zeigt auf den jeweils neuesten Commit des Branches und bewegt
+sich mit jedem weiteren Push. Wenn in dieser Anleitung vom „exakten Commit“
+die Rede ist, bedeutet das deshalb: Verarbeitet wird genau der Stand, der den
+Lauf ausgelöst hat - nicht ein möglicherweise inzwischen neuerer Stand auf
+demselben Branch. Bei einem normalen Push übernimmt GitHub diese Kennung
+automatisch; Benutzer müssen sie nur bei einer manuellen Wiederholung angeben.
+
+In SVN wird ein Stand üblicherweise über eine fortlaufende Revisionsnummer wie
+`r12345` bezeichnet. Git ist nicht an ein zentrales, fortlaufendes
+Nummernsystem gebunden und verwendet daher die Commit-SHA als eindeutige
+Kennung. Der Zweck ist vergleichbar: Beide Angaben machen einen konkreten
+Quellstand nachvollziehbar. Die Git-Kennung ist lediglich technisch anders
+aufgebaut und weniger leicht zu merken.
+
+Daneben kommen zwei ähnlich aussehende, aber anders verwendete Kennungen vor:
+
+- Der Commit-SHA von `mtext-actions` legt für Administratoren fest, welche
+  freigegebene Version der zentralen Automation verwendet wird.
+- Eine SHA-256-Prüfsumme bestätigt, dass eine erzeugte Paketdatei nach dem Bau
+  nicht verändert wurde. Sie bezeichnet keinen Git-Commit.
+
 ## 4. Änderung nach Entwicklung bringen
 
 1. Das richtige Mandanten-Repository und die betroffene Releaselinie wählen.
@@ -159,7 +190,8 @@ Unter **Actions → Sync M/Text resources → Run workflow** angeben:
 
 Die Automation weist den Lauf zurück, wenn der Commit nicht aus dem gewählten
 Branch erreichbar ist. Das Zielsystem kann nicht frei eingegeben werden; es
-wird aus Branch und zentraler Konfiguration abgeleitet.
+wird aus Branch und zentraler Konfiguration abgeleitet. Eine allgemeine
+Erklärung zu Commits und SHAs steht unter „Begriffe und Namensregeln“.
 
 ### Release-Lauf wiederholen
 
