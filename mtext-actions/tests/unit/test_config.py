@@ -13,7 +13,7 @@ from lbs_delivery.config import (
     load_mandant_config,
     release_branch,
     resolve_adapter_url,
-    validate_pull_request_promotion,
+    validate_release_promotion,
     validate_release_tag,
 )
 from lbs_delivery.errors import DeliveryError, Status
@@ -123,15 +123,29 @@ class ConfigTests(unittest.TestCase):
         validate_release_tag(self.deployments, "R261.100")
         validate_release_tag(self.deployments, "R261.108")
         self.assertEqual(release_branch(self.deployments, "R261"), "R261/Bereitstellung")
-        for source, target in (
-            ("feature/R261/12345-example", "R261/Entwicklung"),
-            ("R261/Entwicklung", "R261/Abnahme"),
-            ("release/R261-20260715T143000Z", "R261/Bereitstellung"),
-        ):
-            validate_pull_request_promotion(self.deployments, source, target)
+        validate_release_promotion(
+            self.deployments,
+            "release/R261-20260715T143000Z",
+            "R261/Bereitstellung",
+        )
         with self.assertRaises(DeliveryError):
-            validate_pull_request_promotion(
+            validate_release_promotion(
                 self.deployments, "R261/Abnahme", "R261/Bereitstellung"
+            )
+        with self.assertRaises(DeliveryError):
+            validate_release_promotion(
+                self.deployments,
+                "feature/R261/12345-example",
+                "R261/Entwicklung",
+            )
+        with self.assertRaisesRegex(
+            DeliveryError,
+            "source branch and release branch must use the same release line",
+        ):
+            validate_release_promotion(
+                self.deployments,
+                "release/R260-20260715T143000Z",
+                "R261/Bereitstellung",
             )
         with self.assertRaises(DeliveryError):
             validate_release_tag(self.deployments, "R999.100")

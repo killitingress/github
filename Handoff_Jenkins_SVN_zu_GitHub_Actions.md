@@ -24,7 +24,7 @@ Die erste Zielversion behält die bestehenden Integrationsverfahren bewusst bei:
 
 Die neue Lösung bildet den bisherigen fachlichen Promotionsweg ausdrücklich ab: Für jede aktive Releaselinie existieren die physischen Branches `<Releaselinie>/Entwicklung`, `/Abnahme` und `/Bereitstellung`. Eine Änderung wird zunächst nach Entwicklung übernommen und zum zugehörigen M/Text-Entwicklungsserver verteilt. Die Promotion nach Abnahme verteilt denselben Stand zum M/Text-Abnahmeserver. Ausgewählte Änderungen werden anschließend über einen UTC-datierten Auswahlbranch nach Bereitstellung übernommen. Ein vom Benutzer gesetzter Release-Tag auf diesem Stand startet FULL oder DELTA und übergibt das Artefakt an den bestehenden Mainframe-Prozess.
 
-Ein Pull Request ist dabei die kontrollierte GitHub-Hülle für Prüfung, Nachvollziehbarkeit und Merge. Er verteilt selbst keine Ressourcen. Erst der Merge erzeugt einen Push auf den Zielbranch und löst den zuständigen Deployment-Workflow aus. Ein verpflichtendes fremdes Review wird nicht eingeführt; der Ersteller darf nach erfolgreichen Checks selbst mergen. Direkte Pushes auf die Stufenbranches werden durch Branchschutz verhindert.
+Ein Pull Request ist dabei ausschließlich vor Bereitstellung die kontrollierte GitHub-Hülle für Prüfung, Nachvollziehbarkeit und Merge. Er verteilt selbst keine Ressourcen. Direkte Pushes nach Entwicklung und Abnahme lösen den zuständigen Sync-Workflow aus. Ein verpflichtendes fremdes Review wird nicht eingeführt; der Ersteller darf nach erfolgreichen Checks selbst mergen. Direkte Pushes sind nur auf Bereitstellung verboten.
 
 Für die fachliche Implementierung wird Python als einheitliche Sprache empfohlen. GitHub-Actions-YAML bleibt reine Orchestrierung. Bash wird auf kurze Aufrufe und einen optionalen Runner-Preflight begrenzt. Die JCL wird als versionierte Template-Datei abgelegt und zur Laufzeit mit validierten Werten gerendert.
 
@@ -44,7 +44,7 @@ Für die fachliche Implementierung wird Python als einheitliche Sprache empfohle
 - Deployment- und Release-Läufe arbeiten immer auf einem exakten Git-Commit-SHA.
 - Die physischen Git-Branches heißen für die aktiven Linien `R260`, `R261` und `R270` jeweils `<Releaselinie>/Entwicklung`, `/Abnahme` und `/Bereitstellung`.
 - Der Mandantenkontext wird aus dem jeweiligen migrierten Repository und dessen versionierter Konfiguration bestimmt, nicht aus einem frei eingebbaren Deploymentparameter.
-- Pull Requests prüfen Promotions; ein fremdes Review ist nicht verpflichtend. Erst der Merge auf den Zielbranch löst eine Verteilung aus.
+- Nur Pull Requests nach Bereitstellung prüfen Auswahlbranch, Konfiguration und Freigabestand; ein fremdes Review ist nicht verpflichtend.
 - Push auf `Rxxx/Entwicklung` verteilt zum M/Text-Entwicklungsserver.
 - Push auf `Rxxx/Abnahme` verteilt zum M/Text-Abnahmeserver.
 - Push auf `Rxxx/Bereitstellung` allein baut noch kein Release; erst ein gültiger Release-Tag startet FULL oder DELTA.
@@ -264,7 +264,7 @@ mtext-actions/                   # gemeinsames Automatisierungs-Repository
   .github/
     workflows/
       ci.yml
-      reusable-validate-pr.yml
+      reusable-validate-release-promotion.yml
       reusable-sync-resources.yml
       reusable-release.yml
   config/
@@ -302,7 +302,7 @@ mtext-actions/                   # gemeinsames Automatisierungs-Repository
 
 Die Workflow-Dateien in den Mandanten-Repositories enthalten nur Trigger, minimale Berechtigungen und den versionierten Aufruf des zentralen wiederverwendbaren Workflows. Fachlogik wird dort nicht dupliziert. Die zentrale Referenz wird nicht auf einen beweglichen Branch wie `main`, sondern auf eine freigegebene unveränderliche Version gesetzt.
 
-Die fachlichen Einstiegspunkte `validate-pr`, `sync-resources`,
+Die fachlichen Einstiegspunkte `validate-release-promotion`, `sync-resources`,
 `build-release` und `publish-mainframe` sind als Subcommands eines Pakets
 umgesetzt. Dadurch teilen sie Konfigurationsauflösung, Fehlercodes und Tests
 ohne Copy-and-paste.
@@ -311,7 +311,7 @@ Die Workflows setzen alle Pflichtargumente. Für die lokale Referenz zeigt die
 CLI ihre jeweils aktuelle vollständige Schnittstelle selbst an:
 
 ```bash
-PYTHONPATH=mtext-actions/src python -m lbs_delivery validate-pr --help
+PYTHONPATH=mtext-actions/src python -m lbs_delivery validate-release-promotion --help
 PYTHONPATH=mtext-actions/src python -m lbs_delivery sync-resources --help
 PYTHONPATH=mtext-actions/src python -m lbs_delivery build-release --help
 PYTHONPATH=mtext-actions/src python -m lbs_delivery publish-mainframe --help
@@ -339,32 +339,30 @@ Entwicklungsbranch der aktuell führenden Linie, zunächst
 
 ### Bedeutung des Pull Requests
 
-Ein Pull Request ist in diesem Zielbild kein zusätzlicher fachlicher Lieferweg. Er ersetzt die heute manuell ausgeführte und anschließend commitete SVN-Merge-Stufe durch einen sichtbaren, prüfbaren GitHub-Prozess:
+Ein Pull Request ist in diesem Zielbild ausschließlich die formale Freigabe zur Bereitstellung. Er macht den Auswahlbranch vor dem Merge sichtbar und prüfbar:
 
 ```text
 Quellbranch auswählen
 -> Änderungen und Commits im Pull Request anzeigen
 -> automatisierte Validierung ausführen
 -> nach erfolgreichen Checks selbst oder durch einen anderen Berechtigten mergen
--> in Zielbranch mergen
--> Push-Ereignis auf Zielbranch
--> zuständigen Sync- oder Releaseprozess starten
+-> nach `Bereitstellung` mergen
+-> noch keinen Releaseprozess starten; erst der Tag löst ihn aus
 ```
 
-Der `pull_request`-Workflow hat keine externen Seiteneffekte. Er verteilt nichts zum M/Text-Server und veröffentlicht nichts auf dem Mainframe. Diese Aktionen beginnen erst nach dem Merge.
+Der `pull_request`-Workflow hat keine externen Seiteneffekte. Er verteilt nichts zum M/Text-Server und veröffentlicht nichts auf dem Mainframe. Die Synchronisationen für Entwicklung und Abnahme beginnen jeweils mit ihrem direkten Push.
 
 ### Fachlicher Git-Ablauf
 
-1. Eine Änderung an Tonic-Brief-Ressourcen wird im jeweiligen mandantenabhängigen Git-Repository lokal auf einem kurzlebigen Feature-Branch erstellt.
-2. Der Feature-Branch folgt `feature/<Releaselinie>/<Issue>-<Kurzname>`, wird nach GitHub gepusht und per Pull Request nach `<Releaselinie>/Entwicklung` übernommen.
-3. Der Merge erzeugt dort einen Push; `sync-resources.yml` verteilt den exakten Merge-Commit zum zugehörigen M/Text-Entwicklungsserver.
-4. Die Promotion erfolgt über einen Pull Request von `<Releaselinie>/Entwicklung` nach `<Releaselinie>/Abnahme`.
-5. Der Merge verteilt denselben Stand zum M/Text-Abnahmeserver.
-6. Für eine Bereitstellung wird ein Branch wie `release/R260-20260715T143000Z` angelegt.
-7. Die ausgewählten Commits aus Abnahme werden gezielt per `git cherry-pick` in diesen Auswahlbranch übernommen.
-8. Ein Pull Request übernimmt den gesammelten Stand nach `<Releaselinie>/Bereitstellung`.
-9. Nach dem Merge setzt ein Benutzer auf genau diesem Commit einen Release-Tag. Eine zusätzliche Tagschutzregel ist zunächst nicht vorgesehen.
-10. `release.yml` leitet aus dem Tag den Branch `<Releaselinie>/Bereitstellung` ab, prüft die Erreichbarkeit und erzeugt FULL oder DELTA.
+1. Eine Änderung an Tonic-Brief-Ressourcen wird im jeweiligen mandantenabhängigen Git-Repository erstellt, bei Bedarf auf einem optionalen Feature-Branch, und direkt nach `<Releaselinie>/Entwicklung` gepusht.
+2. `sync-resources.yml` verteilt den exakten Push-Commit zum zugehörigen M/Text-Entwicklungsserver.
+3. Nach erfolgreicher Entwicklungsprüfung wird der fachlich freigegebene Commit direkt nach `<Releaselinie>/Abnahme` promotet.
+4. Der Push verteilt den Stand zum M/Text-Abnahmeserver.
+5. Für eine Bereitstellung wird ein Branch wie `release/R260-20260715T143000Z` angelegt.
+6. Die ausgewählten Commits aus Abnahme werden gezielt per `git cherry-pick` in diesen Auswahlbranch übernommen.
+7. Ein Pull Request übernimmt den gesammelten Stand nach `<Releaselinie>/Bereitstellung`.
+8. Nach dem Merge setzt ein Benutzer auf genau diesem Commit einen Release-Tag. Eine zusätzliche Tagschutzregel ist zunächst nicht vorgesehen.
+9. `release.yml` leitet aus dem Tag den Branch `<Releaselinie>/Bereitstellung` ab, prüft die Erreichbarkeit und erzeugt FULL oder DELTA.
 
 Der Release-Branch und der Pull Request ersetzen damit das heutige einzelne Mergen ausgewählter SVN-Commits mit anschließendem Sammel-Commit. Die einzelnen Git-Commits bleiben standardmäßig nachvollziehbar. Ein zusätzlicher Squash ist für den Paketbau nicht erforderlich.
 
@@ -372,7 +370,7 @@ Der Release-Branch und der Pull Request ersetzen damit das heutige einzelne Merg
 
 | GitHub-Ereignis | Workflow | Zweck | Python-Module und Skripte | Externe Seiteneffekte |
 |---|---|---|---|---|
-| `pull_request` nach `Rxxx/Entwicklung`, `/Abnahme` oder `/Bereitstellung` | `validate.yml` | Änderung oder Promotion vor dem Merge prüfen | `validate-pr` | keine |
+| `pull_request` nach `Rxxx/Bereitstellung` | `validate.yml` | Auswahlbranch, Konfiguration und Freigabestand vor dem Merge prüfen | `validate-release-promotion` | keine |
 | `push` auf `Rxxx/Entwicklung` | `sync-resources.yml` | Ressourcen zum M/Text-Entwicklungsserver verteilen | `sync-resources`, `resources.py`, `mtext_adapter.py` | NFS/Dateiübergabe und HTTP-Aufruf Entwicklung |
 | `push` auf `Rxxx/Abnahme` | `sync-resources.yml` | Ressourcen zum M/Text-Abnahmeserver verteilen | `sync-resources`, `resources.py`, `mtext_adapter.py` | NFS/Dateiübergabe und HTTP-Aufruf Abnahme |
 | `push` eines Tags `Rnnn.nnn` auf einem `Rnnn/Bereitstellung`-Commit | `release.yml` | anhand der Endung FULL oder DELTA bauen, Manifest erzeugen und Publish aufrufen | `build-release`, `release.py`, `manifest.py` | Artefaktablage; danach manuell freigegebene Mainframe-Übergabe |
@@ -385,7 +383,7 @@ Der Release-Branch und der Pull Request ersetzen damit das heutige einzelne Merg
 2. Freigegebene Python-Version bereitstellen.
 3. Abhängigkeiten reproduzierbar installieren.
 4. Schema und alle Konfigurationsdateien validieren.
-5. Zulässige Promotionsrichtung und identische Releaselinie prüfen: Feature nach Entwicklung, Entwicklung nach Abnahme, UTC-Auswahlbranch nach Bereitstellung.
+5. Zulässigen UTC-Auswahlbranch und identische Releaselinie vor Bereitstellung prüfen.
 6. Keine zentralen Unit-Tests wiederholen; diese laufen im CI von `mtext-actions`.
 7. Keine internen Zielsysteme aufrufen.
 
@@ -435,7 +433,7 @@ Die Architektur ist in zwei getrennten, editierbaren Draw.io-Dateien dokumentier
 
 Die Ist-Skizze zeigt Entwicklung, Abnahme, Bereitstellung, kumulatives Delta gegen `.100`, separaten Vorrelease-Informationsvergleich, NFS, Adapter, M/Text sowie FTP/JCL/Mainframe.
 
-Die Soll-Skizze zeigt getrennte Mandanten-Repositories, das zentrale Automatisierungs-Repository, Feature-Branch, Pull Requests und Merge-Trigger für `Rxxx/Entwicklung`, `Rxxx/Abnahme` und `Rxxx/Bereitstellung`, die vorgeschlagenen Workflows und Python-Module, FULL-/DELTA-Erzeugung, das versionierte JCL-Template und die zunächst unveränderte Mainframe-Übergabe. Status-Polling bleibt außerhalb der ersten Ausbaustufe.
+Die Soll-Skizze zeigt getrennte Mandanten-Repositories, das zentrale Automatisierungs-Repository, direkte Push-Trigger für `Rxxx/Entwicklung` und `Rxxx/Abnahme` sowie den Pull Request vor `Rxxx/Bereitstellung`, die vorgeschlagenen Workflows und Python-Module, FULL-/DELTA-Erzeugung, das versionierte JCL-Template und die zunächst unveränderte Mainframe-Übergabe. Status-Polling bleibt außerhalb der ersten Ausbaustufe.
 
 ## 10. Konfigurationsmodell
 
@@ -509,9 +507,9 @@ Validierungsregeln:
 - Jeder Lauf verwendet `github.sha` beziehungsweise einen daraus aufgelösten Commit-SHA.
 - `HEAD` wird nicht als dauerhaftes Deployment-Merkmal gespeichert.
 - Branch und Tag dienen als Auslöser; der Commit-SHA ist die technische Identität des Laufs.
-- `Rxxx/Entwicklung` und `Rxxx/Abnahme` sind Deployment-Branches; ein Merge dorthin löst die jeweilige M/Text-Verteilung aus.
+- `Rxxx/Entwicklung` und `Rxxx/Abnahme` sind Deployment-Branches; ein direkter Push dorthin löst die jeweilige M/Text-Verteilung aus.
 - `Rxxx/Bereitstellung` ist der Release-Stand; ein Merge dorthin erzeugt ohne Tag noch keine Lieferung.
-- Branchschutz erzwingt Pull Requests und verhindert direkte produktive Pushes.
+- Branchschutz erzwingt Pull Requests nur vor Bereitstellung und verhindert dort direkte Pushes.
 
 ### FULL
 
@@ -668,8 +666,8 @@ Zwischen den Schritten 4 bis 8 existiert ein kontrolliertes Wartungsfenster, abe
 ### Workflows
 
 - Pull Requests führen keine externen Deployments oder Übertragungen aus.
-- Ein Merge nach `Rxxx/Entwicklung` löst genau eine Verteilung zum M/Text-Entwicklungsserver aus.
-- Ein Merge von `Rxxx/Entwicklung` nach `Rxxx/Abnahme` löst genau eine Verteilung zum M/Text-Abnahmeserver aus.
+- Ein Push nach `Rxxx/Entwicklung` löst genau eine Verteilung zum M/Text-Entwicklungsserver aus.
+- Ein Push nach `Rxxx/Abnahme` löst genau eine Verteilung zum M/Text-Abnahmeserver aus.
 - Ein Merge nach `Rxxx/Bereitstellung` löst ohne Release-Tag keine Paketierung aus.
 - Ein Tag `Rnnn.100` auf einem `Rnnn/Bereitstellung`-Commit löst genau eine FULL-Lieferung aus.
 - Ein Tag `Rnnn.xxx` mit `xxx` ungleich `100` löst genau eine DELTA-Lieferung gegen `Rnnn.100` aus.
@@ -723,7 +721,8 @@ Zwischen den Schritten 4 bis 8 existiert ein kontrolliertes Wartungsfenster, abe
 - Repositories: `j520730/mtext-actions`, `j517120/mtext-fi` sowie später `mtext-autonom`, `mtext-by`, `mtext-lh`, `mtext-nw`, `mtext-os`, `mtext-sa`.
 - Aktive Linien: `R261 -> en01`, `R270 -> en02`, `R260 -> en03`.
 - Branches: `<Releaselinie>/Entwicklung`, `/Abnahme`, `/Bereitstellung`; zunächst ist `R261/Entwicklung` Default Branch, kein zusätzlicher `main`.
-- Feature-Branches: `feature/<Releaselinie>/<GitHub-Issue>-<Kurzname>`; Auswahlbranches: `release/<Releaselinie>-<UTC-Zeitstempel>`.
+- Feature-Branches: optional als lokale Arbeits- und Namenskonvention `feature/<Releaselinie>/<GitHub-Issue>-<Kurzname>`; sie lösen keine Automatisierung aus.
+- Auswahlbranches: `release/<Releaselinie>-<UTC-Zeitstempel>`.
 - Drei gemeinsame GitHub Environments; nur Mainframe in `Bereitstellung` verlangt eine manuelle Freigabe.
 - Keine verpflichtende fremde Pull-Request-Freigabe und zunächst kein Tagschutz.
 - Python 3.14, Runnerlabel vorläufig `mtext-delivery`, Artefaktaufbewahrung 30 Tage.

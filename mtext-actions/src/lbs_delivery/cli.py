@@ -20,7 +20,7 @@ from .config import (
     resolve_environment,
     resolve_server_sync_root,
     resolve_sync_branch,
-    validate_pull_request_promotion,
+    validate_release_promotion,
     validate_release_tag,
 )
 from .errors import DeliveryError, Status
@@ -56,7 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="lbs-delivery")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    validate = subparsers.add_parser("validate-pr")
+    validate = subparsers.add_parser("validate-release-promotion")
     _common_config_arguments(validate)
     validate.add_argument("--source-branch", required=True)
     validate.add_argument("--target-branch", required=True)
@@ -106,11 +106,11 @@ def _load_configs(
     return mandant, deployments
 
 
-def _validate_pr(arguments: argparse.Namespace) -> Status:
-    """Validiert Konfiguration und Promotionsrichtung eines Pull Requests."""
+def _validate_release_promotion(arguments: argparse.Namespace) -> Status:
+    """Validiert Konfiguration und Auswahlbranch vor Bereitstellung."""
 
     mandant, deployments = _load_configs(arguments)
-    validate_pull_request_promotion(
+    validate_release_promotion(
         deployments,
         arguments.source_branch,
         arguments.target_branch,
@@ -268,7 +268,7 @@ def run(arguments: argparse.Namespace) -> Status:
     """Leitet geparste Argumente an den passenden fachlichen Handler weiter."""
 
     handlers = {
-        "validate-pr": _validate_pr,
+        "validate-release-promotion": _validate_release_promotion,
         "sync-resources": _sync,
         "build-release": _build_release,
         "publish-mainframe": _publish,

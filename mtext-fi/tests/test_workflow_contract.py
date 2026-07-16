@@ -44,15 +44,16 @@ class WorkflowContractTests(unittest.TestCase):
             for token in forbidden:
                 self.assertNotIn(token, text.lower(), (workflow_name, token))
 
-    def test_validate_workflow_is_a_pull_request_only_gate(self) -> None:
+    def test_validate_workflow_is_a_pull_request_gate_for_bereitstellung_only(self) -> None:
         text = (WORKFLOWS / "validate.yml").read_text(encoding="utf-8")
         for release_line in ("R260", "R261", "R270"):
-            for stage in ("Entwicklung", "Abnahme", "Bereitstellung"):
-                self.assertIn(f"      - {release_line}/{stage}", text)
+            self.assertIn(f"      - {release_line}/Bereitstellung", text)
+            self.assertNotIn(f"      - {release_line}/Entwicklung", text)
+            self.assertNotIn(f"      - {release_line}/Abnahme", text)
         self.assertIn("pull_request:", text)
         self.assertNotIn("  push:", text)
         self.assertNotIn("workflow_dispatch:", text)
-        self.assertIn("reusable-validate-pr.yml", text)
+        self.assertIn("reusable-validate-release-promotion.yml", text)
 
     def test_sync_workflow_has_only_two_explicit_target_environments(self) -> None:
         text = (WORKFLOWS / "sync-resources.yml").read_text(encoding="utf-8")

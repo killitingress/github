@@ -20,8 +20,6 @@ Cutover-Arbeiten sind ausdrücklich als solche dokumentiert.
 
 - [Zielbild GitHub Actions/Git](./confluence/Zielbild_GitHub_Actions_Git.md):
   fachliches und technisches Zielbild in Confluence-geeigneter Form.
-- [Migration und harter Cut](./confluence/Migration_und_harter_Cut.md):
-  Phasen, Nachweise und Cutover-Grundsätze.
 - [Nächste Schritte](./confluence/Naechste_Schritte.md): verbindliche offene,
   gesperrte und bereits entschiedene Tätigkeiten.
 - [Technisches Handoff](../Handoff_Jenkins_SVN_zu_GitHub_Actions.md):

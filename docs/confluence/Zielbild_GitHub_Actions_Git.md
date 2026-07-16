@@ -5,10 +5,8 @@
 **Geltungsbereich:** M/Text-Ressourcenverteilung und Mainframe-Bereitstellung
 
 Dieses Dokument beschreibt das fachliche und organisatorische Zielbild. Es ist
-bewusst weniger implementierungsnah als das technische Handoff. Einzelheiten
-zur Migration stehen auf der Seite
-[Migration und harter Cut](./Migration_und_harter_Cut.md), der aktuelle
-Arbeitsvorrat auf der Seite [Nächste Schritte](./Naechste_Schritte.md). Die
+bewusst weniger implementierungsnah als das technische Handoff. Der aktuelle
+Arbeitsvorrat steht auf der Seite [Nächste Schritte](./Naechste_Schritte.md). Die
 tägliche Bedienung beschreibt die
 [Benutzeranleitung](./Benutzeranleitung.md).
 
@@ -40,19 +38,20 @@ Aus ihm werden fachlich relevante Mappings, Paketregeln, Übergabeverfahren und
 JCL-Inhalte übernommen. Die monolithische technische Struktur und die
 historische Fehlerbehandlung werden nicht fortgeführt.
 
-Der fachliche Promotionsweg bleibt erhalten. Änderungen gelangen zunächst in
-die Entwicklungsstufe und werden von dort zum M/Text-Entwicklungssystem
-verteilt. Nach erfolgreichen Prüfungen und Merge werden sie in die
-Abnahmestufe übernommen und zum M/Text-Abnahmesystem verteilt. Ausgewählte Änderungen
-gelangen anschließend in die Bereitstellung. Erst ein manuell gesetzter Release-Tag
+Der fachliche Promotionsweg bleibt erhalten. Änderungen gelangen per direktem
+Push zunächst in die Entwicklungsstufe und werden von dort zum M/Text-
+Entwicklungssystem verteilt. Nach erfolgreicher Prüfung wird derselbe Commit
+direkt in die Abnahmestufe übernommen und zum M/Text-Abnahmesystem verteilt.
+Ausgewählte Änderungen gelangen anschließend per Pull Request in die
+Bereitstellung. Erst ein manuell gesetzter Release-Tag
 auf diesem Stand erzeugt eine FULL- oder DELTA-Lieferung für den bestehenden
 Mainframe-Prozess.
 
-Pull Requests bilden die kontrollierte Hülle für Prüfung und Nachvollziehbarkeit.
-Sie führen selbst keine Verteilung aus. Erst der Merge erzeugt das Ereignis,
-das den jeweiligen Prozess startet. Ein verpflichtendes fremdes Review wird
-nicht eingeführt; der Ersteller darf nach erfolgreichen Statuschecks selbst
-mergen. Direkte Änderungen an den geschützten Stufenbranches werden verhindert.
+Der Pull Request nach Bereitstellung bildet die kontrollierte Hülle für
+Prüfung und Nachvollziehbarkeit. Er führt selbst keine Verteilung aus. Ein
+verpflichtendes fremdes Review wird nicht eingeführt; der Ersteller darf nach
+erfolgreichen Statuschecks selbst mergen. Direkte Pushes sind nur für
+Bereitstellung verboten.
 
 Die vorhandenen Integrationsverfahren bleiben in der ersten Ausbaustufe
 bewusst bestehen. M/Text wird synchron über den vorhandenen Adapter
@@ -78,10 +77,10 @@ Die Umstellung folgt einem klar abgegrenzten Zielvertrag:
 - Jeder Lauf arbeitet auf einem eindeutig bestimmten Commit-SHA.
 - Der Mandant ergibt sich aus Repository und versionierter Konfiguration und
   ist kein frei eingebbarer Deploymentparameter.
-- Pull Requests prüfen Änderungen; externe Verteilungen starten
-  erst durch den Merge oder durch einen gültigen Release-Tag.
-- Ein Merge nach `Rxxx/Entwicklung` verteilt zum Entwicklungssystem, ein Merge
-  nach `Rxxx/Abnahme` zum Abnahmesystem. Ein Merge nach
+- Direkte Pushes nach `Rxxx/Entwicklung` und `Rxxx/Abnahme` verteilen zum
+  jeweiligen M/Text-System.
+- Ein Pull Request nach `Rxxx/Bereitstellung` prüft Auswahlbranch,
+  Konfiguration und Freigabestand; sein Merge nach
   `Rxxx/Bereitstellung` erzeugt allein noch keine Lieferung.
 - Die bestehenden Adapter- und Mainframe-Verfahren werden in der ersten
   Ausbaustufe nicht um fachliches Status-Polling erweitert.
@@ -157,7 +156,6 @@ github/
   docs/
     confluence/
       Zielbild_GitHub_Actions_Git.md
-      Migration_und_harter_Cut.md
       Naechste_Schritte.md
 
   mtext-fi/
@@ -177,7 +175,7 @@ github/
     .github/
       workflows/
         ci.yml
-        reusable-validate-pr.yml
+        reusable-validate-release-promotion.yml
         reusable-sync-resources.yml
         reusable-release.yml
     config/
@@ -248,23 +246,20 @@ In SVN lagen unter einem Stufenbranch wie `Entwicklung` mehrere
 Releaseverzeichnisse nebeneinander. In Git werden Releaselinie und Stufe in den
 Branchnamen aufgenommen, beispielsweise `R260/Entwicklung`,
 `R260/Abnahme` und `R260/Bereitstellung`. Diese Abweichung ist bewusst: Jede
-aktive Linie erhält eine eigene Historie, einen eindeutigen Pull-Request-Pfad,
+aktive Linie erhält eine eigene Historie, einen eindeutigen Promotionspfad,
 eigene Schutzregeln und einen unmissverständlichen Deploymentauslöser. Ein
 gemeinsamer Stufenbranch mit Releaseordnern würde dagegen Änderungen mehrerer
 Linien in einem Pull Request und zusätzliche fehleranfällige Pfadfilter
 ermöglichen.
 
-Eine Änderung beginnt in einem Branch wie
-`feature/R260/12345-kurzbeschreibung`. Ein Pull Request nach
-`R260/Entwicklung` validiert Inhalt, Konfiguration und Promotionsrichtung,
-besitzt aber keine externen Seiteneffekte. Nach dem Merge wird der exakte
-Merge-Commit automatisch zum M/Text-Entwicklungssystem der Linie verteilt.
-Eine zusätzliche manuelle Environment-Freigabe oder ein fremdes Review ist
-nicht erforderlich.
+Eine Änderung kann bei Bedarf zunächst auf einem lokalen Feature-Branch
+entstehen; nur ihr direkter Push nach `R260/Entwicklung` verteilt den exakten
+Commit automatisch zum M/Text-Entwicklungssystem der Linie. Nach
+erfolgreicher fachlicher Prüfung wird derselbe Commit direkt nach
+`R260/Abnahme` promoviert und dort verteilt. Eine zusätzliche manuelle
+Environment-Freigabe oder ein fremdes Review ist nicht erforderlich.
 
-Die Promotion zur Abnahme erfolgt durch einen Pull Request von
-`R260/Entwicklung` nach `R260/Abnahme`. Dessen Merge verteilt automatisch zum
-zugehörigen Abnahmesystem. Für die Bereitstellung werden ausgewählte Commits in
+Für die Bereitstellung werden ausgewählte Commits in
 einem UTC-datierten Branch wie `release/R260-20260715T143000Z` gesammelt und
 per Pull Request nach `R260/Bereitstellung` übernommen.
 
@@ -285,8 +280,8 @@ Automation mit Schreibrechten auf mehrere geschützte Branches.
 Die wiederverwendbaren Workflows sind nach Verantwortung getrennt. Der
 Release-Workflow hält Paketbau und Mainframe-Übergabe als zwei Jobs in
 derselben Datei; nur der Übergabejob bindet das Environment `Bereitstellung`.
-Die Promotionsvalidierung läuft ausschließlich als Pull-Request-Gate. Sync und
-Releasebau validieren die Konfiguration bei der tatsächlichen Verwendung
+Die Freigabevalidierung läuft ausschließlich als Pull-Request-Gate vor
+Bereitstellung. Sync und Releasebau validieren die Konfiguration bei der tatsächlichen Verwendung
 erneut. Kontrollierte manuelle Wiederholungen müssen denselben Commit
 verwenden; vor einer erneuten M/Text-Verteilung wird geprüft, dass der Commit
 im ausgewählten Stufenbranch enthalten ist.

@@ -2,8 +2,7 @@
 
 **Stand:** 15. Juli 2026
 **Zweck:** Operative Restarbeiten bis zur nichtproduktiven Abnahme und zum späteren Cutover
-**Bezug:** [Zielbild](./Zielbild_GitHub_Actions_Git.md) und
-[Migration und harter Cut](./Migration_und_harter_Cut.md)
+**Bezug:** [Zielbild](./Zielbild_GitHub_Actions_Git.md)
 
 **Bedienung nach Aktivierung:** [Benutzeranleitung](./Benutzeranleitung.md)
 
@@ -31,8 +30,9 @@ gesperrt und werden nicht durch Annahmen ersetzt.
 
 | Status | Tätigkeit | Ort | Konkreter Wert beziehungsweise Ergebnis |
 |---|---|---|---|
-| offen | Direkte Pushes verhindern und Pull Requests verlangen | GitHub Rulesets für `R*/Entwicklung`, `R*/Abnahme`, `R*/Bereitstellung` | Kein verpflichtendes fremdes Review; Ersteller darf nach erfolgreichen Checks selbst mergen |
-| offen | Validierung als Pflichtcheck setzen | Dieselben Rulesets | Check des Workflows `Validate change` verpflichtend |
+| offen | Direkte Pushes nach Entwicklung und Abnahme zulassen | GitHub Rulesets für `R*/Entwicklung`, `R*/Abnahme` | Force-Pushes und Löschen weiterhin verbieten |
+| offen | Pull Request vor Bereitstellung verlangen | GitHub Ruleset für `R*/Bereitstellung` | Kein verpflichtendes fremdes Review; Ersteller darf nach erfolgreichen Checks selbst mergen |
+| offen | Validierung als Pflichtcheck setzen | Ruleset für `R*/Bereitstellung` | Check des Workflows `Validate change / Validate release promotion` verpflichtend |
 | offen | GitHub Environment anlegen | Repository Settings → Environments | Gemeinsame Environments `Entwicklung`, `Abnahme`, `Bereitstellung` |
 | offen | Environment-Regeln setzen | Environments | Keine zusätzliche Freigabe für Entwicklung und Abnahme; manuelle Freigabe vor Mainframe-Übergabe in `Bereitstellung` |
 | offen | Zulässige Deploymentbranches eintragen | Environments | Je Environment nur die passenden Branches der drei aktiven Linien erlauben |

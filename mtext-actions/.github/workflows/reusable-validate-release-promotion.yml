@@ -1,4 +1,4 @@
-name: Reusable pull request validation
+name: Reusable release promotion validation
 
 # Dieser Workflow prüft einen konkreten Mandanten-Commit, ohne externe Systeme anzusprechen.
 'on':
@@ -32,7 +32,7 @@ permissions:
 
 jobs:
   validate:
-    name: Validate pull request configuration and promotion
+    name: Validate release promotion configuration
     runs-on:
       - self-hosted
       - linux
@@ -62,15 +62,15 @@ jobs:
           LBS_WHEELHOUSE: ${{ vars.LBS_WHEELHOUSE }}
         run: automation/scripts/runner-preflight.sh automation/requirements.lock
 
-      - name: Validate configuration and promotion
-        # Geprüft werden Konfiguration, Commit-Zuordnung und zulässige Promotionsrichtung.
+      - name: Validate configuration and release promotion
+        # Geprüft werden Konfiguration, Commit-Zuordnung und der Auswahlbranch vor Bereitstellung.
         env:
           INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}
           INPUT_SOURCE_BRANCH: ${{ inputs.source_branch }}
           INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
           PYTHONPATH: automation/src
         run: >-
-          "${{ steps.runtime.outputs.python }}" -m lbs_delivery validate-pr
+          "${{ steps.runtime.outputs.python }}" -m lbs_delivery validate-release-promotion
           --mandant-config source/config/mandant.json
           --mandant-schema automation/config/mandant.schema.json
           --deployments-config automation/config/deployments.json

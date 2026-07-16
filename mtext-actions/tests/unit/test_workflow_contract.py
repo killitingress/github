@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github/workflows"
 EXPECTED = {
     "ci.yml",
-    "reusable-validate-pr.yml",
+    "reusable-validate-release-promotion.yml",
     "reusable-sync-resources.yml",
     "reusable-release.yml",
 }
@@ -39,7 +39,9 @@ class CentralWorkflowContractTests(unittest.TestCase):
         )
 
     def test_validate_has_no_external_integration_contract(self) -> None:
-        text = (WORKFLOWS / "reusable-validate-pr.yml").read_text(encoding="utf-8")
+        text = (
+            WORKFLOWS / "reusable-validate-release-promotion.yml"
+        ).read_text(encoding="utf-8")
         for token in (
             "MAINFRAME_",
             "vMtextAdapter",
@@ -48,7 +50,7 @@ class CentralWorkflowContractTests(unittest.TestCase):
             "unittest",
         ):
             self.assertNotIn(token, text)
-        self.assertIn("validate-pr", text)
+        self.assertIn("validate-release-promotion", text)
 
     def test_workflows_reference_json_configuration(self) -> None:
         for path in WORKFLOWS.glob("*.yml"):

@@ -46,15 +46,17 @@ Der redundante historische Sonderpfad `LOMS_Basis[FI]` wird nicht übernommen.
 ## Branch- und Releasefluss
 
 Für die gleichzeitig aktiven Linien existieren getrennte Stufenbranches, etwa
-`R261/Entwicklung`, `R261/Abnahme` und `R261/Bereitstellung`. Änderungen
-beginnen in `feature/R261/<Issue>-<Kurzbeschreibung>` und gelangen per Pull
-Request nach `R261/Entwicklung`. Der Merge verteilt den exakten Commit zum
-M/Text-Entwicklungssystem. Die Promotion nach `R261/Abnahme` erfolgt ebenfalls
-per Pull Request; ihr Merge verteilt zum Abnahmesystem.
+`R261/Entwicklung`, `R261/Abnahme` und `R261/Bereitstellung`. Änderungen können
+bei Bedarf zunächst auf einem lokalen Feature-Branch entstehen; erst der direkte
+Push nach `R261/Entwicklung` löst die Automatisierung aus. Nach erfolgreicher
+Prüfung kann ein fachlich freigegebener Commit direkt nach `R261/Abnahme`
+promoviert werden. Die jeweiligen Pushes verteilen ihren exakten Commit zum
+Entwicklungs- beziehungsweise Abnahmesystem.
 
 Ausgewählte abgenommene Änderungen werden über einen UTC-datierten Branch wie
-`release/R261-20260715T143000Z` nach `R261/Bereitstellung` übernommen. Ein
-Merge dorthin validiert den Stand, erzeugt aber noch keine Lieferung. Erst ein
+`release/R261-20260715T143000Z` per Pull Request nach `R261/Bereitstellung`
+übernommen. Der Pull Request validiert den Stand; sein Merge erzeugt aber noch
+keine Lieferung. Erst ein
 vom Benutzer gesetzter Tag `Rnnn.nnn` startet FULL oder DELTA. `.100` ist FULL;
 spätere Tags derselben Linie sind kumulative DELTAs gegen `.100`.
 

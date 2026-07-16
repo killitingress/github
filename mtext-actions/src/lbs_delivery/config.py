@@ -23,9 +23,6 @@ _RELEASE_TAG_RE = re.compile(r"R[0-9]{3}\.[0-9]{3}")
 _STAGE_BRANCH_RE = re.compile(
     r"(?P<release_line>R[0-9]{3})/(?P<stage>[A-Za-z][A-Za-z0-9_-]*)"
 )
-_FEATURE_BRANCH_RE = re.compile(
-    r"feature/(?P<release_line>R[0-9]{3})/[1-9][0-9]*-[a-z0-9][a-z0-9-]*"
-)
 _SELECTION_BRANCH_RE = re.compile(
     r"release/(?P<release_line>R[0-9]{3})-[0-9]{8}T[0-9]{6}Z"
 )
@@ -292,29 +289,30 @@ def resolve_sync_branch(
     return release_line
 
 
-def validate_pull_request_promotion(
+def validate_release_promotion(
     deployments: DeploymentsConfig,
     source_branch: str,
     target_branch: str,
 ) -> None:
-    """Prüft die erlaubte Promotionsrichtung eines Pull Requests."""
+    """Prüft einen Auswahlbranch für den Pull Request nach Bereitstellung."""
 
-    target_line, target_environment = resolve_stage_branch(deployments, target_branch)
-    if target_environment.get("code") == "E":
-        feature = _FEATURE_BRANCH_RE.fullmatch(source_branch)
-        if feature is not None and feature.group("release_line") == target_line:
-            return
-    elif target_environment.get("code") == "A":
-        source_line, source_environment = resolve_stage_branch(
-            deployments, source_branch
+    target_line, _ = resolve_stage_branch(deployments, target_branch)
+    if target_branch != release_branch(deployments, target_line):
+        raise DeliveryError(
+            Status.VALIDATION_FAILED,
+            "target branch must be the release branch",
         )
-        if source_line == target_line and source_environment.get("code") == "E":
-            return
-    elif target_environment.get("release_on_tag", False):
-        selection = _SELECTION_BRANCH_RE.fullmatch(source_branch)
-        if selection is not None and selection.group("release_line") == target_line:
-            return
-    raise DeliveryError(Status.VALIDATION_FAILED, "invalid promotion direction")
+    selection = _SELECTION_BRANCH_RE.fullmatch(source_branch)
+    if selection is None:
+        raise DeliveryError(
+            Status.VALIDATION_FAILED,
+            "source branch must be a UTC-dated release selection branch",
+        )
+    if selection.group("release_line") != target_line:
+        raise DeliveryError(
+            Status.VALIDATION_FAILED,
+            "source branch and release branch must use the same release line",
+        )
 
 
 def public_summary(

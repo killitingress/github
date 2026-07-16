@@ -28,9 +28,9 @@ zeigen.
 
 ### `validate.yml`
 
-Der Workflow läuft ausschließlich für Pull Requests in die drei
-Stufenbranches von `R260`, `R261` und `R270`. Er validiert Konfiguration,
-Repository-Identität und Promotionsrichtung. Die zentrale Testsuite läuft nur
+Der Workflow läuft ausschließlich für Pull Requests nach
+`R260/Bereitstellung`, `R261/Bereitstellung` oder `R270/Bereitstellung`. Er
+validiert Konfiguration, Repository-Identität und den Auswahlbranch. Die zentrale Testsuite läuft nur
 im CI-Workflow von `mtext-actions`. Pull Requests im Draft-Status werden erst
 nach `ready_for_review` geprüft. Push- und manuelle Validierungsläufe sind
 nicht vorgesehen; Sync und Releasebau validieren die Konfiguration erneut bei
@@ -101,11 +101,12 @@ Folgende Schutzmaßnahmen werden als Repository- oder Organisationsregeln in
 GitHub konfiguriert und können nicht durch diese Workflow-Dateien allein
 erzwungen werden:
 
-- Pull-Request-Pflicht und Verbot direkter Pushes auf alle
-  `Rxxx/Entwicklung`-, `Rxxx/Abnahme`- und `Rxxx/Bereitstellung`-Branches;
+- direkte Pushes nach `Rxxx/Entwicklung` und `Rxxx/Abnahme` zulassen;
+- Pull-Request-Pflicht und Verbot direkter Pushes nur auf
+  `Rxxx/Bereitstellung`;
 - keine verpflichtende fremde Freigabe; der Ersteller darf nach erfolgreichen
   Statuschecks selbst mergen;
-- `Validate change / Validate configuration and promotion` als erforderlicher
+- `Validate change / Validate release promotion` als erforderlicher
   Statuscheck;
 - freigegebene Actions und wiederverwendbare Workflows;
 - die drei gemeinsamen GitHub Environments `Entwicklung`, `Abnahme` und
@@ -113,7 +114,7 @@ erzwungen werden:
 - minimale Berechtigungen des `GITHUB_TOKEN` auf Repository-Ebene.
 
 `R261/Entwicklung` wird zunächst als Default Branch eingestellt. Workflow- und
-Konfigurationsänderungen werden je aktiver Linie per Pull Request nach
+Konfigurationsänderungen werden je aktiver Linie direkt nach
 `Rxxx/Entwicklung` eingebracht und anschließend über den normalen
 Promotionsweg weitergeführt. Beim Linienwechsel wird der Default Branch manuell
 auf den Entwicklungsbranch der neuen führenden Linie geändert.

@@ -12,11 +12,11 @@ Betrieb
 ## 1. Zweck und aktueller Betriebsstatus
 
 Die Lösung führt M/Text-Ressourcen eines Mandanten über die drei Stufen
-`Entwicklung`, `Abnahme` und `Bereitstellung`. Pull Requests prüfen die
-zulässige Promotionsrichtung. Erst ein Merge nach Entwicklung oder Abnahme
-löst die jeweilige M/Text-Synchronisation aus. Ein Merge nach Bereitstellung
-liefert noch nichts aus; erst ein Release-Tag startet FULL oder DELTA und die
-nachgelagerte Mainframe-Übergabe.
+`Entwicklung`, `Abnahme` und `Bereitstellung`. Pushes nach Entwicklung und
+Abnahme lösen die jeweilige M/Text-Synchronisation aus. Nur der Pull Request
+nach Bereitstellung prüft den Auswahlbranch vor dem Merge. Ein Merge nach
+Bereitstellung liefert noch nichts aus; erst ein Release-Tag startet FULL oder
+DELTA und die nachgelagerte Mainframe-Übergabe.
 
 Der Stand im gemeinsamen Workspace ist noch **nicht aktiviert**:
 
@@ -36,60 +36,60 @@ Schutzverhalten.
 
 | Rolle | Typische Aufgabe | Erforderlicher Zugriff |
 |---|---|---|
-| Ressourcenautor | Änderung erstellen und Pull Request nach Entwicklung öffnen | Lesen, Feature-Branch pushen, Pull Request erstellen |
+| Ressourcenautor | Änderung direkt nach Entwicklung pushen und nach erfolgreicher Prüfung nach Abnahme promoten | Schreiben auf Entwicklungs- und Abnahmebranches |
 | Release-Verantwortlicher | Nach Abnahme Auswahlbranch erstellen, Bereitstellung mergen und Tag setzen | Branch erstellen, Pull Request mergen, Tag pushen |
 | Environment-Freigebender | Mainframe-Übergabe nach erfolgreichem Paketbau genehmigen | Reviewer für das Environment `Bereitstellung` |
 | Betrieb/Plattform | Runner, Secrets, Environments, Rulesets und Vertragsschalter verwalten | Repository-/Organisationsadministration |
 
 Ein verpflichtendes fremdes Pull-Request-Review ist im Zielbild nicht
-vorgesehen. Der Ersteller darf nach erfolgreichen Pflichtchecks selbst
-mergen. Direkte Pushes auf die drei Stufenbranches bleiben verboten.
+vorgesehen. Direkte Pushes sind für Entwicklung und Abnahme erlaubt. Nur die
+Bereitstellung verlangt einen Pull Request; der Ersteller darf ihn nach
+erfolgreichen Pflichtchecks selbst mergen.
 
 ## 3. Begriffe und Namensregeln
 
 | Element | Verbindliches Format | Beispiel |
 |---|---|---|
 | Stufenbranch | `Rnnn/Entwicklung`, `Rnnn/Abnahme`, `Rnnn/Bereitstellung` | `R261/Entwicklung` |
-| Feature-Branch | `feature/Rnnn/<Issue>-<kurzname>` | `feature/R261/12345-neuer-baustein` |
+| Optionaler Feature-Branch | `feature/Rnnn/<Issue>-<kurzname>` | `feature/R261/12345-neuer-baustein` |
 | Auswahlbranch | `release/Rnnn-YYYYMMDDTHHMMSSZ` in UTC | `release/R261-20260715T143000Z` |
 | Release-Tag | `Rnnn.nnn` | `R261.100`, `R261.108` |
 
-Der Issue-Teil des Feature-Branches ist eine positive Zahl. Der Kurzname
-verwendet Kleinbuchstaben, Ziffern und Bindestriche. Groß-/Kleinschreibung der
-Stufen ist verbindlich. Aktive Linien sind derzeit `R260`, `R261` und `R270`.
+Feature-Branches sind eine optionale lokale Arbeits- und Namenskonvention. Sie
+sind kein Pull-Request-Gate und lösen keine Verteilung aus. Maßgeblich für die
+Automatisierung sind nur Pushes auf die Stufenbranches. Groß-/Kleinschreibung
+der Stufen ist verbindlich. Aktive Linien sind derzeit `R260`, `R261` und
+`R270`.
 
 ## 4. Änderung nach Entwicklung bringen
 
 1. Das richtige Mandanten-Repository und die betroffene Releaselinie wählen.
-2. Den Feature-Branch vom aktuellen `<Releaselinie>/Entwicklung` erstellen.
+2. Den aktuellen `<Releaselinie>/Entwicklung` auschecken; optional dafür einen
+   lokalen Feature-Branch erstellen.
 3. Nur die fachlich vorgesehenen Ressourcen ändern. Die Mandantenkonfiguration
    nur gemeinsam mit der fachlichen Zuordnung ändern; keine Secrets ablegen.
-4. Änderungen committen und den Feature-Branch nach GitHub pushen.
-5. Einen Pull Request vom Feature-Branch nach
-   `<Releaselinie>/Entwicklung` öffnen.
-6. Den Check
-   `Validate change / Validate configuration and promotion` abwarten.
-7. Nach erfolgreichem Check mergen.
-8. Unter **Actions → Sync M/Text resources** den durch den Merge ausgelösten
+4. Änderungen committen und den gewünschten Commit direkt nach
+   `<Releaselinie>/Entwicklung` pushen.
+5. Unter **Actions → Sync M/Text resources** den durch den Push ausgelösten
    Lauf kontrollieren.
 
-Der Pull Request selbst besitzt keine externen Seiteneffekte. Erst der Push
-durch den Merge startet die Synchronisation des exakten Merge-Commits. Ein
-erfolgreicher Lauf endet mit `ADAPTER_ACCEPTED`; dies bestätigt die synchrone
-2xx-Annahme des Adapters, nicht einen späteren fachlichen M/Text-Jobstatus.
+Der Push startet die Synchronisation des exakten Commits. Ein erfolgreicher
+Lauf endet mit `ADAPTER_ACCEPTED`; dies bestätigt die synchrone 2xx-Annahme des
+Adapters, nicht einen späteren fachlichen M/Text-Jobstatus.
 
 ## 5. Nach Abnahme promoten
 
-1. Einen Pull Request von `<Releaselinie>/Entwicklung` nach
-   `<Releaselinie>/Abnahme` öffnen.
-2. Prüfen, dass Quell- und Zielbranch dieselbe Releaselinie verwenden.
-3. Den Validierungscheck abwarten und anschließend mergen.
-4. Unter **Actions → Sync M/Text resources** den Abnahmelauf kontrollieren.
-5. Die fachliche Abnahme außerhalb des Workflows nach dem vereinbarten
+1. Den in Entwicklung erfolgreich geprüften Commit ermitteln.
+2. Genau diesen Commit direkt nach `<Releaselinie>/Abnahme` pushen.
+3. Unter **Actions → Sync M/Text resources** den Abnahmelauf kontrollieren.
+4. Die fachliche Abnahme außerhalb des Workflows nach dem vereinbarten
    Verfahren dokumentieren.
 
-Der Merge nach Abnahme verteilt den vollständigen konfigurierten Projektstand
-des exakten Merge-Commits. Er baut noch kein Mainframe-Paket.
+Der Push nach Abnahme verteilt den vollständigen konfigurierten Projektstand
+des vom Anwender fachlich freigegebenen Commits. Er baut noch kein
+Mainframe-Paket. Die Auswahl dieses Commits ist eine fachliche
+Verantwortlichkeit; der Workflow erzwingt keine Gleichheit mit einem früheren
+Entwicklungspush.
 
 ## 6. Ausgewählte Änderungen bereitstellen
 
@@ -101,7 +101,8 @@ des exakten Merge-Commits. Er baut noch kein Mainframe-Paket.
    keine ungeprüften Konfliktauflösungen übernehmen.
 3. Einen Pull Request vom Auswahlbranch nach
    `<Releaselinie>/Bereitstellung` öffnen.
-4. Inhalt, Zielbranch und Validierungscheck prüfen und den Pull Request mergen.
+4. Inhalt, Zielbranch und den Check `Validate change / Validate release promotion`
+   prüfen und den Pull Request mergen.
 5. Den erzeugten Merge-Commit notieren. Der Merge allein startet weder
    Paketbau noch Mainframe-Übergabe.
 
@@ -219,5 +220,4 @@ Requests, Konfigurationsdateien, Workflow-Inputs oder Support-Tickets kopieren.
   dokumentiert.
 
 Technische Einrichtung, Aktivierung und Cutover sind keine Benutzeraktionen.
-Sie folgen den Seiten [Nächste Schritte](./Naechste_Schritte.md) und
-[Migration und harter Cut](./Migration_und_harter_Cut.md).
+Sie folgen der Seite [Nächste Schritte](./Naechste_Schritte.md).

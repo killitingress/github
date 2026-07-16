@@ -18,7 +18,7 @@ Workflows über einen unveränderlichen Commit-SHA auf.
 mtext-actions/
   .github/workflows/
     ci.yml
-    reusable-validate-pr.yml
+    reusable-validate-release-promotion.yml
     reusable-sync-resources.yml
     reusable-release.yml
   config/
@@ -54,9 +54,9 @@ mtext-actions/
 
 ## Wiederverwendbare Workflows
 
-`reusable-validate-pr.yml` prüft bei Pull Requests ausschließlich
-Repository-Identität, Konfiguration und Promotionsrichtung. Dieser Workflow
-besitzt keine M/Text-, Mainframe- oder zentralen Testschritte.
+`reusable-validate-release-promotion.yml` prüft beim Pull Request nach Bereitstellung
+ausschließlich Repository-Identität, Konfiguration und den Auswahlbranch.
+Dieser Workflow besitzt keine M/Text-, Mainframe- oder zentralen Testschritte.
 
 `reusable-sync-resources.yml` checkt einen exakten Commit aus, stellt die
 konfigurierten Projekte in einem laufbezogenen Verzeichnis bereit, veröffentlicht
@@ -82,7 +82,7 @@ festgelegt. Fachlogik liegt ausschließlich in Python.
 Die vier vorgesehenen Kommandos sind implementiert:
 
 ```bash
-python -m lbs_delivery validate-pr ...
+python -m lbs_delivery validate-release-promotion ...
 python -m lbs_delivery sync-resources ...
 python -m lbs_delivery build-release ...
 python -m lbs_delivery publish-mainframe ...
@@ -148,7 +148,7 @@ ausführen kann.
 
 Die wiederverwendbaren Workflows erwarten die drei gemeinsamen GitHub
 Environments `Entwicklung`, `Abnahme` und `Bereitstellung`. Entwicklung und
-Abnahme laufen nach einem validierten Merge ohne zusätzliche manuelle
+Abnahme laufen nach einem direkten Push ohne zusätzliche manuelle
 Environment-Freigabe. Die Mainframe-Übergabe im Environment `Bereitstellung`
 wartet auf eine manuelle Freigabe.
 
