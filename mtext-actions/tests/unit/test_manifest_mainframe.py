@@ -194,6 +194,7 @@ class ManifestAndMainframeTests(unittest.TestCase):
                 FtpSettings("host", "user", "password"),
                 ftp_factory=lambda: fake,
             )
+            self.assertIn("CONNECT host 60.0", fake.commands)
             self.assertIn("STOR 'IEA.LOMS.TONICZ(FIBASISF)'", fake.commands)
             self.assertIn("SITE FILETYPE=JES", fake.commands)
             self.assertIn("STOR LIT9028A", fake.commands)

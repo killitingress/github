@@ -413,7 +413,8 @@ Bei der Migration werden für jede aktive Releaselinie mindestens der
 `.100`-Stand und alle späteren Tags übernommen. Aus einem bisherigen SVN-Namen
 wie `R260.101_MText` wird der Git-Tag `R260.101`. Die Übernahme älterer
 Historie, SVN-Eigenschaften, Autoren und großer Dateien wird im
-Migrationskonzept gesondert behandelt.
+[Migrations- und Cutover-Runbook](./Migration_und_Cutover_Runbook.md) gesondert
+behandelt.
 
 ## 9. Mainframe-Übergabe und JCL
 
@@ -459,3 +460,11 @@ Anfrage.
 
 Die erste Ausbaustufe fragt weder bei M/Text noch auf dem Mainframe nach dem
 späteren fachlichen Endstatus.
+
+## 11. Spätere Erweiterungen
+
+Nicht zur ersten Produktivsetzung gehören zusätzliche
+E-Mail-Benachrichtigungen, weitergehende historische SVN-Daten und ein
+optionales M/Text- oder Mainframe-Status-Polling. Falls die
+Mandantenkonfiguration später über Pull Requests gepflegt wird, kann außerdem
+eine verbindliche Code-Owner-Freigabe ergänzt werden.

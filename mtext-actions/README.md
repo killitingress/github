@@ -177,19 +177,19 @@ wartet auf eine manuelle Freigabe.
 
 Der Publish-Job liest im Environment `Bereitstellung`:
 
-- Secrets: `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER`,
-  `MAINFRAME_FTP_PASSWORD`;
-- Variablen: `MAINFRAME_DATASET`, `MAINFRAME_JES_TARGET`,
-  `MAINFRAME_FTP_TIMEOUT`.
+- Secrets: `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER` und
+  `MAINFRAME_FTP_PASSWORD`.
+
+Dataset `IEA.LOMS.TONICZ`, JES-Ziel `LIT9028A` und FTP-Timeout 60 Sekunden
+sind als gemeinsame technische Konstanten in der zentralen Automation
+festgelegt und werden nicht als GitHub-Variablen gepflegt.
 
 `LBS_WHEELHOUSE` wird bereits für Config-Check, Sync und Build benötigt und
 muss daher als Repository- oder Organisationsvariable verfügbar sein; eine
 ausschließlich im Environment `Bereitstellung` hinterlegte Variable reicht
 nicht aus.
 
-Leere optionale Mainframe-Variablen fallen auf die historischen Dataset- und
-JES-Namen sowie 60 Sekunden Timeout zurück. Zugangsdaten werden weder in
-Manifest, JCL noch Logausgaben geschrieben.
+Zugangsdaten werden weder in Manifest, JCL noch Logausgaben geschrieben.
 
 Da aufrufendes und zentrales Repository in unterschiedlichen Namespaces
 liegen, muss `j520730/mtext-actions` in den GitHub-Enterprise-Actions-

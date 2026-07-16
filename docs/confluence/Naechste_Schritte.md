@@ -1,195 +1,90 @@
 # Nächste Schritte
 
-**Zweck:** Operative Restarbeiten für den Test-Parallelbetrieb und den späteren produktiven Cutover
+**Zweck:** Operative Restarbeiten bis zum Test-Parallelbetrieb
 
 **Bezug:** [Zielbild](./Zielbild_GitHub_Actions_Git.md)
 
 **Bedienung nach Aktivierung:** [Benutzeranleitung](./Benutzeranleitung.md)
 
+**Migration und Produktivsetzung:**
+[Migrations- und Cutover-Runbook](./Migration_und_Cutover_Runbook.md)
+
 **Ablauf:** [Soll-Architektur Ablaufdiagramm](../../Architektur_Soll_GitHub_Actions_Git.drawio)
 
-Diese Seite enthält nur noch Tätigkeiten, die nach dem lokalen
-Implementierungsstand manuell oder durch konkrete Konfiguration auszuführen
-sind. Architekturbegründungen stehen im Zielbild. Noch unbekannte Werte werden
-offen ausgewiesen und vor dem jeweiligen Integrationslauf geklärt.
+Diese Seite ist die Arbeitsliste für die erstmalige Einrichtung und die
+nichtproduktive Abnahme. Bestätigte Punkte bleiben zur Orientierung sichtbar;
+Architekturbegründungen, Bedienabläufe und das spätere Cutover stehen in den
+verlinkten Dokumenten.
 
-## 1. GitHub-Repositories erstmals einrichten
-
-| Status | Tätigkeit | Ort | Konkreter Wert beziehungsweise Ergebnis |
-|---|---|---|---|
-| offen | Zentrales Repository privat anlegen beziehungsweise lokalen Stand übernehmen | GitHub Enterprise: `j520730/mtext-actions` | Nur das zentrale Automatisierungsteam erhält direkten Lese- oder Schreibzugriff; Standardbranch und Freigabeprozess festlegen |
-| offen | Privates FI-Repository anlegen beziehungsweise lokalen Stand übernehmen | GitHub Enterprise: `j517120/mtext-fi` | Ressourcen, `config/mandant.json` und dünne Workflows übernehmen; private Sichtbarkeit als Voraussetzung für den Aufruf des privaten zentralen Workflows bestätigen |
-| offen | Aktive Stufenbranches anlegen | `j517120/mtext-fi` | Je `R260`, `R261`, `R270`: `Entwicklung`, `Abnahme`, `Bereitstellung` |
-| offen | Aktuellen Default Branch setzen | Repository Settings → Default branch | Zunächst `R261/Entwicklung`; beim rollierenden Linienwechsel manuell umstellen |
-| offen | Zentrale Workflowversion pinnen | Alle Dateien unter `mtext-fi/.github/workflows/` in jeder aktiven Linie | Null-SHA durch denselben freigegebenen 40-stelligen Commit-SHA aus `mtext-actions` ersetzen |
-| offen | Repositoryübergreifenden Actions-Zugriff aktivieren | `j520730/mtext-actions` → Settings → Actions → General → Access | Ausschließlich den vorgesehenen Mandanten-Repositories die Ausführung der wiederverwendbaren Workflows erlauben; Text-Entwickler der Mandanten nicht als Repositorymitglieder aufnehmen |
-| offen | Zentralen Code-Checkout praktisch prüfen | Nichtproduktiver Config-, Sync- oder Release-Lauf | Prüfen, ob die Enterprise-Freigabe den Checkout über beide Namespaces ermöglicht; falls ein Installation-Token erforderlich ist, den Workflowvertrag vor Aktivierung um dessen sichere Übergabe erweitern |
-| offen | Mandantensichtbare Logs prüfen | Nichtproduktive Läufe in einem Mandanten-Repository | Sicherstellen, dass Logs keine vertraulichen zentralen Implementierungsdetails, Tokens, Secrets oder internen Dateiinhalte offenlegen |
-| offen | Integrierten Git-Client der M/Text Workbench abnehmen | Repräsentativer Arbeitsplatz und `mtext-fi` | Authentifizierung, Branchwechsel, Commit und Push auf einen Entwicklungsbranch praktisch prüfen und verständlich dokumentieren |
-| offen | Zusätzlichen Git-Client für die Stufenweitergabe auswählen und bereitstellen | Arbeitsplätze der berechtigten Text-Entwickler und Release-Verantwortlichen | Produkt, Installation, Aktualisierung, Authentifizierung und Support festlegen; Cherry-Pick zwischen den Stufenbranches praktisch abnehmen |
-| bestätigt | GitHub-Plattform festhalten | Betriebsdokumentation | GitHub Enterprise Server 3.20.4 |
-
-## 2. Branch- und Environment-Regeln konfigurieren
-
-| Status | Tätigkeit | Ort | Konkreter Wert beziehungsweise Ergebnis |
-|---|---|---|---|
-| offen | Mandantenspezifische Verantwortliche benennen | Je Mandanten-Repository | Team für Ressourcenarbeit sowie kleines Release-Team für `R*/Bereitstellung` und neue Release-Tags festlegen |
-| offen | Direkte Pushes auf Entwicklung und Abnahme zulassen | Branchschutz für `R*/Entwicklung`, `R*/Abnahme` | Kreis berechtigter Text-Entwickler je Mandant festlegen; Force-Pushes und Löschen verbieten |
-| offen | Pushes nach Bereitstellung begrenzen | Branchschutz für `R*/Bereitstellung` | Nur das benannte Release-Team darf direkt pushen; Force-Pushes und Löschen bleiben verboten |
-| offen | Zentrale Aufrufdateien im Mandanten-Repository schützen | Push-Ruleset für `.github/workflows/**/*` | Änderungen durch Text-Entwickler des Mandanten auf allen Branches blockieren; Bypass nur für die zentralen Automatisierungsverantwortlichen vorsehen und auf GHES 3.20.4 praktisch prüfen |
-| offen | Mandantenkonfiguration gegen normale Ressourcen-Pushes schützen | Push-Ruleset für `config/mandant.json` | Änderungen nur dem ausdrücklich benannten technischen Verantwortlichenkreis erlauben; normale Workbench-Pushes dürfen die Datei nicht verändern |
-| offen | GitHub Environment anlegen | Repository Settings → Environments | Gemeinsame Environments `Entwicklung`, `Abnahme`, `Bereitstellung` |
-| offen | Environment-Regeln setzen | Environments | Keine zusätzliche Freigabe für Entwicklung und Abnahme; manuelle Freigabe vor Mainframe-Übergabe in `Bereitstellung` |
-| offen | Zulässige Deploymentbranches eintragen | Environments | Generische Muster `R*/Entwicklung`, `R*/Abnahme` und für die Freigabe `R*/Bereitstellung` verwenden; die aktive Linie wird zentral validiert |
-| offen | Erstellung von Release-Tags begrenzen | Tag-Ruleset für `R[0-9][0-9][0-9].[0-9][0-9][0-9]` | Nur das je Mandant benannte Release-Team darf neue passende Tags anlegen |
-| offen | Release-Tags unveränderlich schützen | Separates Tag-Ruleset für dasselbe Muster | Updates, Force-Pushes und Löschungen ohne regulären Bypass verbieten; einen gegebenenfalls notwendigen administrativen Notfallweg separat festlegen |
-| offen | Cherry-Pick-Bedienweg für Abnahme und Bereitstellung festlegen | Zusätzlicher Git-Client und Pilotprozess je Mandant | Auswahl nach SHA, Aktualisierung des Zielbranches, Dokumentation der vollständigen Quell-SHA im neuen Ziel-Commit, Reihenfolge mehrerer Commits, Konfliktbehandlung, Prüfung und Push verständlich dokumentieren; die GitHub-Weboberfläche allein unterstützt diesen Ablauf nicht |
-| offen | Release-Tag in GitHub praktisch prüfen | GitHub-Weboberfläche und nichtproduktiver Bereitstellungsbranch | Tag auf dem bestätigten Bereitstellungsstand anlegen, Ruleset-Wirkung und einmaligen Start des Release-Workflows prüfen |
-
-## 3. Runner und Abhängigkeiten bereitstellen
-
-| Status | Tätigkeit | Ort | Konkreter Wert beziehungsweise Ergebnis |
-|---|---|---|---|
-| offen | Self-hosted Runner bereitstellen | GitHub-Enterprise-Runnerverwaltung | Labels `self-hosted`, `linux`, `mtext-delivery` bestätigen und zuweisen |
-| offen | Python und Git prüfen | Vorgesehener Runner | Python 3.14 und Git müssen verfügbar sein; `scripts/runner-preflight.sh` ausführen |
-| offen | GHES-Artefakt-Actions prüfen | GHES-Organisation `actions` und nichtproduktiver Release-Lauf | `upload-artifact` v3.2.2-node20 (`c6a3b2bd78b3985e4b2f15397fec357f0fd808de`) und `download-artifact` v3.1.0-node20 (`ad191675b41f6a5b46da9a048cb6893812da158b`) müssen auf GHES 3.20.4 verfügbar sein; v4 ist nicht zu verwenden |
-| offen | Action-Runtime des Runners prüfen | Vorgesehener Self-hosted Runner | Ausführung von Node-20-Actions mit den fest gepinnten Artefakt-SHAs bestätigen |
-| offen | Internes Wheelhouse bereitstellen | Runner und Repository-/Organisationsvariable | `LBS_WHEELHOUSE` auf freigegebenen lokalen Pfad setzen; Installation bleibt `--no-index` |
-| offen | Interne CA prüfen | Vorgesehener Runner | TLS-Aufruf gegen `https://en01e.ltoma.intern/vMtextAdapter/sync` testen; fehlende CA in den Truststore aufnehmen, TLS-Prüfung nicht deaktivieren |
-| offen | Netzwerkpfade nach Transportentscheidung freigeben | Runner, Adapter, M/Text und Netzwerk | Immer benötigte Zugriffe auf Adapter beziehungsweise M/Text sowie Mainframe-FTP und JES ermöglichen; Share- oder GitHub-Zugriff nur für die gewählte M/Text-Transportvariante freigeben |
-
-## 4. M/Text-Konfiguration vervollständigen und abnehmen
-
-| Status | Tätigkeit | Ort | Konkreter Wert beziehungsweise Ergebnis |
-|---|---|---|---|
-| bestätigt | Linien- und URL-Mapping | `mtext-actions/config/deployments.json` | `R260→en03`, `R261→en01`, `R270→en02`; Hosts jeweils `enXXe` und `enXXa` |
-| bestätigt | Heutigen Adaptervertrag als Ausgangslage festhalten | Bestehender Jenkins-/SVN-Prozess und `mtext-actions` | Der aktuelle Ablauf schreibt zuerst nach `serverSync` und sendet danach einen POST auf `/vMtextAdapter/sync` mit `MAN`/`INR`; dies ist noch keine Entscheidung für den Zieltransport |
-| offen | Transportweg nach `serverSync` entscheiden | Architektur, Adapterbetrieb, M/Text-Betrieb, Netzwerk und GitHub-Enterprise-Betrieb | Drei Varianten verbindlich bewerten: PUT der Ressourcendaten an den Adapter, direkter NFS-/Sharezugriff des Runners oder Download eines GitHub-Actions-Artefakts durch Adapter beziehungsweise M/Text |
-| offen | Gemeinsame Kompatibilitätsanforderung nachweisen | Repräsentativer Jenkins-/SVN-Stand und nichtproduktives `serverSync` | Für jede ernsthaft betrachtete Variante nachweisen, dass nach der Übertragung derselbe Verzeichnisbaum mit identischen relativen Pfaden, Dateinamen und Dateiinhalten entsteht; Transportdateien und technische Metadaten dürfen nicht im von M/Text ausgewerteten Bestand verbleiben |
-| offen | Variante 1: PUT an den Adapter konkretisieren | M/Text-Adapter und `mtext-actions` | Vertrag für einen PUT auf `/vMtextAdapter/sync` mit `MAN`, `INR` und Ressourcendaten festlegen; Adapter schreibt zunächst in einen temporären Bereich, veröffentlicht vollständig nach `serverSync` und startet direkt den internen Synchronisationsprozess; Authentifizierung, Größenlimits, Prüfsummen, Wiederholung, Parallelität und Erfolgsstatus festlegen |
-| offen | Variante 2: Sharezugriff des Runners konkretisieren | Runner, NFS-/Sharebetrieb und `mtext-actions` | Verfügbarkeit des Shares in der neuen Umgebung, Mountpfad, Rechte, Kapazität, atomare Veröffentlichung, Parallelität und Wiederanlauf prüfen; `adapter.server_sync_path_template` erst bei Auswahl dieser Variante als Zielkonfiguration bestätigen |
-| offen | Variante 3: Actions-Artefakt herunterladen | Adapter oder M/Text, GitHub Enterprise und `mtext-actions` | Den bereits für `serverSync` zusammengestellten Verzeichnisbaum ohne zusätzliches inneres M/Text-Paket als eigenes Sync-Artefakt hochladen; Download über die GitHub-Actions-Artefakt-API ohne Git-Checkout prüfen; Übergabe von Repository, Lauf-/Artefakt-ID und Prüfsumme, `Actions: read`-Berechtigung, technische Identität, Erreichbarkeit, Aufbewahrungsfrist, temporäres Entpacken, Veröffentlichung nach `serverSync` und Wiederanlauf festlegen; klar von FULL-/DELTA-Releaseartefakten abgrenzen |
-| offen | Zielvertrag und Verantwortlichkeiten festschreiben | Zielbild, Deploymentkonfiguration, Workflows und Betriebsdokumentation | Nach der Entscheidung nur die gewählte Variante implementieren und keine vorgezogene generische Transportschicht bauen; festlegen, welches System Übertragung, Prüfung, Schreiben nach `serverSync`, Start der internen Synchronisation und Fehlerbehandlung verantwortet |
-| offen | Nebenwirkungsfreien Config-Check prüfen | Push mit Änderung an `config/mandant.json` | `CONFIG_VALIDATED` ohne Environment, Secrets, serverSync-, Adapter- oder Mainframe-Zugriff bestätigen |
-| offen | Nichtproduktiven Synchronisationslauf durchführen | Freigegebener Runner und nichtproduktive Ziele | Vollständigen Projektstand bereitstellen, Adapterantwort und Wiederanlauf prüfen |
-
-## 5. Mainframe-Übergabe einrichten und abnehmen
-
-| Status | Tätigkeit | Ort | Konkreter Wert beziehungsweise Ergebnis |
-|---|---|---|---|
-| offen | FTP-Secrets hinterlegen | GitHub Environment `Bereitstellung` | `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER`, `MAINFRAME_FTP_PASSWORD` |
-| offen | Mainframe-Variablen hinterlegen | Repository-/Environment-Variablen | `MAINFRAME_DATASET=IEA.LOMS.TONICZ`, `MAINFRAME_JES_TARGET=LIT9028A`, `MAINFRAME_FTP_TIMEOUT=60` |
-| bestätigt | Historischen JCL-Eingabevertrag fachlich bestätigen | Bestehendes Verfahren und versioniertes JCL-Template | Der mandantenspezifische Zielcode wird wie bisher über genau einen vorhandenen JCL-Platzhalter eingesetzt; der getrennte zentrale Test-/Produktionswert ist auf `T` und `P` begrenzt; ein zusätzlicher Zielparameter wird nicht eingeführt |
-| offen | JCL und unmittelbare Übergabe nichtproduktiv prüfen | Freigegebener Mainframe-Testweg | FTP-Antworten, `SITE FILETYPE=JES`, Submit und gerendertes JCL abnehmen |
-
-Die Mainframe-Übergabe wartet im Environment `Bereitstellung` auf manuelle
-Freigabe. GitHub-Actions-Artefakte bleiben 30 Tage erhalten. Build und Publish
-sind getrennte Jobs desselben Release-Workflows; vor der Übergabe werden
-Manifest und Prüfsummen erneut geprüft. Übergaben werden je
-Mandanten-Repository serialisiert; unterschiedliche Mandanten dürfen parallel
-laufen.
-
-Mit der bestätigten Übergabe an IZE9 endet der in GitHub Actions abgebildete
-Lieferprozess. Der weitere, deutlich umfangreichere Weg bis Produktion wird
-außerhalb dieser Automation nach dem bestehenden Betriebsverfahren gesteuert.
-
-## 6. SVN-Abzug für Parallelbetrieb und Cutover vorbereiten
-
-Voraussichtlich im November/Dezember 2026 wird zunächst ein Abzug der
-SVN-Repositories nach Git kopiert. Auf diesem Stand wird die GitHub-Umgebung
-für Tests bereitgestellt, während Jenkins und SVN weiterhin den produktiven
-Prozess tragen. Eine laufende Synchronisation des Testbestands mit SVN ist
-nicht erforderlich. Für den ab Januar 2027 geplanten produktiven harten
-Cutover wird der dann freigegebene aktuelle SVN-Stand abschließend nach Git
-übertragen und geprüft.
-
-| Status | Tätigkeit | Ort | Konkreter Wert beziehungsweise Ergebnis |
-|---|---|---|---|
-| geplant November/Dezember 2026 | Ersten SVN-Abzug für den Test-Parallelbetrieb erstellen | Alle Mandanten-Repositories | GitHub-Testumgebung mit einem dokumentierten SVN-Ausgangsstand bereitstellen; Jenkins/SVN bleiben produktiv |
-| offen | Import-Allowlist erstellen | Migrationskonfiguration je SVN-Repository | Aktive Linien `R260`, `R261`, `R270` und die drei fachlichen Stufen |
-| offen | Projektmatrix inventarisieren und freigeben | Je Mandant und gegebenenfalls je Releaselinie | Repositoryinhalt, Projekt-Allowlist und historisch festgelegte Lieferdateinamen getrennt dokumentieren; nicht allein aus einer globalen Projektliste ableiten |
-| erforderlich | Release-Basis importieren | Git-Tags je Mandanten-Repository | Je aktiver Linie mindestens `.100` und alle danach entstandenen Tags importieren |
-| offen | SVN-Pfade auf Git abbilden | Migrationsskript/-konfiguration | `branches/Entwicklung/R260.100_MText/<Projekt>` → Branch `R260/Entwicklung`, Pfad `<Projekt>` |
-| offen | Tagnamen normalisieren | Migrationsskript/-konfiguration | `R260.101_MText` → `R260.101`; Entfernung von `_MText` protokollieren |
-| offen | SVN-Artefakte ausschließen | Migrationsfilter | `Verbunden mit Bereitstellung*.txt`, Backup-/Fusion-Sonderstände und andere nicht freigegebene Marker nicht übernehmen |
-| offen | Repositoryinhalte und Projekt-Allowlist unterscheiden | Importprüfung und `config/mandant.json` | FI enthält auch `LOMS_Testdaten`, `mtext-autonom` auch `LOMS_Testdaten_Autonom`; Testdatenprojekte bleiben außerhalb der Projekt-Allowlist |
-| separate Aufgabe | SVN-Autoren zuordnen | Autoren-Mappingdatei des Migrationstools | Bestehende SVN-Namen auf Git-Identitäten abbilden |
-| offen | SVN-Eigenschaften inventarisieren | Read-only SVN-Analyse | `svn:externals`, EOL, Keywords, executable, leere Verzeichnisse, Mergeinfo und große Dateien behandeln |
-| optional | Weitere Historie und ältere Tags importieren | Migrationskonfiguration | So viel Elementhistorie wie praktikabel erhalten; darf den Cutover nicht blockieren |
-| geplant ab Januar 2027 | Finalen SVN-Stand für den produktiven Cutover übertragen | Alle Mandanten-Repositories | Seit dem ersten Abzug entstandene produktive Änderungen übernehmen und den freigegebenen Endstand verifizieren |
-
-Ziel-Repositories sind `mtext-fi`, `mtext-autonom`, `mtext-by`, `mtext-lh`,
-`mtext-nw`, `mtext-os` und `mtext-sa`. Der erste Abzug eröffnet nur den
-Test-Parallelbetrieb. Der finale Import, SVN-Freeze sowie die Deaktivierung von
-Jenkins sind eigene freizugebende Tätigkeiten des produktiven Cutovers und
-werden nicht durch den lokalen Implementierungsstand ausgelöst.
-
-## 7. Produktiven Cutover durchführen und abnehmen
-
-Der produktive harte Cutover ist ab Januar 2027 vorgesehen. Er wird mit einem
-eigenen freigegebenen Runbook durchgeführt; der vorherige Test-Parallelbetrieb
-aktiviert ihn nicht automatisch. Die verbindliche Reihenfolge ist:
-
-1. Änderungsfreeze für den bisherigen Jenkins-/SVN-Prozess aktivieren.
-2. Den letzten freigegebenen SVN-Stand und alle weiterhin benötigten Tags je
-   Mandant nach Git übertragen.
-3. Inhalte, Pfadabbildungen, Tags und den letzten migrierten Commit je Mandant
-   dokumentieren und automatisiert verifizieren.
-4. Jenkins-Trigger und Jenkins-Job für diesen Prozess deaktivieren.
-5. SVN für diesen Prozess schreibschützen oder gemäß Betriebskonzept
-   stilllegen.
-6. Git als einzige führende Quelle für diesen Prozess festlegen.
-7. Die für den Regelbetrieb vorgesehenen GitHub Environments, Secrets und
-   Workflows freigeben.
-8. Je einen definierten Smoke-Test für Entwicklung und Abnahme sowie je einen
-   FULL- und DELTA-Release durchführen und dokumentieren.
-
-Während der eigentlichen Umschaltung gibt es keinen gleichzeitigen produktiven
-Lieferbetrieb aus Jenkins/SVN und GitHub. Der Cutover ist erst abgenommen, wenn
-mindestens folgende Kriterien erfüllt sind:
-
-- Kein GitHub-Workflow benötigt Jenkins oder SVN und Jenkins löst für diesen
-  Prozess keine Jobs mehr aus.
-- Für jeden Mandanten sind der letzte migrierte SVN-Stand, sein Git-Commit und
-  alle weiterhin benötigten Release-Tags dokumentiert und geprüft.
-- Sicherungs- und Sonderstände wurden nur nach ausdrücklicher Freigabe
-  übernommen.
-- Alle Mandanten-Repositories verwenden dieselbe freigegebene Version der
-  zentralen Automation.
-- Pushes nach Entwicklung und Abnahme lösen jeweils genau die vorgesehene
-  M/Text-Verteilung aus; ein Push nach Bereitstellung erzeugt ohne Tag keine
-  Lieferung.
-- `.100` erzeugt FULL, andere gültige Release-Tags derselben Linie erzeugen
-  ein kumulatives DELTA gegen `.100`.
-- Ressourcenbereitstellung, Adapterantwort, Artefaktprüfung, JCL und die
-  unmittelbare Mainframe-Übergabe wurden auf dem vorgesehenen Betriebsweg
-  erfolgreich geprüft.
-- Gleichzeitige Schreibvorgänge auf dasselbe Ziel werden verhindert; Läufe für
-  unterschiedliche Mandanten dürfen wie vorgesehen parallel arbeiten.
-
-## 8. Wiederkehrende Konfigurationsarbeiten
-
-Der verbindliche Bedienablauf für den Linienwechsel und die initiale
-Vollsynchronisation steht ausschließlich in der
-[Benutzeranleitung](./Benutzeranleitung.md#3-neue-releaselinie-initial-in-mtext-bereitstellen).
-Hier verbleiben nur die administrativen Prüfpunkte:
+## 1. GitHub-Grundaufbau herstellen
 
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
-| offen | Ausgangsstand je Mandant bestätigen | Letzten tatsächlich ausgelieferten Tag und vollständige Commit-SHA gemäß Benutzeranleitung dokumentieren |
-| offen | Neue Stufenbranches administrativ einrichten | Entwicklung, Abnahme und Bereitstellung basieren auf dem bestätigten Tag-Commit; ausgeschiedene Linie gemäß Aufbewahrungsregel stilllegen |
-| offen | Zentrale Linienkonfiguration aktualisieren | Linienmapping und Adapterziele in `mtext-actions/config/deployments.json` sind geprüft und freigegeben |
-| offen | Repositoryeinstellungen nachführen | Default Branch zeigt auf die neue führende Entwicklungslinie; Workflow- und Konfigurationsstand ist auf allen aktiven Linien korrekt |
-| offen | Initialisierung je Mandant abnehmen | Bedienablauf aus der Benutzeranleitung wurde durchgeführt; Läufe und fachliche Smoke-Tests sind dokumentiert |
+| offen | Zentrales Repository `j520730/mtext-actions` und privates FI-Repository `j517120/mtext-fi` auf GitHub Enterprise anlegen beziehungsweise die lokalen Stände übernehmen | Das zentrale Repository ist nur für das Automatisierungsteam direkt zugänglich; das FI-Repository enthält Ressourcen, Mandantenkonfiguration und dünne Workflows |
+| offen | Aktive Stufenbranches und Default Branch einrichten | Für `R260`, `R261` und `R270` bestehen jeweils `Entwicklung`, `Abnahme` und `Bereitstellung`; zunächst ist `R261/Entwicklung` der Default Branch |
+| offen | Zentrale Workflowversion pinnen und repositoryübergreifenden Actions-Zugriff freigeben | Alle aufrufenden Workflows verwenden denselben freigegebenen Commit-SHA; nur vorgesehene Mandanten-Repositories dürfen `mtext-actions` aufrufen |
+| offen | Zentralen Checkout und mandantensichtbare Logs praktisch prüfen | Ein nichtproduktiver Lauf funktioniert über beide Namespaces und zeigt weder Secrets noch unnötige interne Details; ein gegebenenfalls erforderlicher Installation-Token wird vor Aktivierung sicher in den Workflowvertrag aufgenommen |
+| offen | Git-Clients für Ressourcenarbeit und Stufenweitergabe abnehmen | M/Text Workbench unterstützt Authentifizierung, Branchwechsel, Commit und Push; ein zusätzlicher Git-Client unterstützt den dokumentierten Cherry-Pick-Ablauf |
+| bestätigt | GitHub-Plattform festhalten | GitHub Enterprise Server 3.20.4 |
 
-Die dünnen Sync-Workflows bleiben beim Linienwechsel unverändert. Unbekannte
-Linien werden zentral durch `deployments.json` abgewiesen.
+## 2. Schutz- und Freigaberegeln konfigurieren
 
-## 9. Spätere Erweiterungen
+| Status | Tätigkeit | Ergebnis |
+|---|---|---|
+| offen | Mandantenspezifische Verantwortliche benennen | Team für Ressourcenarbeit, technischer Konfigurationskreis und kleines Release-Team sind festgelegt |
+| offen | Branchschutz für die drei Stufen einrichten | Berechtigte Text-Entwickler dürfen nach Entwicklung und Abnahme pushen; Bereitstellung ist auf das Release-Team begrenzt; Löschen und Force-Pushes sind gesperrt |
+| offen | Zentrale Aufrufdateien und `config/mandant.json` schützen | Normale Ressourcen-Pushes können weder `.github/workflows/**/*` noch die Mandantenkonfiguration verändern; notwendige Bypässe sind eng begrenzt |
+| offen | GitHub Environments konfigurieren | `Entwicklung`, `Abnahme` und `Bereitstellung` sind angelegt; nur die Mainframe-Übergabe in `Bereitstellung` erfordert eine manuelle Freigabe; zulässige Branchmuster sind eingetragen |
+| offen | Release-Tags schützen | Nur das Release-Team darf Tags nach dem Muster `R[0-9][0-9][0-9].[0-9][0-9][0-9]` erstellen; Ändern und Löschen sind gesperrt |
+| offen | Cherry-Pick und Release-Tag praktisch abnehmen | Auswahl nach SHA, Konfliktbehandlung und Push in die Zielstufe sind dokumentiert; ein nichtproduktiver Tag startet genau einen Release-Workflow |
 
-- E-Mail-Benachrichtigungen zusätzlich zu GitHub-Benachrichtigungen;
-- optional mehr historische SVN-Tags und Elementhistorie;
-- bei einer späteren PR-basierten Config-Pflege verbindliche Code-Owner- und
-  Freigaberegel für Änderungen an `config/mandant.json`;
-- optionales M/Text- oder Mainframe-Status-Polling als eigener Ausbau, nicht
-  als Voraussetzung für die erste Produktivsetzung.
+## 3. Runner und technische Abhängigkeiten bereitstellen
+
+Ein GitHub-Actions-Artefakt ist ein von einem Workflow erzeugtes und in GitHub
+befristet gespeichertes Dateipaket. In diesem Prozess übergibt der Build-Job
+damit Releasepakete, Informationsdateien und Manifest an den Publish-Job; es
+ist weder ein Git-Commit noch eine dauerhafte Ablage.
+
+| Status | Tätigkeit | Ergebnis |
+|---|---|---|
+| offen | Self-hosted Runner und Laufzeit bereitstellen | Labels `self-hosted`, `linux`, `mtext-delivery`, Python 3.14, Git und die Ausführung von Node-20-Actions sind bestätigt; `scripts/runner-preflight.sh` ist erfolgreich |
+| offen | GHES-Artefakt-Actions prüfen | Die in den Workflows gepinnten Node-20-Varianten von `upload-artifact` v3.2.2 und `download-artifact` v3.1.0 sind auf GHES 3.20.4 verfügbar; v4 wird nicht verwendet |
+| offen | Internes Wheelhouse bereitstellen | `LBS_WHEELHOUSE` verweist als Repository- oder Organisationsvariable auf einen freigegebenen lokalen Pfad; die Installation bleibt `--no-index` |
+| offen | Zertifikate und Netzwerkpfade prüfen | Die interne CA ist im Truststore; der Runner erreicht die gewählten M/Text-Ziele sowie Mainframe-FTP und JES, ohne die TLS-Prüfung zu deaktivieren |
+
+## 4. M/Text-Transport entscheiden und abnehmen
+
+| Status | Tätigkeit | Ergebnis |
+|---|---|---|
+| bestätigt | Linien- und URL-Mapping | `R260→en03`, `R261→en01`, `R270→en02`; Hosts jeweils `enXXe` und `enXXa` |
+| bestätigt | Heutigen Adaptervertrag als Ausgangslage festhalten | Der bestehende Ablauf schreibt zuerst nach `serverSync` und sendet danach einen POST mit `MAN` und `INR`; dies legt den künftigen Transport noch nicht fest |
+| offen | Transportweg nach `serverSync` entscheiden und Zielvertrag festschreiben | Genau eine der im [Zielbild](./Zielbild_GitHub_Actions_Git.md#4-zielarchitektur-und-verantwortlichkeiten) beschriebenen Varianten wird ausgewählt: PUT an den Adapter, Sharezugriff des Runners oder Download eines Actions-Artefakts durch Adapter beziehungsweise M/Text; Verantwortlichkeiten, Authentifizierung, Prüfung und Wiederanlauf sind geklärt |
+| offen | Kompatibilität des gewählten Transports nachweisen | Auf `serverSync` entsteht derselbe Verzeichnisbaum wie im bisherigen Verfahren; Transportdateien und technische Metadaten verbleiben nicht im ausgewerteten Bestand |
+| offen | Config-Check und Synchronisation nichtproduktiv prüfen | `CONFIG_VALIDATED` bleibt nebenwirkungsfrei; ein vollständiger Projektstand wird erfolgreich über den gewählten Transport bereitgestellt und der Wiederanlauf ist geprüft |
+
+## 5. Mainframe-Übergabe einrichten und abnehmen
+
+| Status | Tätigkeit | Ergebnis |
+|---|---|---|
+| offen | FTP-Secrets im GitHub Environment `Bereitstellung` hinterlegen | `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER` und `MAINFRAME_FTP_PASSWORD` sind verfügbar |
+| bestätigt | Historischen JCL-Eingabevertrag fachlich bestätigen | Der mandantenspezifische Zielcode wird wie bisher über genau einen vorhandenen JCL-Platzhalter eingesetzt; der zentrale Test-/Produktionswert ist auf `T` und `P` begrenzt |
+| offen | JCL und unmittelbare Übergabe nichtproduktiv prüfen | FTP-Antworten, `SITE FILETYPE=JES`, Submit, gerendertes JCL und Wiederholung mit demselben geprüften Artefakt sind abgenommen |
+
+Die Mainframe-Übergabe wartet auf eine manuelle Freigabe. Das Releaseartefakt
+bleibt 30 Tage erhalten; vor der Übergabe werden Manifest und Prüfsummen erneut
+geprüft. Mit der bestätigten Übergabe an IZE9 endet der in GitHub Actions
+abgebildete Lieferprozess.
+
+## 6. Test-Parallelbetrieb vorbereiten
+
+| Status | Tätigkeit | Ergebnis |
+|---|---|---|
+| geplant November/Dezember 2026 | Ersten SVN-Abzug nach dem [Migrations- und Cutover-Runbook](./Migration_und_Cutover_Runbook.md) erstellen | Alle Mandanten-Repositories stehen mit dokumentiertem SVN-Ausgangsstand für Tests bereit; Jenkins und SVN bleiben produktiv |
+| offen | Importumfang und Release-Basen je Mandant freigeben | Aktive Linien, Projekte, Dateinamen und Ausschlüsse sind inventarisiert; je aktiver Linie werden mindestens der `.100`-Stand und alle späteren Tags übernommen |
+| offen | Nichtproduktiven End-to-End-Pilot abnehmen | Git-Clients, Schutzregeln, M/Text-Synchronisation sowie FULL- und DELTA-Release einschließlich Mainframe-Übergabe sind auf dem vorgesehenen Betriebsweg geprüft |
+
+Der finale SVN-Abzug und der harte Cutover sind ab Januar 2027 vorgesehen. Die
+verbindliche Reihenfolge und die Abnahmekriterien stehen ausschließlich im
+[Migrations- und Cutover-Runbook](./Migration_und_Cutover_Runbook.md). Der
+wiederkehrende Linienwechsel steht in der
+[Benutzeranleitung](./Benutzeranleitung.md#3-neue-releaselinie-initial-in-mtext-bereitstellen).

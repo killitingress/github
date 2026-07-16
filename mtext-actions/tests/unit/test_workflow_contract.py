@@ -49,6 +49,7 @@ class CentralWorkflowContractTests(unittest.TestCase):
         self.assertIn("needs: build", text)
         self.assertIn("environment: Bereitstellung", text)
         self.assertIn("secrets.MAINFRAME_FTP_PASSWORD", text)
+        self.assertNotIn("vars.MAINFRAME_", text)
         self.assertIn("--execute", text)
 
     def test_config_validation_has_no_external_write_path(self) -> None:

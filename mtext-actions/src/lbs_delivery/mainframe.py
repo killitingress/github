@@ -17,22 +17,22 @@ from .manifest import Manifest, PackageArtifact
 _MEMBER_RE = re.compile(r"[A-Z0-9]{1,8}")
 _DATASET_RE = re.compile(r"[A-Z0-9@$#.-]{1,44}")
 _FTP_ERRORS = (OSError, ValueError) + ftplib.all_errors
+MAINFRAME_DATASET = "IEA.LOMS.TONICZ"
+MAINFRAME_JES_TARGET = "LIT9028A"
+MAINFRAME_FTP_TIMEOUT_SECONDS = 60.0
 
 
 @dataclass(frozen=True)
 class FtpSettings:
-    """Bündelt Zugang und technische Zielparameter der FTP-/JES-Übergabe."""
+    """Bündelt die Zugangsdaten der FTP-/JES-Übergabe."""
 
     host: str
     user: str
     password: str
-    dataset: str = "IEA.LOMS.TONICZ"
-    jes_target: str = "LIT9028A"
-    timeout: float = 60.0
 
     @classmethod
     def from_environment(cls) -> "FtpSettings":
-        """Liest Secrets und optionale Zielwerte aus der Prozessumgebung."""
+        """Liest die erforderlichen Secrets aus der Prozessumgebung."""
 
         required = {
             "host": os.environ.get("MAINFRAME_FTP_HOST", ""),
@@ -43,12 +43,7 @@ class FtpSettings:
             raise DeliveryError(
                 Status.VALIDATION_FAILED, "required Mainframe FTP secrets are missing"
             )
-        return cls(
-            **required,
-            dataset=os.environ.get("MAINFRAME_DATASET") or "IEA.LOMS.TONICZ",
-            jes_target=os.environ.get("MAINFRAME_JES_TARGET") or "LIT9028A",
-            timeout=float(os.environ.get("MAINFRAME_FTP_TIMEOUT") or "60"),
-        )
+        return cls(**required)
 
 
 def render_package_jcl(
@@ -82,7 +77,7 @@ def submit_package(
 
     if _MEMBER_RE.fullmatch(member) is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "invalid Mainframe member")
-    if _DATASET_RE.fullmatch(settings.dataset) is None:
+    if _DATASET_RE.fullmatch(MAINFRAME_DATASET) is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "invalid Mainframe dataset")
     package = Path(package_path)
     jcl = Path(jcl_path)
@@ -90,13 +85,13 @@ def submit_package(
         raise DeliveryError(Status.MAINFRAME_TRANSFER_FAILED, "publish input is missing")
     session = ftp_factory()
     try:
-        session.connect(settings.host, timeout=settings.timeout)
+        session.connect(settings.host, timeout=MAINFRAME_FTP_TIMEOUT_SECONDS)
         login_reply = session.login(settings.user, settings.password)
         if login_reply and not _accepted(login_reply):
             raise ftplib.Error(login_reply)
         with package.open("rb") as source:
             reply = session.storbinary(
-                f"STOR '{settings.dataset}({member})'", source
+                f"STOR '{MAINFRAME_DATASET}({member})'", source
             )
         if not _accepted(reply):
             raise ftplib.Error(reply)
@@ -104,7 +99,7 @@ def submit_package(
         if not _accepted(site_reply):
             raise ftplib.Error(site_reply)
         with jcl.open("rb") as source:
-            jes_reply = session.storlines(f"STOR {settings.jes_target}", source)
+            jes_reply = session.storlines(f"STOR {MAINFRAME_JES_TARGET}", source)
         if not _accepted(jes_reply):
             raise ftplib.Error(jes_reply)
         session.quit()

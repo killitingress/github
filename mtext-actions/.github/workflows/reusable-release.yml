@@ -144,12 +144,9 @@ jobs:
       - name: Verify artifact, render JCL and submit FTP/JES
         # Manifest und Prüfsummen werden vor Übertragung und Jobübergabe erneut validiert.
         env:
-          MAINFRAME_DATASET: ${{ vars.MAINFRAME_DATASET }}
           MAINFRAME_FTP_HOST: ${{ secrets.MAINFRAME_FTP_HOST }}
           MAINFRAME_FTP_PASSWORD: ${{ secrets.MAINFRAME_FTP_PASSWORD }}
-          MAINFRAME_FTP_TIMEOUT: ${{ vars.MAINFRAME_FTP_TIMEOUT }}
           MAINFRAME_FTP_USER: ${{ secrets.MAINFRAME_FTP_USER }}
-          MAINFRAME_JES_TARGET: ${{ vars.MAINFRAME_JES_TARGET }}
           PYTHONPATH: automation/src
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery publish-mainframe
