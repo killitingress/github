@@ -1,22 +1,23 @@
 # GitHub-Actions-Vertrag für `mtext-fi`
 
-Die drei YAML-Dateien in diesem Verzeichnis sind bewusst dünne aufrufende
+Die beiden YAML-Dateien in diesem Verzeichnis sind bewusst dünne aufrufende
 Workflows. Fachlogik, Zielauflösung, Paketbau und Integrationen gehören in das
 zentrale Repository `mtext-actions`.
 
-Die Bedienung nach Aktivierung beschreibt die
+Die Bedienung beschreibt die
 [Benutzeranleitung](../../../docs/confluence/Benutzeranleitung.md); die
 [Soll-Grafik](../../../Architektur_Soll_GitHub_Actions_Git.drawio) zeigt den
 vollständigen Ablauf.
 
-## Aktivierungssperre im Entwurf
+## Technischer Platzhalter im Entwicklungssystem
 
 Alle `uses:`-Aufrufe zeigen auf `j520730/mtext-actions` und derzeit auf den
 nicht auflösbaren Null-SHA
-`0000000000000000000000000000000000000000`. Dadurch kann dieser Entwurf keine
-zentrale Automatisierung und folglich kein externes Ziel aufrufen.
+`0000000000000000000000000000000000000000`. Dieser Wert ist kein
+Sicherheitsmechanismus, sondern nur ein noch zu ersetzender technischer
+Platzhalter: Unter dieser Referenz existiert keine zentrale Workflowversion.
 
-Vor einer Aktivierung wird der Null-SHA in allen drei Workflow-Dateien durch
+Vor dem ersten Integrationslauf wird der Null-SHA in beiden Workflow-Dateien durch
 den vollständigen 40-stelligen Commit-SHA einer freigegebenen Version von
 `mtext-actions` ersetzt.
 
@@ -25,16 +26,6 @@ zulässig. `uses:` und der Input `automation_ref` müssen auf denselben Commit
 zeigen.
 
 ## Workflow-Übersicht
-
-### `validate.yml`
-
-Der Workflow läuft ausschließlich für Pull Requests nach
-`R260/Bereitstellung`, `R261/Bereitstellung` oder `R270/Bereitstellung`. Er
-validiert Konfiguration, Repository-Identität und den Auswahlbranch. Die zentrale Testsuite läuft nur
-im CI-Workflow von `mtext-actions`. Pull Requests im Draft-Status werden erst
-nach `ready_for_review` geprüft. Push- und manuelle Validierungsläufe sind
-nicht vorgesehen; Sync und Releasebau validieren die Konfiguration erneut bei
-der tatsächlichen Verwendung.
 
 ### `sync-resources.yml`
 
@@ -59,6 +50,10 @@ Automatisierung leitet aus `Rnnn.nnn` den Branch `Rnnn/Bereitstellung` ab und
 prüft, dass der Tag von dort erreichbar ist. `.100` erzeugt FULL; andere dreistellige Endungen erzeugen DELTA
 gegen den `.100`-Tag derselben Linie.
 
+Direkte Pushes nach `Rnnn/Bereitstellung` lösen keinen Workflow und keine
+Lieferung aus. Erst der Release-Tag lädt und validiert die Konfiguration,
+prüft die Branchzuordnung und startet den Paketbau.
+
 Paketbau und Mainframe-Übergabe sind zwei getrennte Jobs desselben zentralen
 Release-Workflows. Der zweite Job verwendet ausschließlich den Namen des im
 ersten Job einmalig hochgeladenen und durch Manifest-Prüfsummen gesicherten
@@ -72,8 +67,6 @@ mandantenseitigen Angaben:
 
 - `repository_name`: Repository-Identität des Auslösers;
 - `commit_sha` beziehungsweise `release_tag` und optional `trigger_sha`;
-- `source_branch` und `target_branch` für die Pull-Request-
-  Promotionsvalidierung;
 - `target_environment` für Entwicklung oder Abnahme;
 - `source_branch`, aus dem Releaselinie und Stufe validiert abgeleitet werden;
 - `automation_repository` und `automation_ref` für den Checkout der exakt
@@ -93,7 +86,7 @@ Die Zielplattform ist GitHub Enterprise Server 3.20.4. Der zentrale
 Release-Workflow verwendet daher die offiziellen Node-20-v3-Varianten der
 Artefakt-Actions statt der auf GHES nicht unterstützten v4-Varianten. Die
 Verfügbarkeit der fest gepinnten Action-SHAs und die Node-20-Unterstützung des
-self-hosted Runners werden vor Aktivierung praktisch geprüft.
+self-hosted Runners werden vor dem ersten Integrationslauf praktisch geprüft.
 
 ## Außerhalb der Dateien zu konfigurierende GitHub-Einstellungen
 
@@ -101,13 +94,8 @@ Folgende Schutzmaßnahmen werden als Repository- oder Organisationsregeln in
 GitHub konfiguriert und können nicht durch diese Workflow-Dateien allein
 erzwungen werden:
 
-- direkte Pushes nach `Rxxx/Entwicklung` und `Rxxx/Abnahme` zulassen;
-- Pull-Request-Pflicht und Verbot direkter Pushes nur auf
-  `Rxxx/Bereitstellung`;
-- keine verpflichtende fremde Freigabe; der Ersteller darf nach erfolgreichen
-  Statuschecks selbst mergen;
-- `Validate change / Validate release promotion` als erforderlicher
-  Statuscheck;
+- direkte Pushes nach `Rxxx/Entwicklung`, `Rxxx/Abnahme` und
+  `Rxxx/Bereitstellung` zulassen;
 - freigegebene Actions und wiederverwendbare Workflows;
 - die drei gemeinsamen GitHub Environments `Entwicklung`, `Abnahme` und
   `Bereitstellung`; nur `Bereitstellung` verlangt eine manuelle Freigabe;

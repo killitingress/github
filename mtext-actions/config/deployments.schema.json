@@ -70,16 +70,12 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "contract_approved",
-        "server_sync_contract_approved",
         "path",
         "payload",
         "server_sync_path_template",
         "targets"
       ],
       "properties": {
-        "contract_approved": {"type": "boolean"},
-        "server_sync_contract_approved": {"type": "boolean"},
         "path": {"const": "/vMtextAdapter/sync"},
         "payload": {
           "type": "object",
@@ -126,9 +122,8 @@
     "mainframe": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["contract_approved", "ispw"],
+      "required": ["ispw"],
       "properties": {
-        "contract_approved": {"type": "boolean"},
         "ispw": {"enum": ["T", "P"]}
       }
     }

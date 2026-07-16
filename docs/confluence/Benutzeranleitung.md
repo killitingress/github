@@ -1,65 +1,82 @@
 # Benutzeranleitung für die M/Text-Lieferung mit GitHub Actions
 
-**Stand:** 15. Juli 2026
-
-**Zielgruppe:** Ressourcenautoren, Release-Verantwortliche, Freigebende und
-Betrieb
-
 **Bezug:** [Zielbild](./Zielbild_GitHub_Actions_Git.md),
-[Soll-Grafik](../../Architektur_Soll_GitHub_Actions_Git.drawio) und
-[offene Aktivierungsschritte](./Naechste_Schritte.md)
+[Soll-Grafik](../../Architektur_Soll_GitHub_Actions_Git.drawio)
 
-## 1. Zweck und aktueller Betriebsstatus
+## 1. Zweck
 
 Die Lösung führt M/Text-Ressourcen eines Mandanten über die drei Stufen
 `Entwicklung`, `Abnahme` und `Bereitstellung`. Pushes nach Entwicklung und
-Abnahme lösen die jeweilige M/Text-Synchronisation aus. Nur der Pull Request
-nach Bereitstellung prüft den Auswahlbranch vor dem Merge. Ein Merge nach
-Bereitstellung liefert noch nichts aus; erst ein Release-Tag startet FULL oder
-DELTA und die nachgelagerte Mainframe-Übergabe.
+Abnahme lösen die jeweilige M/Text-Synchronisation aus. Der Push nach
+Bereitstellung liefert noch nichts aus; erst ein Release-Tag startet eine FULL
+oder DELTA Lieferung via der nachgelagerten Mainframe-Übergabe an die IZE9.
 
-Der Stand im gemeinsamen Workspace ist noch **nicht aktiviert**:
+### Hinweis zur Einführung
 
-- die drei Mandantenworkflows referenzieren absichtlich einen nicht
-  auflösbaren Null-SHA der zentralen Automatisierung;
-- `serverSync`, Adapter und Mainframe sind zusätzlich durch drei auf `false`
-  stehende Vertragsschalter gesperrt;
-- Runner, Environments, Secrets, Branchrulesets und externe Verträge müssen
-  vor der Nutzung gemäß „Nächste Schritte“ eingerichtet und abgenommen werden.
+Voraussichtlich ab November/Dezember 2026 steht die neue GitHub-Umgebung auf
+Basis eines Abzugs der SVN-Repositories zunächst für Tests zur Verfügung. In
+diesem Parallelbetrieb bleibt der bisherige Jenkins-/SVN-Prozess produktiv. Die
+Produktivsetzung ist ab Januar 2027 als harter Cutover geplant. Ab dann ist
+GitHub für den M/Text Tonic Lieferprozess das führende System.
 
-Solange diese Sperren bestehen, darf diese Anleitung nur für Vorbereitung,
-Schulung und lokale nebenwirkungsfreie Tests verwendet werden. Ein roter Lauf
-wegen Null-SHA oder deaktiviertem Vertrag ist in diesem Zustand erwartetes
-Schutzverhalten.
+### Abgrenzung
 
-## 2. Rollen und Berechtigungen
+Zu Themen wie technischer Einrichtung, Aktivierung und Cutover gibt es
+[Nächste Schritte](./Naechste_Schritte.md).
 
-| Rolle | Typische Aufgabe | Erforderlicher Zugriff |
-|---|---|---|
-| Ressourcenautor | Änderung direkt nach Entwicklung pushen und nach erfolgreicher Prüfung nach Abnahme promoten | Schreiben auf Entwicklungs- und Abnahmebranches |
-| Release-Verantwortlicher | Nach Abnahme Auswahlbranch erstellen, Bereitstellung mergen und Tag setzen | Branch erstellen, Pull Request mergen, Tag pushen |
-| Environment-Freigebender | Mainframe-Übergabe nach erfolgreichem Paketbau genehmigen | Reviewer für das Environment `Bereitstellung` |
-| Betrieb/Plattform | Runner, Secrets, Environments, Rulesets und Vertragsschalter verwalten | Repository-/Organisationsadministration |
+Usermigration und Verwaltung, Rollen und Berechtigungsstruktur sind nicht
+Bestandteil dieser Dokumentation.
 
-Ein verpflichtendes fremdes Pull-Request-Review ist im Zielbild nicht
-vorgesehen. Direkte Pushes sind für Entwicklung und Abnahme erlaubt. Nur die
-Bereitstellung verlangt einen Pull Request; der Ersteller darf ihn nach
-erfolgreichen Pflichtchecks selbst mergen.
-
-## 3. Begriffe und Namensregeln
+## 2. Begriffe und Namensregeln
 
 | Element | Verbindliches Format | Beispiel |
 |---|---|---|
-| Stufenbranch | `Rnnn/Entwicklung`, `Rnnn/Abnahme`, `Rnnn/Bereitstellung` | `R261/Entwicklung` |
-| Optionaler Feature-Branch | `feature/Rnnn/<Issue>-<kurzname>` | `feature/R261/12345-neuer-baustein` |
-| Auswahlbranch | `release/Rnnn-YYYYMMDDTHHMMSSZ` in UTC | `release/R261-20260715T143000Z` |
+| Stufenbranch | `Rnnn/Entwicklung`, `Rnnn/Abnahme`, `Rnnn/Bereitstellung` | `R271/Entwicklung` |
+| Optionaler Feature-Branch | `feature/Rnnn/<Issue>-<kurzname>` | `feature/R270/0711-komplizierte-Arbeiten` |
 | Release-Tag | `Rnnn.nnn` | `R261.100`, `R261.108` |
 
-Feature-Branches sind eine optionale lokale Arbeits- und Namenskonvention. Sie
-sind kein Pull-Request-Gate und lösen keine Verteilung aus. Maßgeblich für die
-Automatisierung sind nur Pushes auf die Stufenbranches. Groß-/Kleinschreibung
-der Stufen ist verbindlich. Aktive Linien sind derzeit `R260`, `R261` und
-`R270`.
+Groß-/Kleinschreibung der Stufen ist verbindlich. Aktive Linien sind derzeit
+`R260`, `R261` und `R270`.
+
+### Unterschied zwischen SVN und Git einfach erklärt
+
+SVN und Git erfüllen denselben Grundzweck: Sie speichern Änderungen an Dateien
+und machen frühere Stände nachvollziehbar. Der wichtigste Unterschied liegt
+darin, wie Änderungen gespeichert und mit anderen geteilt werden.
+
+| SVN | Git |
+|---|---|
+| Die gemeinsame Versionsverwaltung liegt zentral auf dem SVN-Server. | Jeder ausgecheckte Arbeitsbereich ist ein eigenes lokales Git-Repository mit Versionshistorie. GitHub dient als gemeinsame, zentrale Austauschplattform. |
+| Ein Commit überträgt eine Änderung direkt an den SVN-Server. | Ein Commit speichert die Änderung zunächst nur lokal. Erst ein anschließender Push überträgt sie nach GitHub. |
+| Neue Stände erhalten fortlaufende Revisionsnummern wie `r12345`. | Jeder Stand erhält eine eindeutige Commit-SHA. |
+| Branches werden vergleichsweise selten und eher für länger getrennte Entwicklungslinien verwendet. | Branches lassen sich leicht als vorübergehende Arbeitsbereiche für einzelne Änderungen nutzen. |
+
+Für die tägliche Arbeit bedeutet das vor allem: **Committen und Pushen sind in
+Git zwei getrennte Schritte.** Ein lokaler Commit sichert den eigenen
+Arbeitsstand, verändert aber noch nichts auf GitHub und löst keine
+Synchronisation aus. Erst der Push auf einen Stufenbranch veröffentlicht den
+Stand und startet – bei Entwicklung oder Abnahme – den zugehörigen Workflow.
+
+Git und GitHub sind dabei nicht dasselbe: **Git** ist die
+Versionsverwaltung. **GitHub** stellt das gemeinsame Repository, die
+Oberfläche, Berechtigungen und die GitHub-Actions-Automation bereit.
+
+### Feature-Branch einfach erklärt
+
+Ein **Feature-Branch** ist ein eigener Arbeitsbereich für eine einzelne
+Änderung. Dort kann ein noch unfertiger Stand gespeichert und bei Bedarf nach
+GitHub gepusht werden, ohne bereits das M/Text-Entwicklungssystem zu
+aktualisieren. Das ist besonders nützlich, wenn eine Änderung mehrere Tage
+dauert, mehrere Personen daran arbeiten oder der Zwischenstand zunächst
+geprüft werden soll.
+
+Für eine kleine, fertig vorbereitete Änderung ist kein Feature-Branch nötig.
+Sie kann direkt auf dem passenden Entwicklungsbranch bearbeitet und gepusht
+werden. Ist die Arbeit auf einem Feature-Branch abgeschlossen, wird der
+gewünschte Commit nach `<Releaselinie>/Entwicklung` übernommen. Erst der Push
+dieses Entwicklungsbranches startet die M/Text-Synchronisation. Der
+Feature-Branch selbst bezeichnet keine Lieferstufe und löst keine Automation
+aus.
 
 ### Commit und SHA einfach erklärt
 
@@ -92,23 +109,23 @@ Daneben kommen zwei ähnlich aussehende, aber anders verwendete Kennungen vor:
 - Eine SHA-256-Prüfsumme bestätigt, dass eine erzeugte Paketdatei nach dem Bau
   nicht verändert wurde. Sie bezeichnet keinen Git-Commit.
 
-## 4. Änderung nach Entwicklung bringen
+## 3. Änderung nach Entwicklung bringen
 
-1. Das richtige Mandanten-Repository und die betroffene Releaselinie wählen.
-2. Den aktuellen `<Releaselinie>/Entwicklung` auschecken; optional dafür einen
-   lokalen Feature-Branch erstellen.
-3. Nur die fachlich vorgesehenen Ressourcen ändern. Die Mandantenkonfiguration
-   nur gemeinsam mit der fachlichen Zuordnung ändern; keine Secrets ablegen.
-4. Änderungen committen und den gewünschten Commit direkt nach
-   `<Releaselinie>/Entwicklung` pushen.
-5. Unter **Actions → Sync M/Text resources** den durch den Push ausgelösten
-   Lauf kontrollieren.
+1. Den aktuellen `<Releaselinie>/Entwicklung` auschecken; für länger laufende,
+   gemeinsam bearbeitete oder zunächst zu prüfende Änderungen optional einen
+   Feature-Branch erstellen, zum Beispiel
+   `feature/R270/12345-BT0303-viele-Anpassungen-am-Text`.
+2. Fachlich vorgesehene Änderungen an den Brief-Ressourcen durchführen.
+3. Änderungen committen.
+4. Den Commit direkt nach `<Releaselinie>/Entwicklung` pushen.
+5. Im GitHub unter **Actions → Sync M/Text resources** den durch den Push
+   ausgelösten Lauf kontrollieren.
 
-Der Push startet die Synchronisation des exakten Commits. Ein erfolgreicher
-Lauf endet mit `ADAPTER_ACCEPTED`; dies bestätigt die synchrone 2xx-Annahme des
-Adapters, nicht einen späteren fachlichen M/Text-Jobstatus.
+Der Push startet die Synchronisation des exakten Commits mit dem entsprechenden
+Tonic Server (`en01e` für `Entwicklung` und `en01a` für Abnahme). Ein erfolgreicher
+Lauf endet mit `ADAPTER_ACCEPTED`.
 
-## 5. Nach Abnahme promoten
+## 4. Nach Abnahme promoten
 
 1. Den in Entwicklung erfolgreich geprüften Commit ermitteln.
 2. Genau diesen Commit direkt nach `<Releaselinie>/Abnahme` pushen.
@@ -119,29 +136,24 @@ Adapters, nicht einen späteren fachlichen M/Text-Jobstatus.
 Der Push nach Abnahme verteilt den vollständigen konfigurierten Projektstand
 des vom Anwender fachlich freigegebenen Commits. Er baut noch kein
 Mainframe-Paket. Die Auswahl dieses Commits ist eine fachliche
-Verantwortlichkeit; der Workflow erzwingt keine Gleichheit mit einem früheren
+Verantwortlichkeit. Der Workflow erzwingt keine Gleichheit mit einem früheren
 Entwicklungspush.
 
-## 6. Ausgewählte Änderungen bereitstellen
+## 5. Ausgewählte Änderungen bereitstellen
 
-1. Einen UTC-Zeitstempel bestimmen und den Auswahlbranch
-   `release/<Releaselinie>-<YYYYMMDDTHHMMSSZ>` vom aktuellen
-   `<Releaselinie>/Bereitstellung` erstellen.
+1. Den aktuellen `<Releaselinie>/Bereitstellung` auschecken.
 2. Ausschließlich die fachlich freigegebenen Commits aus Abnahme per
-   `git cherry-pick` in diesen Branch übernehmen. Konflikte fachlich prüfen;
-   keine ungeprüften Konfliktauflösungen übernehmen.
-3. Einen Pull Request vom Auswahlbranch nach
-   `<Releaselinie>/Bereitstellung` öffnen.
-4. Inhalt, Zielbranch und den Check `Validate change / Validate release promotion`
-   prüfen und den Pull Request mergen.
-5. Den erzeugten Merge-Commit notieren. Der Merge allein startet weder
-   Paketbau noch Mainframe-Übergabe.
+   `git cherry-pick` übernehmen. Konflikte fachlich prüfen; keine ungeprüften
+   Konfliktauflösungen übernehmen.
+3. Den zusammengestellten Stand direkt nach
+   `<Releaselinie>/Bereitstellung` pushen.
+4. Den Ziel-Commit notieren. Der Push startet weder Paketbau noch
+   Mainframe-Übergabe.
 
-Der Auswahlbranch muss exakt dem Namensformat entsprechen. Ein direkter Pull
-Request von Abnahme nach Bereitstellung wird von der Promotionsvalidierung
-abgelehnt.
+Die Auswahl der Commits ist eine fachliche Verantwortung. Die verbindliche
+technische Prüfung erfolgt erst, wenn der Release-Tag gesetzt wird.
 
-## 7. FULL oder DELTA auslösen
+## 6. FULL oder DELTA Lieferung auslösen
 
 Vor dem Taggen müssen Releaselinie, Mandant, gewünschter Lieferungstyp und der
 exakte Commit auf `<Releaselinie>/Bereitstellung` fachlich bestätigt sein.
@@ -164,8 +176,9 @@ git push origin refs/tags/R261.108
 
 Danach unter **Actions → Build and publish release** prüfen:
 
-1. `Build FULL or DELTA artifact` validiert Tag und Branchzuordnung, baut die
-   Pakete und erzeugt `manifest.json` mit SHA-256-Prüfsummen.
+1. `Build FULL or DELTA artifact` validiert Konfiguration, Tag und
+   Branchzuordnung, baut die Pakete und erzeugt `manifest.json` mit
+   SHA-256-Prüfsummen.
 2. Das Artefakt heißt `<Repository>-<Release-Tag>` und wird standardmäßig
    30 Tage aufbewahrt.
 3. `Verify and hand over artifact to Mainframe` wartet im Environment
@@ -178,7 +191,7 @@ Danach unter **Actions → Build and publish release** prüfen:
 FTP-/JES-Übergabe akzeptiert wurde. Der fachliche Abschluss des Mainframe-Jobs
 wird in Ausbaustufe 1 nicht abgefragt.
 
-## 8. Einen Lauf kontrolliert wiederholen
+## 7. Einen Lauf kontrolliert wiederholen
 
 ### M/Text-Synchronisation wiederholen
 
@@ -204,12 +217,12 @@ Vor jedem Wiederanlauf klären, ob das Zielsystem die vorherige Übergabe bereit
 angenommen hat. GitHub Actions kennt ohne Status-Polling keinen nachgelagerten
 fachlichen Endstatus.
 
-## 9. Status und Fehlerbilder verstehen
+## 8. Status und Fehlerbilder verstehen
 
 | Status oder sichtbares Symptom | Bedeutung | Nächste Prüfung |
 |---|---|---|
-| Workflow kann zentrale Datei am Null-SHA nicht laden | Aktivierungssperre des Entwurfs | Freigegebenen zentralen Commit erst nach den dokumentierten Abnahmen pinnen |
-| `VALIDATION_FAILED` | Input, Konfiguration, Schema, Branchrichtung, Vertrag oder JCL ungültig | Erste Fehlermeldung lesen; Branch-/Tagformat und Freigabeschalter prüfen |
+| Workflow kann zentrale Datei am Null-SHA nicht laden | Technischer Platzhalter ist noch eingetragen | Vorgesehenen vollständigen Commit-SHA von `mtext-actions` in beiden Workflows eintragen |
+| `VALIDATION_FAILED` | Input, Konfiguration, Schema, Branchrichtung oder JCL ungültig | Erste Fehlermeldung lesen; Branch-/Tagformat und Konfiguration prüfen |
 | `SOURCE_FAILED` | Commit oder Tag/Basisreferenz nicht auflösbar | SHA, Tag, `.100`-Basis und Branch-Erreichbarkeit prüfen |
 | `PACKAGE_FAILED` | Paket, Informationsdatei oder Manifest konnte nicht sicher gebaut werden | Fehlende Projektpfade, Symlinks, leeres/benutztes Ausgabeverzeichnis prüfen |
 | `RESOURCE_TRANSFER_FAILED` | Veröffentlichung nach serverSync/NFS fehlgeschlagen | Mount, Rechte, Zielpfad und Runnerzugriff prüfen; Adapter wurde nicht aufgerufen |
@@ -217,39 +230,7 @@ fachlichen Endstatus.
 | `ADAPTER_ACCEPTED` | Unmittelbare Adapterannahme erfolgreich | Kein Beleg für einen nachgelagerten M/Text-Endstatus |
 | `ARTIFACT_READY` | Releaseartefakt lokal gebaut und geprüft | Publish-Freigabe beziehungsweise nächsten Job prüfen |
 | `MAINFRAME_TRANSFER_FAILED` | FTP-Upload oder JES-Submit unmittelbar fehlgeschlagen | Credentials, Dataset, JES-Ziel, Netzwerk und FTP-Antwort prüfen |
-| `MAINFRAME_SUBMITTED` | Unmittelbare FTP-/JES-Übergabe akzeptiert | Mainframe-Endstatus separat nach bestehendem Betriebsverfahren prüfen |
+| `MAINFRAME_SUBMITTED` | Unmittelbare FTP-/JES-Übergabe akzeptiert | Weiteren Status im Betriebsverfahren verfolgen |
 
 Logs dürfen keine Credentials enthalten. Zugangsdaten niemals in Pull
 Requests, Konfigurationsdateien, Workflow-Inputs oder Support-Tickets kopieren.
-
-## 10. Was Benutzer nicht tun dürfen
-
-- keine direkten Pushes auf Stufenbranches erzwingen oder Schutzregeln
-  umgehen;
-- keinen Tag auf einen Commit außerhalb des zugehörigen
-  `Rnnn/Bereitstellung`-Branches setzen;
-- bestehende Release-Tags nicht verschieben oder ohne abgestimmtes
-  Korrekturverfahren löschen und neu anlegen;
-- keine URLs, Mandanten oder Zielsysteme als freie Workflowwerte einschleusen;
-- Null-SHA oder Vertragsschalter nicht zur Fehlerbehebung eigenmächtig
-  aktivieren;
-- einen grünen Adapter- oder Mainframe-Übergabestatus nicht als fachlichen
-  Endstatus ausgeben;
-- keine Änderungen mehr im alten Jenkins-/SVN-Prozess vornehmen, sobald der
-  produktive harte Cut erfolgt ist.
-
-## 11. Kurze Checkliste vor einem Release
-
-- richtiger Mandant und richtige Releaselinie;
-- gewünschte Commits fachlich in Abnahme bestätigt;
-- Auswahlbranch vom aktuellen Bereitstellungsstand erstellt;
-- Pull Request nach Bereitstellung erfolgreich validiert und gemergt;
-- Ziel-Commit notiert und Tag noch nicht vorhanden;
-- `.100` vorhanden, wenn ein DELTA erzeugt werden soll;
-- Build-Artefakt und Manifest erfolgreich;
-- manuelle Mainframe-Freigabe durch berechtigte Person;
-- unmittelbare Übergabe und nachgelagerter fachlicher Status getrennt
-  dokumentiert.
-
-Technische Einrichtung, Aktivierung und Cutover sind keine Benutzeraktionen.
-Sie folgen der Seite [Nächste Schritte](./Naechste_Schritte.md).

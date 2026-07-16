@@ -34,8 +34,6 @@
     }
   },
   "adapter": {
-    "contract_approved": false,
-    "server_sync_contract_approved": false,
     "path": "/vMtextAdapter/sync",
     "payload": {
       "mandant": "MAN",
@@ -63,7 +61,6 @@
     "info_name_template": "_INFO_{mandant}-{project}-{delivery_type}-{release}-{previous_release}.txt"
   },
   "mainframe": {
-    "contract_approved": false,
     "ispw": "P"
   }
 }

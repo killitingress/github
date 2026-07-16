@@ -45,7 +45,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && endsWith(inputs.source_branch, '/Entwicklung'))
     uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
     with:
-      # Die Null-SHAs bleiben bis zur kontrollierten Aktivierung als Sperre bestehen.
+      # Die Null-SHAs sind technische Platzhalter und werden vor dem ersten Integrationslauf ersetzt.
       repository_name: ${{ github.event.repository.name }}
       commit_sha: ${{ inputs.commit_sha || github.sha }}
       source_branch: ${{ github.event_name == 'push' && github.ref_name || inputs.source_branch }}

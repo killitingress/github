@@ -29,7 +29,6 @@ mtext-fi/
     mandant.json
   .github/
     workflows/
-      validate.yml
       sync-resources.yml
       release.yml
 ```
@@ -53,22 +52,21 @@ Prüfung kann ein fachlich freigegebener Commit direkt nach `R261/Abnahme`
 promoviert werden. Die jeweiligen Pushes verteilen ihren exakten Commit zum
 Entwicklungs- beziehungsweise Abnahmesystem.
 
-Ausgewählte abgenommene Änderungen werden über einen UTC-datierten Branch wie
-`release/R261-20260715T143000Z` per Pull Request nach `R261/Bereitstellung`
-übernommen. Der Pull Request validiert den Stand; sein Merge erzeugt aber noch
-keine Lieferung. Erst ein
-vom Benutzer gesetzter Tag `Rnnn.nnn` startet FULL oder DELTA. `.100` ist FULL;
-spätere Tags derselben Linie sind kumulative DELTAs gegen `.100`.
+Ausgewählte abgenommene Änderungen werden direkt nach
+`R261/Bereitstellung` gepusht. Dieser Push erzeugt noch keine Lieferung. Erst
+ein vom Benutzer gesetzter Tag `Rnnn.nnn` prüft den Bereitstellungsstand und
+startet FULL oder DELTA. `.100` ist FULL; spätere Tags derselben Linie sind
+kumulative DELTAs gegen `.100`.
 
 Aktuell ist `R261/Entwicklung` als Default Branch vorgesehen. Beim rollierenden
 Linienwechsel wird der Default Branch manuell auf den Entwicklungsbranch der
 neuen führenden Linie umgestellt. Ein zusätzlicher `main`-Branch ist nicht
 vorgesehen.
 
-## Sicherheit des aktuellen Entwurfs
+## Stand des Entwicklungssystems
 
 Die Workflows referenzieren `j520730/mtext-actions`, aber absichtlich noch
-einen nicht auflösbaren Null-SHA. Vor dessen kontrollierter Ersetzung können
-sie keine zentrale Automatisierung und keine internen Zielsysteme aufrufen.
-Die notwendigen Aktivierungsschritte und GitHub-Schutzeinstellungen sind in
+einen nicht auflösbaren Null-SHA als technischen Platzhalter. Vor dem ersten
+Integrationslauf wird er durch den vollständigen Commit-SHA der vorgesehenen
+zentralen Version ersetzt. Die erforderliche GitHub- und Runner-Einrichtung ist in
 `.github/workflows/README.md` dokumentiert.

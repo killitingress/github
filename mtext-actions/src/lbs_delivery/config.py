@@ -23,9 +23,6 @@ _RELEASE_TAG_RE = re.compile(r"R[0-9]{3}\.[0-9]{3}")
 _STAGE_BRANCH_RE = re.compile(
     r"(?P<release_line>R[0-9]{3})/(?P<stage>[A-Za-z][A-Za-z0-9_-]*)"
 )
-_SELECTION_BRANCH_RE = re.compile(
-    r"release/(?P<release_line>R[0-9]{3})-[0-9]{8}T[0-9]{6}Z"
-)
 _SECRET_KEY_RE = re.compile(r"(?:password|passwd|secret|credential|token)", re.I)
 
 
@@ -240,27 +237,6 @@ def resolve_server_sync_root(
     )
 
 
-def require_sync_contracts(deployments: DeploymentsConfig) -> None:
-    """Erlaubt externe M/Text-Aufrufe nur nach Freigabe beider Verträge."""
-
-    adapter = deployments["adapter"]
-    if not adapter["server_sync_contract_approved"]:
-        raise DeliveryError(
-            Status.VALIDATION_FAILED, "serverSync contract is not approved"
-        )
-    if not adapter["contract_approved"]:
-        raise DeliveryError(Status.VALIDATION_FAILED, "adapter contract is not approved")
-
-
-def require_mainframe_contract(deployments: DeploymentsConfig) -> None:
-    """Erlaubt die Mainframe-Übergabe nur nach expliziter Vertragsfreigabe."""
-
-    if not deployments["mainframe"]["contract_approved"]:
-        raise DeliveryError(
-            Status.VALIDATION_FAILED, "Mainframe contract is not approved"
-        )
-
-
 def resolve_stage_branch(
     deployments: DeploymentsConfig, branch: str
 ) -> tuple[str, EnvironmentConfig]:
@@ -287,44 +263,3 @@ def resolve_sync_branch(
             "source branch stage does not match target environment",
         )
     return release_line
-
-
-def validate_release_promotion(
-    deployments: DeploymentsConfig,
-    source_branch: str,
-    target_branch: str,
-) -> None:
-    """Prüft einen Auswahlbranch für den Pull Request nach Bereitstellung."""
-
-    target_line, _ = resolve_stage_branch(deployments, target_branch)
-    if target_branch != release_branch(deployments, target_line):
-        raise DeliveryError(
-            Status.VALIDATION_FAILED,
-            "target branch must be the release branch",
-        )
-    selection = _SELECTION_BRANCH_RE.fullmatch(source_branch)
-    if selection is None:
-        raise DeliveryError(
-            Status.VALIDATION_FAILED,
-            "source branch must be a UTC-dated release selection branch",
-        )
-    if selection.group("release_line") != target_line:
-        raise DeliveryError(
-            Status.VALIDATION_FAILED,
-            "source branch and release branch must use the same release line",
-        )
-
-
-def public_summary(
-    mandant: MandantConfig, deployments: DeploymentsConfig
-) -> JsonObject:
-    """Erzeugt eine geheimnisfreie Zusammenfassung für Validierungsprotokolle."""
-
-    return {
-        "repository": mandant["repository"],
-        "mandant": mandant["code"],
-        "subsystem": mandant["subsystem"],
-        "projects": [project["name"] for project in mandant["projects"]],
-        "release_lines": sorted(deployments["release_lines"]),
-        "environments": sorted(deployments["environments"]),
-    }

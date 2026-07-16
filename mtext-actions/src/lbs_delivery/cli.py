@@ -12,15 +12,11 @@ from .config import (
     MandantConfig,
     load_deployments_config,
     load_mandant_config,
-    public_summary,
     release_branch,
-    require_mainframe_contract,
-    require_sync_contracts,
     resolve_adapter_url,
     resolve_environment,
     resolve_server_sync_root,
     resolve_sync_branch,
-    validate_release_promotion,
     validate_release_tag,
 )
 from .errors import DeliveryError, Status
@@ -55,11 +51,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(prog="lbs-delivery")
     subparsers = parser.add_subparsers(dest="command", required=True)
-
-    validate = subparsers.add_parser("validate-release-promotion")
-    _common_config_arguments(validate)
-    validate.add_argument("--source-branch", required=True)
-    validate.add_argument("--target-branch", required=True)
 
     sync = subparsers.add_parser("sync-resources")
     _common_config_arguments(sync)
@@ -106,19 +97,6 @@ def _load_configs(
     return mandant, deployments
 
 
-def _validate_release_promotion(arguments: argparse.Namespace) -> Status:
-    """Validiert Konfiguration und Auswahlbranch vor Bereitstellung."""
-
-    mandant, deployments = _load_configs(arguments)
-    validate_release_promotion(
-        deployments,
-        arguments.source_branch,
-        arguments.target_branch,
-    )
-    print(json.dumps(public_summary(mandant, deployments), sort_keys=True))
-    return Status.ARTIFACT_READY
-
-
 def _sync(arguments: argparse.Namespace) -> Status:
     """Stellt Ressourcen bereit und ruft bei Freigabe den M/Text-Adapter auf."""
 
@@ -135,7 +113,6 @@ def _sync(arguments: argparse.Namespace) -> Status:
     if not arguments.execute:
         print(json.dumps({"status": "STAGED", "projects": staged}, sort_keys=True))
         return Status.ARTIFACT_READY
-    require_sync_contracts(deployments)
     server_sync_root = resolve_server_sync_root(
         deployments, release_line, environment
     )
@@ -243,7 +220,6 @@ def _publish(arguments: argparse.Namespace) -> Status:
             )
         )
         return Status.ARTIFACT_READY
-    require_mainframe_contract(deployments)
     settings = FtpSettings.from_environment()
     for package, jcl_path in rendered:
         package_path = resolve_within(
@@ -268,7 +244,6 @@ def run(arguments: argparse.Namespace) -> Status:
     """Leitet geparste Argumente an den passenden fachlichen Handler weiter."""
 
     handlers = {
-        "validate-release-promotion": _validate_release_promotion,
         "sync-resources": _sync,
         "build-release": _build_release,
         "publish-mainframe": _publish,

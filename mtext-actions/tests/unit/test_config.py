@@ -13,7 +13,6 @@ from lbs_delivery.config import (
     load_mandant_config,
     release_branch,
     resolve_adapter_url,
-    validate_release_promotion,
     validate_release_tag,
 )
 from lbs_delivery.errors import DeliveryError, Status
@@ -119,34 +118,10 @@ class ConfigTests(unittest.TestCase):
             & set(self.deployments["mainframe"])
         )
 
-    def test_tag_promotion_and_repository_guards(self) -> None:
+    def test_release_tag_and_repository_guards(self) -> None:
         validate_release_tag(self.deployments, "R261.100")
         validate_release_tag(self.deployments, "R261.108")
         self.assertEqual(release_branch(self.deployments, "R261"), "R261/Bereitstellung")
-        validate_release_promotion(
-            self.deployments,
-            "release/R261-20260715T143000Z",
-            "R261/Bereitstellung",
-        )
-        with self.assertRaises(DeliveryError):
-            validate_release_promotion(
-                self.deployments, "R261/Abnahme", "R261/Bereitstellung"
-            )
-        with self.assertRaises(DeliveryError):
-            validate_release_promotion(
-                self.deployments,
-                "feature/R261/12345-example",
-                "R261/Entwicklung",
-            )
-        with self.assertRaisesRegex(
-            DeliveryError,
-            "source branch and release branch must use the same release line",
-        ):
-            validate_release_promotion(
-                self.deployments,
-                "release/R260-20260715T143000Z",
-                "R261/Bereitstellung",
-            )
         with self.assertRaises(DeliveryError):
             validate_release_tag(self.deployments, "R999.100")
         with self.assertRaises(DeliveryError) as raised:
@@ -154,14 +129,6 @@ class ConfigTests(unittest.TestCase):
                 MANDANT_CONFIG, MANDANT_SCHEMA, repository_name="mtext-by"
             )
         self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
-
-    def test_external_contracts_default_to_locked(self) -> None:
-        self.assertFalse(self.deployments["adapter"]["contract_approved"])
-        self.assertFalse(
-            self.deployments["adapter"]["server_sync_contract_approved"]
-        )
-        self.assertFalse(self.deployments["mainframe"]["contract_approved"])
-
 
 if __name__ == "__main__":
     unittest.main()

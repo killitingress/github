@@ -8,8 +8,9 @@ Mandantenspezifische Ressourcen und Mappings bleiben in Repositories wie
 `mtext-fi`. Diese Repositories rufen die hier enthaltenen wiederverwendbaren
 Workflows über einen unveränderlichen Commit-SHA auf.
 
-Übergreifende Dokumentation: [Dokumentationsübersicht](../docs/README.md),
-[Benutzeranleitung](../docs/confluence/Benutzeranleitung.md) und
+Übergreifende Dokumentation: [Technisches Zielbild](../docs/confluence/Zielbild_GitHub_Actions_Git.md),
+[Benutzeranleitung](../docs/confluence/Benutzeranleitung.md),
+[Nächste Schritte](../docs/confluence/Naechste_Schritte.md) und
 [Soll-Grafik](../Architektur_Soll_GitHub_Actions_Git.drawio).
 
 ## Struktur
@@ -18,7 +19,6 @@ Workflows über einen unveränderlichen Commit-SHA auf.
 mtext-actions/
   .github/workflows/
     ci.yml
-    reusable-validate-release-promotion.yml
     reusable-sync-resources.yml
     reusable-release.yml
   config/
@@ -54,10 +54,6 @@ mtext-actions/
 
 ## Wiederverwendbare Workflows
 
-`reusable-validate-release-promotion.yml` prüft beim Pull Request nach Bereitstellung
-ausschließlich Repository-Identität, Konfiguration und den Auswahlbranch.
-Dieser Workflow besitzt keine M/Text-, Mainframe- oder zentralen Testschritte.
-
 `reusable-sync-resources.yml` checkt einen exakten Commit aus, stellt die
 konfigurierten Projekte in einem laufbezogenen Verzeichnis bereit, veröffentlicht
 sie nach serverSync und ruft den bestehenden Adapter einmal synchron auf.
@@ -72,17 +68,16 @@ aus. Der gemeldete Status `MAINFRAME_SUBMITTED` ist kein fachlicher Endstatus
 des Mainframe-Jobs.
 
 `ci.yml` führt die zentrale Testsuite nur bei Änderungen an `mtext-actions`
-aus. Mandanten-Pull-Requests wiederholen diese Tests nicht.
+aus.
 
 Alle verwendeten `actions/*`-Actions sind auf vollständige Commit-SHAs
 festgelegt. Fachlogik liegt ausschließlich in Python.
 
 ## CLI
 
-Die vier vorgesehenen Kommandos sind implementiert:
+Die drei vorgesehenen Kommandos sind implementiert:
 
 ```bash
-python -m lbs_delivery validate-release-promotion ...
 python -m lbs_delivery sync-resources ...
 python -m lbs_delivery build-release ...
 python -m lbs_delivery publish-mainframe ...
@@ -96,28 +91,16 @@ CLI für den normalen Promotions- und Releaseablauf nicht direkt aufrufen.
 `sync-resources` führt ohne `--execute` nur das lokale Staging aus.
 `publish-mainframe` verifiziert ohne `--execute` das Manifest und alle
 Prüfsummen und rendert das JCL lokal, führt aber keine FTP-/JES-Übergabe aus.
-Zusätzlich bleiben
-serverSync, Adapter und Mainframe durch drei versionierte Freigabeschalter in
-`config/deployments.json` gesperrt.
 
-## Sicherheitssperren des aktuellen Stands
-
-Die folgenden Werte stehen absichtlich auf `false`:
-
-```text
-adapter.contract_approved
-adapter.server_sync_contract_approved
-mainframe.contract_approved
-```
-
-Sie werden erst nach fachlicher Abnahme des jeweiligen Vertrags per Pull
-Request aktiviert. Damit führt auch ein versehentlich gestarteter Workflow
-keine externe Aktion aus.
+## Stand des Entwicklungssystems
 
 Das Beispiel-Repository `j517120/mtext-fi` verweist bereits auf
 `j520730/mtext-actions`, verwendet aber weiterhin den nicht auflösbaren
-Null-SHA. Dieser wird erst nach Review durch den vollständigen Commit-SHA der
-freigegebenen zentralen Version ersetzt.
+Null-SHA als technischen Platzhalter. Vor dem ersten Integrationslauf wird er
+in beiden aufrufenden Workflows durch den vollständigen Commit-SHA der
+vorgesehenen zentralen Version ersetzt. Zusätzliche versionierte
+Freigabeschalter für serverSync, Adapter oder Mainframe gibt es nicht; die
+Schnittstellen werden auf dem Entwicklungssystem praktisch geprüft.
 
 ## Runner-Vertrag
 
@@ -186,9 +169,9 @@ Endpunkt endet auf `/vMtextAdapter/sync`. Der bestätigte Payload ist
 unmittelbare Annahme. Authentifizierung und nachgelagertes Status-Polling sind
 in der ersten Ausbaustufe nicht vorgesehen.
 
-Der `serverSync`-Sharepfad ist noch nicht bestätigt. Deshalb bleiben
-`adapter.server_sync_contract_approved`, `adapter.contract_approved` und die
-Mainframe-Freigabe bis zu nichtproduktiven Integrationsprüfungen deaktiviert.
+Der `serverSync`-Sharepfad ist noch nicht bestätigt und wird beim
+nichtproduktiven Integrationslauf auf dem vorgesehenen Runner praktisch
+geprüft.
 
 ## Releaseverhalten
 
@@ -228,8 +211,8 @@ reproduzierbarer FULL-/DELTA-Bau, kumulative Löschlisten, Manifestprüfung,
 JCL-Rendering, Ressourcen-Staging, Adapterstatus und der unmittelbare FTP-/JES-
 Vertrag. Historische Referenzdateien gehören nicht zur Testsuite.
 
-Nichtproduktive Integrationsläufe gegen freigegebene Ziele und fachliche
-Abnahmen bleiben vor jeder Aktivierung verpflichtend. Ein M/Text- oder
+Nichtproduktive Integrationsläufe gegen die vorgesehenen Entwicklungsziele
+und fachliche Abnahmen bleiben vor dem regulären Betrieb erforderlich. Ein M/Text- oder
 Mainframe-Job-Polling ist bewusst nicht implementiert.
 
 Die Git-Prüfungen erwarten den von `actions/checkout` angelegten Remote
