@@ -53,19 +53,46 @@ class ReleaselinienConfigTests(unittest.TestCase):
                         load_releaselinien(path)
                     self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
 
-    def test_uebergabeprofil_requires_codepipeline_stage(self) -> None:
-        """Lehnt Übergabeprofile außerhalb der sechs erlaubten Stages ab."""
+    def test_hostprofil_requires_codepipeline_stage(self) -> None:
+        """Lehnt Hostprofile außerhalb der sechs erlaubten Stages ab."""
 
         config = json.loads(
             (ROOT / "tests/fixtures/mandant.json").read_text(encoding="utf-8")
         )
-        config["mandant"]["uebergabeprofile"]["FKT"]["stage"] = "DEV"
+        config["mandant"]["hostprofile"]["FKT"]["stage"] = "DEV"
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "mandant.json"
+            (Path(directory) / "LOMS_Basis").mkdir()
             path.write_text(json.dumps(config), encoding="utf-8")
             with self.assertRaises(DeliveryError) as raised:
-                load_mandant_config(path, repository_name="mtext-fi")
+                load_mandant_config(
+                    path,
+                    repository_name="mtext-fi",
+                    repository_root=directory,
+                )
         self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
+
+    def test_projects_are_visible_root_directories_except_exclusions(self) -> None:
+        """Ermittelt Projekte aus der Wurzel und beachtet versteckte Elemente."""
+
+        config = json.loads(
+            (ROOT / "tests/fixtures/mandant.json").read_text(encoding="utf-8")
+        )
+        config["mandant"]["excluded_projects"] = ["LOMS_Testdaten"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ("LOMS_Basis", "Fonts", "LOMS_Testdaten", ".github"):
+                (root / name).mkdir()
+            path = root / ".config.json"
+            path.write_text(json.dumps(config), encoding="utf-8")
+
+            mandant = load_mandant_config(
+                path,
+                repository_name="mtext-fi",
+                repository_root=root,
+            )
+
+        self.assertEqual(mandant["projects"], ["Fonts", "LOMS_Basis"])
 
 
 if __name__ == "__main__":

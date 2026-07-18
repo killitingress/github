@@ -16,15 +16,8 @@ from .jcl import JCL_LEVELS, SUBSYSTEM_RE
 JsonObject = dict[str, Any]
 
 
-class ProjectConfig(TypedDict):
-    """Beschreibt ein fachliches Projekt und seinen Repositorypfad."""
-
-    name: str
-    source_path: str
-
-
-class UebergabeprofilConfig(TypedDict):
-    """Beschreibt die JCL-Zuordnung eines Übergabeprofils."""
+class HostprofilConfig(TypedDict):
+    """Beschreibt die JCL-Zuordnung eines Hostprofils."""
 
     assignment: str
     stage: str
@@ -36,8 +29,8 @@ class MandantConfig(TypedDict):
     kuerzel: str
     repository: str
     subsystem: str
-    projects: list[ProjectConfig]
-    uebergabeprofile: dict[str, UebergabeprofilConfig]
+    projects: list[str]
+    hostprofile: dict[str, HostprofilConfig]
 
 
 class ReleaselinieConfig(TypedDict):
@@ -59,9 +52,6 @@ RELEASE_TAG_RE = re.compile(r"R([0-9]{3})\.([0-9]{3})")
 _REPOSITORY_RE = re.compile(r"mtext-(?:[a-z]{2}|autonom)")
 # Prüft die erlaubten Zeichen und die maximale Länge eines Projektnamens.
 _PROJECT_NAME_RE = re.compile(r"[A-Za-z0-9_\[\]-]{1,128}")
-# Verhindert absolute Pfade, Nullbytes und Traversal in konfigurierten Quellpfaden.
-_SOURCE_PATH_RE = re.compile(r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))[^\x00]{1,256}")
-
 # Zulässige Kürzel der vorhandenen Mandanten-Repositorys.
 MANDANTEN_KUERZEL = {"FI", "BY", "LH", "NW", "OS", "SA", "IT"}
 # Ordnet der fachlichen Stage den serverSync- und Host-Suffix zu.
@@ -109,17 +99,21 @@ def load_document(path: str | Path) -> JsonObject:
 
 
 def load_mandant_config(
-    config_path: str | Path, *, repository_name: str
+    config_path: str | Path, *, repository_name: str, repository_root: str | Path
 ) -> MandantConfig:
-    """Lädt und prüft die einzige variable Lieferkonfiguration."""
+    """Lädt die Lieferkonfiguration und ermittelt Projekte aus der Repositorywurzel."""
 
     document = load_document(config_path)
     _object(document, {"mandant"}, "Mandantenkonfiguration")
-    mandant = _object(
-        document["mandant"],
-        {"kuerzel", "repository", "subsystem", "projects", "uebergabeprofile"},
-        "Mandant",
-    )
+    mandant = document["mandant"]
+    required_fields = {"kuerzel", "repository", "subsystem", "hostprofile"}
+    allowed_fields = required_fields | {"excluded_projects"}
+    if (
+        not isinstance(mandant, dict)
+        or not required_fields.issubset(mandant)
+        or not set(mandant).issubset(allowed_fields)
+    ):
+        _invalid("Mandant")
     if (
         not isinstance(mandant["kuerzel"], str)
         or mandant["kuerzel"] not in MANDANTEN_KUERZEL
@@ -131,37 +125,60 @@ def load_mandant_config(
     if mandant["repository"] != repository_name:
         _invalid("Repository-Zuordnung des Mandanten")
 
-    projects = mandant["projects"]
-    if not isinstance(projects, list) or not projects:
+    excluded_projects = mandant.get("excluded_projects", [])
+    if not isinstance(excluded_projects, list):
+        _invalid("ausgeschlossene Projekte")
+    for project in excluded_projects:
+        _matches(project, _PROJECT_NAME_RE, "ausgeschlossener Projektname")
+    if len(excluded_projects) != len(set(excluded_projects)):
+        _invalid("doppelte ausgeschlossene Projekte")
+
+    # Nur sichtbare Verzeichnisse direkt unter der Wurzel bilden M/Text-Projekte.
+    root = Path(repository_root)
+    try:
+        projects = sorted(
+            item.name
+            for item in root.iterdir()
+            if item.is_dir()
+            and not item.name.startswith(".")
+            and item.name not in excluded_projects
+        )
+    except OSError as exc:
+        raise DeliveryError(
+            Status.VALIDATION_FAILED,
+            "Repositorywurzel kann nicht gelesen werden",
+        ) from exc
+    if not projects:
         _invalid("Projekte des Mandanten")
     for project in projects:
-        project = _object(project, {"name", "source_path"}, "Projekt")
-        _matches(project["name"], _PROJECT_NAME_RE, "Projektname")
-        _matches(project["source_path"], _SOURCE_PATH_RE, "Projekt-Quellpfad")
-    for field in ("name", "source_path"):
-        values = [project[field] for project in projects]
-        if len(values) != len(set(values)):
-            _invalid(f"doppeltes Projektfeld {field}")
-    project_codes = [project_code_for_name(project["name"]) for project in projects]
+        _matches(project, _PROJECT_NAME_RE, "Projektname")
+    project_codes = [project_code_for_name(project) for project in projects]
     # Zwei Projekte dürfen nicht auf denselben historischen Liefercode abbilden.
     if len(project_codes) != len(set(project_codes)):
         _invalid("doppelte Zuordnung eines Liefercodes")
 
-    uebergabeprofile = mandant["uebergabeprofile"]
-    if not isinstance(uebergabeprofile, dict) or not uebergabeprofile:
-        _invalid("Übergabeprofile")
-    for uebergabeprofil in uebergabeprofile.values():
-        uebergabeprofil = _object(
-            uebergabeprofil, {"assignment", "stage"}, "Übergabeprofil"
-        )
-        # Für Übergabeprofile gilt ausschließlich die Allowlist der
+    hostprofile = mandant["hostprofile"]
+    if not isinstance(hostprofile, dict) or not hostprofile:
+        _invalid("Hostprofile")
+    for hostprofil in hostprofile.values():
+        hostprofil = _object(hostprofil, {"assignment", "stage"}, "Hostprofil")
+        # Für Hostprofile gilt ausschließlich die Allowlist der
         # CodePipeline-Stages.
         if (
-            not isinstance(uebergabeprofil["stage"], str)
-            or uebergabeprofil["stage"] not in JCL_LEVELS
+            not isinstance(hostprofil["stage"], str)
+            or hostprofil["stage"] not in JCL_LEVELS
         ):
             _invalid("CodePipeline-Stage")
-    return cast(MandantConfig, mandant)
+    return cast(
+        MandantConfig,
+        {
+            "kuerzel": mandant["kuerzel"],
+            "repository": mandant["repository"],
+            "subsystem": mandant["subsystem"],
+            "projects": projects,
+            "hostprofile": hostprofile,
+        },
+    )
 
 
 def load_releaselinien(path: str | Path) -> Releaselinien:

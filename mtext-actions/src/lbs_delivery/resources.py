@@ -5,9 +5,8 @@ from __future__ import annotations
 import os
 import shutil
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
 
 from .errors import DeliveryError, Status
 from .paths import reject_symlinks, resolve_within
@@ -16,7 +15,7 @@ from .paths import reject_symlinks, resolve_within
 def stage_resources(
     source_root: str | Path,
     staging_root: str | Path,
-    projects: Sequence[Mapping[str, Any]],
+    projects: Sequence[str],
 ) -> list[str]:
     """Kopiert geprüfte Projektstände in ein leeres laufbezogenes Staging."""
 
@@ -32,7 +31,7 @@ def stage_resources(
     for project in projects:
         project_source = resolve_within(
             source,
-            project["source_path"],
+            project,
             status=Status.VALIDATION_FAILED,
             subject="Ressourcenprojekt",
             reject_symlink=True,
@@ -40,14 +39,14 @@ def stage_resources(
         if not project_source.is_dir():
             raise DeliveryError(
                 Status.RESOURCE_TRANSFER_FAILED,
-                f"Ressourcenprojekt fehlt: {project['name']}",
+                f"Ressourcenprojekt fehlt: {project}",
             )
         reject_symlinks(
             project_source, status=Status.VALIDATION_FAILED, subject="Ressource"
         )
-        destination = staging / project["name"]
+        destination = staging / project
         shutil.copytree(project_source, destination, copy_function=shutil.copy2)
-        staged.append(project["name"])
+        staged.append(project)
     return staged
 
 

@@ -58,6 +58,7 @@ jobs:
           PYTHONPATH: automation/src
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery validate-config
-          --mandant-config source/config/mandant.json
+          --repository-root source
+          --mandant-config source/.config.json
           --releaselinien automation/config/releaselinien.json
           --repository-name "$INPUT_REPOSITORY_NAME"

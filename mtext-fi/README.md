@@ -1,7 +1,7 @@
 # Bedienungsanleitung für `mtext-fi`
 
-Dieses Repository enthält die FI-Ressourcen für M/Text. FI ist der
-Master-Mandant für die unfragmentierten Projekte:
+Dieses Repository enthält die M/Text Brief-Ressourcen des Mandanten.
+FI ist der Master-Mandant, verantwortlich für die Projekte:
 
 - `Configuration`
 - `Fonts`
@@ -9,8 +9,10 @@ Master-Mandant für die unfragmentierten Projekte:
 - `LOMS_Basis`
 - `LOMS_PKA`
 
-`LOMS_Testdaten` gehört zum Repository, wird aber nicht synchronisiert oder
-ausgeliefert. Ein Fragmentprojekt `LOMS_Basis[FI]` wird nicht verwendet.
+`LOMS_Testdaten` gehört zum Repository, ist aber von der Synchronisierung
+mittels `excluded_projects` in .config.json ausgeschlossen.
+Dateien im Wurzelpfad, deren Namen mit einem Punkt (.) beginnen, und diese
+README Datei, sind ebenfalls ausgeschlossen.
 
 ## Branches
 
@@ -23,26 +25,25 @@ Jede aktive Releaselinie besitzt drei Branches:
 | `<Releaselinie>/Bereitstellung` | abgenommene Änderungen für eine Lieferung zusammenstellen |
 
 Zusätzliche Feature-Branches können für länger laufende Arbeiten verwendet
-werden. Die führende Releaselinie, beispielsweise `R261/Entwicklung`, ist der
-Default Branch.
+werden. Der Default Branch ist die eingestellt führende Releaselinie,
+beispielsweise `R261/Entwicklung` - dies ist je Release umzustellen.
 
 ## Änderung nach Entwicklung bringen
 
-1. Den Entwicklungsbranch der richtigen Releaselinie auschecken und
-   aktualisieren.
-2. Die M/Text-Ressourcen bearbeiten und lokal prüfen.
-3. Die Änderung committen und nach GitHub pushen.
+1. Entwicklungsbranch der gewünschten Releaselinie auschecken / aktualisieren.
+2. M/Text-Ressourcen bearbeiten und lokal prüfen.
+3. Die Änderung committen und dann nach GitHub pushen.
 4. Den Workflow **Sync M/Text resources** kontrollieren.
 
-Der Workflow synchronisiert den vollständigen konfigurierten Projektstand des
-gepushten Commits nach M/Text-Entwicklung.
+Der Workflow synchronisiert den Projektstand des gepushten Commits mit
+M/Text-Entwicklung.
 
 ## Änderung zur Abnahme und Bereitstellung weitergeben
 
 1. Den fachlich freigegebenen Commit mit dem bereitgestellten Git-Client per
    Cherry-Pick auf den Zielbranch übernehmen.
-2. Die vollständige SHA des Quell-Commits mit `cherry-pick -x` in der
-   Commit-Nachricht dokumentieren.
+2. Optional: SHA des Quell-Commits mit `cherry-pick -x` in der
+   Commit-Nachricht speichern.
 3. Den übernommenen Gesamtstand prüfen.
 4. Den Zielbranch pushen. Bei der Abnahme anschließend den Workflow
    **Sync M/Text resources** kontrollieren.
@@ -67,9 +68,10 @@ Bestehende Release-Tags dürfen nicht verändert oder gelöscht werden.
 
 ## Mandantenkonfiguration
 
-[`config/mandant.json`](config/mandant.json) legt die ausgelieferten Projekte,
-das Mandantenkürzel, das Repository, das Mainframe-Subsystem und die
-Übergabeprofile fest. Änderungen werden mit den benannten Mandanten- und
+[`.config.json`](.config.json) legt das Mandantenkürzel, das Repository, das
+Mainframe-Subsystem, die Hostprofile und optionale Projektausschlüsse fest.
+Alle anderen sichtbaren Verzeichnisse in der Repositorywurzel werden als
+Projekte verarbeitet. Änderungen werden mit den benannten Mandanten- und
 Betriebsverantwortlichen abgestimmt. Ein Push der Datei startet den
 Config-Check.
 

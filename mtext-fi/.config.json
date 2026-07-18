@@ -1,0 +1,20 @@
+{
+  "mandant": {
+    "kuerzel": "FI",
+    "repository": "mtext-fi",
+    "subsystem": "LOMS",
+    "excluded_projects": [
+      "LOMS_Testdaten"
+    ],
+    "hostprofile": {
+      "FKT": {
+        "assignment": "LOMS000066",
+        "stage": "FKTE"
+      },
+      "JUR": {
+        "assignment": "LOMS000067",
+        "stage": "JURP"
+      }
+    }
+  }
+}

@@ -1,21 +1,17 @@
 # GitHub-Actions-Vertrag für `mtext-fi`
 
-Die drei YAML-Dateien in diesem Verzeichnis sind bewusst dünne aufrufende
+Die drei YAML-Dateien in diesem Verzeichnis sind bewusst schlanke aufrufende
 Workflows. Fachlogik, Zielauflösung, Paketbau und Integrationen gehören in das
 zentrale Repository `mtext-actions`.
 
-Die Bedienung beschreibt die
-[Benutzeranleitung](../../../docs/confluence/Benutzeranleitung.md); die
-[Soll-Grafik](../../../Architektur_Soll_GitHub_Actions_Git.drawio) zeigt den
-vollständigen Ablauf.
+Die [Benutzeranleitung](../../../docs/confluence/Benutzeranleitung.md)
+beschreibt die Bedienung.
 
 ## Technischer Platzhalter im Entwicklungssystem
 
 Alle `uses:`-Aufrufe zeigen auf `j520730/mtext-actions` und derzeit auf den
-nicht auflösbaren Null-SHA
-`0000000000000000000000000000000000000000`. Dieser Wert ist kein
-Sicherheitsmechanismus, sondern nur ein noch zu ersetzender technischer
-Platzhalter: Unter dieser Referenz existiert keine zentrale Workflowversion.
+Null-SHA `0000000000000000000000000000000000`. Unter dieser Referenz gibt es
+noch keine zentrale Workflowversion.
 
 Vor dem ersten Integrationslauf wird der Null-SHA in allen Workflow-Dateien
 durch den vollständigen 40-stelligen Commit-SHA einer freigegebenen Version
@@ -29,57 +25,42 @@ zeigen.
 
 ### `validate-config.yml`
 
-Jeder Push, der `config/mandant.json` ändert, ruft eine reine
+Jeder Push, der `.config.json` ändert, ruft eine reine
 Konfigurationsprüfung auf. Sie validiert die Datei gegen das zentrale Schema,
 prüft Repository-Identität und Eindeutigkeit sowie die gemeinsame
 Deploymentkonfiguration. Der Check besitzt keinen `--execute`-Pfad, bindet kein
-Environment und liest keine Secrets. Er kann daher weder M/Text noch den
-Mainframe verändern und liefert frühes Feedback zu Konfigurationsfehlern. Er
-ist kein technisch erzwungenes Gate; Sync und Release validieren die jeweils
-verwendete Konfiguration auf ihrem eigenen Ausführungspfad erneut.
+Environment und liest keine Secrets. Sync und Release validieren die
+verwendete Konfiguration erneut.
 
 ### `sync-resources.yml`
 
-Ein Push auf einen Branch `Rnnn/Entwicklung` oder `Rnnn/Abnahme` ruft die
-zentrale Ressourcensynchronisation für genau die zugehörige M/Text-Umgebung
-auf. Derselbe manuelle Einstieg dient sowohl der initialen Vollsynchronisation
-bei einem Releaselinienwechsel als auch einer kontrollierten Wiederholung. Er
-verlangt einen exakten Commit-SHA und einen expliziten Stufenbranch. Die
-zentrale Implementierung leitet Releaselinie und Zielumgebung aus diesem
-Branch ab, gleicht die Releaselinie mit der zentralen Konfiguration ab und
-weist den Lauf zurück, wenn Linie oder Commit nicht zulässig sind. Die
-Workflow-Trigger enthalten daher keine einzeln gepflegte Liste aktiver Linien.
+Ein Push auf `Rnnn/Entwicklung` oder `Rnnn/Abnahme` startet die zentrale
+Synchronisation für die passende M/Text-Umgebung. Der manuelle Start verlangt
+einen Commit-SHA und einen Stufenbranch. Die zentrale Umsetzung prüft beides
+und leitet daraus Releaselinie und Zielumgebung ab.
 
-Jede Synchronisation überträgt den vollständigen Stand aller Projekte aus
-`config/mandant.json`; technisch gibt es keinen DELTA-Modus für M/Text. Eine
-initiale Vollsynchronisation benötigt deshalb keinen eigenen zentralen
-Workflow und keinen künstlichen Quellcommit. Sie wird für Entwicklung und
-Abnahme getrennt gestartet, weil beide Stufen eigene Zielsysteme besitzen.
-Repositoryinhalte außerhalb der Projekt-Allowlist, beispielsweise
-`LOMS_Testdaten`, sowie `.github` und `config` werden nicht nach M/Text
-kopiert.
+Jede Synchronisation überträgt den vollständigen Stand aller sichtbaren
+Projektverzeichnisse in der Repositorywurzel. Für M/Text gibt es keinen
+DELTA-Modus. Versteckte Verzeichnisse werden ignoriert. Weitere Ausschlüsse
+stehen in `excluded_projects` der `.config.json`.
 
 Zwei Schreibvorgänge auf dasselbe
 Mandanten-/Linien-/Stufen-Ziel werden durch Concurrency serialisiert.
 
-Die zentrale Automatisierung muss den Commit erneut auflösen, die
-Repository-Identität gegen `config/mandant.json` prüfen und die Zielumgebung aus
-der gemeinsamen Konfiguration bestimmen. Frei eingegebene URLs oder Mandanten
-sind nicht vorgesehen.
+Die zentrale Automatisierung prüft den Commit und die Repository-Identität.
+URL und Mandant lassen sich nicht frei eingeben.
 
 ### `release.yml`
 
 Der Workflow reagiert ausschließlich auf Tags im Format `Rnnn.nnn` oder auf
 eine manuelle Wiederholung mit einem bereits vorhandenen Tag. Die zentrale
 Automatisierung leitet aus `Rnnn.nnn` den Branch `Rnnn/Bereitstellung` ab und
-prüft, dass der Tag von dort erreichbar ist. `.100` erzeugt FULL; andere
+prüft, dass der Tag von dort erreichbar ist. `.100` erzeugt FULL. Andere
 dreistellige Endungen erzeugen DELTA gegen den `.100`-Tag derselben Linie.
 
-Direkte Pushes nach `Rnnn/Bereitstellung` lösen keinen Sync- oder
-Release-Workflow und keine Lieferung aus. Wird dabei `config/mandant.json`
-geändert, läuft lediglich der nebenwirkungsfreie Config-Check. Erst der
-Release-Tag prüft die Konfiguration und Branchzuordnung und startet den
-Paketbau.
+Ein Push nach `Rnnn/Bereitstellung` startet keine Lieferung. Bei einer
+Änderung an `.config.json` läuft nur der Config-Check. Der Release-Tag prüft
+Konfiguration und Branchzuordnung und startet den Paketbau.
 
 Paketbau und Mainframe-Übergabe sind zwei getrennte Jobs desselben zentralen
 Release-Workflows. Der zweite Job verwendet ausschließlich den Namen des im
@@ -92,14 +73,14 @@ und erhält keine FTP-Credentials.
 Der zentrale Workflowvertrag verwendet ausschließlich die folgenden
 mandantenseitigen Angaben:
 
-- `repository_name`: Repository-Identität des Auslösers;
-- `commit_sha` beziehungsweise `release_tag` und optional `trigger_sha`;
-- `target_environment` für Entwicklung oder Abnahme;
-- `source_branch`, aus dem Releaselinie und Stufe validiert abgeleitet werden;
+- `repository_name`: Repository-Identität des Auslösers
+- `commit_sha` beziehungsweise `release_tag` und optional `trigger_sha`
+- `target_environment` für Entwicklung oder Abnahme
+- `source_branch`, aus dem Releaselinie und Stufe validiert abgeleitet werden
 - `automation_repository` und `automation_ref` für den Checkout der exakt
   gepinnten zentralen Implementierung.
 
-Secrets werden nicht als freie Inputs aus diesen dünnen Workflows
+Secrets werden nicht als freie Inputs aus diesen schlanken Workflows
 weitergereicht. Die Sync-Jobs binden das zur Stufe gehörende GitHub Environment,
 benötigen derzeit aber keine Secrets. Nur der Publish-Job bindet das Environment
 `Bereitstellung` und liest dort die Mainframe-Secrets. Deren Namen und die
@@ -110,7 +91,7 @@ Für den Zugriff von `j517120/mtext-fi` auf
 `j520730/mtext-actions` muss außerdem die GitHub-Enterprise-Actions-Freigabe
 des zentralen Repositories eingerichtet und praktisch geprüft werden. Die
 Benutzer von `mtext-fi` benötigen dafür keinen direkten Zugriff auf
-`mtext-actions`; die Freigabe gilt für den Workflowaufruf, nicht für
+`mtext-actions`. Die Freigabe gilt für den Workflowaufruf, nicht für
 Repositorymitgliedschaften.
 
 Die Zielplattform ist GitHub Enterprise Server 3.20.4. Der zentrale
@@ -126,19 +107,19 @@ GitHub konfiguriert und können nicht durch diese Workflow-Dateien allein
 erzwungen werden:
 
 - direkte Pushes nach `Rnnn/Entwicklung` und `Rnnn/Abnahme` für die jeweils
-  berechtigten Mitarbeiter zulassen;
+  berechtigten Mitarbeiter zulassen
 - direkte Pushes nach `Rnnn/Bereitstellung` auf das je Mandant benannte
-  Release-Team begrenzen; Force-Pushes und Löschen bleiben verboten;
+  Release-Team begrenzen. Force-Pushes und Löschen bleiben verboten
 - `.github/workflows/**/*` per Push-Ruleset auf allen Branches gegen Änderungen
-  durch Mandantenmitarbeiter schützen; Bypass nur für die zentralen
-  Automatisierungsverantwortlichen;
-- `config/mandant.json` von normalen Ressourcen-Pushes ausschließen und nur
-  dem benannten technischen Verantwortlichenkreis zur Änderung erlauben;
+  durch Mandantenmitarbeiter schützen. Bypass nur für die zentralen
+  Automatisierungsverantwortlichen
+- `.config.json` von normalen Ressourcen-Pushes ausschließen und nur
+  dem benannten technischen Verantwortlichenkreis zur Änderung erlauben
 - neue Tags `Rnnn.nnn` nur durch das Release-Team zulassen und bestehende
-  Release-Tags gegen Änderung, Force-Push und Löschung schützen;
-- freigegebene Actions und wiederverwendbare Workflows;
+  Release-Tags gegen Änderung, Force-Push und Löschung schützen
+- freigegebene Actions und wiederverwendbare Workflows
 - die drei gemeinsamen GitHub Environments `Entwicklung`, `Abnahme` und
-  `Bereitstellung`; nur `Bereitstellung` verlangt eine manuelle Freigabe;
+  `Bereitstellung`. Nur `Bereitstellung` verlangt eine manuelle Freigabe
 - minimale Berechtigungen des `GITHUB_TOKEN` auf Repository-Ebene.
 
 `R261/Entwicklung` wird zunächst als Default Branch eingestellt. Workflow- und

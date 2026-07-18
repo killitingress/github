@@ -1,4 +1,26 @@
-"""Validiert Releasemanifeste und prüft die zugehörigen Artefakte."""
+"""Sichert den Vertrag zwischen Erzeugung und Übergabe einer Releaselieferung.
+
+``build-release`` erzeugt aus dem durch einen Release-Tag festgelegten Stand
+des Mandanten-Repositorys für jedes Projekt ein FULL- oder
+DELTA-Paket sowie eine lesbare Informationsdatei. Zusammen mit diesen
+Lieferartefakten schreibt der Build ein ``manifest.json``. Dieses
+Releasemanifest beschreibt den Releasebezug, die Lieferart, die für die
+Mainframe-JCL benötigten Werte und jede erzeugte Datei mit Pfad, Größe und
+SHA-256-Prüfsumme.
+
+Das Manifest ist das Kontrollverzeichnis der vom Build-Job an den
+Publish-Job weitergegebenen Releaselieferung. ``publish-mainframe`` liest es
+nach dem Herunterladen und der Freigabe, um die Pakete zu bestimmen, die JCL
+zu rendern und die Lieferung an den Mainframe zu übergeben.
+
+Vor dem Schreiben und nach dem Lesen prüft dieses Modul Felder, Formate und
+fachliche Querverweise des Manifests. Vor der Übergabe stellt es zusätzlich
+sicher, dass jeder manifestierte Pfad innerhalb des Artefaktverzeichnisses
+liegt, keine symbolische Verknüpfung verwendet und Größe sowie Prüfsumme der
+Datei den Angaben des Builds entsprechen. Dadurch gelangen weder ein
+unvollständiges Manifest noch fehlende, vertauschte oder nachträglich
+veränderte Lieferartefakte in die Mainframe-Übergabe.
+"""
 
 from __future__ import annotations
 
@@ -7,16 +29,12 @@ import re
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
-from .config import (
-    MANDANTEN_KUERZEL,
-    RELEASELINIE_RE,
-    RELEASE_TAG_RE,
-)
+from .config import MANDANTEN_KUERZEL, RELEASE_TAG_RE
 from .delivery_names import DELIVERY_CODES
 from .errors import DeliveryError, Status
 from .git_refs import FULL_SHA_RE
 from .jcl import JclRenderError, MEMBER_RE, validate_jcl_values
-from .paths import resolve_within, safe_relative_path, sha256_file
+from .paths import resolve_within, sha256_file
 
 
 class ArtifactData(TypedDict):
@@ -73,9 +91,12 @@ class Manifest(TypedDict):
     artifacts: list[Artifact]
     jcl: JclValues
 
+
 # Reguläre Ausdrücke für manifest-spezifische Werte.
 # Prüft eine kleingeschriebene hexadezimale SHA-256-Prüfsumme.
 _CHECKSUM_RE = re.compile(r"[0-9a-f]{64}")
+# Gemeinsame Feldmenge von Paket- und Informationsartefakten.
+_ARTIFACT_KEYS = {"kind", "path", "project", "size", "sha256"}
 # Vollständige Feldmenge des Manifestwurzelobjekts.
 _ROOT_KEYS = {
     "repository",
@@ -91,8 +112,6 @@ _ROOT_KEYS = {
     "artifacts",
     "jcl",
 }
-# Gemeinsame Feldmenge von Paket- und Informationsartefakten.
-_ARTIFACT_KEYS = {"kind", "path", "project", "size", "sha256"}
 # Zusätzliche Felder eines Paketartefakts.
 _PACKAGE_KEYS = _ARTIFACT_KEYS | {
     "member",
@@ -121,14 +140,14 @@ def _string(
     subject: str,
     *,
     pattern: re.Pattern[str] | None = None,
-    maximum: int | None = None,
 ) -> str:
-    """Prüft ein nicht leeres Manifestfeld auf Länge und Format."""
+    """Prüft ein nicht leeres Manifestfeld auf sein verbindliches Format."""
 
-    valid = isinstance(value, str) and bool(value)
-    valid = valid and (maximum is None or len(value) <= maximum)
-    valid = valid and (pattern is None or pattern.fullmatch(value) is not None)
-    if not valid:
+    if (
+        not isinstance(value, str)
+        or not value
+        or (pattern is not None and pattern.fullmatch(value) is None)
+    ):
         _invalid(f"ungültig: {subject}")
     return value
 
@@ -140,23 +159,11 @@ def _optional(value: Any, subject: str, pattern: re.Pattern[str]) -> None:
         _string(value, subject, pattern=pattern)
 
 
-def _artifact_path(value: Any) -> str:
-    """Prüft einen Artefaktpfad vor späteren Dateisystemzugriffen."""
-
-    path = _string(value, "Artefaktpfad", maximum=256)
-    if "\x00" in path:
-        _invalid("ungültiger Artefaktpfad")
-    safe_relative_path(
-        path, status=Status.PACKAGE_FAILED, subject="Artefakt"
-    )
-    return path
-
-
 def _validate_manifest(document: Any) -> Manifest:
     """Prüft ausschließlich den verwendeten Manifestvertrag."""
 
     manifest = _object(document, _ROOT_KEYS, "Manifest")
-    _string(manifest["repository"], "Repository", maximum=128)
+    _string(manifest["repository"], "Repository")
     if (
         not isinstance(manifest["mandant"], str)
         or manifest["mandant"] not in MANDANTEN_KUERZEL
@@ -165,18 +172,11 @@ def _validate_manifest(document: Any) -> Manifest:
     release_tag = _string(
         manifest["release_tag"], "Release-Tag", pattern=RELEASE_TAG_RE
     )
-    releaselinie = _string(
-        manifest["releaselinie"], "Releaselinie", pattern=RELEASELINIE_RE
-    )
     # Das separate Linienfeld verhindert mehrdeutige Releasebezüge im Manifest.
-    if releaselinie != release_tag[:4]:
+    if manifest["releaselinie"] != release_tag[:4]:
         _invalid("Releaselinie passt nicht zum Release-Tag")
-    if (
-        not isinstance(manifest["delivery_type"], str)
-        or manifest["delivery_type"] not in {"FULL", "DELTA"}
-    ):
+    if manifest["delivery_type"] not in ("FULL", "DELTA"):
         _invalid("ungültige Lieferart")
-    _optional(manifest["base_tag"], "Basis-Tag", RELEASE_TAG_RE)
     _optional(manifest["base_sha"], "Basis-SHA", FULL_SHA_RE)
     _string(manifest["target_sha"], "Ziel-SHA", pattern=FULL_SHA_RE)
     _optional(manifest["previous_tag"], "Vorgänger-Tag", RELEASE_TAG_RE)
@@ -195,10 +195,10 @@ def _validate_manifest(document: Any) -> Manifest:
         kind = artifact.get("kind")
         expected_keys = _PACKAGE_KEYS if kind == "package" else _ARTIFACT_KEYS
         artifact = _object(artifact, expected_keys, "Artefakt")
-        if kind not in {"package", "information"}:
+        if kind not in ("package", "information"):
             _invalid("ungültige Artefaktart")
-        _artifact_path(artifact["path"])
-        _string(artifact["project"], "Artefaktprojekt", maximum=128)
+        _string(artifact["path"], "Artefaktpfad")
+        _string(artifact["project"], "Artefaktprojekt")
         if type(artifact["size"]) is not int or artifact["size"] < 0:
             _invalid("ungültige Artefaktgröße")
         _string(artifact["sha256"], "Artefaktprüfsumme", pattern=_CHECKSUM_RE)
@@ -210,9 +210,7 @@ def _validate_manifest(document: Any) -> Manifest:
             ):
                 _invalid("ungültiger Projektcode des Pakets")
             if artifact["deletion_list"] is not None:
-                _string(
-                    artifact["deletion_list"], "Löschliste", maximum=128
-                )
+                _string(artifact["deletion_list"], "Löschliste")
             if (
                 type(artifact["deletion_count"]) is not int
                 or artifact["deletion_count"] < 0

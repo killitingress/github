@@ -255,9 +255,8 @@ def build_release(
         direct_changes = diff_name_status(root, previous_sha, target_sha)
     previous_label = previous_tag or LEGACY_NO_PREVIOUS_RELEASE
     artifacts: list[PackageArtifact | InformationArtifact] = []
-    for project in mandant["projects"]:
-        project_name = project["name"]
-        project_path = project["source_path"]
+    for project_name in mandant["projects"]:
+        project_path = project_name
         project_code = project_code_for_name(project_name)
         delivery_code = "F" if delivery_type == "FULL" else "D"
         archive_name = ARCHIVE_NAME_TEMPLATE.format(
@@ -339,7 +338,7 @@ def build_release(
             }
         )
     releaselinie = release_tag[:4]
-    uebergabeprofil = mandant["uebergabeprofile"][uebergabeprofil_name]
+    uebergabeprofil = mandant["hostprofile"][uebergabeprofil_name]
     manifest: Manifest = {
         "repository": repository_name,
         "mandant": mandant["kuerzel"],

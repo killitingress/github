@@ -6,7 +6,7 @@ name: Validate mandant configuration
     branches:
       - '**'
     paths:
-      - config/mandant.json
+      - .config.json
 
 permissions:
   contents: read

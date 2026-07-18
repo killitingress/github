@@ -82,7 +82,7 @@ class UebergabeVertragTests(unittest.TestCase):
         (server_sync / "LOMS_Basis/value.txt").write_text("old", encoding="utf-8")
 
         # Staging und Veröffentlichung ersetzen den vorhandenen Projektstand.
-        projects = [{"name": "LOMS_Basis", "source_path": "LOMS_Basis"}]
+        projects = ["LOMS_Basis"]
         self.assertEqual(stage_resources(source, staging, projects), ["LOMS_Basis"])
         publish_server_sync(staging, server_sync)
         self.assertEqual(

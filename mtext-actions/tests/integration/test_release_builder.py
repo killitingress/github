@@ -83,6 +83,7 @@ class ReleaseBuilderTests(unittest.TestCase):
         self.mandant = load_mandant_config(
             AUTOMATION_ROOT / "tests/fixtures/mandant.json",
             repository_name="mtext-fi",
+            repository_root=self.repository,
         )
         self.releaselinien = load_releaselinien(
             AUTOMATION_ROOT / "config/releaselinien.json"
@@ -190,52 +191,6 @@ class ReleaseBuilderTests(unittest.TestCase):
                 / "_INFO_FI-LOMS_Basis-FULL-R261.100-R001.100.txt"
             ).is_file()
         )
-
-    def test_information_uses_repository_source_path_for_changes(self) -> None:
-        """Ordnet Git-Änderungen über den konfigurierten Repositorypfad zu."""
-
-        repository = self.root / "nested-source"
-        project_root = repository / "sources/LOMS_Basis"
-        project_root.mkdir(parents=True)
-        git(repository, "init", "-b", "R261/Bereitstellung")
-        git(repository, "config", "user.name", "Test")
-        git(repository, "config", "user.email", "test@example.invalid")
-        (project_root / "value.txt").write_text("base\n", encoding="utf-8")
-        git(repository, "add", ".")
-        git(repository, "commit", "-m", "full")
-        git(repository, "tag", "R261.100")
-        (project_root / "value.txt").write_text("changed\n", encoding="utf-8")
-        git(repository, "add", ".")
-        git(repository, "commit", "-m", "delta")
-        git(repository, "tag", "R261.101")
-
-        mandant = {
-            **self.mandant,
-            "projects": [
-                {"name": "LOMS_Basis", "source_path": "sources/LOMS_Basis"}
-            ],
-        }
-        output = self.root / "nested-output"
-        build_release(
-            repository,
-            output,
-            mandant,
-            repository_name="mtext-fi",
-            release_tag="R261.101",
-            uebergabeprofil_name=self.releaselinien["R261"]["uebergabeprofil"],
-            target_sha=resolve_commit(repository, "R261.101"),
-            base_sha=resolve_commit(repository, "R261.100"),
-            previous_tag="R261.100",
-            previous_sha=resolve_commit(repository, "R261.100"),
-        )
-
-        information = (
-            output / "_INFO_FI-LOMS_Basis-DELTA-R261.101-R261.100.txt"
-        ).read_text(encoding="utf-8")
-        self.assertIn(
-            "M       VORRELEASE/sources/LOMS_Basis/value.txt", information
-        )
-
 
 if __name__ == "__main__":
     unittest.main()

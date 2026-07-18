@@ -78,7 +78,7 @@ jobs:
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery build-release
           --repository-root source
-          --mandant-config source/config/mandant.json
+          --mandant-config source/.config.json
           --releaselinien automation/config/releaselinien.json
           --repository-name "$INPUT_REPOSITORY_NAME"
           --tag "$INPUT_RELEASE_TAG"

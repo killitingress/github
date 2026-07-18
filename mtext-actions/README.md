@@ -45,8 +45,9 @@ Workflows deren Argumente.
 ## Zentrale Releaselinienzuordnung
 
 [`config/releaselinien.json`](config/releaselinien.json) enthält je
-Releaselinie genau `mtext_linie` und `uebergabeprofil`. Das Übergabeprofil muss
-in der Mandantenkonfiguration vorhanden sein. Neue Releaselinien werden mit
+Releaselinie genau `mtext_linie` und `uebergabeprofil`. Der dort genannte Name
+muss unter `hostprofile` in der Mandantenkonfiguration vorhanden sein. Neue
+Releaselinien werden mit
 den zugehörigen drei Branches und dem fachlich bestätigten Ausgangsstand
 eingerichtet.
 

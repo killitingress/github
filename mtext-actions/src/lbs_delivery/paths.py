@@ -50,7 +50,7 @@ def resolve_within(
         raise DeliveryError(status, f"Symlinks sind für {subject} nicht erlaubt")
     try:
         resolved = candidate.resolve(strict=strict)
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
         raise DeliveryError(status, f"Pfad für {subject} fehlt") from exc
     # Die Elternprüfung vermeidet Verwechslungen durch lediglich gleichnamige Präfixe.
     if resolved == resolved_root or resolved_root not in resolved.parents:

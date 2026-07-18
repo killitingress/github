@@ -37,7 +37,8 @@ from .resources import publish_server_sync, stage_resources
 def _common_config_arguments(parser: argparse.ArgumentParser) -> None:
     """Ergänzt gemeinsame Pfade und Repository-Angaben eines Subcommands."""
 
-    parser.add_argument("--mandant-config", default="config/mandant.json")
+    parser.add_argument("--mandant-config", default=".config.json")
+    parser.add_argument("--repository-root", default=".")
     parser.add_argument("--releaselinien", required=True)
     parser.add_argument("--repository-name", required=True)
 
@@ -53,7 +54,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     sync = subparsers.add_parser("sync-resources")
     _common_config_arguments(sync)
-    sync.add_argument("--repository-root", default=".")
     sync.add_argument("--commit", required=True)
     sync.add_argument("--source-branch", required=True)
     sync.add_argument("--environment", required=True)
@@ -63,7 +63,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     release = subparsers.add_parser("build-release")
     _common_config_arguments(release)
-    release.add_argument("--repository-root", default=".")
     release.add_argument("--tag", required=True)
     release.add_argument("--trigger-sha", default="")
     release.add_argument("--output", default="dist")
@@ -84,16 +83,17 @@ def _load_configs(arguments: argparse.Namespace) -> tuple[MandantConfig, Release
     mandant = load_mandant_config(
         arguments.mandant_config,
         repository_name=arguments.repository_name,
+        repository_root=arguments.repository_root,
     )
     releaselinien = load_releaselinien(arguments.releaselinien)
-    konfigurierte_profile = mandant["uebergabeprofile"]
+    konfigurierte_profile = mandant["hostprofile"]
     if any(
         item["uebergabeprofil"] not in konfigurierte_profile
         for item in releaselinien.values()
     ):
         raise DeliveryError(
             Status.VALIDATION_FAILED,
-            "Releaselinie verweist auf ein unbekanntes Übergabeprofil",
+            "Releaselinie verweist auf ein unbekanntes Hostprofil",
         )
     return mandant, releaselinien
 

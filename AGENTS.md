@@ -49,7 +49,7 @@
 - Insbesondere heißt es `Releaselinie`, nicht `Release-Line` oder
   `release_line`, und `Mandantenkürzel`, nicht `Mandant-Code`.
 - Die zugehörigen JSON-Felder heißen `kuerzel`, `releaselinie`,
-  `mtext_linie`, `uebergabeprofil` und `uebergabeprofile`. Bei Feldnamen werden
+  `mtext_linie`, `uebergabeprofil` und `hostprofile`. Bei Feldnamen werden
   Umlaute als `ae`, `oe` und `ue` geschrieben.
 - Namen in Code, Fehlermeldungen, Kommentaren und Dokumentation müssen dieselbe
   Fachsprache verwenden. Unveränderliche technische Namen externer Verträge
@@ -89,8 +89,8 @@
 - Jede Formatregel hat genau einen Eigentümer. Andere Module importieren diese
   Regel oder leiten ihre Prüfung daraus ab, statt dieselbe Regel erneut zu
   formulieren.
-- Für Übergabeprofile werden keine erlaubten Profilnamen fest verdrahtet. Die
-  vorhandenen Profile stehen unter `uebergabeprofile`; fachlich erlaubt sind
+- Für Hostprofile werden keine erlaubten Profilnamen fest verdrahtet. Die
+  vorhandenen Profile stehen unter `hostprofile`; fachlich erlaubt sind
   ausschließlich die sechs CodePipeline-Stages `FKTE`, `FKTF`, `JURJ`, `JURP`,
   `SVTS` und `VPTV`.
 

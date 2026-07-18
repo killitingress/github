@@ -3,14 +3,7 @@
     "kuerzel": "FI",
     "repository": "mtext-fi",
     "subsystem": "LOMS",
-    "projects": [
-      {"name": "Configuration", "source_path": "Configuration"},
-      {"name": "Fonts", "source_path": "Fonts"},
-      {"name": "LOMS_Framework", "source_path": "LOMS_Framework"},
-      {"name": "LOMS_Basis", "source_path": "LOMS_Basis"},
-      {"name": "LOMS_PKA", "source_path": "LOMS_PKA"}
-    ],
-    "uebergabeprofile": {
+    "hostprofile": {
       "FKT": {"assignment": "LOMS000066", "stage": "FKTE"},
       "JUR": {"assignment": "LOMS000067", "stage": "JURP"}
     }
