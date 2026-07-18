@@ -12,6 +12,8 @@ from .errors import DeliveryError, Status
 
 # Vorhandene Mandantenkürzel bestimmen Dateinamen und Mainframe-Member.
 MANDANTEN_KUERZEL = {"FI", "BY", "LH", "NW", "OS", "SA", "IT"}
+# ISPW-Instanz des Mandanten: T für Test, P für Produktion; steuert JCL und Mainframe-Ziel.
+ISPW_INSTANZEN = {"T", "P"}
 # Ausschließlich diese produktiv vorhandenen CodePipeline-Stages sind erlaubt.
 CODEPIPELINE_STAGES = {"FKTE", "FKTF", "JURJ", "JURP", "SVTS", "VPTV"}
 # Historisch festgelegte Liefercodes bilden Projektname auf Archiv und Member ab.
@@ -115,7 +117,7 @@ def load_configuration(
         )
     if not isinstance(subsystem, str) or not subsystem:
         raise DeliveryError(Status.VALIDATION_FAILED, "Subsystem fehlt")
-    if not isinstance(ispw, str) or ispw not in {"T", "P"}:
+    if not isinstance(ispw, str) or ispw not in ISPW_INSTANZEN:
         raise DeliveryError(Status.VALIDATION_FAILED, "ISPW-Instanz ist ungültig")
     if not isinstance(excluded, list) or not all(
         isinstance(item, str) for item in excluded
