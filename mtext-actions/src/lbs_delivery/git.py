@@ -62,18 +62,20 @@ def resolve(repository: str | Path, reference: str) -> str:
     return value
 
 
+def require_ancestor(
+    repository: str | Path, ancestor: str, descendant: str
+) -> None:
+    """Prüft die für Branch- und Releasebezüge erforderliche Git-Abstammung."""
+
+    _git(repository, "merge-base", "--is-ancestor", ancestor, descendant)
+
+
 def require_checkout(repository: str | Path, commit: str, branch: str) -> None:
     """Prüft Commitformat, Checkout und Erreichbarkeit vom Zielbranch."""
 
     if FULL_SHA_RE.fullmatch(commit) is None or resolve(repository, "HEAD") != commit:
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Commit")
-    _git(
-        repository,
-        "merge-base",
-        "--is-ancestor",
-        commit,
-        f"refs/remotes/origin/{branch}",
-    )
+    require_ancestor(repository, commit, f"refs/remotes/origin/{branch}")
 
 
 def require_release_tag(repository: str | Path, tag: str, branch: str) -> str:
@@ -84,13 +86,7 @@ def require_release_tag(repository: str | Path, tag: str, branch: str) -> str:
     target = resolve(repository, f"refs/tags/{tag}")
     if resolve(repository, "HEAD") != target:
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Tag")
-    _git(
-        repository,
-        "merge-base",
-        "--is-ancestor",
-        target,
-        f"refs/remotes/origin/{branch}",
-    )
+    require_ancestor(repository, target, f"refs/remotes/origin/{branch}")
     return target
 
 

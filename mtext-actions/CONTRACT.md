@@ -7,8 +7,11 @@ Kompatibilitätsregeln aus dem nur als Referenz gelesenen Jenkins-Hook
 
 ## Konfiguration
 
-- Ein Mandanten-Repository besitzt ein bekanntes Mandantenkürzel, ein
-  Mainframe-Subsystem und mindestens ein Hostprofil.
+- Ein Mandanten-Repository besitzt ein bekanntes Mandantenkürzel, eine
+  ISPW-Instanz `T` oder `P`, ein Mainframe-Subsystem und mindestens ein
+  Hostprofil.
+- Mandanten-, Hostprofil- und Releaselinienkonfiguration enthalten nur die
+  festgelegten Felder.
 - Sichtbare Projektverzeichnisse bilden den Lieferumfang; ausdrücklich
   ausgeschlossene Verzeichnisse werden ignoriert.
 - Jedes Projekt muss einem historisch festgelegten Liefercode zugeordnet sein.
@@ -26,8 +29,14 @@ Kompatibilitätsregeln aus dem nur als Referenz gelesenen Jenkins-Hook
 
 - Ein Tag mit Endung `.100` erzeugt FULL, jeder weitere Tag der Releaselinie
   ein kumulatives DELTA gegen `.100`.
+- Die `.100`-Basis eines DELTA ist ein Vorgänger des Ziel-Tags in der
+  Git-Historie.
 - Der Tag muss vom Bereitstellungsbranch erreichbar sein und dem Checkout
   entsprechen.
+- Bis zur Freigabe des Publish-Jobs im Environment `Bereitstellung` kann das
+  Release-Team einen irrtümlichen Tag nach Abbruch des zugehörigen Laufs
+  löschen und neu anlegen. Die Freigabe bindet Tagname und Ziel-Commit; danach
+  ist diese Release-Identität unveränderlich.
 - Archivnamen, Mainframe-Member, Löschlisten und Informationsdateien folgen dem
   bestehenden Jenkins-Vertrag.
 - Erkannte Dateikopien werden wie Hinzufügungen behandelt; Umbenennungen als

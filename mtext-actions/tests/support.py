@@ -33,6 +33,7 @@ def write_mandant(path: Path, **overrides: object) -> None:
     mandant: dict[str, object] = {
         "kuerzel": "FI",
         "repository": "mtext-fi",
+        "ispw": "P",
         "subsystem": "LOMS",
         "hostprofile": {
             "FKT": {"assignment": "LOMS000066", "stage": "FKTE"},

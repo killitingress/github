@@ -24,7 +24,7 @@ verlinkten Dokumenten.
 | bestätigt | Zentrale Implementierung gegen den fachlichen Vertrag prüfen | Die vier CLI-Kommandos, FULL und DELTA, Artefaktprüfung, JCL, FTP-/JES-Vertrag, Ressourcensynchronisation und Workflowgrenzen sind durch Akzeptanztests abgedeckt |
 | offen | Branches der aktiven Stages und Default Branch einrichten | Für `R260`, `R261` und `R270` bestehen jeweils Branches der Stages `Entwicklung`, `Abnahme` und `Bereitstellung`. Zunächst ist `R261/Entwicklung` der Default Branch |
 | offen | Zentrale Workflowversion pinnen und repositoryübergreifenden Actions-Zugriff freigeben | Alle aufrufenden Workflows verwenden denselben freigegebenen Commit-SHA. Nur vorgesehene Mandanten-Repositories rufen `mtext-actions` auf |
-| offen | Zentralen Checkout und mandantensichtbare Logs praktisch prüfen | Ein Testlauf funktioniert über beide Namespaces und zeigt keine Secrets oder unnötigen internen Details. Falls nötig, wird ein Installation-Token sicher in den Workflowvertrag aufgenommen |
+| offen | Zentralen Codebezug und mandantensichtbare Logs praktisch prüfen | Die ausgeführte Python-Anwendung stammt unveränderlich aus derselben freigegebenen Version wie der aufgerufene zentrale Workflow. Der Aufrufer kann kein anderes Automations-Repository, keine andere Version und keine andere Runnerklasse wählen. Ein Testlauf funktioniert über beide Namespaces und zeigt keine Secrets oder unnötigen internen Details. Falls nötig, wird ein kurzlebiges Installation-Token mit reinen Leserechten sicher in den Workflowvertrag aufgenommen |
 | offen | Git-Clients für Ressourcenarbeit und die Weitergabe zwischen den Stages abnehmen | M/Text Workbench unterstützt Authentifizierung, Branchwechsel, Commit und Push. Ein zusätzlicher Git-Client unterstützt den dokumentierten Cherry-Pick-Ablauf |
 | bestätigt | GitHub-Plattform festhalten | GitHub Enterprise Server 3.20.4 |
 
@@ -34,16 +34,17 @@ verlinkten Dokumenten.
 |---|---|---|
 | offen | Mandantenspezifische Verantwortliche benennen | Team für Ressourcenarbeit, technischer Konfigurationskreis und kleines Release-Team sind festgelegt |
 | offen | Branchschutz für die drei Stages einrichten | Berechtigte Text-Entwickler dürfen nach Entwicklung und Abnahme pushen. Bereitstellung ist auf das Release-Team begrenzt. Löschen und Force-Pushes sind gesperrt |
-| offen | Zentrale Aufrufdateien und `.config.json` schützen | Normale Ressourcen-Pushes können weder `.github/workflows/**/*` noch die Mandantenkonfiguration verändern. Notwendige Bypässe sind eng begrenzt |
+| offen | Zentrale Aufrufdateien und `.config.json` schützen | Normale Ressourcen-Pushes können weder `.github/workflows/**/*` noch die Mandantenkonfiguration verändern. Notwendige Bypässe sind eng begrenzt. Die GitHub-Actions-Richtlinie verlangt vollständige Commit-SHAs für Actions und wiederverwendbare Workflows |
 | offen | GitHub Environments konfigurieren | `Entwicklung`, `Abnahme` und `Bereitstellung` sind angelegt. Nur die Mainframe-Übergabe in `Bereitstellung` braucht eine manuelle Freigabe. Die Branchmuster sind eingetragen |
-| offen | Release-Tags schützen | Nur das Release-Team darf Tags nach dem Muster `R[0-9][0-9][0-9].[0-9][0-9][0-9]` erstellen. Ändern und Löschen sind gesperrt |
-| offen | Cherry-Pick und Release-Tag praktisch abnehmen | Auswahl nach SHA, Konfliktbehandlung und Push auf den Zielbranch sind dokumentiert. Ein nichtproduktiver Tag startet genau einen Release-Workflow |
+| offen | Lebenszyklus und Schutz der Release-Tags einrichten | Nur das Release-Team darf Tags nach dem Muster `R[0-9][0-9][0-9].[0-9][0-9][0-9]` erstellen oder löschen. Vor der Freigabe kann es einen irrtümlichen Tag nach Abbruch des zugehörigen Laufs löschen und neu anlegen. Die Freigabe bindet Tagname und Ziel-Commit; danach sind Änderung und Löschung gesperrt. Da ein statisches Tag-Ruleset diesen Zustandswechsel nicht allein abbildet, wird eine technische Sperre oder eine revisionssicher überwachte Betriebsregel festgelegt |
+| offen | Cherry-Pick und Release-Tag praktisch abnehmen | Auswahl nach SHA, Konfliktbehandlung und Push auf den Zielbranch sind dokumentiert. Ein nichtproduktiver Tag startet genau einen Release-Workflow. Der Test weist nach, dass ein irrtümlicher Tag vor der Freigabe kontrolliert zurückgenommen werden kann und die festgelegte Schutzregel nach der Freigabe greift |
 
 ## 3. Runner und technische Abhängigkeiten bereitstellen
 
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
 | offen | Self-hosted Runner und Laufzeit bereitstellen | Labels `self-hosted`, `linux`, `mtext-delivery`, Python 3.14, Git und die Ausführung von Node-20-Actions sind bestätigt. `scripts/runner-preflight.sh` ist erfolgreich |
+| offen | Runnerzugriff und Lebenszyklus absichern | CI-Läufe sind von Runnern mit Zugriff auf M/Text und Mainframe getrennt. Runner-Gruppen erlauben nur die vorgesehenen Repositories und Workflows. Bereinigung oder Neuaufbau nach einem Job sowie Protokollaufbewahrung sind festgelegt und praktisch geprüft |
 | offen | GHES-Artefakt-Actions prüfen | Die in den Workflows gepinnten Node-20-Varianten von `upload-artifact` v3.2.2 und `download-artifact` v3.1.0 sind auf GHES 3.20.4 verfügbar. Version 4 wird nicht verwendet |
 | offen | Zertifikate und Netzwerkpfade prüfen | Die interne CA ist im Truststore. Der Runner erreicht die gewählten M/Text-Ziele sowie Mainframe-FTP und JES, ohne die TLS-Prüfung zu deaktivieren |
 
@@ -55,6 +56,7 @@ verlinkten Dokumenten.
 | bestätigt | Heutigen Adaptervertrag als Ausgangslage festhalten | Der bestehende Ablauf schreibt zuerst nach `serverSync` und sendet danach einen POST mit `MAN` und `INR`. Dies legt den künftigen Transport noch nicht fest |
 | offen | Transportweg nach `serverSync` entscheiden und Zielvertrag festschreiben | Genau eine der im [Zielbild](./Zielbild_GitHub_Actions_Git.md#4-zielarchitektur-und-verantwortlichkeiten) beschriebenen Varianten wird ausgewählt: PUT an den Adapter, Sharezugriff des Runners oder Download eines Actions-Artefakts durch Adapter beziehungsweise M/Text. Verantwortlichkeiten, Authentifizierung, Prüfung und Wiederanlauf sind geklärt |
 | offen | Kompatibilität des gewählten Transports nachweisen | Auf `serverSync` liegen dieselben Dateien und Verzeichnisse wie im bisherigen Verfahren. Transportdateien und Metadaten bleiben nicht im ausgewerteten Bestand |
+| offen | Fehler- und Wiederanlaufverhalten des Zielstands abnehmen | Ein Abbruch zwischen zwei Projektersetzungen ruft den Adapter nicht auf. Ein Wiederanlauf stellt den vollständigen Commit her. Entfernte oder neu ausgeschlossene Projekte bleiben nicht als veralteter Bestand unter `serverSync` liegen |
 | offen | Config-Check und Synchronisation nichtproduktiv prüfen | Der Config-Check liefert `CONFIG_VALIDATED`. Ein vollständiger Projektstand wird erfolgreich über den gewählten Transport bereitgestellt und der Wiederanlauf ist geprüft |
 
 ## 5. Mainframe-Übergabe einrichten und abnehmen
@@ -62,8 +64,8 @@ verlinkten Dokumenten.
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
 | offen | FTP-Secrets im GitHub Environment `Bereitstellung` hinterlegen | `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER` und `MAINFRAME_FTP_PASSWORD` sind verfügbar |
-| bestätigt | Historischen JCL-Eingabevertrag fachlich bestätigen | Der mandantenspezifische Zielcode wird wie bisher über genau einen vorhandenen JCL-Platzhalter eingesetzt. Der zentrale Test-/Produktionswert ist auf `T` und `P` begrenzt |
-| offen | JCL und unmittelbare Übergabe nichtproduktiv prüfen | FTP-Antworten, `SITE FILETYPE=JES`, Submit, gerendertes JCL und Wiederholung mit demselben geprüften Artefakt sind abgenommen |
+| bestätigt | Historischen JCL-Eingabevertrag fachlich bestätigen | Der mandantenspezifische Zielcode wird wie bisher über genau einen vorhandenen JCL-Platzhalter eingesetzt. Die Mandantenkonfiguration enthält die ISPW-Instanz und begrenzt sie auf `T` oder `P` |
+| offen | JCL und unmittelbare Übergabe nichtproduktiv prüfen | Die konfigurierte ISPW-Instanz wird korrekt in Dataset und Programmaufruf eingesetzt. FTP-Antworten, `SITE FILETYPE=JES`, Submit, gerendertes JCL und Wiederholung mit demselben geprüften Artefakt sind abgenommen |
 
 ## 6. Test-Parallelbetrieb vorbereiten
 

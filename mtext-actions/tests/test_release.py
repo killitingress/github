@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lbs_delivery.errors import DeliveryError
+from lbs_delivery.errors import DeliveryError, Status
 from lbs_delivery.mainframe import publish_mainframe
 from lbs_delivery.manifest import load_and_verify, sha256_file
 from lbs_delivery.release import build_release
@@ -121,6 +121,58 @@ class ReleaseTests(unittest.TestCase):
         (output / "FIBASISD.tgz").write_bytes(b"tampered")
         with self.assertRaises(DeliveryError):
             load_and_verify(manifest_path, output)
+
+    def test_release_uses_mandant_ispw_instance(self) -> None:
+        """Übernimmt die konfigurierte Testinstanz in Manifest und JCL."""
+
+        configuration = load_test_configuration(
+            self.root,
+            self.repository,
+            mandant={"ispw": "T"},
+        )
+        output = self.root / "test-instance"
+        manifest_path = build_release(
+            configuration,
+            repository_root=self.repository,
+            output_directory=output,
+            repository_name="mtext-fi",
+            tag="R261.108",
+            trigger_sha=git(self.repository, "rev-parse", "HEAD"),
+        )
+        manifest, _packages = load_and_verify(manifest_path, output)
+        self.assertEqual(manifest["jcl"]["ISPW"], "T")
+
+        publish_mainframe(
+            manifest_path=manifest_path,
+            artifact_root=output,
+            template_path=AUTOMATION_ROOT / "templates/mainframe-upload.jcl",
+            temporary_directory=self.root / "test-jcl",
+            execute=False,
+        )
+        rendered = (self.root / "test-jcl/FIBASISD.jcl").read_text(
+            encoding="ascii"
+        )
+        self.assertIn("DSN=IEA.ISPWT.BOAS.FKTE.TONICZ", rendered)
+        self.assertIn("PARM='ISPT/WZZECIJ'", rendered)
+
+    def test_delta_rejects_base_outside_target_history(self) -> None:
+        """Lehnt eine `.100`-Basis außerhalb der Historie des Ziel-Tags ab."""
+
+        git(self.repository, "checkout", "--orphan", "unrelated")
+        git(self.repository, "commit", "--allow-empty", "-m", "unrelated")
+        git(self.repository, "tag", "--force", "R261.100")
+        git(self.repository, "checkout", "--detach", "R261.108")
+
+        with self.assertRaises(DeliveryError) as context:
+            build_release(
+                self.configuration,
+                repository_root=self.repository,
+                output_directory=self.root / "invalid-base",
+                repository_name="mtext-fi",
+                tag="R261.108",
+                trigger_sha=git(self.repository, "rev-parse", "HEAD"),
+            )
+        self.assertEqual(context.exception.status, Status.SOURCE_FAILED)
 
 
 if __name__ == "__main__":

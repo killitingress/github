@@ -64,12 +64,16 @@ Bereitstellungsbranches:
 
 Der Release-Workflow prüft den Tag, baut die Lieferdateien und wartet vor der
 Mainframe-Übergabe auf die Freigabe im GitHub Environment `Bereitstellung`.
-Bestehende Release-Tags dürfen nicht verändert oder gelöscht werden.
+Bis zu dieser Freigabe kann das Release-Team einen irrtümlich angelegten Tag
+nach Abbruch des zugehörigen Workflow-Laufs löschen und bei Bedarf neu
+anlegen. Mit der Freigabe werden Tagname und Ziel-Commit zur unveränderlichen
+Release-Identität; danach darf der Tag weder verschoben noch gelöscht werden.
 
 ## Mandantenkonfiguration
 
 [`.config.json`](.config.json) legt das Mandantenkürzel, das Repository, das
-Mainframe-Subsystem, die Hostprofile und optionale Projektausschlüsse fest.
+Mainframe-Subsystem, die ISPW-Instanz `T` oder `P`, die Hostprofile und
+optionale Projektausschlüsse fest.
 Alle anderen sichtbaren Verzeichnisse in der Repositorywurzel werden als
 Projekte verarbeitet. Änderungen werden mit den benannten Mandanten- und
 Betriebsverantwortlichen abgestimmt. Ein Push der Datei startet den

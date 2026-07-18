@@ -16,18 +16,16 @@ FULL- oder DELTA-Lieferung mit anschließender Mainframe-Übergabe an IZE9.
 Technische Einrichtung und Cutover beschreibt
 [Nächste Schritte](./Naechste_Schritte.md).
 
-Die konkrete Benutzerverwaltung erfolgt je Mandanten-Repository. Für
+Die konkrete Benutzerverwaltung erfolgt je Mandanten-Repository. Für die
 `Bereitstellung` und das Setzen von Release-Tags benennt jeder Mandant einen
-kleinen Kreis von Release-Verantwortlichen. Andere Text-Entwickler können
-diese Schritte nur ausführen, wenn sie diesem Kreis angehören.
+kleinen Kreis von Release-Verantwortlichen.
 
 ## 2. Begriffe und Namensregeln
 
 Eine **Stage** ist in dieser Anleitung ein Abschnitt des Freigabe- und
 Lieferprozesses. Die drei Prozess-Stages heißen `Entwicklung`, `Abnahme` und
 `Bereitstellung`. Jede Releaselinie besitzt einen eigenen Branch für jede
-dieser Stages. Der später beschriebene JCL-Stage-Code wie `FKTE` oder `JURP`
-bezeichnet dagegen das CodePipeline-`LEVEL` und ist davon unabhängig.
+dieser Stages.
 
 | Element | Verbindliches Format | Beispiel |
 |---|---|---|
@@ -37,6 +35,8 @@ bezeichnet dagegen das CodePipeline-`LEVEL` und ist davon unabhängig.
 
 Groß-/Kleinschreibung der Stage-Namen ist verbindlich. Aktive Linien sind
 `R260`, `R261` und `R270`.
+
+## 3. Grundlagen zu Git
 
 ### Unterschied zwischen SVN und Git einfach erklärt
 
@@ -103,37 +103,6 @@ Ein **Pull** holt den GitHub-Stand und integriert ihn anschließend. Je nach
 Git-Client geschieht dies durch Merge oder Rebase. Der verbindliche Bedienweg
 und die zu verwendende Pull-Variante werden deshalb zusammen mit dem
 zusätzlichen Git-Client festgelegt und praktisch geprüft.
-
-### M/Text Workbench und GitHub
-
-Die tägliche Bearbeitung findet in der **M/Text Workbench** statt. Ihr
-integrierter Git-Client wird verwendet, um geänderte Briefressourcen zu prüfen,
-zu committen und auf den vorgesehenen Entwicklungsbranch zu pushen. Für diese
-normale Ressourcenarbeit benötigen Text-Entwickler weder die Git-Kommandozeile
-noch die erweiterten Verwaltungsfunktionen von GitHub. Einen direkten Zugriff
-auf das zentrale Automatisierungs-Repository `mtext-actions` benötigen und
-erhalten sie nicht.
-
-Für die gezielte Weitergabe einzelner Änderungen zwischen den Stages reicht
-der integrierte Git-Client der M/Text Workbench nach heutigem Kenntnisstand
-nicht aus. Die dafür berechtigten Text-Entwickler erhalten zusätzlich einen
-geeigneten Git-Client. Welches Produkt eingesetzt wird und wie Installation,
-Authentifizierung und Bedienung erfolgen, wird vor dem Pilotbetrieb festgelegt
-und praktisch abgenommen.
-
-**GitHub im Browser** wird für die darüber hinausgehenden Prozessschritte
-verwendet. Dazu gehören insbesondere:
-
-- ausgelöste Workflow-Läufe und ihre Protokolle kontrollieren,
-- fehlgeschlagene oder ausdrücklich manuell durchgeführte Läufe wiederholen,
-- Freigaben im Environment `Bereitstellung` erteilen,
-- durch das Mandanten-Release-Team einen Release-Tag anlegen,
-- Branch-, Tag- und Berechtigungsregeln administrieren.
-
-Die Weitergabe ausgewählter Stände nach Abnahme und Bereitstellung ist keine
-alltägliche Ressourcenbearbeitung. Der dafür verwendete Bedienweg im
-zusätzlichen Git-Client und die berechtigten Verantwortlichen werden vor dem
-Pilotbetrieb verbindlich festgelegt.
 
 ### Feature-Branch einfach erklärt
 
@@ -240,7 +209,125 @@ Konflikt, wird nicht einfach weitergepusht: Die Abweichung muss fachlich
 geklärt, die Konfliktauflösung geprüft und erst danach committed und gepusht
 werden. Force-Pushes bleiben verboten.
 
-### Was ist `.config.json`?
+## 4. Git-Anwendungen bedienen
+
+Für den Gesamtprozess werden drei Anwendungen mit klar getrennten Aufgaben
+verwendet:
+
+| Anwendung | Aufgabe | Benutzerkreis |
+|---|---|---|
+| M/Text Workbench mit integriertem Git-Client | Briefressourcen bearbeiten, Änderungen prüfen, committen und nach Entwicklung pushen | Text-Entwickler |
+| Zusätzlicher Git-Client | Ausgewählte Commits per Cherry-Pick nach Abnahme und Bereitstellung weitergeben | dafür berechtigte Text-Entwickler und Mandanten-Release-Team |
+| GitHub im Browser | Commits und Läufe prüfen, manuelle Läufe starten, Freigaben erteilen und Release-Tags verwalten | Text-Entwickler sowie die jeweils berechtigten Verantwortlichen |
+
+Für die normale Ressourcenarbeit ist keine Git-Kommandozeile erforderlich.
+Einen direkten Zugriff auf das zentrale Automatisierungs-Repository
+`mtext-actions` benötigen und erhalten Mandantenbenutzer nicht.
+
+### M/Text Workbench mit integriertem Git-Client
+
+Die tägliche Bearbeitung findet in der M/Text Workbench statt. Vor der ersten
+produktiven Verwendung werden Anmeldung, Repositorybezug und die verfügbaren
+Git-Funktionen mit der eingesetzten Workbench-Version praktisch abgenommen.
+
+Der verbindliche Standardablauf ist:
+
+1. Das richtige Mandanten-Repository öffnen und die Verbindung zu GitHub
+   prüfen.
+2. Den Entwicklungsbranch der vorgesehenen Releaselinie auswählen und vor der
+   Bearbeitung auf den aktuellen GitHub-Stand bringen.
+3. Die Briefressourcen in der M/Text Workbench bearbeiten und fachlich prüfen.
+4. Im integrierten Git-Client die geänderten Dateien kontrollieren. Dateien
+   unter `.github/workflows/` und `.config.json` gehören nicht zu einer
+   normalen Ressourcenänderung.
+5. Nur die zusammengehörigen Änderungen für den Commit auswählen und eine
+   aussagekräftige Commit-Nachricht eintragen.
+6. Commit und Push auf den vorgesehenen Entwicklungsbranch ausführen.
+7. Wird der Push abgelehnt, keinen Force-Push verwenden. Zuerst den aktuellen
+   GitHub-Stand laden und die Abweichung nach dem freigegebenen Bedienweg
+   auflösen.
+8. Den durch den Push ausgelösten Lauf in GitHub kontrollieren.
+
+Ein Feature-Branch kann verwendet werden, wenn dieser Ablauf in der
+eingesetzten Workbench freigegeben ist. Die Übernahme des fertigen Commits nach
+`Rnnn/Entwicklung` muss ebenfalls mit dem praktisch abgenommenen Bedienweg
+erfolgen.
+
+### Zusätzlicher Git-Client
+
+Der zusätzliche Git-Client wird für die gezielte Weitergabe zwischen den
+Branches verwendet. Das konkrete Produkt, seine Installation, Authentifizierung
+und die darin verwendeten Bezeichnungen werden vor dem Pilotbetrieb festgelegt
+und praktisch abgenommen. Der Client muss den folgenden Ablauf vollständig
+unterstützen:
+
+| Quellbranch | Zielbranch | Verantwortlich |
+|---|---|---|
+| `Rnnn/Entwicklung` | `Rnnn/Abnahme` | dafür berechtigte Text-Entwickler |
+| `Rnnn/Abnahme` | `Rnnn/Bereitstellung` | Mandanten-Release-Team |
+
+Der verbindliche Standardablauf ist:
+
+1. Das richtige Mandanten-Repository öffnen und die neuesten GitHub-Stände
+   abrufen.
+2. Den Zielbranch auschecken und vor dem Cherry-Pick aktualisieren.
+3. Den fachlich freigegebenen Quell-Commit anhand seiner vollständigen SHA
+   auswählen.
+4. Den Commit per Cherry-Pick übernehmen. Die vollständige Quell-SHA muss mit
+   `cherry-pick -x` oder einer gleichwertigen festen Zeile in der neuen
+   Commit-Nachricht dokumentiert werden.
+5. Abhängige Commits in ihrer ursprünglichen Reihenfolge übernehmen.
+6. Bei einem Konflikt nicht pushen. Den Cherry-Pick entweder vollständig
+   abbrechen oder die Abweichung fachlich klären, kontrolliert auflösen und das
+   Ergebnis erneut prüfen.
+7. Geänderte Dateien, Ziel-Commit und dokumentierte Quell-SHA kontrollieren.
+8. Den Zielbranch ohne Force-Push nach GitHub pushen und dort den entstandenen
+   Commit prüfen.
+
+### GitHub im Browser
+
+GitHub im Browser dient der Kontrolle und den Prozessschritten, die nicht in
+den lokalen Git-Clients stattfinden.
+
+#### Commit und Workflow-Lauf prüfen
+
+1. Das Mandanten-Repository und dort **Actions** öffnen.
+2. Den zum Prozessschritt gehörenden Workflow und den ausgelösten Lauf
+   auswählen.
+3. Branch oder Tag, Commit-SHA und Auslöser mit dem erwarteten Stand
+   vergleichen.
+4. Die Jobs und ihre Protokolle öffnen und den abschließenden Status prüfen.
+5. Bei einem Fehler zuerst die früheste fachliche Fehlermeldung auswerten und
+   keine Zugangsdaten oder andere vertrauliche Werte in Kommentare übernehmen.
+
+#### Lauf abbrechen, wiederholen oder manuell starten
+
+- Ein offensichtlich falscher Lauf wird vor einer externen Wirkung
+  abgebrochen.
+- **Re-run jobs** wiederholt einen vorhandenen Lauf mit demselben Commit und
+  derselben Git-Referenz.
+- **Run workflow** startet einen neuen kontrollierten Lauf mit den in Kapitel
+  11 beschriebenen Eingaben.
+- Vor jeder Wiederholung wird geprüft, ob das Zielsystem den vorherigen Lauf
+  bereits angenommen hat.
+
+#### Mainframe-Übergabe freigeben
+
+1. Im Release-Lauf prüfen, dass der Build-Job erfolgreich war und Tag,
+   Ziel-Commit sowie Artefakt zum freizugebenden Stand gehören.
+2. Die ausstehende Freigabe für das Environment `Bereitstellung` öffnen.
+3. Bei einer Abweichung nicht freigeben, sondern den Lauf abbrechen und den
+   Fehler klären.
+4. Nur den vollständig geprüften Stand freigeben und anschließend den
+   Publish-Job bis zum Abschluss kontrollieren.
+
+Das Anlegen und die kontrollierte Rücknahme eines Release-Tags sind in Kapitel
+10 beschrieben. Änderungen an Repositoryrechten, Rulesets, Environments oder
+Secrets gehören nicht zur normalen Benutzerarbeit. Der verbindliche
+Zielzustand steht im [Zielbild](./Zielbild_GitHub_Actions_Git.md#6-github-konfiguration),
+Einrichtung und Abnahme in [Nächste Schritte](./Naechste_Schritte.md).
+
+## 5. Mandantenkonfiguration in `.config.json`
 
 Die Datei `.config.json` liegt in der Wurzel des Mandanten-Repositorys und
 gehört wie die M/Text-Ressourcen zum versionierten Lieferstand. Sie beantwortet
@@ -251,9 +338,9 @@ drei Fragen:
 3. Welche mandantenspezifischen technischen Zuordnungen gelten für die
    nachgelagerte Übergabe?
 
-Die Datei enthält keine Passwörter, Ziel-URLs oder frei wählbaren
-Release-Einstellungen. Diese Werte werden zentral oder in geschützten
-GitHub-Einstellungen verwaltet.
+Die Datei enthält keine Passwörter oder Ziel-URLs. Technische Übergabewerte
+sind auf die nachfolgend beschriebenen Felder beschränkt. Zugangsdaten werden
+in geschützten GitHub-Einstellungen verwaltet.
 
 #### Mandantenidentität
 
@@ -294,13 +381,14 @@ und keine Sonderkonfiguration.
 
 #### Mandantenspezifische Werte für die technische Übergabe
 
-Gemeint sind insbesondere Subsystem, Assignment und der JCL-Stage-Code, der
-das CodePipeline-`LEVEL` bezeichnet. Diese Werte sind für den Mandanten
-relevant, werden in `.config.json`
-verständlich beschrieben und können bei einer tatsächlichen Änderung der
-Zuordnung angepasst werden. Das FI-Beispiel lautet:
+Gemeint sind insbesondere ISPW-Instanz, Subsystem, Assignment und der
+JCL-Stage-Code, der das CodePipeline-`LEVEL` bezeichnet. Diese Werte sind für
+den Mandanten relevant, werden in `.config.json` verständlich beschrieben und
+können bei einer tatsächlichen Änderung der Zuordnung angepasst werden. Das
+FI-Beispiel lautet:
 
 ```json
+"ispw": "P",
 "subsystem": "LOMS",
 "hostprofile": {
   "FKT": {
@@ -316,6 +404,7 @@ Zuordnung angepasst werden. Das FI-Beispiel lautet:
 
 | Feld | Bedeutung | Verwendung in der versionierten JCL |
 |---|---|---|
+| `ispw` | ISPW-Instanz des Mandanten: `T` für Test oder `P` für Produktion | wird als `ISPW` unter anderem in Datasetnamen und im Aufruf von `WZZRCJOB` eingesetzt |
 | `subsystem` | Subsystem des Mandanten, für FI beispielsweise `LOMS` | wird als `SUBSYS` eingesetzt und dort für `APPLID` und `SUBAPPL` verwendet |
 | `assignment` | Assignment des Mandanten für das jeweilige Hostprofil | wird als `ASSIGNMENT` eingesetzt und dort für `PROJNO` verwendet |
 | `stage` | JCL-Stage-Code für das CodePipeline-`LEVEL`, beispielsweise `FKTE` oder `JURP` | wird in den `LEVEL`-Platzhalter eingesetzt und dort unter anderem für `CLVL` und `SLVL` verwendet |
@@ -329,19 +418,19 @@ pflegt innerhalb beider Profile seine jeweils gültige Kombination aus
 Assignment und Stage-Code.
 
 Als Stage-Codes akzeptiert die Konfiguration ausschließlich `FKTE`,
-`FKTF`, `JURJ`, `JURP`, `SVTS` und `VPTV`. Der getrennte Wert für Test oder
-Produktion gehört nicht zur Mandantenkonfiguration. Für die Übergabe wird
-zentral `P` verwendet. Zugangsdaten gehören ebenfalls
-nicht in `.config.json`.
+`FKTF`, `JURJ`, `JURP`, `SVTS` und `VPTV`. Das davon getrennte Feld `ispw`
+ist für jeden Mandanten verpflichtend und akzeptiert ausschließlich `T` für
+Test oder `P` für Produktion. Zugangsdaten gehören weiterhin nicht in
+`.config.json`.
 
-Eine Änderung an `subsystem`, `assignment` oder `stage` verändert die spätere
-technische Übergabe. Sie ist deshalb keine gewöhnliche Änderung an einer
-Briefressource, aber ausdrücklich zulässig, wenn sich die fachlich bestätigte
-Mandantenzuordnung ändert. Die Änderung erfolgt versioniert durch den dafür
-berechtigten Verantwortlichenkreis und wird mit den Mandanten- und
+Eine Änderung an `ispw`, `subsystem`, `assignment` oder `stage` verändert die
+spätere technische Übergabe. Sie ist deshalb keine gewöhnliche Änderung an
+einer Briefressource, aber ausdrücklich zulässig, wenn sich die fachlich
+bestätigte Mandantenzuordnung ändert. Die Änderung erfolgt versioniert durch
+den dafür berechtigten Verantwortlichenkreis und wird mit den Mandanten- und
 Betriebsverantwortlichen abgestimmt. Normale Workbench-Pushes dürfen
-`.config.json` nicht verändern. GitHub schützt die Datei mit einer
-eigenen Pfadregel.
+`.config.json` nicht verändern. GitHub schützt die Datei mit einer eigenen
+Pfadregel.
 
 Ein Push mit einer Änderung an `.config.json` startet automatisch
 **Validate mandant configuration**. Dieser Check prüft die Datei ohne Zugriff
@@ -354,7 +443,7 @@ wurden. Der Status ersetzt deshalb keine fachliche Freigabe und ist kein
 technisches Gate. Synchronisation und Release laden dieselbe Konfiguration auf
 ihrem tatsächlichen Ausführungspfad.
 
-## 3. Neue Releaselinie einrichten
+## 6. Neue Releaselinie einrichten
 
 Für jede neue Linie werden drei Branches im Format `Rnnn/Entwicklung`,
 `Rnnn/Abnahme` und `Rnnn/Bereitstellung` angelegt. Ausgangspunkt ist der
@@ -362,8 +451,8 @@ fachlich bestätigte letzte Release-Tag der bisherigen Linie.
 
 Das zentrale Automatisierungsteam ergänzt in `config/releaselinien.json` genau
 eine Zuordnung aus neuer Releaselinie, technischer M/Text-Linie und vorhandenem
-Übergabeprofil. Die Felder heißen `mtext_linie` und `uebergabeprofil`. Der
-Profilname muss unter `hostprofile` in `.config.json` vorhanden sein.
+Hostprofil. Die Felder heißen `mtext_linie` und `hostprofil`. Der Profilname
+muss unter `hostprofile` in `.config.json` vorhanden sein.
 Stage-Namen, JCL-Parameter, URL-Aufbau, serverSync-Pfad und Tagformat bleiben
 unverändert.
 
@@ -373,7 +462,7 @@ Anschließend wird der vollständige Projektstand über den manuellen Workflow
 passende neue Branch der Stage. `ADAPTER_ACCEPTED` ersetzt nicht den fachlichen
 Smoke-Test in M/Text.
 
-## 4. Änderung nach Entwicklung bringen
+## 7. Änderung nach Entwicklung bringen
 
 1. In der M/Text Workbench prüfen, dass der aktuelle
    `<Releaselinie>/Entwicklung` geöffnet ist. Für länger laufende oder
@@ -391,7 +480,7 @@ Releaselinie und Stage zentral ermittelten M/Text-Ziel. Für `R261` sind dies
 beispielsweise `en01e` in Entwicklung und `en01a` in Abnahme. Ein erfolgreicher
 Lauf endet mit `ADAPTER_ACCEPTED`.
 
-## 5. Stand zur Abnahme weitergeben
+## 8. Stand zur Abnahme weitergeben
 
 1. Den in Entwicklung erfolgreich geprüften Commit ermitteln.
 2. Im zusätzlichen Git-Client den aktuellen Zielbranch
@@ -408,7 +497,7 @@ Lauf endet mit `ADAPTER_ACCEPTED`.
 Der Push nach Abnahme verteilt den vollständigen Projektstand des durch den
 Cherry-Pick neu entstandenen Commits. Er baut noch kein Mainframe-Paket.
 
-## 6. Ausgewählte Änderungen bereitstellen
+## 9. Ausgewählte Änderungen bereitstellen
 
 1. In GitHub die fachlich freigegebenen Commits aus Abnahme bestimmen und ihre
    Reihenfolge festhalten.
@@ -426,7 +515,7 @@ Cherry-Pick neu entstandenen Commits. Er baut noch kein Mainframe-Paket.
 
 Pushen darf hier nur das für den jeweiligen Mandanten benannte Release-Team.
 
-## 7. FULL- oder DELTA-Lieferung auslösen
+## 10. FULL- oder DELTA-Lieferung auslösen
 
 Vor dem Taggen müssen Releaselinie, Mandant, gewünschter Lieferungstyp und der
 exakte Commit auf `<Releaselinie>/Bereitstellung` fachlich bestätigt sein.
@@ -436,10 +525,12 @@ exakte Commit auf `<Releaselinie>/Bereitstellung` fachlich bestätigt sein.
 - Jede andere gültige dreistellige Endung, zum Beispiel `R261.108`, erzeugt
   ein kumulatives DELTA von `R261.100` bis zum Zieltag.
 - Ein DELTA setzt voraus, dass der `.100`-Tag derselben Linie vorhanden und
-  erreichbar ist.
-- Nur das benannte Release-Team darf einen neuen Release-Tag setzen. Ein
-  vorhandener Release-Tag ist die unveränderliche Release-Identität und darf
-  weder verschoben noch gelöscht werden.
+  in der Git-Historie ein Vorgänger des Ziel-Tags ist.
+- Nur das benannte Release-Team darf einen Release-Tag setzen oder vor seiner
+  Freigabe löschen und neu anlegen.
+- Mit der Freigabe des Publish-Jobs im Environment `Bereitstellung` werden
+  Tagname und Ziel-Commit zur unveränderlichen Release-Identität. Danach darf
+  der Tag weder verschoben noch gelöscht werden.
 
 Der Release-Tag wird vom Mandanten-Release-Team in GitHub angelegt:
 
@@ -450,6 +541,10 @@ Der Release-Tag wird vom Mandanten-Release-Team in GitHub angelegt:
    aktueller Commit der bestätigte Release-Stand ist.
 4. Den Release veröffentlichen. Dadurch wird der Tag angelegt und der
    Release-Workflow gestartet.
+
+Das Veröffentlichen des GitHub-Releases ist noch nicht die Freigabe im Sinne
+des Tag-Lebenszyklus. Maßgeblich ist ausschließlich die spätere manuelle
+Freigabe des Publish-Jobs im Environment `Bereitstellung`.
 
 Danach unter **Actions → Build and publish release** prüfen:
 
@@ -464,11 +559,23 @@ Danach unter **Actions → Build and publish release** prüfen:
    geprüft. Danach werden die JCL-Werte validiert, das versionierte Template
    gerendert und Paket plus JCL per FTP/JES übergeben.
 
+### Irrtümlichen Tag vor der Freigabe zurücknehmen
+
+Wurde der Tag auf dem falschen Commit oder mit dem falschen Namen angelegt,
+darf der zugehörige Publish-Job nicht freigegeben werden. Das Release-Team
+bricht zuerst den gesamten Workflow-Lauf ab, löscht anschließend den
+irrtümlichen Tag und legt ihn bei Bedarf auf dem bestätigten Commit neu an.
+Der neu angelegte Tag startet einen neuen, vollständig zu prüfenden Lauf.
+
+Nach der Freigabe ist diese Korrektur nicht mehr zulässig. Scheitert die
+technische Übergabe nach der Freigabe, wird der kontrollierte Wiederanlauf mit
+demselben Tag und demselben geprüften Artefakt durchgeführt.
+
 `MAINFRAME_SUBMITTED` bedeutet ausschließlich, dass die unmittelbare
 FTP-/JES-Übergabe akzeptiert wurde. Der fachliche Abschluss des Mainframe-Jobs
 wird in Ausbaustufe 1 nicht abgefragt.
 
-## 8. Einen Lauf kontrolliert wiederholen
+## 11. Einen Lauf kontrolliert wiederholen
 
 Ein noch verfügbarer Workflow-Lauf kann in GitHub über **Actions**, den
 betroffenen Lauf und **Re-run jobs** mit demselben Commit und derselben
@@ -498,7 +605,7 @@ Vor jedem Wiederanlauf klären, ob das Zielsystem die vorherige Übergabe bereit
 angenommen hat. GitHub Actions kennt ohne Status-Polling keinen nachgelagerten
 fachlichen Endstatus.
 
-## 9. Status und Fehlerbilder verstehen
+## 12. Status und Fehlerbilder verstehen
 
 | Status oder sichtbares Symptom | Bedeutung | Nächste Prüfung |
 |---|---|---|

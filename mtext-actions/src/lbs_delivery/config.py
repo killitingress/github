@@ -35,6 +35,7 @@ class Configuration:
 
     kuerzel: str
     repository: str
+    ispw: str
     subsystem: str
     projects: dict[str, str]
     hostprofile: dict[str, dict[str, str]]
@@ -62,14 +63,43 @@ def load_configuration(
 ) -> Configuration:
     """Lädt den Mandanten und verknüpft ihn mit den Releaselinien."""
 
+    mandant_configuration = _read_json(mandant_path)
+    releaselinien = _read_json(releaselinien_path)
+    if (
+        not isinstance(mandant_configuration, dict)
+        or "mandant" not in mandant_configuration
+    ):
+        raise DeliveryError(
+            Status.VALIDATION_FAILED, "Konfiguration ist unvollständig"
+        )
+    if set(mandant_configuration) != {"mandant"}:
+        raise DeliveryError(
+            Status.VALIDATION_FAILED, "Konfiguration enthält unbekannte Felder"
+        )
+    mandant = mandant_configuration["mandant"]
+    if not isinstance(mandant, dict):
+        raise DeliveryError(
+            Status.VALIDATION_FAILED, "Konfiguration ist unvollständig"
+        )
+    if set(mandant) - {
+        "kuerzel",
+        "repository",
+        "ispw",
+        "subsystem",
+        "hostprofile",
+        "excluded_projects",
+    }:
+        raise DeliveryError(
+            Status.VALIDATION_FAILED, "Konfiguration enthält unbekannte Felder"
+        )
+
     try:
-        mandant = _read_json(mandant_path)["mandant"]
         kuerzel = mandant["kuerzel"]
         repository = mandant["repository"]
+        ispw = mandant["ispw"]
         subsystem = mandant["subsystem"]
         hostprofile = mandant["hostprofile"]
         excluded = mandant.get("excluded_projects", [])
-        releaselinien = _read_json(releaselinien_path)
     except (KeyError, TypeError) as exc:
         raise DeliveryError(
             Status.VALIDATION_FAILED, "Konfiguration ist unvollständig"
@@ -85,6 +115,8 @@ def load_configuration(
         )
     if not isinstance(subsystem, str) or not subsystem:
         raise DeliveryError(Status.VALIDATION_FAILED, "Subsystem fehlt")
+    if not isinstance(ispw, str) or ispw not in {"T", "P"}:
+        raise DeliveryError(Status.VALIDATION_FAILED, "ISPW-Instanz ist ungültig")
     if not isinstance(excluded, list) or not all(
         isinstance(item, str) for item in excluded
     ):
@@ -96,6 +128,7 @@ def load_configuration(
     for profile in hostprofile.values():
         if (
             not isinstance(profile, dict)
+            or set(profile) != {"assignment", "stage"}
             or profile.get("stage") not in CODEPIPELINE_STAGES
             or not isinstance(profile.get("assignment"), str)
         ):
@@ -133,8 +166,9 @@ def load_configuration(
     for values in releaselinien.values():
         if (
             not isinstance(values, dict)
+            or set(values) != {"mtext_linie", "hostprofil"}
             or not isinstance(values.get("mtext_linie"), str)
-            or values.get("uebergabeprofil") not in hostprofile
+            or values.get("hostprofil") not in hostprofile
         ):
             raise DeliveryError(
                 Status.VALIDATION_FAILED, "Releaselinie ist ungültig"
@@ -142,6 +176,7 @@ def load_configuration(
     return Configuration(
         kuerzel=kuerzel,
         repository=repository,
+        ispw=ispw,
         subsystem=subsystem,
         projects=projects,
         hostprofile=hostprofile,

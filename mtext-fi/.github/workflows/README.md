@@ -115,8 +115,12 @@ erzwungen werden:
   Automatisierungsverantwortlichen
 - `.config.json` von normalen Ressourcen-Pushes ausschließen und nur
   dem benannten technischen Verantwortlichenkreis zur Änderung erlauben
-- neue Tags `Rnnn.nnn` nur durch das Release-Team zulassen und bestehende
-  Release-Tags gegen Änderung, Force-Push und Löschung schützen
+- Erstellen und Löschen von Tags `Rnnn.nnn` auf das Release-Team begrenzen.
+  Vor der Freigabe im Environment `Bereitstellung` darf es einen irrtümlichen
+  Tag nach Abbruch des zugehörigen Laufs löschen und neu anlegen
+- freigegebene Release-Tags gegen Änderung, Force-Push und Löschung schützen.
+  Die zustandsabhängige Sperre wird vor der Aktivierung technisch oder durch
+  eine revisionssicher überwachte Betriebsregel festgelegt und abgenommen
 - freigegebene Actions und wiederverwendbare Workflows
 - die drei gemeinsamen GitHub Environments `Entwicklung`, `Abnahme` und
   `Bereitstellung`. Nur `Bereitstellung` verlangt eine manuelle Freigabe

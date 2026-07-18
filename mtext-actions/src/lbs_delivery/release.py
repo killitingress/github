@@ -11,7 +11,14 @@ from pathlib import Path
 
 from .config import Configuration
 from .errors import DeliveryError, Status
-from .git import GitChange, changes, previous_tag, require_release_tag, resolve
+from .git import (
+    GitChange,
+    changes,
+    previous_tag,
+    require_ancestor,
+    require_release_tag,
+    resolve,
+)
 from .manifest import Manifest, sha256_file, write_manifest
 
 
@@ -202,6 +209,8 @@ def build_release(
     delivery_type = "FULL" if tag.endswith(FULL_SUFFIX) else "DELTA"
     base = f"{releaselinie}{FULL_SUFFIX}" if delivery_type == "DELTA" else None
     base_sha = resolve(root, f"refs/tags/{base}") if base else None
+    if base_sha:
+        require_ancestor(root, base_sha, target_sha)
     previous = previous_tag(root, tag)
     previous_sha = resolve(root, f"refs/tags/{previous}") if previous else None
     cumulative = changes(root, base_sha, target_sha) if base_sha else []
@@ -287,8 +296,8 @@ def build_release(
             ]
         )
 
-    profile_name = configuration.releaselinien[releaselinie]["uebergabeprofil"]
-    profile = configuration.hostprofile[profile_name]
+    hostprofil_name = configuration.releaselinien[releaselinie]["hostprofil"]
+    hostprofil = configuration.hostprofile[hostprofil_name]
     manifest: Manifest = {
         "repository": repository_name,
         "mandant": configuration.kuerzel,
@@ -299,10 +308,10 @@ def build_release(
         "previous_tag": previous,
         "artifacts": artifacts,
         "jcl": {
-            "ISPW": "P",
-            "LEVEL": profile["stage"],
+            "ISPW": configuration.ispw,
+            "LEVEL": hostprofil["stage"],
             "SUBSYS": configuration.subsystem,
-            "ASSIGNMENT": profile["assignment"],
+            "ASSIGNMENT": hostprofil["assignment"],
         },
     }
     return write_manifest(output / "manifest.json", manifest)
