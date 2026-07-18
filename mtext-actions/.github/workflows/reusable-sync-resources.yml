@@ -1,6 +1,7 @@
 name: Reusable M/Text resource sync
 
-# Der Aufrufer übergibt einen unveränderlichen Commit und eine fachlich festgelegte Zielstufe.
+# Dieser wiederverwendbare Workflow prüft und paketiert einen unveränderlichen
+# Mandanten-Commit und übergibt dessen Ressourcen synchron an die festgelegte M/Text-Stufe.
 'on':
   workflow_call:
     inputs:
@@ -41,6 +42,8 @@ jobs:
     environment: ${{ inputs.target_environment }}
     timeout-minutes: 30
     steps:
+      # Lädt den vollständig aufgelösten Mandanten-Commit einschließlich seiner
+      # Historie, damit Branch-Zugehörigkeit und Vorgängerstände geprüft werden können.
       - name: Check out mandant repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -49,6 +52,8 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
 
+      # Lädt genau den vom Aufrufer festgelegten Commit der zentralen
+      # Automatisierung, ohne Zugangsdaten in der Git-Konfiguration zu speichern.
       - name: Check out pinned automation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -57,12 +62,15 @@ jobs:
           path: automation
           persist-credentials: false
 
+      # Prüft den Self-hosted Runner und stellt den Pfad zur freigegebenen
+      # Python-Laufzeit als Ausgabe für die Synchronisation bereit.
       - name: Prepare approved Python runtime
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
+      # Validiert Mandantenkonfiguration, Branch und Commit, erzeugt ein temporäres
+      # Ressourcenpaket und ruft den M/Text-Adapter synchron mit diesem Paket auf.
       - name: Stage, publish and synchronously call the adapter
-        # Die Python-Schicht prüft Konfiguration, Branch und Commit vor jedem externen Aufruf.
         env:
           INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}
           INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}

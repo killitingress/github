@@ -1,5 +1,7 @@
 name: Sync M/Text resources
 
+# Dieser Workflow verteilt den exakten Stand eines Entwicklungs- oder
+# Abnahme-Branches über die zentrale Automatisierung an die zugehörige M/Text-Stufe.
 'on':
   # Nur Änderungen auf den Branches für Entwicklung und Abnahme lösen automatisch eine Verteilung aus.
   push:
@@ -27,7 +29,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Separate Jobs halten die Environment-Bindung explizit und verhindern frei eingegebene Zielstufen.
+  # Dieser Aufruf übergibt Commits der Entwicklungs-Branches ausschließlich an
+  # den zentralen Workflow mit dem fest vorgegebenen Environment Entwicklung.
   sync-entwicklung:
     name: Sync to Entwicklung
     if: >-
@@ -43,6 +46,8 @@ jobs:
       automation_repository: j520730/mtext-actions
       automation_ref: 0000000000000000000000000000000000000000
 
+  # Dieser Aufruf übergibt Commits der Abnahme-Branches ausschließlich an den
+  # zentralen Workflow mit dem fest vorgegebenen Environment Abnahme.
   sync-abnahme:
     name: Sync to Abnahme
     if: >-

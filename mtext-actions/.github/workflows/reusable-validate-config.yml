@@ -1,6 +1,7 @@
 name: Reusable mandant configuration validation
 
-# Dieser Workflow prüft Konfigurationen frühzeitig und spricht keine Zielsysteme an.
+# Dieser wiederverwendbare Workflow validiert die Mandantenkonfiguration eines
+# exakten Commits gegen die zentralen Releaselinien, ohne Zielsysteme anzusprechen.
 'on':
   workflow_call:
     inputs:
@@ -33,6 +34,8 @@ jobs:
       - ${{ inputs.runner_label }}
     timeout-minutes: 20
     steps:
+      # Lädt genau den zu prüfenden Mandanten-Commit in einen getrennten Pfad und
+      # speichert dabei keine GitHub-Zugangsdaten in der Git-Konfiguration.
       - name: Check out mandant repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -40,6 +43,8 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
 
+      # Lädt den festgelegten Stand der zentralen Validierungslogik und ihrer
+      # versionierten Releaselinien-Zuordnung.
       - name: Check out pinned automation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -48,10 +53,14 @@ jobs:
           path: automation
           persist-credentials: false
 
+      # Prüft den Self-hosted Runner und stellt den Pfad zur freigegebenen
+      # Python-Laufzeit als Ausgabe für die Validierung bereit.
       - name: Prepare approved Python runtime
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
+      # Prüft Struktur und fachliche Zuordnungen der .config.json für das
+      # aufrufende Repository; dieser Schritt führt keine externe Übergabe aus.
       - name: Validate configuration without external access
         env:
           INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}

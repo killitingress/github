@@ -1,6 +1,7 @@
 name: Reusable release
 
-# Der Workflow trennt die lokale Paketerzeugung von der freizugebenden externen Veröffentlichung.
+# Dieser wiederverwendbare Workflow erzeugt aus einem Release-Tag ein FULL- oder
+# DELTA-Artefakt und übergibt es erst in einem getrennt freizugebenden Job an den Mainframe.
 'on':
   workflow_call:
     inputs:
@@ -49,6 +50,8 @@ jobs:
     outputs:
       artifact_name: ${{ steps.metadata.outputs.artifact_name }}
     steps:
+      # Lädt den durch den Release-Tag bezeichneten Mandanten-Commit mit seiner
+      # Historie, damit Tag, Vorgänger-Release und Änderungsumfang geprüft werden können.
       - name: Check out tagged mandant commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -57,6 +60,8 @@ jobs:
           persist-credentials: false
           ref: refs/tags/${{ inputs.release_tag }}
 
+      # Lädt genau den vom Aufrufer festgelegten Stand der Build-Logik und
+      # speichert keine GitHub-Zugangsdaten in der Git-Konfiguration.
       - name: Check out pinned automation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -65,10 +70,14 @@ jobs:
           path: automation
           persist-credentials: false
 
+      # Prüft den Self-hosted Runner und stellt den Pfad zur freigegebenen
+      # Python-Laufzeit als Ausgabe für den Build bereit.
       - name: Prepare approved Python runtime
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
+      # Prüft Tag und Mandantenkonfiguration, ermittelt FULL oder DELTA und
+      # erzeugt Release-Dateien, Manifest und Prüfsummen im Verzeichnis dist.
       - name: Build release and manifest
         env:
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
@@ -85,6 +94,8 @@ jobs:
           --trigger-sha "$INPUT_TRIGGER_SHA"
           --output dist
 
+      # Bildet aus Repository und Release-Tag einen eindeutigen Artefaktnamen und
+      # stellt ihn dem Upload sowie dem nachfolgenden Veröffentlichungsjob bereit.
       - name: Define artifact identity
         id: metadata
         env:
@@ -92,8 +103,9 @@ jobs:
           INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}
         run: printf 'artifact_name=%s-%s\n' "$INPUT_REPOSITORY_NAME" "$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
+      # Speichert den vollständigen dist-Inhalt ohne zusätzliche Komprimierung
+      # als Laufartefakt; fehlende Build-Ausgaben lassen den Job fehlschlagen.
       - name: Store release artifact
-        # Die fest gepinnte Artefakt-Action ist mit der eingesetzten GHES-Version kompatibel.
         uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de
         with:
           name: ${{ steps.metadata.outputs.artifact_name }}
@@ -116,6 +128,8 @@ jobs:
       cancel-in-progress: false
     timeout-minutes: 30
     steps:
+      # Lädt genau den festgelegten Stand der Übergabelogik und der JCL-Vorlage,
+      # ohne GitHub-Zugangsdaten in der Git-Konfiguration zu speichern.
       - name: Check out pinned automation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -124,19 +138,23 @@ jobs:
           path: automation
           persist-credentials: false
 
+      # Lädt ausschließlich das vom Build-Job dieses Workflow-Laufs benannte
+      # Release-Artefakt in das lokale Verzeichnis dist.
       - name: Download exact release artifact
-        # Übergeben wird nur das im selben Lauf erzeugte und anschließend geprüfte Artefakt.
         uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
         with:
           name: ${{ needs.build.outputs.artifact_name }}
           path: dist
 
+      # Prüft den Self-hosted Runner und stellt den Pfad zur freigegebenen
+      # Python-Laufzeit als Ausgabe für die Mainframe-Übergabe bereit.
       - name: Prepare approved Python runtime
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
+      # Validiert Manifest und Prüfsummen erneut, überträgt das Artefakt per FTP,
+      # rendert die JCL in einem temporären Verzeichnis und reicht sie bei JES ein.
       - name: Verify artifact, render JCL and submit FTP/JES
-        # Manifest und Prüfsummen werden vor Übertragung und Jobübergabe erneut validiert.
         env:
           MAINFRAME_FTP_HOST: ${{ secrets.MAINFRAME_FTP_HOST }}
           MAINFRAME_FTP_PASSWORD: ${{ secrets.MAINFRAME_FTP_PASSWORD }}

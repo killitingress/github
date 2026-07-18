@@ -1,8 +1,10 @@
 name: Build and publish release
 
-# Das Mandanten-Release-Team setzt den Tag; erst dessen Push startet Build und
-# nachgelagerte Freigabe.
+# Dieser Workflow lässt aus einem vorhandenen Release-Tag ein unveränderliches
+# Release-Artefakt bauen und nach Freigabe an den Mainframe übergeben.
 'on':
+  # Das Mandanten-Release-Team setzt den Tag; erst dessen Push startet Build und
+  # nachgelagerte Freigabe.
   push:
     tags:
       - R[0-9][0-9][0-9].[0-9][0-9][0-9]
@@ -21,7 +23,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Der zentrale Workflow kapselt Build und getrennt freizugebende Veröffentlichung.
+  # Dieser Aufruf übergibt den Release-Tag an den zentralen Workflow, der Build
+  # und Veröffentlichung in getrennten Jobs ausführt.
   release:
     name: Build and publish release
     uses: j520730/mtext-actions/.github/workflows/reusable-release.yml@0000000000000000000000000000000000000000

@@ -1,5 +1,7 @@
 name: Validate mandant configuration
 
+# Dieser Workflow prüft jede geänderte Mandantenkonfiguration mit der zentralen
+# Validierungslogik, ohne Daten an M/Text oder den Mainframe zu übertragen.
 'on':
   # Der Check liefert bei jeder Änderung der Mandantenkonfiguration frühes Feedback.
   push:
@@ -16,6 +18,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Dieser Aufruf lässt den exakten Commit durch den fest gepinnten zentralen
+  # Validierungsworkflow prüfen.
   validate:
     name: Validate mandant configuration
     uses: j520730/mtext-actions/.github/workflows/reusable-validate-config.yml@0000000000000000000000000000000000000000

@@ -1,6 +1,7 @@
 name: Central tests
 
-# Die Prüfung besitzt keine externen Seiteneffekte und benötigt nur Leserechte.
+# Dieser Workflow führt bei Pull Requests und Änderungen an main alle zentralen
+# Python-Tests aus, ohne M/Text oder den Mainframe anzusprechen.
 'on':
   pull_request:
   push:
@@ -25,15 +26,21 @@ jobs:
       - mtext-delivery
     timeout-minutes: 20
     steps:
+      # Lädt den zu prüfenden Automatisierungsstand in den Arbeitsbereich und
+      # hinterlegt dabei kein GitHub-Token in der lokalen Git-Konfiguration.
       - name: Check out automation without persisted credentials
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
 
+      # Prüft den Self-hosted Runner und stellt den Pfad zur freigegebenen
+      # Python-Laufzeit als Ausgabe für die nachfolgenden Schritte bereit.
       - name: Prepare approved Python runtime
         id: runtime
         run: scripts/runner-preflight.sh
 
+      # Startet die vollständige Unit-Test-Suite mit dem produktiven Quellcode
+      # im Python-Suchpfad; die Tests führen keine externen Übergaben aus.
       - name: Run tests without external calls
         env:
           PYTHONPATH: src
