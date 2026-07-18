@@ -29,8 +29,11 @@ def call_adapter(
 ) -> AdapterResponse:
     """Sendet den konfigurierten Payload per HTTPS und akzeptiert jeden 2xx-Status."""
 
+    # Zugangsdaten und fachlicher Payload dürfen nur verschlüsselt übertragen werden.
     if not url.startswith("https://"):
-        raise DeliveryError(Status.VALIDATION_FAILED, "adapter URL must use HTTPS")
+        raise DeliveryError(
+            Status.VALIDATION_FAILED, "Adapter-URL muss HTTPS verwenden"
+        )
     request = urllib.request.Request(
         url,
         data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
@@ -38,6 +41,7 @@ def call_adapter(
         method="POST",
     )
     try:
+        # Die Grenze reicht für Diagnosen und verhindert unbeschränktes Antwortlesen.
         with opener(request, timeout=timeout) as response:
             status = int(response.status)
             body = response.read(65536).decode("utf-8", errors="replace")
@@ -45,12 +49,14 @@ def call_adapter(
         body = exc.read(65536).decode("utf-8", errors="replace")
         raise DeliveryError(
             Status.ADAPTER_FAILED,
-            f"adapter returned HTTP {exc.code}: {body[:1000]}",
+            f"Adapter antwortet mit HTTP {exc.code}: {body[:1000]}",
         ) from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
-        raise DeliveryError(Status.ADAPTER_FAILED, "adapter transport failed") from exc
+        raise DeliveryError(
+            Status.ADAPTER_FAILED, "Adapter-Transport fehlgeschlagen"
+        ) from exc
     if status < 200 or status >= 300:
         raise DeliveryError(
-            Status.ADAPTER_FAILED, f"adapter returned HTTP {status}: {body[:1000]}"
+            Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {status}: {body[:1000]}"
         )
     return AdapterResponse(status=status, body=body)

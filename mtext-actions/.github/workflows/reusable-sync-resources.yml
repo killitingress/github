@@ -73,7 +73,7 @@ jobs:
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery sync-resources
           --repository-root source
           --mandant-config source/config/mandant.json
-          --release-lines automation/config/release_lines.json
+          --releaselinien automation/config/releaselinien.json
           --repository-name "$INPUT_REPOSITORY_NAME"
           --commit "$INPUT_COMMIT_SHA"
           --source-branch "$INPUT_SOURCE_BRANCH"

@@ -7,11 +7,13 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from .config import RELEASE_TAG_RE
 from .errors import DeliveryError, Status
 
 
-_FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
-_TAG_RE = re.compile(r"R([0-9]{3})\.([0-9]{3})")
+# Reguläre Ausdrücke für Git-Referenzen.
+# Prüft eine vollständige kleingeschriebene Commit-SHA.
+FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
 
 
 @dataclass(frozen=True)
@@ -23,8 +25,12 @@ class GitChange:
     old_path: str | None = None
 
 
-def _git(repository: str | Path, *arguments: str) -> bytes:
-    """Führt einen lesenden Git-Aufruf mit vereinheitlichter Fehlerbehandlung aus."""
+def _git(
+    repository: str | Path,
+    *arguments: str,
+    accepted_returncodes: tuple[int, ...] = (0,),
+) -> subprocess.CompletedProcess[bytes]:
+    """Führt Git mit vereinheitlichter Prozess- und Fehlerbehandlung aus."""
 
     try:
         result = subprocess.run(
@@ -34,17 +40,21 @@ def _git(repository: str | Path, *arguments: str) -> bytes:
             stderr=subprocess.PIPE,
         )
     except OSError as exc:
-        raise DeliveryError(Status.SOURCE_FAILED, "git is not available") from exc
-    if result.returncode != 0:
-        raise DeliveryError(Status.SOURCE_FAILED, "git reference operation failed")
-    return result.stdout
+        raise DeliveryError(Status.SOURCE_FAILED, "Git ist nicht verfügbar") from exc
+    if result.returncode not in accepted_returncodes:
+        raise DeliveryError(
+            Status.SOURCE_FAILED, "Git-Referenzoperation fehlgeschlagen"
+        )
+    return result
 
 
 def require_full_sha(value: str) -> str:
     """Akzeptiert ausschließlich vollständige, kleingeschriebene Commit-SHAs."""
 
-    if _FULL_SHA_RE.fullmatch(value) is None:
-        raise DeliveryError(Status.SOURCE_FAILED, "commit must be a full SHA")
+    if FULL_SHA_RE.fullmatch(value) is None:
+        raise DeliveryError(
+            Status.SOURCE_FAILED, "Commit benötigt eine vollständige SHA"
+        )
     return value
 
 
@@ -52,9 +62,9 @@ def resolve_commit(repository: str | Path, reference: str) -> str:
     """Löst eine Git-Referenz eindeutig auf den zugehörigen Commit auf."""
 
     if not reference or reference.startswith("-"):
-        raise DeliveryError(Status.SOURCE_FAILED, "invalid git reference")
-    resolved = _git(repository, "rev-parse", "--verify", f"{reference}^{{commit}}")
-    value = resolved.decode("ascii", errors="strict").strip()
+        raise DeliveryError(Status.SOURCE_FAILED, "ungültige Git-Referenz")
+    result = _git(repository, "rev-parse", "--verify", f"{reference}^{{commit}}")
+    value = result.stdout.decode("ascii", errors="strict").strip()
     return require_full_sha(value)
 
 
@@ -63,7 +73,8 @@ def require_head(repository: str | Path, expected_sha: str) -> None:
 
     if resolve_commit(repository, "HEAD") != require_full_sha(expected_sha):
         raise DeliveryError(
-            Status.SOURCE_FAILED, "checked out HEAD does not match requested commit"
+            Status.SOURCE_FAILED,
+            "ausgecheckter HEAD stimmt nicht mit dem angeforderten Commit überein",
         )
 
 
@@ -76,7 +87,7 @@ def require_commit_on_branch(
     if not is_ancestor(repository, commit, f"refs/remotes/origin/{branch}"):
         raise DeliveryError(
             Status.SOURCE_FAILED,
-            "requested commit is not reachable from the selected stage branch",
+            "Commit ist vom ausgewählten Stage-Branch nicht erreichbar",
         )
 
 
@@ -85,25 +96,15 @@ def is_ancestor(repository: str | Path, ancestor: str, descendant: str) -> bool:
 
     ancestor_sha = resolve_commit(repository, ancestor)
     descendant_sha = resolve_commit(repository, descendant)
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repository),
-            "merge-base",
-            "--is-ancestor",
-            ancestor_sha,
-            descendant_sha,
-        ],
-        check=False,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+    result = _git(
+        repository,
+        "merge-base",
+        "--is-ancestor",
+        ancestor_sha,
+        descendant_sha,
+        accepted_returncodes=(0, 1),
     )
-    if result.returncode == 0:
-        return True
-    if result.returncode == 1:
-        return False
-    raise DeliveryError(Status.SOURCE_FAILED, "git ancestry check failed")
+    return result.returncode == 0
 
 
 def require_tag_on_branch(
@@ -115,7 +116,8 @@ def require_tag_on_branch(
     branch_sha = resolve_commit(repository, f"refs/remotes/origin/{required_branch}")
     if not is_ancestor(repository, tag_sha, branch_sha):
         raise DeliveryError(
-            Status.SOURCE_FAILED, "release tag is not reachable from required branch"
+            Status.SOURCE_FAILED,
+            "Release-Tag ist vom erforderlichen Branch nicht erreichbar",
         )
     return tag_sha
 
@@ -127,9 +129,12 @@ def diff_name_status(
 
     base = require_full_sha(base_sha)
     target = require_full_sha(target_sha)
-    fields = _git(
+    result = _git(
         repository, "diff", "--name-status", "-z", "--find-renames", base, target
-    ).decode("utf-8", errors="strict").split("\0")
+    )
+    fields = result.stdout.decode("utf-8", errors="strict").split("\0")
+    # Die Nulltrennung erhält auch ungewöhnliche, aber gültige Dateinamen
+    # unverändert.
     if fields and fields[-1] == "":
         fields.pop()
     changes: list[GitChange] = []
@@ -140,13 +145,15 @@ def diff_name_status(
         status = status_field[0]
         if status in {"R", "C"}:
             if index + 1 >= len(fields):
-                raise DeliveryError(Status.SOURCE_FAILED, "malformed git rename diff")
+                raise DeliveryError(
+                    Status.SOURCE_FAILED, "fehlerhafter Git-Diff für eine Umbenennung"
+                )
             old_path, new_path = fields[index], fields[index + 1]
             index += 2
             changes.append(GitChange(status=status, path=new_path, old_path=old_path))
         else:
             if index >= len(fields):
-                raise DeliveryError(Status.SOURCE_FAILED, "malformed git diff")
+                raise DeliveryError(Status.SOURCE_FAILED, "fehlerhafter Git-Diff")
             changes.append(GitChange(status=status, path=fields[index]))
             index += 1
     return changes
@@ -155,14 +162,18 @@ def diff_name_status(
 def previous_release_tag(repository: str | Path, target_tag: str) -> str | None:
     """Ermittelt den numerisch letzten Release-Tag vor dem Zieltag."""
 
-    match = _TAG_RE.fullmatch(target_tag)
+    match = RELEASE_TAG_RE.fullmatch(target_tag)
     if match is None:
-        raise DeliveryError(Status.VALIDATION_FAILED, "invalid release tag")
+        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
     target = (int(match.group(1)), int(match.group(2)))
-    tags = _git(repository, "tag", "--list", "R[0-9][0-9][0-9].[0-9][0-9][0-9]")
+    # Git verwendet hier ein Glob; die Treffer werden danach erneut mit dem
+    # regulären Ausdruck geprüft.
+    result = _git(
+        repository, "tag", "--list", "R[0-9][0-9][0-9].[0-9][0-9][0-9]"
+    )
     candidates: list[tuple[tuple[int, int], str]] = []
-    for tag in tags.decode("ascii", errors="strict").splitlines():
-        candidate = _TAG_RE.fullmatch(tag)
+    for tag in result.stdout.decode("ascii", errors="strict").splitlines():
+        candidate = RELEASE_TAG_RE.fullmatch(tag)
         if candidate is None:
             continue
         numeric = (int(candidate.group(1)), int(candidate.group(2)))

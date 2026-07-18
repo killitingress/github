@@ -306,10 +306,12 @@ ausgewählten Branch gehört.
 
 ### Neue Releaselinie einrichten
 
-Eine neue Linie erhält drei Stage-Branches und einen Eintrag in
-`config/release_lines.json`. Der Eintrag enthält nur die fachliche
-Releaselinie, die technische M/Text-Linie und das vorhandene Übergabeprofil
-`FKT` oder `JUR`. Hosts, Stage-Suffixe, serverSync-Pfad, JCL-Parameter und
+Eine neue Linie erhält drei Branches, je einen für Entwicklung, Abnahme und
+Bereitstellung, sowie einen Eintrag in
+`config/releaselinien.json`. Der Eintrag enthält nur die fachliche
+Releaselinie, die technische M/Text-Linie und den Namen eines in
+`mandant.json` vorhandenen Übergabeprofils. Hosts, Stage-Suffixe,
+serverSync-Pfad, JCL-Parameter und
 Tagformat werden unverändert zentral abgeleitet.
 
 Ausgangspunkt der neuen Branches ist der fachlich bestätigte letzte
@@ -321,7 +323,137 @@ Die Zielplattform ist GitHub Enterprise Server 3.20.4. Die verwendeten
 GitHub-Actions-Bausteine und der interne Runner müssen vor der Aktivierung auf
 dieser konkreten Version geprüft werden.
 
-## 7. Konfiguration
+## 7. Workflows, Trigger und Abhängigkeiten
+
+Die Mandanten-Repositories enthalten nur die fachlichen Auslöser. Sie rufen
+fest gepinnte wiederverwendbare Workflows aus `mtext-actions` auf; die
+eigentliche Fachlogik liegt in Python.
+
+### Gesamtzusammenhang
+
+| Prozessschritt | Auslöser im Mandanten-Repository | Mandanten-Workflow | Zentraler Workflow | Python-Kommando | Ergebnis |
+|---|---|---|---|---|---|
+| Mandantenkonfiguration prüfen | Push mit Änderung an `config/mandant.json` auf einem beliebigen Branch | `validate-config.yml` | `reusable-validate-config.yml` | `validate-config` | Konfiguration geprüft |
+| Entwicklung synchronisieren | Push nach `Rnnn/Entwicklung` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync-resources` | Vollständiger konfigurierter Ressourcenstand nach M/Text-Entwicklung synchronisiert |
+| Abnahme synchronisieren | Push nach `Rnnn/Abnahme` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync-resources` | Vollständiger konfigurierter Ressourcenstand nach M/Text-Abnahme synchronisiert |
+| Bereitstellungsstand fortschreiben | Cherry-Pick und Push nach `Rnnn/Bereitstellung` | keiner | keiner | keines | Nur Git-Branch fortgeschrieben; noch keine Lieferung |
+| Release bauen und übergeben | Push eines Tags `Rnnn.nnn` oder manueller Start mit vorhandenem Tag | `release.yml` | `reusable-release.yml` | `build-release`, danach `publish-mainframe` | FULL/DELTA gebaut, geprüft und nach Freigabe per FTP/JES übergeben |
+| Zentrale Automation testen | Pull Request in `mtext-actions` oder Push auf dessen `main` | entfällt | `ci.yml` | `unittest discover` | Zentrale Testfälle und Workflowverträge geprüft |
+
+Die Actions führen keine Cherry-Picks aus. Sie verarbeiten den Stand, den die
+Benutzer auf dem Branch der jeweiligen Stage hergestellt haben. Die
+Sync-Workflows prüfen, dass der exakte auslösende Commit aus dem angegebenen
+Branch erreichbar ist; sie prüfen nicht, ob er per Cherry-Pick aus der
+vorherigen Stage entstanden ist. Alle vorhandenen Workflows besitzen nur
+`contents: read` und können keine Commits, Branches oder Tags schreiben.
+
+Eine schreibende Promotion-Action könnte einen ausgewählten Commit technisch
+mit `git cherry-pick -x` übernehmen und den Zielbranch pushen. Sie benötigte
+dafür Schreibrechte, eine eng begrenzte Ausnahme vom Branchschutz sowie
+Prüfungen von Berechtigung, Quell-SHA, Weitergaberichtung und aktuellem
+Zielstand. Bei einem Konflikt müsste sie ohne Push abbrechen. Nur die
+`-x`-Zeile nachträglich an einen bereits gepushten Commit anzuhängen ist nicht
+möglich, ohne durch die geänderte Commit-Nachricht eine neue SHA zu erzeugen.
+
+Die Quell-SHA ist derzeit eine verbindliche Prozessangabe und wird von der
+Automation nicht ausgewertet. Eine technische Herkunftsprüfung müsste für
+jeden neuen Abnahme-Commit die Erreichbarkeit der angegebenen Quell-SHA aus
+Entwicklung und für jeden Bereitstellungs-Commit entsprechend aus Abnahme
+prüfen.
+
+### Trigger in den Mandanten-Repositories
+
+| Ereignis | Konfigurationsprüfung | Sync Entwicklung | Sync Abnahme | Release |
+|---|---:|---:|---:|---:|
+| Push einer Ressourcenänderung auf einen Feature-Branch | nein | nein | nein | nein |
+| Push mit Änderung an `config/mandant.json` auf einen Feature-Branch | ja | nein | nein | nein |
+| Beliebiger Push nach `Rnnn/Entwicklung` | nur bei geänderter Mandantenkonfiguration | ja | nein | nein |
+| Beliebiger Push nach `Rnnn/Abnahme` | nur bei geänderter Mandantenkonfiguration | nein | ja | nein |
+| Beliebiger Push nach `Rnnn/Bereitstellung` | nur bei geänderter Mandantenkonfiguration | nein | nein | nein |
+| Push eines Tags `Rnnn.nnn` | nein | nein | nein | ja |
+| Manueller Sync mit Entwicklungsbranch | nein | ja | nein | nein |
+| Manueller Sync mit Abnahmebranch | nein | nein | ja | nein |
+| Manueller Release-Start mit vorhandenem Tag | nein | nein | nein | ja |
+| Pull Request im Mandanten-Repository | nein | nein | nein | nein |
+
+Der Sync-Workflow besitzt keinen Pfadfilter. Jeder Push nach Entwicklung oder
+Abnahme startet daher den vollständigen Ressourcensync. Dabei werden nur die
+in `config/mandant.json` erlaubten Projektpfade übertragen.
+
+Der separate Konfigurationscheck ist kein vorgeschaltetes `needs`-Gate. Wenn
+ein Push nach Entwicklung oder Abnahme zugleich `config/mandant.json` ändert,
+können Konfigurationscheck und Sync unabhängig laufen. Sync und Release
+validieren die verwendete Konfiguration vor ihrem externen Zugriff erneut.
+
+### Mandantenseitige YAML-Workflows
+
+| Datei | Automatischer Trigger | Manueller Trigger | Abhängigkeit und Zweck |
+|---|---|---|---|
+| [`validate-config.yml`](../../mtext-fi/.github/workflows/validate-config.yml) | Push auf jedem Branch, wenn `config/mandant.json` geändert wurde | keiner | Ruft `reusable-validate-config.yml` zur Prüfung der Mandantenkonfiguration auf |
+| [`sync-resources.yml`](../../mtext-fi/.github/workflows/sync-resources.yml) | Jeder Push nach `Rnnn/Entwicklung` oder `Rnnn/Abnahme` | vollständige `commit_sha` und `source_branch` | Ruft abhängig von der Branchendung `reusable-sync-resources.yml` mit festem Ziel-Environment `Entwicklung` oder `Abnahme` auf |
+| [`release.yml`](../../mtext-fi/.github/workflows/release.yml) | Push eines Tags `Rnnn.nnn` | vorhandener `release_tag` | Ruft `reusable-release.yml` auf; ein Push nach Bereitstellung allein ist kein Auslöser |
+
+Die Referenzen auf die zentralen Workflows und der Input `automation_ref`
+enthalten im Entwicklungsstand noch die Null-SHA
+`0000000000000000000000000000000000000000`. Vor einem Integrationslauf wird
+sie durch die vollständige SHA der freigegebenen Version von `mtext-actions`
+ersetzt.
+
+### Zentrale YAML-Workflows
+
+| Datei | Trigger | Jobs und Abhängigkeiten | Implementierung und Wirkung |
+|---|---|---|---|
+| [`reusable-validate-config.yml`](../../mtext-actions/.github/workflows/reusable-validate-config.yml) | `workflow_call` | Mandanten-Commit auschecken → Automation auschecken → Laufzeit vorbereiten → prüfen | `validate-config` |
+| [`reusable-sync-resources.yml`](../../mtext-actions/.github/workflows/reusable-sync-resources.yml) | `workflow_call` | Exakten Mandanten-Commit mit vollständiger Historie auschecken → Automation auschecken → Laufzeit vorbereiten → synchronisieren | `sync-resources --execute`; schreibt nach `serverSync` und ruft den M/Text-Adapter per HTTPS auf |
+| [`reusable-release.yml`](../../mtext-actions/.github/workflows/reusable-release.yml) | `workflow_call` | Job `build` erzeugt das Artefakt; Job `publish` hat `needs: build`, lädt genau dieses Artefakt und bindet das Environment `Bereitstellung` | `build-release`, danach `publish-mainframe --execute`; Übergabe per FTP/JES nach Freigabe |
+| [`ci.yml`](../../mtext-actions/.github/workflows/ci.yml) | Pull Request oder Push auf `main` in `mtext-actions` | Automation auschecken → Laufzeit vorbereiten → Tests ausführen | `python -m unittest discover -s tests -v` |
+
+Die wiederverwendbaren Workflows sind nur über `workflow_call` erreichbar.
+Alle zentralen Jobs verwenden Self-hosted Runner mit den Labels `self-hosted`,
+`linux` und standardmäßig `mtext-delivery`.
+
+### Python-Kommandos
+
+| Kommando | Aufgerufen durch | Wesentliche Prüfungen und Abhängigkeiten | Ergebnis |
+|---|---|---|---|
+| `validate-config` | `reusable-validate-config.yml` | JSON-Schemas, Repositoryidentität, erlaubte Konfigurationsschlüssel, eindeutige Projekte und konsistente Releaselinien | Status `CONFIG_VALIDATED` |
+| `sync-resources` | `reusable-sync-resources.yml` | Branch und Environment stimmen überein; vollständige SHA; Checkout entspricht SHA; Commit ist aus dem Remote-Branch erreichbar; sichere Projektpfade | Vollständiger erlaubter Projektstand nach `serverSync`, HTTPS-Aufruf des Adapters, Status `ADAPTER_ACCEPTED` |
+| `build-release` | Job `build` in `reusable-release.yml` | Tagformat und Releaselinie; Tag aus Bereitstellungsbranch erreichbar; Checkout entspricht Tag-SHA; DELTA-Basis `.100`; sichere Projektpfade | Reproduzierbare FULL-/DELTA-Archive, Informationsdateien und `manifest.json` mit SHA-256; Status `ARTIFACT_READY` |
+| `publish-mainframe` | Job `publish` in `reusable-release.yml` | Manifest, Querverweise, Pfade, Größen, SHA-256, JCL-Werte und FTP-Secrets | JCL je Paket, FTP-Übertragung und Übergabe an JES; Status `MAINFRAME_SUBMITTED` |
+
+Der Einstieg erfolgt über
+[`__main__.py`](../../mtext-actions/src/lbs_delivery/__main__.py) und
+[`cli.py`](../../mtext-actions/src/lbs_delivery/cli.py). Die CLI übersetzt
+fachliche Fehler in stabile Statuswerte und Prozess-Exitcodes; ein von null
+verschiedener Exitcode lässt den jeweiligen GitHub-Job fehlschlagen.
+
+### Technische Abhängigkeitsketten
+
+| Einstieg | Abhängigkeitskette |
+|---|---|
+| Konfigurationsänderung | `validate-config.yml` → `reusable-validate-config.yml` → `runner-preflight.sh` → `lbs_delivery validate-config` → `config.py` |
+| Push Entwicklung oder Abnahme | `sync-resources.yml` → `reusable-sync-resources.yml` → `runner-preflight.sh` → `lbs_delivery sync-resources` → `config.py` + `git_refs.py` + `resources.py` → `serverSync` → `mtext_adapter.py` |
+| Release-Tag | `release.yml` → `reusable-release.yml` → `build-release` → GitHub-Artefakt → Environment-Freigabe `Bereitstellung` → `publish-mainframe` → FTP-Dataset + JES |
+| Änderung an `mtext-actions` | `ci.yml` → `runner-preflight.sh` → `unittest discover` → Unit-, Integrations- und Workflowvertragstests |
+
+`runner-preflight.sh` prüft Git und die festgelegte Python-Version, erzeugt eine
+isolierte virtuelle Umgebung und installiert ausschließlich aus dem internen
+`LBS_WHEELHOUSE` gemäß `requirements.lock`. Die externen Actions
+`actions/checkout`, `actions/upload-artifact` und `actions/download-artifact`
+sind jeweils auf eine vollständige Commit-SHA festgelegt.
+
+### Environments, Secrets und Serialisierung
+
+| Bereich | Umsetzung |
+|---|---|
+| Entwicklung und Abnahme | Der Sync-Job bindet das fest gewählte Environment; derzeit werden dort keine Secrets gelesen. |
+| Bereitstellung | Nur der Publish-Job bindet dieses Environment. Die manuelle Freigabe wird in GitHub konfiguriert. |
+| Mainframe-Secrets | Ausschließlich `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER` und `MAINFRAME_FTP_PASSWORD` im Publish-Job |
+| Sync-Serialisierung | Concurrency-Gruppe je Repository und Branch; ein laufender Sync wird nicht aktiv abgebrochen. |
+| Release-Serialisierung | Je Repository und Tag; die Mainframe-Übergabe wird zusätzlich je Mandanten-Repository serialisiert. |
+| Build-Publish-Grenze | Publish lädt genau das vom Build benannte Artefakt und prüft Manifest, Größen und SHA-256 erneut. |
+
+## 8. Konfiguration
 
 Jedes Mandanten-Repository enthält seine eigene Konfiguration. Sie beschreibt
 unter anderem:
@@ -349,9 +481,9 @@ der Mandantenzuordnung versioniert in `mandant.json` angepasst werden. Der
 zentral verwaltete Test-/Produktionswert und Zugangsdaten gehören nicht in
 diese Datei.
 
-Die zentrale Datei `config/release_lines.json` enthält die wachsende Zuordnung
-der fachlichen zu den technischen Linien sowie das Übergabeprofil. Aktuell
-gilt:
+Die zentrale Datei `config/releaselinien.json` enthält die wachsende Zuordnung
+der fachlichen zu den technischen Linien sowie das Übergabeprofil. Die beiden
+Felder heißen `mtext_linie` und `uebergabeprofil`. Aktuell gilt:
 
 | Releaselinie | Technische M/Text-Linie |
 |---|---|
@@ -365,13 +497,11 @@ Konfigurationsfelder führen zu einem Fehler. Es gibt keine stillschweigende
 Rückfallregel auf FI-Werte.
 
 Zusätzlich startet jede Änderung an `config/mandant.json` bereits beim Push
-einen nebenwirkungsfreien Config-Check. Er validiert Mandantenfelder,
-Releaselinienzuordnung, Repository-Identität und fachliche Eindeutigkeit,
-verwendet aber weder Secrets noch Environments oder
-externe Zielzugriffe. Da der derzeitige Prozess keine Pull Requests
-voraussetzt, liefert der Check bewusst nur frühes Feedback und ist kein
-technisch erzwungenes Gate. Config-Änderungen werden fachlich mit den benannten
-Mandanten- und Betriebsverantwortlichen abgestimmt.
+einen Config-Check. Er validiert Mandantenfelder, Releaselinienzuordnung,
+Repository-Identität und fachliche Eindeutigkeit. Da der derzeitige Prozess
+keine Pull Requests voraussetzt, liefert der Check bewusst nur frühes Feedback
+und ist kein technisch erzwungenes Gate. Config-Änderungen werden fachlich mit
+den benannten Mandanten- und Betriebsverantwortlichen abgestimmt.
 
 FI ist für die unfragmentierten Basisprojekte maßgeblich, `mtext-autonom` für
 `LOMS_Autonom`. Die übrigen Mandanten enthalten Fragmentprojekte mit dem
@@ -384,7 +514,7 @@ Noch nicht vollständig inventarisierte Mandanten werden erst nach fachlicher
 Prüfung ihrer Projekte und Zuordnungen für den produktiven Betrieb
 freigegeben.
 
-## 8. FULL- und DELTA-Lieferungen
+## 9. FULL- und DELTA-Lieferungen
 
 Ein Tag mit der Endung `.100`, zum Beispiel `R261.100`, erzeugt eine
 vollständige Lieferung aller Projekte der Mandantenkonfiguration.
@@ -411,7 +541,7 @@ Historie, SVN-Eigenschaften, Autoren und großer Dateien wird im
 [Migrations- und Cutover-Runbook](./Migration_und_Cutover_Runbook.md) gesondert
 behandelt.
 
-## 9. Mainframe-Übergabe und JCL
+## 10. Mainframe-Übergabe und JCL
 
 Die JCL liegt künftig als eigene versionierte Template-Datei vor. Änderungen
 an der Mainframe-Ansteuerung sind dadurch sichtbar und können unabhängig vom
@@ -432,14 +562,14 @@ auf eine manuelle Freigabe.
 Übergaben desselben Mandanten werden nacheinander ausgeführt. Verschiedene
 Mandanten können gleichzeitig liefern.
 
-## 10. Status und Fehler
+## 11. Status und Fehler
 
 Die Lösung meldet nur den Status, den sie selbst sicher feststellen kann:
 
 | Status | Bedeutung |
 |---|---|
-| `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinienzuordnung wurden ohne externen Zielzugriff technisch geprüft. |
-| `VALIDATION_FAILED` | Eingaben oder Konfiguration sind ungültig. Es wurde noch kein Zielsystem angesprochen. |
+| `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinienzuordnung wurden technisch geprüft. |
+| `VALIDATION_FAILED` | Eingaben oder Konfiguration sind ungültig. |
 | `SOURCE_FAILED` | Der angegebene Commit, Branch oder Tag konnte nicht eindeutig aufgelöst werden. |
 | `RESOURCE_TRANSFER_FAILED` | Die Ressourcen konnten nicht in den Übergabebereich für M/Text geschrieben werden. |
 | `ADAPTER_FAILED` | Der M/Text-Adapter war nicht erreichbar oder hat die Anfrage abgelehnt. |

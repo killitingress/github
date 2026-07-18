@@ -4,20 +4,22 @@ from __future__ import annotations
 
 import ftplib
 import os
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 from .errors import DeliveryError, Status
-from .jcl import JclRenderError, render_jcl
+from .jcl import JclRenderError, MEMBER_RE, render_jcl
 from .manifest import Manifest, PackageArtifact
 
 
-_MEMBER_RE = re.compile(r"[A-Z0-9]{1,8}")
+# Fehlerklassen, die während FTP-Verbindung, Upload oder JES-Submit auftreten können.
 _FTP_ERRORS = (OSError, ValueError) + ftplib.all_errors
+# Festes Dataset für die hochgeladenen Releasepakete.
 MAINFRAME_DATASET = "IEA.LOMS.TONICZ"
+# Fester JES-Zielknoten für das gerenderte JCL.
 MAINFRAME_JES_TARGET = "LIT9028A"
+# Maximale Dauer des FTP-Verbindungsaufbaus in Sekunden.
 MAINFRAME_FTP_TIMEOUT_SECONDS = 60.0
 
 
@@ -40,7 +42,7 @@ class FtpSettings:
         }
         if not all(required.values()):
             raise DeliveryError(
-                Status.VALIDATION_FAILED, "required Mainframe FTP secrets are missing"
+                Status.VALIDATION_FAILED, "erforderliche Mainframe-FTP-Secrets fehlen"
             )
         return cls(**required)
 
@@ -55,7 +57,9 @@ def render_package_jcl(
         values["MEMBER"] = package["member"]
         return render_jcl(template, values)
     except JclRenderError as exc:
-        raise DeliveryError(Status.VALIDATION_FAILED, "JCL rendering failed") from exc
+        raise DeliveryError(
+            Status.VALIDATION_FAILED, f"JCL-Rendering fehlgeschlagen: {exc}"
+        ) from exc
 
 
 def _accepted(reply: str) -> bool:
@@ -74,13 +78,14 @@ def submit_package(
 ) -> None:
     """Überträgt ein Paket und reicht die zugehörige JCL unmittelbar bei JES ein."""
 
-    if _MEMBER_RE.fullmatch(member) is None:
-        raise DeliveryError(Status.VALIDATION_FAILED, "invalid Mainframe member")
+    if MEMBER_RE.fullmatch(member) is None:
+        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Mainframe-Member")
     package = Path(package_path)
     jcl = Path(jcl_path)
     if not package.is_file() or not jcl.is_file():
-        raise DeliveryError(Status.MAINFRAME_TRANSFER_FAILED, "publish input is missing")
+        raise DeliveryError(Status.MAINFRAME_TRANSFER_FAILED, "Übergabedatei fehlt")
     session = ftp_factory()
+    # Paketupload und JES-Submit gehören zu einer gemeinsamen FTP-Sitzung.
     try:
         session.connect(settings.host, timeout=MAINFRAME_FTP_TIMEOUT_SECONDS)
         login_reply = session.login(settings.user, settings.password)
@@ -101,10 +106,11 @@ def submit_package(
             raise ftplib.Error(jes_reply)
         session.quit()
     except _FTP_ERRORS as exc:
+        # close() ist nach Transportfehlern nur noch eine bestmögliche Bereinigung.
         try:
             session.close()
         except Exception:
             pass
         raise DeliveryError(
-            Status.MAINFRAME_TRANSFER_FAILED, "FTP/JES hand-over failed"
+            Status.MAINFRAME_TRANSFER_FAILED, "FTP-/JES-Übergabe fehlgeschlagen"
         ) from exc

@@ -1,4 +1,4 @@
-"""Wählt Ressourcen aus, staged sie isoliert und veröffentlicht sie nach serverSync."""
+"""Stellt Ressourcen isoliert bereit und veröffentlicht sie nach serverSync."""
 
 from __future__ import annotations
 
@@ -20,11 +20,12 @@ def stage_resources(
 ) -> list[str]:
     """Kopiert geprüfte Projektstände in ein leeres laufbezogenes Staging."""
 
+    # Ein frisches Staging verhindert die Übernahme von Resten eines älteren Laufs.
     source = Path(source_root).resolve()
     staging = Path(staging_root)
     if staging.exists() and any(staging.iterdir()):
         raise DeliveryError(
-            Status.RESOURCE_TRANSFER_FAILED, "staging directory must be empty"
+            Status.RESOURCE_TRANSFER_FAILED, "Staging-Verzeichnis ist nicht leer"
         )
     staging.mkdir(parents=True, exist_ok=True)
     staged: list[str] = []
@@ -33,16 +34,16 @@ def stage_resources(
             source,
             project["source_path"],
             status=Status.VALIDATION_FAILED,
-            subject="resource project",
+            subject="Ressourcenprojekt",
             reject_symlink=True,
         )
         if not project_source.is_dir():
             raise DeliveryError(
                 Status.RESOURCE_TRANSFER_FAILED,
-                f"resource project is missing: {project['name']}",
+                f"Ressourcenprojekt fehlt: {project['name']}",
             )
         reject_symlinks(
-            project_source, status=Status.VALIDATION_FAILED, subject="resource"
+            project_source, status=Status.VALIDATION_FAILED, subject="Ressource"
         )
         destination = staging / project["name"]
         shutil.copytree(project_source, destination, copy_function=shutil.copy2)
@@ -65,6 +66,8 @@ def publish_server_sync(staging_root: str | Path, server_sync_root: str | Path) 
             had_destination = destination.exists()
             if had_destination:
                 os.replace(destination, backup)
+            # Das Backup stellt den letzten vollständigen Stand bei
+            # Rename-Fehlern wieder her.
             try:
                 os.replace(temporary, destination)
             except OSError:
@@ -75,5 +78,6 @@ def publish_server_sync(staging_root: str | Path, server_sync_root: str | Path) 
                 shutil.rmtree(backup)
     except (OSError, shutil.Error) as exc:
         raise DeliveryError(
-            Status.RESOURCE_TRANSFER_FAILED, "serverSync publication failed"
+            Status.RESOURCE_TRANSFER_FAILED,
+            "serverSync-Veröffentlichung fehlgeschlagen",
         ) from exc

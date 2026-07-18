@@ -79,7 +79,7 @@ jobs:
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery build-release
           --repository-root source
           --mandant-config source/config/mandant.json
-          --release-lines automation/config/release_lines.json
+          --releaselinien automation/config/releaselinien.json
           --repository-name "$INPUT_REPOSITORY_NAME"
           --tag "$INPUT_RELEASE_TAG"
           --trigger-sha "$INPUT_TRIGGER_SHA"

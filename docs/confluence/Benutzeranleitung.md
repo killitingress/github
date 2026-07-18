@@ -59,6 +59,24 @@ darin, wie Änderungen gespeichert und mit anderen geteilt werden.
 | Neue Stände erhalten fortlaufende Revisionsnummern wie `r12345`. | Jeder Stand erhält eine eindeutige Commit-SHA. |
 | Branches werden vergleichsweise selten und eher für länger getrennte Entwicklungslinien verwendet. | Branches lassen sich leicht als vorübergehende Arbeitsbereiche für einzelne Änderungen nutzen. |
 
+### SVN-Pfad und Git-Branch unterscheiden
+
+Im bisherigen SVN-Aufbau sind Stage und Releaselinie Bestandteile des Pfads.
+Bei der Migration werden diese Informationen auf Git-Branches abgebildet:
+
+```text
+SVN: branches/Entwicklung/R260.100_MText/<Projekt>
+Git: Branch R260/Entwicklung, darin Pfad <Projekt>
+```
+
+Die SVN-Verzeichnisse `branches/Entwicklung/R260.100_MText` werden in Git also
+nicht innerhalb des Branches nachgebaut. Die Releaselinie und die Stage stehen
+im Branch-Namen; im ausgecheckten Arbeitsbereich beginnt der Pfad direkt mit
+dem Projektverzeichnis. Für die tägliche Arbeit muss deshalb zuerst der
+richtige Branch gewählt und anschließend das Projekt darin bearbeitet werden.
+Die verbindliche Zuordnung der vorhandenen SVN-Pfade zu den Git-Branches wird
+vor dem Cutover je Mandant geprüft und dokumentiert.
+
 Für die tägliche Arbeit bedeutet das vor allem: **Committen und Pushen sind in
 Git zwei getrennte Schritte.** Ein lokaler Commit sichert den eigenen
 Arbeitsstand, verändert aber noch nichts auf GitHub und löst keine
@@ -69,6 +87,35 @@ Workflow.
 Git und GitHub sind dabei nicht dasselbe: **Git** ist die
 Versionsverwaltung. **GitHub** stellt das gemeinsame Repository, die
 Oberfläche, Berechtigungen und die GitHub-Actions-Automation bereit.
+
+### Push-Ablehnung und Konflikt unterscheiden
+
+Wenn zwei Personen vom selben GitHub-Stand aus arbeiten und eine Person zuerst
+pusht, baut der lokale Commit der zweiten Person noch auf dem vorherigen Stand
+auf. Git lehnt deren Push deshalb üblicherweise als `non-fast-forward` ab. Das
+kann auch geschehen, wenn beide Personen unterschiedliche Dateien geändert
+haben.
+
+Diese Ablehnung ist noch kein inhaltlicher Konflikt. Sie bedeutet zunächst nur,
+dass der lokale Branch nicht mehr aktuell ist. Der neue GitHub-Stand muss
+zuerst übernommen werden. Sind die Änderungen unabhängig, kann Git sie
+automatisch kombinieren. Überschneiden oder widersprechen sie sich, entsteht
+dabei ein Konflikt.
+
+### Merge, Rebase und Pull einfach erklärt
+
+Ein **Merge** verbindet zwei Entwicklungsverläufe. Die vorhandenen Commits
+bleiben unverändert; gegebenenfalls entsteht ein zusätzlicher Merge-Commit.
+
+Ein **Rebase** setzt eigene, noch nicht veröffentlichte Commits auf einen
+neueren Ausgangsstand. Die Änderungen werden erneut angewendet und erhalten
+dabei neue SHAs. Bereits veröffentlichte oder von anderen Personen verwendete
+Commits dürfen in diesem Prozess nicht per Rebase umgeschrieben werden.
+
+Ein **Pull** holt den GitHub-Stand und integriert ihn anschließend. Je nach
+Git-Client geschieht dies durch Merge oder Rebase. Der verbindliche Bedienweg
+und die zu verwendende Pull-Variante werden deshalb zusammen mit dem
+zusätzlichen Git-Client festgelegt und praktisch geprüft.
 
 ### M/Text Workbench und GitHub
 
@@ -118,8 +165,7 @@ gewünschte Commit nach `<Releaselinie>/Entwicklung` übernommen. Erst der Push
 dieses Entwicklungsbranches startet die M/Text-Synchronisation. Der
 Feature-Branch selbst bezeichnet keine Stage des Lieferprozesses und löst
 weder eine M/Text-Synchronisation noch einen Release aus. Nur wenn
-`config/mandant.json` geändert wird, läuft dort der nebenwirkungsfreie
-Config-Check.
+`config/mandant.json` geändert wird, läuft dort der Config-Check.
 
 ### Commit und SHA einfach erklärt
 
@@ -129,6 +175,20 @@ Repository aus 40 Zeichen, zum Beispiel
 `8f3a1c2d4e5f67890123456789abcdef01234567`. Meist genügt in der Oberfläche
 eine verkürzte Darstellung; für einen manuellen Wiederanlauf verlangt die
 Automation jedoch die vollständige Kennung.
+
+Die Commit-SHA ist ein Fingerabdruck des gesamten Commit-Objekts. Sie hängt
+vom versionierten Repository-Dateistand, vom vorherigen Commit, von Autor und
+Committer, den Zeitpunkten und der Commit-Nachricht ab:
+
+```text
+Commit-SHA = Hash(Repository-Dateistand + Eltern-Commit + Metadaten + Nachricht)
+```
+
+Ein Zeitstempel allein wäre weder zuverlässig eindeutig noch ein Nachweis für
+den Inhalt. Mehrere Rechner können gleichzeitig Commits erzeugen, ihre Uhren
+können abweichen und eine nachträgliche Inhaltsänderung bliebe unentdeckt. Git
+speichert dabei nicht für jeden Commit alle Dateien erneut: Unveränderte
+Dateiobjekte werden über den Tree-Hash wiederverwendet.
 
 Ein Branchname wie `R261/Entwicklung` bezeichnet dagegen keinen dauerhaft
 festen Stand. Er zeigt auf den jeweils neuesten Commit des Branches und bewegt
@@ -169,6 +229,28 @@ die vollständige SHA des Quell-Commits nach der für den zusätzlichen
 Git-Client festgelegten Konvention in der Nachricht des neuen Ziel-Commits
 dokumentiert werden.
 
+Das folgende Beispiel zeigt die selektive Weitergabe. Auf Entwicklung liegen
+die unabhängigen Änderungen A, B und C; nach Abnahme soll zunächst nur B:
+
+```text
+Entwicklung:  Basis ─ A ─ B ─ C
+Abnahme:      Basis ─ B'
+```
+
+`B'` enthält dieselbe fachliche Änderung wie B, ist aber wegen des anderen
+Eltern-Commits und der neuen Metadaten ein eigener Commit mit neuer SHA. A und
+C werden nicht automatisch übernommen. Beim nächsten Übergang wird der in
+Abnahme geprüfte Commit `B'` weitergegeben:
+
+```text
+Entwicklung:     Basis ─ A ─ B ─ C
+Abnahme:         Basis ─ B'
+Bereitstellung:  Basis ─ B''
+```
+
+Die Striche kennzeichnen neue Commits und SHAs, keine fachlich veränderten
+Varianten.
+
 Der werkzeugunabhängige Ablauf ist:
 
 1. Den Zielbranch auschecken und auf den aktuellen GitHub-Stand bringen.
@@ -178,11 +260,34 @@ Der werkzeugunabhängige Ablauf ist:
    kontrollieren.
 5. Den Zielbranch pushen und den dadurch ausgelösten Workflow prüfen.
 
+Die vollständige Quell-SHA wird direkt in der Nachricht des neuen Commits
+gespeichert. Der Git-Befehl `cherry-pick -x` ergänzt sie automatisch:
+
+```text
+(cherry picked from commit 8f3a1c2d4e5f67890123456789abcdef01234567)
+```
+
+Der zusätzliche Git-Client muss diese Option unterstützen oder eine
+gleichwertige feste Zeile in der Commit-Nachricht ermöglichen. Die vorhandenen
+GitHub Actions erzeugen den Cherry-Pick nicht und tragen die Quell-SHA nicht
+nachträglich ein.
+
 Bei mehreren voneinander abhängigen Commits werden alle freigegebenen Commits
 in ihrer ursprünglichen Reihenfolge übernommen. Meldet der Git-Client einen
 Konflikt, wird nicht einfach weitergepusht: Die Abweichung muss fachlich
 geklärt, die Konfliktauflösung geprüft und erst danach committed und gepusht
 werden. Force-Pushes bleiben verboten.
+
+Bei einer Push-Ablehnung oder einem Konflikt gilt:
+
+1. Quelländerung und aktuellen Zielstand vergleichen.
+2. Gewünschtes fachliches Ergebnis klären.
+3. Konflikt im Git-Client auflösen oder den Vorgang sicher abbrechen.
+4. Alle betroffenen Dateien und den Gesamtstand prüfen.
+5. Erst danach erneut pushen und den Workflow kontrollieren.
+
+Git erkennt nur technische Überschneidungen. Auch ein automatisch kombiniertes
+Ergebnis kann fachlich falsch sein und muss deshalb geprüft werden.
 
 GitHub bietet in der Weboberfläche keinen allgemeinen direkten Cherry-Pick
 zwischen beliebigen Branches an. Die konkreten Schaltflächen können deshalb
@@ -208,11 +313,11 @@ GitHub-Einstellungen verwaltet.
 #### Mandantenidentität
 
 ```json
-"code": "FI",
+"kuerzel": "FI",
 "repository": "mtext-fi"
 ```
 
-`code` ist das kurze Mandantenkennzeichen und bildet unter anderem den Anfang
+`kuerzel` ist das Mandantenkürzel und bildet unter anderem den Anfang
 der historischen Lieferdateinamen. `repository` muss exakt dem Namen des
 auslösenden GitHub-Repositories entsprechen. Dadurch kann eine Konfiguration nicht
 versehentlich in einem anderen Mandanten-Repository verwendet werden.
@@ -257,7 +362,7 @@ Zuordnung angepasst werden. Das FI-Beispiel lautet:
 
 ```json
 "subsystem": "LOMS",
-"handover_profiles": {
+"uebergabeprofile": {
   "FKT": {
     "assignment": "LOMS000066",
     "stage": "FKTE"
@@ -275,7 +380,7 @@ Zuordnung angepasst werden. Das FI-Beispiel lautet:
 | `assignment` | Assignment des Mandanten für das jeweilige Übergabeprofil | wird als `ASSIGNMENT` eingesetzt und dort für `PROJNO` verwendet |
 | `stage` | JCL-Stage-Code für das CodePipeline-`LEVEL`, beispielsweise `FKTE` oder `JURP` | wird in den `LEVEL`-Platzhalter eingesetzt und dort unter anderem für `CLVL` und `SLVL` verwendet |
 
-Die Namen `FKT` und `JUR` unter `handover_profiles` bezeichnen die beiden aus
+Die Namen `FKT` und `JUR` unter `uebergabeprofile` bezeichnen die beiden aus
 dem bisherigen Verfahren übernommenen Übergabeprofile. Sie sind nicht selbst
 die Stage-Codes. Welche Releaselinie welches Profil verwendet, steht in der
 zentralen Releaselinienzuordnung, aktuell `R260 → JUR`, `R261 → FKT` und
@@ -316,15 +421,17 @@ Für jede neue Linie werden drei Branches im Format `Rnnn/Entwicklung`,
 `Rnnn/Abnahme` und `Rnnn/Bereitstellung` angelegt. Ausgangspunkt ist der
 fachlich bestätigte letzte Release-Tag der bisherigen Linie.
 
-Das zentrale Automatisierungsteam ergänzt in `config/release_lines.json` genau
+Das zentrale Automatisierungsteam ergänzt in `config/releaselinien.json` genau
 eine Zuordnung aus neuer Releaselinie, technischer M/Text-Linie und vorhandenem
-Übergabeprofil `FKT` oder `JUR`. Stage-Namen, JCL-Parameter, URL-Aufbau,
-serverSync-Pfad und Tagformat bleiben unverändert.
+Übergabeprofil. Die Felder heißen `mtext_linie` und `uebergabeprofil`; der
+Profilname muss unter `uebergabeprofile` in `mandant.json` vorhanden sein.
+Stage-Namen, JCL-Parameter, URL-Aufbau, serverSync-Pfad und Tagformat bleiben
+unverändert.
 
 Anschließend wird der vollständige Projektstand über den manuellen Workflow
 **Sync M/Text resources** einmal nach Entwicklung und einmal nach Abnahme
 übertragen. Verwendet werden jeweils die Commit-SHA des Ausgangstags und der
-passende neue Stage-Branch. `ADAPTER_ACCEPTED` ersetzt nicht den fachlichen
+passende neue Branch der Stage. `ADAPTER_ACCEPTED` ersetzt nicht den fachlichen
 Smoke-Test in M/Text.
 
 ## 4. Änderung nach Entwicklung bringen

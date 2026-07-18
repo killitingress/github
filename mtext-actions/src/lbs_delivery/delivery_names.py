@@ -7,7 +7,10 @@ import re
 from .errors import DeliveryError, Status
 
 
+# Reguläre Ausdrücke für fachliche Projektnamen.
+# Entfernt ein optionales Mandantenkürzel wie `[FI]` vor der Codezuordnung.
 _FRAGMENT_SUFFIX = re.compile(r"\[[A-Z]{2}\]$")
+# Historisch festgelegter Liefercode je fachlichem Basisprojekt.
 _DELIVERY_CODE_BY_PROJECT = {
     "Configuration": "CONFI",
     "Fonts": "FONTS",
@@ -16,6 +19,8 @@ _DELIVERY_CODE_BY_PROJECT = {
     "LOMS_PKA": "PKA",
     "LOMS_Autonom": "AUTON",
 }
+# Erlaubte Projektcodes in einem erzeugten Manifest.
+DELIVERY_CODES = set(_DELIVERY_CODE_BY_PROJECT.values())
 
 
 def project_code_for_name(project_name: str) -> str:
@@ -27,5 +32,5 @@ def project_code_for_name(project_name: str) -> str:
     except KeyError as exc:
         raise DeliveryError(
             Status.VALIDATION_FAILED,
-            f"project has no approved delivery name mapping: {project_name}",
+            f"Projekt besitzt keine freigegebene Liefercode-Zuordnung: {project_name}",
         ) from exc

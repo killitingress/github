@@ -59,7 +59,7 @@ ist weder ein Git-Commit noch eine dauerhafte Ablage.
 | bestätigt | Heutigen Adaptervertrag als Ausgangslage festhalten | Der bestehende Ablauf schreibt zuerst nach `serverSync` und sendet danach einen POST mit `MAN` und `INR`; dies legt den künftigen Transport noch nicht fest |
 | offen | Transportweg nach `serverSync` entscheiden und Zielvertrag festschreiben | Genau eine der im [Zielbild](./Zielbild_GitHub_Actions_Git.md#4-zielarchitektur-und-verantwortlichkeiten) beschriebenen Varianten wird ausgewählt: PUT an den Adapter, Sharezugriff des Runners oder Download eines Actions-Artefakts durch Adapter beziehungsweise M/Text; Verantwortlichkeiten, Authentifizierung, Prüfung und Wiederanlauf sind geklärt |
 | offen | Kompatibilität des gewählten Transports nachweisen | Auf `serverSync` entsteht derselbe Verzeichnisbaum wie im bisherigen Verfahren; Transportdateien und technische Metadaten verbleiben nicht im ausgewerteten Bestand |
-| offen | Config-Check und Synchronisation nichtproduktiv prüfen | `CONFIG_VALIDATED` bleibt nebenwirkungsfrei; ein vollständiger Projektstand wird erfolgreich über den gewählten Transport bereitgestellt und der Wiederanlauf ist geprüft |
+| offen | Config-Check und Synchronisation nichtproduktiv prüfen | Der Config-Check liefert `CONFIG_VALIDATED`; ein vollständiger Projektstand wird erfolgreich über den gewählten Transport bereitgestellt und der Wiederanlauf ist geprüft |
 
 ## 5. Mainframe-Übergabe einrichten und abnehmen
 

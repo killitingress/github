@@ -10,15 +10,12 @@ from pathlib import Path
 from .config import (
     ADAPTER_PAYLOAD,
     MandantConfig,
-    ReleaseLines,
+    RELEASE_TAG_RE,
+    Releaselinien,
+    SYNC_STAGES,
     load_mandant_config,
-    load_release_lines,
-    release_branch,
-    release_profile,
-    resolve_adapter_url,
-    resolve_server_sync_root,
-    resolve_sync_branch,
-    validate_release_tag,
+    load_releaselinien,
+    validate_releaselinie,
 )
 from .errors import DeliveryError, Status
 from .git_refs import (
@@ -41,7 +38,7 @@ def _common_config_arguments(parser: argparse.ArgumentParser) -> None:
     """Ergänzt gemeinsame Pfade und Repository-Angaben eines Subcommands."""
 
     parser.add_argument("--mandant-config", default="config/mandant.json")
-    parser.add_argument("--release-lines", required=True)
+    parser.add_argument("--releaselinien", required=True)
     parser.add_argument("--repository-name", required=True)
 
 
@@ -81,29 +78,37 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _load_configs(arguments: argparse.Namespace) -> tuple[MandantConfig, ReleaseLines]:
+def _load_configs(arguments: argparse.Namespace) -> tuple[MandantConfig, Releaselinien]:
     """Lädt Mandant und Releaselinien."""
 
-    return (
-        load_mandant_config(
-            arguments.mandant_config,
-            repository_name=arguments.repository_name,
-        ),
-        load_release_lines(arguments.release_lines),
+    mandant = load_mandant_config(
+        arguments.mandant_config,
+        repository_name=arguments.repository_name,
     )
+    releaselinien = load_releaselinien(arguments.releaselinien)
+    konfigurierte_profile = mandant["uebergabeprofile"]
+    if any(
+        item["uebergabeprofil"] not in konfigurierte_profile
+        for item in releaselinien.values()
+    ):
+        raise DeliveryError(
+            Status.VALIDATION_FAILED,
+            "Releaselinie verweist auf ein unbekanntes Übergabeprofil",
+        )
+    return mandant, releaselinien
 
 
 def _validate_config(arguments: argparse.Namespace) -> Status:
-    """Prüft Mandant und Releaselinien ohne Nebenwirkungen."""
+    """Prüft Mandant und Releaselinien."""
 
-    mandant, release_lines = _load_configs(arguments)
+    mandant, releaselinien = _load_configs(arguments)
     print(
         json.dumps(
             {
                 "status": Status.CONFIG_VALIDATED.value,
-                "mandant": mandant["code"],
+                "mandanten_kuerzel": mandant["kuerzel"],
                 "repository": mandant["repository"],
-                "release_lines": sorted(release_lines),
+                "releaselinien": sorted(releaselinien),
             },
             sort_keys=True,
         )
@@ -114,10 +119,18 @@ def _validate_config(arguments: argparse.Namespace) -> Status:
 def _sync(arguments: argparse.Namespace) -> Status:
     """Stellt Ressourcen bereit und ruft bei Freigabe den M/Text-Adapter auf."""
 
-    mandant, release_lines = _load_configs(arguments)
-    release_line = resolve_sync_branch(
-        release_lines, arguments.source_branch, arguments.environment
-    )
+    mandant, releaselinien = _load_configs(arguments)
+    releaselinie, separator, stage = arguments.source_branch.partition("/")
+    validate_releaselinie(releaselinien, releaselinie)
+    if (
+        separator != "/"
+        or arguments.environment not in SYNC_STAGES
+        or stage != arguments.environment
+    ):
+        raise DeliveryError(
+            Status.VALIDATION_FAILED,
+            "Branch und Zielumgebung der Synchronisation passen nicht zusammen",
+        )
     commit = require_full_sha(arguments.commit)
     require_head(arguments.repository_root, commit)
     require_commit_on_branch(arguments.repository_root, commit, arguments.source_branch)
@@ -126,12 +139,12 @@ def _sync(arguments: argparse.Namespace) -> Status:
     if not arguments.execute:
         print(json.dumps({"status": "STAGED", "projects": staged}, sort_keys=True))
         return Status.ARTIFACT_READY
-    server_sync_root = resolve_server_sync_root(
-        release_lines, release_line, arguments.environment
-    )
+    mtext_linie = releaselinien[releaselinie]["mtext_linie"]
+    path_suffix, host_suffix = SYNC_STAGES[arguments.environment]
+    server_sync_root = f"/nfs/mtext/{mtext_linie}{path_suffix}/serverSync"
     publish_server_sync(arguments.staging_dir, server_sync_root)
     response = call_adapter(
-        resolve_adapter_url(release_lines, release_line, arguments.environment),
+        f"https://{mtext_linie}{host_suffix}.ltoma.intern/vMtextAdapter/sync",
         ADAPTER_PAYLOAD,
         timeout=arguments.timeout,
     )
@@ -151,15 +164,19 @@ def _sync(arguments: argparse.Namespace) -> Status:
 def _build_release(arguments: argparse.Namespace) -> Status:
     """Prüft den Release-Tag und erzeugt das zugehörige FULL oder DELTA."""
 
-    mandant, release_lines = _load_configs(arguments)
-    validate_release_tag(release_lines, arguments.tag)
-    required_branch = release_branch(release_lines, arguments.tag[:4])
+    mandant, releaselinien = _load_configs(arguments)
+    if RELEASE_TAG_RE.fullmatch(arguments.tag) is None:
+        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
+    releaselinie = arguments.tag[:4]
+    validate_releaselinie(releaselinien, releaselinie)
+    required_branch = f"{releaselinie}/Bereitstellung"
     target_sha = require_tag_on_branch(
         arguments.repository_root, arguments.tag, required_branch
     )
     if arguments.trigger_sha and require_full_sha(arguments.trigger_sha) != target_sha:
         raise DeliveryError(
-            Status.SOURCE_FAILED, "tag SHA does not match triggering commit"
+            Status.SOURCE_FAILED,
+            "Tag-SHA stimmt nicht mit dem auslösenden Commit überein",
         )
     require_head(arguments.repository_root, target_sha)
     delivery = release_type(arguments.tag)
@@ -182,7 +199,7 @@ def _build_release(arguments: argparse.Namespace) -> Status:
         mandant,
         repository_name=arguments.repository_name,
         release_tag=arguments.tag,
-        profile_name=release_profile(release_lines, arguments.tag[:4]),
+        uebergabeprofil_name=releaselinien[releaselinie]["uebergabeprofil"],
         target_sha=target_sha,
         base_sha=base_sha,
         previous_tag=previous_tag,
@@ -236,7 +253,7 @@ def _publish(arguments: argparse.Namespace) -> Status:
             arguments.artifact_root,
             package["path"],
             status=Status.PACKAGE_FAILED,
-            subject="artifact",
+            subject="Artefakt",
             strict=True,
             reject_symlink=True,
         )
@@ -272,6 +289,9 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return exc.exit_code
     except (OSError, UnicodeError) as exc:
-        print(f"{Status.VALIDATION_FAILED.value}: local file operation failed", file=sys.stderr)
+        print(
+            f"{Status.VALIDATION_FAILED.value}: lokale Dateioperation fehlgeschlagen",
+            file=sys.stderr,
+        )
         return DeliveryError(Status.VALIDATION_FAILED, str(exc)).exit_code
     return 0

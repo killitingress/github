@@ -1,6 +1,6 @@
 {
   "mandant": {
-    "code": "FI",
+    "kuerzel": "FI",
     "repository": "mtext-fi",
     "subsystem": "LOMS",
     "projects": [
@@ -10,7 +10,7 @@
       {"name": "LOMS_Basis", "source_path": "LOMS_Basis"},
       {"name": "LOMS_PKA", "source_path": "LOMS_PKA"}
     ],
-    "handover_profiles": {
+    "uebergabeprofile": {
       "FKT": {"assignment": "LOMS000066", "stage": "FKTE"},
       "JUR": {"assignment": "LOMS000067", "stage": "JURP"}
     }
