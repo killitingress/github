@@ -34,8 +34,13 @@ seiner Konfiguration. Die gemeinsame Automatisierung liegt in einem zentralen
 Repository. So bleiben die Mandantendaten getrennt, während alle Mandanten
 dieselben geprüften Abläufe verwenden.
 
-Eine Änderung durchläuft weiterhin die Stufen Entwicklung, Abnahme und
-Bereitstellung:
+Eine Änderung durchläuft weiterhin die drei Prozess-Stages Entwicklung,
+Abnahme und Bereitstellung. Als Stage wird in diesem Dokument ein Abschnitt
+des Freigabe- und Lieferprozesses bezeichnet. Der später genannte
+JCL-Stage-Code wie `FKTE` oder `JURP` bezeichnet dagegen das
+CodePipeline-`LEVEL` und ist davon unabhängig.
+
+Der Ablauf ist:
 
 1. Ein Push nach `Rnnn/Entwicklung` verteilt den Stand an das
    M/Text-Entwicklungssystem.
@@ -79,8 +84,8 @@ Bestandteil dieser ersten Ausbaustufe.
   technische Kennung ist der Commit-SHA.
 - Der Mandant ergibt sich aus dem Repository und seiner Konfiguration. Er kann
   beim Start eines Laufs nicht frei gewählt werden.
-- Aktive Releaselinien erhalten getrennte Branches für Entwicklung, Abnahme
-  und Bereitstellung. Derzeit sind dies `R260`, `R261` und `R270`.
+- Die Releaselinien `R260`, `R261` und `R270` erhalten getrennte Branches für
+  Entwicklung, Abnahme und Bereitstellung.
 - Geheimnisse und Zugangsdaten werden nicht in Git gespeichert, sondern über
   die dafür vorgesehenen GitHub-Einstellungen bereitgestellt.
 - Eine weitergehende Statusabfrage bei M/Text oder auf dem Mainframe wird in
@@ -157,7 +162,7 @@ dient der Laufkontrolle, manuellen Wiederholungen, Freigaben, Release-Tags und
 den weitergehenden Verwaltungsaufgaben. Die tägliche Ressourcenarbeit setzt
 keine Git-Kommandozeile voraus.
 
-Für die gezielte Übernahme einzelner Änderungen zwischen den Stufen erhalten
+Für die gezielte Übernahme einzelner Änderungen zwischen den Stages erhalten
 die dafür berechtigten Text-Entwickler zusätzlich einen geeigneten Git-Client.
 Das konkrete Produkt, seine Bereitstellung und der verbindliche Bedienweg
 werden vor dem Pilotbetrieb festgelegt und abgenommen.
@@ -166,9 +171,9 @@ Die Berechtigungen werden je Mandanten-Repository vergeben. Jeder Mandant
 benennt ein Release-Team, das als einzige reguläre Gruppe direkt nach
 `Rnnn/Bereitstellung` pushen und neue Release-Tags anlegen darf. So können die
 Verantwortlichen je Mandant unterschiedlich sein, ohne die gemeinsame
-Automation zu verzweigen. Force-Pushes und das Löschen von Stufenbranches
-bleiben verboten. Bereits angelegte Release-Tags dürfen auch vom Release-Team
-nicht verändert oder gelöscht werden.
+Automation zu verzweigen. Force-Pushes und das Löschen der Branches dieser
+Stages bleiben verboten. Bereits angelegte Release-Tags dürfen auch vom
+Release-Team nicht verändert oder gelöscht werden.
 
 Für jeden Lauf checkt GitHub Actions sowohl den ausgewählten Stand des
 Mandanten-Repositories als auch eine festgelegte Version der zentralen
@@ -232,7 +237,7 @@ ebenfalls in das Repository übernommen werden, ist aber wie bisher nicht
 Bestandteil der Synchronisation oder der Releasepakete.
 
 Die Workflows im Mandanten-Repository legen nur Auslöser und explizite
-Zielstufen fest. Die Verarbeitung erfolgt durch die zentralen Workflows aus
+Ziel-Environments fest. Die Verarbeitung erfolgt durch die zentralen Workflows aus
 `mtext-actions`. Im aktuellen Entwicklungsstand enthalten die Verweise auf
 diese zentralen Workflows noch eine nicht lauffähige Folge aus Nullen als
 Platzhalter.
@@ -262,23 +267,22 @@ R260/Bereitstellung
 ```
 
 Damit ist aus jedem Branchnamen eindeutig erkennbar, zu welcher Releaselinie
-und Stufe er gehört. Ein gemeinsamer Stufenbranch mit mehreren
+und Stage er gehört. Ein gemeinsamer Branch je Stage mit mehreren
 Releaseverzeichnissen, wie er in SVN verwendet wurde, wird nicht fortgeführt.
 
 Für größere oder gemeinsam bearbeitete Änderungen kann ein Feature-Branch
 verwendet werden. Er löst keine Verteilung aus. Kleine Änderungen dürfen auch
 direkt auf dem Entwicklungsbranch entstehen. Ein Feature-Branch ist keine
-zusätzliche fachliche Stufe.
+zusätzliche Stage des Freigabeprozesses.
 
 Ein Push nach `Rnnn/Entwicklung` oder `Rnnn/Abnahme` startet automatisch die
-M/Text-Verteilung für die entsprechende Stufe. Beim Übergang zur nächsten
-Stufe wird eine fachlich ausgewählte Änderung per Cherry-Pick übernommen. Der
+M/Text-Verteilung für die entsprechende Stage. Beim Übergang zur nächsten
+Stage wird eine fachlich ausgewählte Änderung per Cherry-Pick übernommen. Der
 Cherry-Pick erzeugt auf dem Zielbranch einen neuen Commit mit einer neuen SHA;
 weitergegeben wird dieselbe Änderung, nicht derselbe Commit. Die
 vollständige Quell-SHA wird nach einer verbindlichen Konvention im neuen
-Ziel-Commit dokumentiert. Die Workflow-Trigger verwenden das allgemeine
-Namensmuster `Rnnn/<Stufe>`; ob eine konkrete Linie aktiv ist, entscheidet
-ausschließlich die zentrale Deploymentkonfiguration.
+Ziel-Commit dokumentiert. Ob die Releaselinie fachlich eingerichtet ist,
+entscheidet die zentrale Releaselinienzuordnung.
 
 Ein Push nach `Rnnn/Bereitstellung` erzeugt noch keine Lieferung. Erst ein Tag
 im Format `Rnnn.nnn` startet den Paketbau. Dabei wird geprüft, ob der Tag zur
@@ -289,12 +293,7 @@ durch Tag-Rulesets gegen Änderung, Force-Push und Löschung geschützt.
 Der zusätzliche Git-Client für die Auswahl und Übernahme einzelner Änderungen
 nach Abnahme und Bereitstellung wird vor dem Pilotbetrieb ausgewählt,
 bereitgestellt und praktisch abgenommen. Ein direkter Cherry-Pick ist über die
-GitHub-Weboberfläche allein nicht verfügbar. Soll der erweiterte Ablauf später
-vollständig im Browser stattfinden, ist ein kurzlebiger Auswahlbranch mit
-einem normalen Pull Request der bevorzugte GitHub-native Weg. Dafür ist kein
-eigener fachlicher Validate-Workflow erforderlich. Eine alternativ eingeführte
-schreibende Automation müsste einen eigenen, ausdrücklich freizugebenden
-Sicherheitsvertrag erhalten.
+GitHub-Weboberfläche allein nicht verfügbar.
 
 Die Mandanten-Repositories erhalten keinen zusätzlichen `main`-Branch. Als
 Default Branch dient der Entwicklungsbranch der aktuell führenden Linie,
@@ -303,24 +302,20 @@ Einstellung manuell angepasst.
 
 Manuelle Wiederholungen sind möglich, müssen aber denselben Commit verwenden.
 Vor einer erneuten M/Text-Verteilung prüft der Workflow, ob dieser Commit zum
-ausgewählten Stufenbranch gehört.
+ausgewählten Branch gehört.
 
-### Initiale Vollsynchronisation bei einer neuen Releaselinie
+### Neue Releaselinie einrichten
 
-Eine neue Releaselinie basiert je Mandant auf dem unveränderlichen Commit des
-letzten tatsächlich ausgelieferten Release-Tags der bisherigen Linie. Dieser
-bestätigte Tag und nicht lediglich der numerisch höchste vorhandene Tag bildet
-die Basis der neuen Stufenbranches.
+Eine neue Linie erhält drei Stage-Branches und einen Eintrag in
+`config/release_lines.json`. Der Eintrag enthält nur die fachliche
+Releaselinie, die technische M/Text-Linie und das vorhandene Übergabeprofil
+`FKT` oder `JUR`. Hosts, Stage-Suffixe, serverSync-Pfad, JCL-Parameter und
+Tagformat werden unverändert zentral abgeleitet.
 
-Für Entwicklung und Abnahme wird der bestehende Sync-Ablauf mit diesem Commit
-je einmal verwendet. Er überträgt den vollständigen Stand der Projekt-Allowlist;
-ein eigener M/Text-FULL-Pakettyp und ein künstlicher Änderungscommit sind nicht
-erforderlich. `ADAPTER_ACCEPTED` ersetzt nicht den anschließenden fachlichen
-Smoke-Test in M/Text.
-
-Der verbindliche Bedienablauf einschließlich Verantwortlichkeiten,
-Workflow-Inputs, Dokumentation und Wiederanlauf steht in der
-[Benutzeranleitung](./Benutzeranleitung.md#3-neue-releaselinie-initial-in-mtext-bereitstellen).
+Ausgangspunkt der neuen Branches ist der fachlich bestätigte letzte
+Release-Tag der bisherigen Linie. Dessen vollständiger Projektstand wird über
+den manuellen Sync-Workflow einmal nach Entwicklung und einmal nach Abnahme
+übertragen und anschließend in M/Text fachlich geprüft.
 
 Die Zielplattform ist GitHub Enterprise Server 3.20.4. Die verwendeten
 GitHub-Actions-Bausteine und der interne Runner müssen vor der Aktivierung auf
@@ -338,23 +333,25 @@ unter anderem:
 Diese `config/mandant.json` ist ein versionierter Bestandteil des fachlichen
 Lieferstands und keine frei veränderbare Laufzeitkonfiguration. `projects`
 bildet die gemeinsame Projekt-Allowlist für Synchronisation und Release;
-linien- oder stufenspezifische Zusatzprojekte sind nicht vorgesehen. Dadurch
-bleibt auch bei einem späteren Release eines älteren Tags nachvollziehbar,
-welche Projekte und technischen Übergabewerte zu genau diesem Stand gehörten.
+Zusatzprojekte für einzelne Releaselinien oder Stages sind nicht vorgesehen.
+Dadurch bleibt auch bei einem späteren Release eines älteren Tags
+nachvollziehbar, welche Projekte und technischen Übergabewerte zu genau diesem
+Stand gehörten.
 Eine Zentralisierung außerhalb des Mandanten-Repositories würde diese
 gemeinsame Versionierung von Ressourcen und Mandantenmapping auflösen und ist
 deshalb nicht vorgesehen.
 
 Zu den mandantenspezifischen Übergabewerten gehören das Subsystem sowie je
-Übergabeprofil Assignment und fachlicher Stage-Code. Die bestehende JCL nennt
-diesen Stage-Code historisch `LEVEL`; ein zusätzlicher Levelwert wird nicht
-eingeführt. Diese Werte dürfen bei einer fachlich bestätigten Änderung der
-Mandantenzuordnung versioniert in `mandant.json` angepasst werden. Der zentral
-verwaltete Test-/Produktionswert und Zugangsdaten gehören nicht in diese Datei.
+Übergabeprofil Assignment und JCL-Stage-Code. Die bestehende JCL verwendet
+diesen Stage-Code als CodePipeline-`LEVEL`; ein zusätzlicher Levelwert wird
+nicht eingeführt. Diese Werte dürfen bei einer fachlich bestätigten Änderung
+der Mandantenzuordnung versioniert in `mandant.json` angepasst werden. Der
+zentral verwaltete Test-/Produktionswert und Zugangsdaten gehören nicht in
+diese Datei.
 
-Die zentrale Konfiguration beschreibt die gemeinsamen Releaselinien,
-Zielstufen, M/Text-Adressen und Dateinamensregeln. Derzeit gelten folgende
-Zuordnungen:
+Die zentrale Datei `config/release_lines.json` enthält die wachsende Zuordnung
+der fachlichen zu den technischen Linien sowie das Übergabeprofil. Aktuell
+gilt:
 
 | Releaselinie | Technische M/Text-Linie |
 |---|---|
@@ -368,15 +365,13 @@ Konfigurationsfelder führen zu einem Fehler. Es gibt keine stillschweigende
 Rückfallregel auf FI-Werte.
 
 Zusätzlich startet jede Änderung an `config/mandant.json` bereits beim Push
-einen nebenwirkungsfreien Config-Check. Er validiert Schema,
-Repository-Identität, fachliche Eindeutigkeit und interne Querverweise der
-Deploymentkonfiguration, verwendet aber weder Secrets noch Environments oder
+einen nebenwirkungsfreien Config-Check. Er validiert Mandantenfelder,
+Releaselinienzuordnung, Repository-Identität und fachliche Eindeutigkeit,
+verwendet aber weder Secrets noch Environments oder
 externe Zielzugriffe. Da der derzeitige Prozess keine Pull Requests
 voraussetzt, liefert der Check bewusst nur frühes Feedback und ist kein
 technisch erzwungenes Gate. Config-Änderungen werden fachlich mit den benannten
-Mandanten- und Betriebsverantwortlichen abgestimmt. Falls Config-Änderungen
-später über Pull Requests freigegeben werden, kann `config/mandant.json`
-zusätzlich einem verbindlichen Code-Owner-Verfahren unterstellt werden.
+Mandanten- und Betriebsverantwortlichen abgestimmt.
 
 FI ist für die unfragmentierten Basisprojekte maßgeblich, `mtext-autonom` für
 `LOMS_Autonom`. Die übrigen Mandanten enthalten Fragmentprojekte mit dem
@@ -443,7 +438,7 @@ Die Lösung meldet nur den Status, den sie selbst sicher feststellen kann:
 
 | Status | Bedeutung |
 |---|---|
-| `CONFIG_VALIDATED` | Mandanten- und Deploymentkonfiguration wurden ohne externen Zielzugriff technisch geprüft. |
+| `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinienzuordnung wurden ohne externen Zielzugriff technisch geprüft. |
 | `VALIDATION_FAILED` | Eingaben oder Konfiguration sind ungültig. Es wurde noch kein Zielsystem angesprochen. |
 | `SOURCE_FAILED` | Der angegebene Commit, Branch oder Tag konnte nicht eindeutig aufgelöst werden. |
 | `RESOURCE_TRANSFER_FAILED` | Die Ressourcen konnten nicht in den Übergabebereich für M/Text geschrieben werden. |
@@ -458,13 +453,5 @@ Ein HTTP-Fehler des M/Text-Adapters gilt immer als fehlgeschlagener Lauf. Ein
 Status zwischen 200 und 299 bestätigt nur die unmittelbare Annahme der
 Anfrage.
 
-Die erste Ausbaustufe fragt weder bei M/Text noch auf dem Mainframe nach dem
-späteren fachlichen Endstatus.
-
-## 11. Spätere Erweiterungen
-
-Nicht zur ersten Produktivsetzung gehören zusätzliche
-E-Mail-Benachrichtigungen, weitergehende historische SVN-Daten und ein
-optionales M/Text- oder Mainframe-Status-Polling. Falls die
-Mandantenkonfiguration später über Pull Requests gepflegt wird, kann außerdem
-eine verbindliche Code-Owner-Freigabe ergänzt werden.
+Die Automation fragt weder bei M/Text noch auf dem Mainframe nach dem späteren
+fachlichen Endstatus.

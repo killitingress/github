@@ -21,10 +21,10 @@ verlinkten Dokumenten.
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
 | offen | Zentrales Repository `j520730/mtext-actions` und privates FI-Repository `j517120/mtext-fi` auf GitHub Enterprise anlegen beziehungsweise die lokalen Stände übernehmen | Das zentrale Repository ist nur für das Automatisierungsteam direkt zugänglich; das FI-Repository enthält Ressourcen, Mandantenkonfiguration und dünne Workflows |
-| offen | Aktive Stufenbranches und Default Branch einrichten | Für `R260`, `R261` und `R270` bestehen jeweils `Entwicklung`, `Abnahme` und `Bereitstellung`; zunächst ist `R261/Entwicklung` der Default Branch |
+| offen | Branches der aktiven Stages und Default Branch einrichten | Für `R260`, `R261` und `R270` bestehen jeweils Branches der Stages `Entwicklung`, `Abnahme` und `Bereitstellung`; zunächst ist `R261/Entwicklung` der Default Branch |
 | offen | Zentrale Workflowversion pinnen und repositoryübergreifenden Actions-Zugriff freigeben | Alle aufrufenden Workflows verwenden denselben freigegebenen Commit-SHA; nur vorgesehene Mandanten-Repositories dürfen `mtext-actions` aufrufen |
 | offen | Zentralen Checkout und mandantensichtbare Logs praktisch prüfen | Ein nichtproduktiver Lauf funktioniert über beide Namespaces und zeigt weder Secrets noch unnötige interne Details; ein gegebenenfalls erforderlicher Installation-Token wird vor Aktivierung sicher in den Workflowvertrag aufgenommen |
-| offen | Git-Clients für Ressourcenarbeit und Stufenweitergabe abnehmen | M/Text Workbench unterstützt Authentifizierung, Branchwechsel, Commit und Push; ein zusätzlicher Git-Client unterstützt den dokumentierten Cherry-Pick-Ablauf |
+| offen | Git-Clients für Ressourcenarbeit und die Weitergabe zwischen den Stages abnehmen | M/Text Workbench unterstützt Authentifizierung, Branchwechsel, Commit und Push; ein zusätzlicher Git-Client unterstützt den dokumentierten Cherry-Pick-Ablauf |
 | bestätigt | GitHub-Plattform festhalten | GitHub Enterprise Server 3.20.4 |
 
 ## 2. Schutz- und Freigaberegeln konfigurieren
@@ -32,11 +32,11 @@ verlinkten Dokumenten.
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
 | offen | Mandantenspezifische Verantwortliche benennen | Team für Ressourcenarbeit, technischer Konfigurationskreis und kleines Release-Team sind festgelegt |
-| offen | Branchschutz für die drei Stufen einrichten | Berechtigte Text-Entwickler dürfen nach Entwicklung und Abnahme pushen; Bereitstellung ist auf das Release-Team begrenzt; Löschen und Force-Pushes sind gesperrt |
+| offen | Branchschutz für die drei Stages einrichten | Berechtigte Text-Entwickler dürfen nach Entwicklung und Abnahme pushen; Bereitstellung ist auf das Release-Team begrenzt; Löschen und Force-Pushes sind gesperrt |
 | offen | Zentrale Aufrufdateien und `config/mandant.json` schützen | Normale Ressourcen-Pushes können weder `.github/workflows/**/*` noch die Mandantenkonfiguration verändern; notwendige Bypässe sind eng begrenzt |
 | offen | GitHub Environments konfigurieren | `Entwicklung`, `Abnahme` und `Bereitstellung` sind angelegt; nur die Mainframe-Übergabe in `Bereitstellung` erfordert eine manuelle Freigabe; zulässige Branchmuster sind eingetragen |
 | offen | Release-Tags schützen | Nur das Release-Team darf Tags nach dem Muster `R[0-9][0-9][0-9].[0-9][0-9][0-9]` erstellen; Ändern und Löschen sind gesperrt |
-| offen | Cherry-Pick und Release-Tag praktisch abnehmen | Auswahl nach SHA, Konfliktbehandlung und Push in die Zielstufe sind dokumentiert; ein nichtproduktiver Tag startet genau einen Release-Workflow |
+| offen | Cherry-Pick und Release-Tag praktisch abnehmen | Auswahl nach SHA, Konfliktbehandlung und Push auf den Zielbranch sind dokumentiert; ein nichtproduktiver Tag startet genau einen Release-Workflow |
 
 ## 3. Runner und technische Abhängigkeiten bereitstellen
 
@@ -49,7 +49,6 @@ ist weder ein Git-Commit noch eine dauerhafte Ablage.
 |---|---|---|
 | offen | Self-hosted Runner und Laufzeit bereitstellen | Labels `self-hosted`, `linux`, `mtext-delivery`, Python 3.14, Git und die Ausführung von Node-20-Actions sind bestätigt; `scripts/runner-preflight.sh` ist erfolgreich |
 | offen | GHES-Artefakt-Actions prüfen | Die in den Workflows gepinnten Node-20-Varianten von `upload-artifact` v3.2.2 und `download-artifact` v3.1.0 sind auf GHES 3.20.4 verfügbar; v4 wird nicht verwendet |
-| offen | Internes Wheelhouse bereitstellen | `LBS_WHEELHOUSE` verweist als Repository- oder Organisationsvariable auf einen freigegebenen lokalen Pfad; die Installation bleibt `--no-index` |
 | offen | Zertifikate und Netzwerkpfade prüfen | Die interne CA ist im Truststore; der Runner erreicht die gewählten M/Text-Ziele sowie Mainframe-FTP und JES, ohne die TLS-Prüfung zu deaktivieren |
 
 ## 4. M/Text-Transport entscheiden und abnehmen
@@ -85,6 +84,6 @@ abgebildete Lieferprozess.
 
 Der finale SVN-Abzug und der harte Cutover sind ab Januar 2027 vorgesehen. Die
 verbindliche Reihenfolge und die Abnahmekriterien stehen ausschließlich im
-[Migrations- und Cutover-Runbook](./Migration_und_Cutover_Runbook.md). Der
-wiederkehrende Linienwechsel steht in der
-[Benutzeranleitung](./Benutzeranleitung.md#3-neue-releaselinie-initial-in-mtext-bereitstellen).
+[Migrations- und Cutover-Runbook](./Migration_und_Cutover_Runbook.md). Die
+Einrichtung einer folgenden Releaselinie steht in der
+[Benutzeranleitung](./Benutzeranleitung.md#3-neue-releaselinie-einrichten).

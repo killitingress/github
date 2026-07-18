@@ -44,9 +44,7 @@ mtext-actions/
     reusable-sync-resources.yml
     reusable-release.yml
   config/
-    mandant.schema.json
-    deployments.schema.json
-    deployments.json
+    release_lines.json
   scripts/
     runner-preflight.sh
   src/lbs_delivery/
@@ -63,22 +61,18 @@ mtext-actions/
     paths.py
     release.py
     resources.py
-    schemas/
-      manifest.schema.json
   templates/
     mainframe-upload.jcl
   tests/
     integration/
     unit/
   .python-version
-  requirements.lock
-  pyproject.toml
 ```
 
 ## Wiederverwendbare Workflows
 
-`reusable-validate-config.yml` prüft die Mandantenkonfiguration, das Schema,
-die Repository-Identität und die gemeinsame Deploymentkonfiguration. Der Job
+`reusable-validate-config.yml` prüft die Mandantenkonfiguration,
+die Repository-Identität und die kleine zentrale Releaselinienzuordnung. Der Job
 verwendet keine Secrets, kein GitHub Environment und keine externen
 Zielzugriffe. Er liefert frühes Feedback, ist aber kein technisch erzwungenes
 Gate; Sync und Release validieren die Konfiguration auf ihren
@@ -89,7 +83,7 @@ konfigurierten Projekte in einem laufbezogenen Verzeichnis bereit. Im aktuellen
 Implementierungsstand veröffentlicht der Workflow sie anschließend nach
 `serverSync` und ruft den bestehenden Adapter einmal synchron auf. Der Ablauf
 überträgt bei jedem Start den vollständigen Stand der Projekt-Allowlist. Er
-wird deshalb unverändert auch für die initiale Vollsynchronisation einer neuen
+wird deshalb auch für die initiale Vollsynchronisation einer neuen
 Releaselinie verwendet; einen M/Text-DELTA-Modus gibt es nicht.
 
 `reusable-release.yml` enthält zwei getrennte Jobs. `build` validiert Tag und
@@ -141,13 +135,11 @@ Schnittstellen werden auf dem Entwicklungssystem praktisch geprüft.
 
 Der Zielrunner ist ein gehärteter Self-hosted Linux-Runner mit den Labels
 `self-hosted`, `linux` und standardmäßig `mtext-delivery`. Benötigt werden Git,
-Python 3.14, ein frischer `RUNNER_TEMP`, Node.js-20-Action-Unterstützung und
-ein internes Wheelhouse.
+Python 3.14 und Node.js-20-Action-Unterstützung.
 
-`LBS_WHEELHOUSE` verweist auf dieses freigegebene Wheelhouse. Der Preflight
-erzeugt für jeden Lauf eine neue virtuelle Umgebung und installiert
-ausschließlich mit `--no-index` aus `requirements.lock`. Ein Download aus
-öffentlichen Paketquellen findet im Workflow nicht statt.
+Die Delivery-CLI verwendet nur die Python-Standardbibliothek. Der Preflight
+prüft Git und die festgelegte Python-Version; Paketinstallation, virtuelle
+Umgebung und Zugriff auf Paketquellen sind nicht erforderlich.
 
 Für Validierung und Releasebau sind keine internen Zielzugriffe erforderlich.
 Der Sync-Job bildet bis zur offenen Transportentscheidung den aktuellen
@@ -184,11 +176,6 @@ Dataset `IEA.LOMS.TONICZ`, JES-Ziel `LIT9028A` und FTP-Timeout 60 Sekunden
 sind als gemeinsame technische Konstanten in der zentralen Automation
 festgelegt und werden nicht als GitHub-Variablen gepflegt.
 
-`LBS_WHEELHOUSE` wird bereits für Config-Check, Sync und Build benötigt und
-muss daher als Repository- oder Organisationsvariable verfügbar sein; eine
-ausschließlich im Environment `Bereitstellung` hinterlegte Variable reicht
-nicht aus.
-
 Zugangsdaten werden weder in Manifest, JCL noch Logausgaben geschrieben.
 
 Da aufrufendes und zentrales Repository in unterschiedlichen Namespaces
@@ -204,8 +191,9 @@ Repository hinterlegt.
 
 ## Linien und Adapterziele
 
-Die aktuell aktiven Linien sind `R260 -> en03`, `R261 -> en01` und
-`R270 -> en02`. Entwicklung und Abnahme verwenden je Linie getrennte Hosts,
+Aktuell sind `R260 -> en03`, `R261 -> en01` und `R270 -> en02` zugeordnet.
+Neue Linien werden mit technischer M/Text-Linie und Übergabeprofil in
+`config/release_lines.json` ergänzt. Entwicklung und Abnahme verwenden je Linie getrennte Hosts,
 beispielsweise `en01e.ltoma.intern` und `en01a.ltoma.intern`. Im aktuellen
 Implementierungsstand endet der Adapterendpunkt auf `/vMtextAdapter/sync`; der
 Payload ist `{"mandant":"MAN","institut":"INR"}` und jeder 2xx-Status gilt
@@ -230,10 +218,10 @@ Dateireihenfolge, Modus, UID/GID und Zeitstempel reproduzierbar.
 Das Manifest enthält Repository, Mandant, Release- und Commitidentität,
 Paketmember sowie Größe und SHA-256 jedes Pakets und jeder Informationsdatei.
 Vor FTP/JES werden sämtliche Dateien erneut gegen dieses Manifest geprüft.
-Das Manifest wird beim Schreiben und Lesen vollständig gegen das mit dem
-Python-Paket ausgelieferte Schema validiert. Konfigurationen und Manifest
-bleiben bewusst einfache JSON-Dokumente; kleine Hilfsfunktionen prüfen
-diejenigen fachlichen Querverweise, die JSON Schema nicht ausdrücken kann.
+Das Manifest wird beim Schreiben und Lesen mit kompakten, expliziten
+Python-Prüfungen validiert. Konfigurationen und Manifest bleiben einfache
+JSON-Dokumente; externe Python-Pakete oder separate Schemadateien werden dafür
+nicht benötigt.
 Mainframe-Übergaben werden innerhalb eines Mandanten-Repositories
 serialisiert; unterschiedliche Mandanten können parallel publizieren.
 
@@ -242,19 +230,12 @@ serialisiert; unterschiedliche Mandanten können parallel publizieren.
 Die Tests sind vollständig lokal und führen keine externen Aufrufe aus:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install --no-index \
-  --find-links "$LBS_WHEELHOUSE" --requirement requirements.lock
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
+PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-Eine vorhandene `.venv` wird wiederverwendet und ist über `.gitignore` vom
-Repository ausgeschlossen.
-
-Abgedeckt sind Konfiguration und Schemas, Branch- und Tagzuordnungen, Git-Diffs,
-reproduzierbarer Bau von FULL und DELTA, kumulative Löschlisten, Manifestprüfung,
-JCL-Rendering, Ressourcen-Staging, Adapterstatus und der unmittelbare FTP-/JES-
-Vertrag. Historische Referenzdateien gehören nicht zur Testsuite.
+Die Testsuite enthält drei fachliche Verträge: FULL-/DELTA-Release,
+Ressourcen-/Adapter-/Mainframe-Übergabe und die Sicherheitsmerkmale der
+zentralen Workflows. Historische Referenzdateien gehören nicht zur Testsuite.
 
 Nichtproduktive Integrationsläufe gegen die vorgesehenen Entwicklungsziele
 und fachliche Abnahmen bleiben vor dem regulären Betrieb erforderlich. Ein

@@ -8,7 +8,7 @@ import tarfile
 from pathlib import Path, PurePosixPath
 from typing import Iterable
 
-from .config import DeploymentsConfig, MandantConfig
+from .config import MandantConfig
 from .delivery_names import project_code_for_name
 from .errors import DeliveryError, Status
 from .git_refs import GitChange, diff_name_status
@@ -19,6 +19,11 @@ from .paths import reject_symlinks, resolve_within
 # Bewahrt die historische Kennzeichnung für ein Release ohne Vorgänger.
 LEGACY_NO_PREVIOUS_RELEASE = "R001.100"
 FULL_RELEASE_SUFFIX = ".100"
+ARCHIVE_NAME_TEMPLATE = "{mandant}{project_code}{delivery_code}.tgz"
+DELETION_LIST_NAME_TEMPLATE = "{mandant}{project_code}D.txt"
+INFO_NAME_TEMPLATE = (
+    "_INFO_{mandant}-{project}-{delivery_type}-{release}-{previous_release}.txt"
+)
 
 
 def release_type(tag: str) -> str:
@@ -236,10 +241,10 @@ def build_release(
     repository_root: str | Path,
     output_directory: str | Path,
     mandant: MandantConfig,
-    deployments: DeploymentsConfig,
     *,
     repository_name: str,
     release_tag: str,
+    profile_name: str,
     target_sha: str,
     base_sha: str | None,
     previous_tag: str | None,
@@ -268,8 +273,7 @@ def build_release(
         project_path = project["source_path"]
         project_code = project_code_for_name(project_name)
         delivery_code = "F" if delivery_type == "FULL" else "D"
-        release_config = deployments["release"]
-        archive_name = release_config["archive_name_template"].format(
+        archive_name = ARCHIVE_NAME_TEMPLATE.format(
             mandant=mandant["code"],
             project_code=project_code,
             delivery_code=delivery_code,
@@ -281,7 +285,7 @@ def build_release(
             files = [path for path in all_paths if _safe_source(root, path).is_file()]
         else:
             files, deletion_paths = delta_paths(cumulative_changes, project_path)
-            deletion_name = release_config["deletion_list_name_template"].format(
+            deletion_name = DELETION_LIST_NAME_TEMPLATE.format(
                 mandant=mandant["code"], project_code=project_code
             )
         archive_path = output / archive_name
@@ -294,7 +298,7 @@ def build_release(
             deletion_list_name=deletion_name,
             deletion_paths=deletion_paths,
         )
-        info_name = release_config["info_name_template"].format(
+        info_name = INFO_NAME_TEMPLATE.format(
             mandant=mandant["code"],
             project=project_name,
             delivery_type=delivery_type,
@@ -336,10 +340,8 @@ def build_release(
             }
         )
     release_line = release_tag[:4]
-    profile_name = deployments["release_lines"][release_line]["handover_profile"]
     profile = mandant["handover_profiles"][profile_name]
     manifest = {
-        "schema_version": 1,
         "repository": repository_name,
         "mandant": mandant["code"],
         "release_tag": release_tag,
@@ -352,7 +354,7 @@ def build_release(
         "previous_sha": previous_sha,
         "artifacts": artifacts,
         "jcl": {
-            "ISPW": deployments["mainframe"]["ispw"],
+            "ISPW": "P",
             # Die bestehende JCL nennt den fachlichen Stage-Code historisch LEVEL.
             "LEVEL": profile["stage"],
             "SUBSYS": mandant["subsystem"],

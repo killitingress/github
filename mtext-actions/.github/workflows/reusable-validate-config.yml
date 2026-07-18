@@ -50,9 +50,7 @@ jobs:
 
       - name: Prepare approved Python runtime
         id: runtime
-        env:
-          LBS_WHEELHOUSE: ${{ vars.LBS_WHEELHOUSE }}
-        run: automation/scripts/runner-preflight.sh automation/requirements.lock
+        run: automation/scripts/runner-preflight.sh
 
       - name: Validate configuration without external access
         env:
@@ -61,7 +59,5 @@ jobs:
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery validate-config
           --mandant-config source/config/mandant.json
-          --mandant-schema automation/config/mandant.schema.json
-          --deployments-config automation/config/deployments.json
-          --deployments-schema automation/config/deployments.schema.json
+          --release-lines automation/config/release_lines.json
           --repository-name "$INPUT_REPOSITORY_NAME"

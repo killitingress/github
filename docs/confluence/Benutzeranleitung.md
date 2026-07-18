@@ -5,7 +5,7 @@
 
 ## 1. Zweck
 
-Die Lösung führt M/Text-Ressourcen eines Mandanten über die drei Stufen
+Die Lösung führt M/Text-Ressourcen eines Mandanten über die drei Stages
 `Entwicklung`, `Abnahme` und `Bereitstellung`. Pushes nach Entwicklung und
 Abnahme lösen die jeweilige M/Text-Synchronisation aus. Der Push nach
 Bereitstellung liefert noch nichts aus; erst ein Release-Tag startet eine
@@ -31,13 +31,19 @@ diese Schritte nur ausführen, wenn sie diesem Kreis angehören.
 
 ## 2. Begriffe und Namensregeln
 
+Eine **Stage** ist in dieser Anleitung ein Abschnitt des Freigabe- und
+Lieferprozesses. Die drei Prozess-Stages heißen `Entwicklung`, `Abnahme` und
+`Bereitstellung`; jede Releaselinie besitzt einen eigenen Branch für jede
+dieser Stages. Der später beschriebene JCL-Stage-Code wie `FKTE` oder `JURP`
+bezeichnet dagegen das CodePipeline-`LEVEL` und ist davon unabhängig.
+
 | Element | Verbindliches Format | Beispiel |
 |---|---|---|
-| Stufenbranch | `Rnnn/Entwicklung`, `Rnnn/Abnahme`, `Rnnn/Bereitstellung` | `R271/Entwicklung` |
+| Branch einer Stage | `Rnnn/Entwicklung`, `Rnnn/Abnahme`, `Rnnn/Bereitstellung` | `R270/Entwicklung` |
 | Optionaler Feature-Branch | `feature/Rnnn/<Issue>-<kurzname>` | `feature/R270/0711-komplizierte-Arbeiten` |
 | Release-Tag | `Rnnn.nnn` | `R261.100`, `R261.108` |
 
-Groß-/Kleinschreibung der Stufen ist verbindlich. Aktive Linien sind derzeit
+Groß-/Kleinschreibung der Stage-Namen ist verbindlich. Aktive Linien sind
 `R260`, `R261` und `R270`.
 
 ### Unterschied zwischen SVN und Git einfach erklärt
@@ -56,8 +62,9 @@ darin, wie Änderungen gespeichert und mit anderen geteilt werden.
 Für die tägliche Arbeit bedeutet das vor allem: **Committen und Pushen sind in
 Git zwei getrennte Schritte.** Ein lokaler Commit sichert den eigenen
 Arbeitsstand, verändert aber noch nichts auf GitHub und löst keine
-Synchronisation aus. Erst der Push auf einen Stufenbranch veröffentlicht den
-Stand und startet – bei Entwicklung oder Abnahme – den zugehörigen Workflow.
+Synchronisation aus. Erst der Push auf den Branch einer Stage veröffentlicht
+den Stand und startet – bei Entwicklung oder Abnahme – den zugehörigen
+Workflow.
 
 Git und GitHub sind dabei nicht dasselbe: **Git** ist die
 Versionsverwaltung. **GitHub** stellt das gemeinsame Repository, die
@@ -73,7 +80,7 @@ noch die erweiterten Verwaltungsfunktionen von GitHub. Einen direkten Zugriff
 auf das zentrale Automatisierungs-Repository `mtext-actions` benötigen und
 erhalten sie nicht.
 
-Für die gezielte Weitergabe einzelner Änderungen zwischen den Stufen reicht
+Für die gezielte Weitergabe einzelner Änderungen zwischen den Stages reicht
 der integrierte Git-Client der M/Text Workbench nach heutigem Kenntnisstand
 nicht aus. Die dafür berechtigten Text-Entwickler erhalten zusätzlich einen
 geeigneten Git-Client. Welches Produkt eingesetzt wird und wie Installation,
@@ -84,7 +91,7 @@ und praktisch abgenommen.
 verwendet. Dazu gehören insbesondere:
 
 - ausgelöste Workflow-Läufe und ihre Protokolle kontrollieren;
-- fehlgeschlagene oder ausdrücklich manuell gestartete Läufe wiederholen;
+- fehlgeschlagene oder ausdrücklich manuell durchgeführte Läufe wiederholen;
 - Freigaben im Environment `Bereitstellung` erteilen;
 - durch das Mandanten-Release-Team einen Release-Tag anlegen;
 - Branch-, Tag- und Berechtigungsregeln administrieren.
@@ -109,8 +116,8 @@ Sie kann direkt auf dem passenden Entwicklungsbranch bearbeitet und gepusht
 werden. Ist die Arbeit auf einem Feature-Branch abgeschlossen, wird der
 gewünschte Commit nach `<Releaselinie>/Entwicklung` übernommen. Erst der Push
 dieses Entwicklungsbranches startet die M/Text-Synchronisation. Der
-Feature-Branch selbst bezeichnet keine Lieferstufe und löst weder eine
-M/Text-Synchronisation noch einen Release aus. Nur wenn
+Feature-Branch selbst bezeichnet keine Stage des Lieferprozesses und löst
+weder eine M/Text-Synchronisation noch einen Release aus. Nur wenn
 `config/mandant.json` geändert wird, läuft dort der nebenwirkungsfreie
 Config-Check.
 
@@ -151,9 +158,9 @@ Daneben kommen zwei ähnlich aussehende, aber anders verwendete Kennungen vor:
 Ein **Cherry-Pick** übernimmt die Änderung eines gezielt ausgewählten Commits
 auf einen anderen Branch. Anders als bei der Zusammenführung eines ganzen
 Branches werden dadurch nicht automatisch alle dort vorhandenen Änderungen
-weitergegeben. Das ist für den vorgesehenen Stufenprozess wichtig: Nach
-Abnahme und Bereitstellung sollen nur fachlich ausgewählte Änderungen
-übernommen werden.
+weitergegeben. Das ist für den vorgesehenen Ablauf zwischen den Stages
+wichtig: Nach Abnahme und Bereitstellung sollen nur fachlich ausgewählte
+Änderungen übernommen werden.
 
 Der Cherry-Pick erzeugt auf dem Zielbranch einen **neuen Commit mit einer
 neuen SHA**. Es wird also dieselbe Änderung weitergegeben, nicht derselbe
@@ -208,9 +215,7 @@ GitHub-Einstellungen verwaltet.
 `code` ist das kurze Mandantenkennzeichen und bildet unter anderem den Anfang
 der historischen Lieferdateinamen. `repository` muss exakt dem Namen des
 auslösenden GitHub-Repositories entsprechen. Dadurch kann eine Konfiguration nicht
-versehentlich in einem anderen Mandanten-Repository verwendet werden. Die
-zusätzliche Angabe `"schema_version": 1` am Anfang der vollständigen Datei
-bezeichnet nur die technische Formatversion.
+versehentlich in einem anderen Mandanten-Repository verwendet werden.
 
 #### Reguläre Lieferprojekte unter `projects`
 
@@ -239,14 +244,14 @@ nicht von Text-Entwicklern in `mandant.json` eingetragen oder geändert.
 
 Ein Verzeichnis wird nicht allein deshalb synchronisiert oder ausgeliefert,
 weil es im Repository vorhanden ist. Es muss als reguläres Projekt unter
-`projects` stehen. Für linien- oder stufenspezifische Zusatzprojekte gibt es
-keine Sonderkonfiguration.
+`projects` stehen. Für einzelne Releaselinien oder Stages gibt es keine
+zusätzlichen Projekte und keine Sonderkonfiguration.
 
 #### Mandantenspezifische Werte für die technische Übergabe
 
-Gemeint sind insbesondere Subsystem, Assignment und der fachliche Stage-Code,
-den die bestehende JCL historisch als `LEVEL` bezeichnet.
-Diese Werte sind für den Mandanten relevant, werden in `mandant.json`
+Gemeint sind insbesondere Subsystem, Assignment und der JCL-Stage-Code, der
+das CodePipeline-`LEVEL` bezeichnet. Diese Werte sind für den Mandanten
+relevant, werden in `mandant.json`
 verständlich beschrieben und können bei einer tatsächlichen Änderung der
 Zuordnung angepasst werden. Das FI-Beispiel lautet:
 
@@ -268,19 +273,20 @@ Zuordnung angepasst werden. Das FI-Beispiel lautet:
 |---|---|---|
 | `subsystem` | Subsystem des Mandanten, für FI beispielsweise `LOMS` | wird als `SUBSYS` eingesetzt und dort für `APPLID` und `SUBAPPL` verwendet |
 | `assignment` | Assignment des Mandanten für das jeweilige Übergabeprofil | wird als `ASSIGNMENT` eingesetzt und dort für `PROJNO` verwendet |
-| `stage` | Tatsächlicher fachlicher Stage-Code, beispielsweise `FKTE` oder `JURP` | wird in den historisch `LEVEL` genannten Platzhalter eingesetzt und dort unter anderem für `CLVL` und `SLVL` verwendet |
+| `stage` | JCL-Stage-Code für das CodePipeline-`LEVEL`, beispielsweise `FKTE` oder `JURP` | wird in den `LEVEL`-Platzhalter eingesetzt und dort unter anderem für `CLVL` und `SLVL` verwendet |
 
 Die Namen `FKT` und `JUR` unter `handover_profiles` bezeichnen die beiden aus
 dem bisherigen Verfahren übernommenen Übergabeprofile. Sie sind nicht selbst
-die Stage-Codes. Welche Releaselinie welches Profil verwendet, wird zentral
-festgelegt: derzeit `R260 → JUR`, `R261 → FKT` und `R270 → JUR`. Der Mandant
+die Stage-Codes. Welche Releaselinie welches Profil verwendet, steht in der
+zentralen Releaselinienzuordnung, aktuell `R260 → JUR`, `R261 → FKT` und
+`R270 → JUR`. Der Mandant
 pflegt innerhalb beider Profile seine jeweils gültige Kombination aus
 Assignment und Stage-Code.
 
-Als Stage-Codes akzeptiert die Konfiguration derzeit ausschließlich `FKTE`,
+Als Stage-Codes akzeptiert die Konfiguration ausschließlich `FKTE`,
 `FKTF`, `JURJ`, `JURP`, `SVTS` und `VPTV`. Der getrennte Wert für Test oder
-Produktion gehört nicht zur Mandantenkonfiguration; er wird zentral verwaltet
-und darf ausschließlich `T` oder `P` sein. Zugangsdaten gehören ebenfalls
+Produktion gehört nicht zur Mandantenkonfiguration; für die Übergabe wird
+zentral `P` verwendet. Zugangsdaten gehören ebenfalls
 nicht in `mandant.json`.
 
 Eine Änderung an `subsystem`, `assignment` oder `stage` verändert die spätere
@@ -304,62 +310,22 @@ gewählt wurden. Der Status ersetzt deshalb keine fachliche Freigabe und ist
 kein technisches Gate. Synchronisation und Release validieren die verwendete
 Konfiguration auf ihrem tatsächlichen Ausführungspfad erneut.
 
-## 3. Neue Releaselinie initial in M/Text bereitstellen
+## 3. Neue Releaselinie einrichten
 
-Bei einem Releaselinienwechsel müssen die Ressourcen nicht erst geändert
-werden, damit sie in den neuen M/Text-Umgebungen verfügbar sind. Vor der
-fachlichen Nutzung der neuen Linie führt der benannte Verantwortlichenkreis je
-Mandant eine initiale Vollsynchronisation für Entwicklung und Abnahme durch.
+Für jede neue Linie werden drei Branches im Format `Rnnn/Entwicklung`,
+`Rnnn/Abnahme` und `Rnnn/Bereitstellung` angelegt. Ausgangspunkt ist der
+fachlich bestätigte letzte Release-Tag der bisherigen Linie.
 
-Ausgangspunkt ist immer der letzte tatsächlich ausgelieferte Release-Tag der
-bisherigen Linie. Der Commit dieses unveränderlichen Tags bildet die Basis der
-neuen Stufenbranches und der initialen M/Text-Synchronisation. Entscheidend ist
-damit der bestätigte letzte Liefertag, nicht lediglich der numerisch höchste
-vorhandene Tag. Diese Auswahl kann die Automation nicht sicher selbst treffen,
-weil sie den Abschluss im nachgelagerten Betriebsverfahren nicht abfragt.
+Das zentrale Automatisierungsteam ergänzt in `config/release_lines.json` genau
+eine Zuordnung aus neuer Releaselinie, technischer M/Text-Linie und vorhandenem
+Übergabeprofil `FKT` oder `JUR`. Stage-Namen, JCL-Parameter, URL-Aufbau,
+serverSync-Pfad und Tagformat bleiben unverändert.
 
-Dabei wird nicht jede technische Datei des Git-Repositories übertragen. Die
-Automation synchronisiert den vollständigen Stand aller Projekte aus der
-Projekt-Allowlist in `config/mandant.json`. Bewusst ausgeschlossene
-Testdatenprojekte sowie `.github` und `config` bleiben außen vor. Diese
-M/Text-Vollsynchronisation ist außerdem nicht die FULL-Lieferung an den
-Mainframe; letztere entsteht erst durch einen Release-Tag mit der Endung
-`.100`.
-
-Der Verantwortlichenkreis führt den Linienwechsel in dieser Reihenfolge aus:
-
-1. Den letzten tatsächlich ausgelieferten Release-Tag der bisherigen Linie
-   und dessen vollständige Commit-SHA feststellen. Der erfolgreiche
-   technische und betriebliche Abschluss der Lieferung muss nach dem
-   vereinbarten Verfahren bestätigt sein.
-2. Die drei neuen Branches `Rnnn/Entwicklung`, `Rnnn/Abnahme` und
-   `Rnnn/Bereitstellung` von genau diesem Tag-Commit anlegen.
-3. Die neue Releaselinie in der zentralen Deploymentkonfiguration freigeben
-   und prüfen, dass ihre M/Text-Ziele korrekt zugeordnet sind.
-4. Unter **Actions → Sync M/Text resources → Run workflow** zunächst für
-   Entwicklung und anschließend für Abnahme die folgenden Werte angeben.
-
-- `commit_sha`: bei beiden Läufen dieselbe vollständige 40-stellige SHA des
-  letzten Liefertags der bisherigen Linie;
-- `source_branch`: passender Branch `Rnnn/Entwicklung` beziehungsweise
-  `Rnnn/Abnahme`.
-
-Die Automation prüft, dass der Tag-Commit aus dem angegebenen neuen Branch
-erreichbar ist, ermittelt das Zielsystem zentral, überträgt alle
-konfigurierten Projekte und ruft den Adapter auf. Ein leerer Commit oder eine
-Scheinänderung zum Auslösen ist nicht notwendig. Beide Läufe, der zugrunde
-liegende letzte Liefertag und die verwendete Commit-SHA werden für den
-Linienwechsel dokumentiert.
-
-Auch wenn der letzte Liefertag eine DELTA-Lieferung an den Mainframe ausgelöst
-hat, wird M/Text vollständig initialisiert: Der Tag verweist auf einen
-vollständigen Repository-Stand, aus dem die Synchronisation alle Projekte der
-Projekt-Allowlist überträgt.
-
-`ADAPTER_ACCEPTED` bestätigt nur, dass der Adapter den Aufruf angenommen hat.
-Vor der fachlichen Freigabe der neuen Linie muss deshalb der vereinbarte
-Smoke-Test in M/Text erfolgreich sein. Schlägt ein Lauf fehl, wird derselbe
-Commit nach Behebung der technischen Ursache kontrolliert erneut gestartet.
+Anschließend wird der vollständige Projektstand über den manuellen Workflow
+**Sync M/Text resources** einmal nach Entwicklung und einmal nach Abnahme
+übertragen. Verwendet werden jeweils die Commit-SHA des Ausgangstags und der
+passende neue Stage-Branch. `ADAPTER_ACCEPTED` ersetzt nicht den fachlichen
+Smoke-Test in M/Text.
 
 ## 4. Änderung nach Entwicklung bringen
 
@@ -375,7 +341,7 @@ Commit nach Behebung der technischen Ursache kontrolliert erneut gestartet.
    ausgelösten Lauf kontrollieren.
 
 Der Push startet die Synchronisation des exakten Commits mit dem aus
-Releaselinie und Stufe zentral ermittelten M/Text-Ziel. Für `R261` sind dies
+Releaselinie und Stage zentral ermittelten M/Text-Ziel. Für `R261` sind dies
 beispielsweise `en01e` in Entwicklung und `en01a` in Abnahme. Ein erfolgreicher
 Lauf endet mit `ADAPTER_ACCEPTED`.
 
@@ -467,7 +433,7 @@ wird in Ausbaustufe 1 nicht abgefragt.
 
 Ein noch verfügbarer Workflow-Lauf kann in GitHub über **Actions**, den
 betroffenen Lauf und **Re-run jobs** mit demselben Commit und derselben
-Git-Referenz wiederholt werden. Die folgenden manuellen Starts sind für Fälle
+Git-Referenz wiederholt werden. Die folgenden manuellen Durchführungen der Workflows sind für Fälle
 gedacht, in denen ein neuer kontrollierter Lauf mit ausdrücklich angegebenem
 Commit oder Tag erforderlich ist.
 
@@ -481,11 +447,10 @@ Unter **Actions → Sync M/Text resources → Run workflow** angeben:
 
 Die Automation weist den Lauf zurück, wenn der Commit nicht aus dem gewählten
 Branch erreichbar ist. Das Zielsystem kann nicht frei eingegeben werden; es
-wird aus Branch und zentraler Konfiguration abgeleitet. Eine allgemeine
-Erklärung zu Commits und SHAs steht unter „Begriffe und Namensregeln“. Dieser
-manuelle Einstieg dient sowohl der initialen Vollsynchronisation beim
-Releaselinienwechsel als auch dem technischen Wiederanlauf eines bereits
-verteilten Stands.
+wird aus dem gewählten Branch abgeleitet. Eine allgemeine Erklärung zu
+Commits und SHAs steht unter „Begriffe und Namensregeln“. Dieser manuelle
+Einstieg dient der initialen Vollsynchronisation einer neuen Linie und dem
+technischen Wiederanlauf eines bereits verteilten Stands.
 
 ### Release-Lauf wiederholen
 
@@ -503,8 +468,8 @@ fachlichen Endstatus.
 | Status oder sichtbares Symptom | Bedeutung | Nächste Prüfung |
 |---|---|---|
 | Workflow kann zentrale Datei am Null-SHA nicht laden | Technischer Platzhalter ist noch eingetragen | Zentrale Automatisierungsverantwortliche informieren; Anwender ändern den SHA nicht selbst |
-| `CONFIG_VALIDATED` | Mandanten- und Deploymentkonfiguration sind technisch konsistent | Fachliche Abstimmung fortsetzen; der Status ist keine automatische Freigabe für die nächste Stufe |
-| `VALIDATION_FAILED` | Input, Konfiguration, Schema, Branchrichtung oder JCL ungültig | Erste Fehlermeldung lesen; Branch-/Tagformat und Konfiguration prüfen |
+| `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinienzuordnung sind technisch konsistent | Fachliche Abstimmung fortsetzen; der Status ist keine automatische Freigabe für die nächste Stage |
+| `VALIDATION_FAILED` | Input, Konfiguration, Branchrichtung oder JCL ungültig | Erste Fehlermeldung lesen; Branch-/Tagformat und Konfiguration prüfen |
 | `SOURCE_FAILED` | Commit oder Tag/Basisreferenz nicht auflösbar | SHA, Tag, `.100`-Basis und Branch-Erreichbarkeit prüfen |
 | `PACKAGE_FAILED` | Paket, Informationsdatei oder Manifest konnte nicht sicher gebaut werden | Fehlende Projektpfade, Symlinks, leeres/benutztes Ausgabeverzeichnis prüfen |
 | `RESOURCE_TRANSFER_FAILED` | Veröffentlichung nach `serverSync` fehlgeschlagen | Fehler des gewählten Transportwegs prüfen; bis zur Transportentscheidung bildet der aktuelle Code die Share-/NFS-Variante ab |

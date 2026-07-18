@@ -27,7 +27,7 @@ Ziel-Repositories sind `mtext-fi`, `mtext-autonom`, `mtext-by`, `mtext-lh`,
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
 | geplant November/Dezember 2026 | Ersten SVN-Abzug für den Test-Parallelbetrieb erstellen | GitHub-Testumgebung mit dokumentiertem SVN-Ausgangsstand; Jenkins und SVN bleiben produktiv |
-| offen | Import-Allowlist erstellen | Aktive Linien `R260`, `R261`, `R270` und die drei fachlichen Stufen sind je SVN-Repository festgelegt |
+| offen | Import-Allowlist erstellen | Aktive Linien `R260`, `R261`, `R270` und die drei Prozess-Stages sind je SVN-Repository festgelegt |
 | offen | Projektmatrix inventarisieren und freigeben | Repositoryinhalt, Projekt-Allowlist und historisch festgelegte Lieferdateinamen sind je Mandant und gegebenenfalls je Releaselinie dokumentiert |
 | erforderlich | Release-Basen importieren | Je aktiver Linie werden mindestens der `.100`-Stand und alle danach entstandenen Tags übernommen |
 | offen | SVN-Pfade auf Git abbilden | Beispielsweise wird `branches/Entwicklung/R260.100_MText/<Projekt>` zu Branch `R260/Entwicklung` mit Pfad `<Projekt>` |

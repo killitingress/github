@@ -67,9 +67,7 @@ jobs:
 
       - name: Prepare approved Python runtime
         id: runtime
-        env:
-          LBS_WHEELHOUSE: ${{ vars.LBS_WHEELHOUSE }}
-        run: automation/scripts/runner-preflight.sh automation/requirements.lock
+        run: automation/scripts/runner-preflight.sh
 
       - name: Build release and manifest
         env:
@@ -81,9 +79,7 @@ jobs:
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery build-release
           --repository-root source
           --mandant-config source/config/mandant.json
-          --mandant-schema automation/config/mandant.schema.json
-          --deployments-config automation/config/deployments.json
-          --deployments-schema automation/config/deployments.schema.json
+          --release-lines automation/config/release_lines.json
           --repository-name "$INPUT_REPOSITORY_NAME"
           --tag "$INPUT_RELEASE_TAG"
           --trigger-sha "$INPUT_TRIGGER_SHA"
@@ -137,9 +133,7 @@ jobs:
 
       - name: Prepare approved Python runtime
         id: runtime
-        env:
-          LBS_WHEELHOUSE: ${{ vars.LBS_WHEELHOUSE }}
-        run: automation/scripts/runner-preflight.sh automation/requirements.lock
+        run: automation/scripts/runner-preflight.sh
 
       - name: Verify artifact, render JCL and submit FTP/JES
         # Manifest und Prüfsummen werden vor Übertragung und Jobübergabe erneut validiert.
@@ -153,7 +147,5 @@ jobs:
           --manifest dist/manifest.json
           --artifact-root dist
           --template automation/templates/mainframe-upload.jcl
-          --deployments-config automation/config/deployments.json
-          --deployments-schema automation/config/deployments.schema.json
           --temporary-dir "$RUNNER_TEMP/jcl-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           --execute

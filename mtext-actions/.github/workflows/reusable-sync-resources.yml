@@ -59,9 +59,7 @@ jobs:
 
       - name: Prepare approved Python runtime
         id: runtime
-        env:
-          LBS_WHEELHOUSE: ${{ vars.LBS_WHEELHOUSE }}
-        run: automation/scripts/runner-preflight.sh automation/requirements.lock
+        run: automation/scripts/runner-preflight.sh
 
       - name: Stage, publish and synchronously call the adapter
         # Die Python-Schicht prüft Konfiguration, Branch und Commit vor jedem externen Aufruf.
@@ -75,9 +73,7 @@ jobs:
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery sync-resources
           --repository-root source
           --mandant-config source/config/mandant.json
-          --mandant-schema automation/config/mandant.schema.json
-          --deployments-config automation/config/deployments.json
-          --deployments-schema automation/config/deployments.schema.json
+          --release-lines automation/config/release_lines.json
           --repository-name "$INPUT_REPOSITORY_NAME"
           --commit "$INPUT_COMMIT_SHA"
           --source-branch "$INPUT_SOURCE_BRANCH"

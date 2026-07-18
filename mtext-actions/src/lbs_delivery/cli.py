@@ -8,13 +8,14 @@ import sys
 from pathlib import Path
 
 from .config import (
-    DeploymentsConfig,
+    ADAPTER_PAYLOAD,
     MandantConfig,
-    load_deployments_config,
+    ReleaseLines,
     load_mandant_config,
+    load_release_lines,
     release_branch,
+    release_profile,
     resolve_adapter_url,
-    resolve_environment,
     resolve_server_sync_root,
     resolve_sync_branch,
     validate_release_tag,
@@ -40,9 +41,7 @@ def _common_config_arguments(parser: argparse.ArgumentParser) -> None:
     """Ergänzt gemeinsame Pfade und Repository-Angaben eines Subcommands."""
 
     parser.add_argument("--mandant-config", default="config/mandant.json")
-    parser.add_argument("--mandant-schema", required=True)
-    parser.add_argument("--deployments-config", required=True)
-    parser.add_argument("--deployments-schema", required=True)
+    parser.add_argument("--release-lines", required=True)
     parser.add_argument("--repository-name", required=True)
 
 
@@ -76,41 +75,35 @@ def build_parser() -> argparse.ArgumentParser:
     publish.add_argument("--manifest", required=True)
     publish.add_argument("--artifact-root", required=True)
     publish.add_argument("--template", required=True)
-    publish.add_argument("--deployments-config", required=True)
-    publish.add_argument("--deployments-schema", required=True)
     publish.add_argument("--temporary-dir", required=True)
     publish.add_argument("--execute", action="store_true")
 
     return parser
 
 
-def _load_configs(
-    arguments: argparse.Namespace,
-) -> tuple[MandantConfig, DeploymentsConfig]:
-    """Lädt die beiden für einen Mandantenlauf erforderlichen Konfigurationen."""
+def _load_configs(arguments: argparse.Namespace) -> tuple[MandantConfig, ReleaseLines]:
+    """Lädt Mandant und Releaselinien."""
 
-    mandant = load_mandant_config(
-        arguments.mandant_config,
-        arguments.mandant_schema,
-        repository_name=arguments.repository_name,
+    return (
+        load_mandant_config(
+            arguments.mandant_config,
+            repository_name=arguments.repository_name,
+        ),
+        load_release_lines(arguments.release_lines),
     )
-    deployments = load_deployments_config(
-        arguments.deployments_config, arguments.deployments_schema
-    )
-    return mandant, deployments
 
 
 def _validate_config(arguments: argparse.Namespace) -> Status:
-    """Prüft Mandanten- und zentrale Deploymentkonfiguration ohne Nebenwirkungen."""
+    """Prüft Mandant und Releaselinien ohne Nebenwirkungen."""
 
-    mandant, deployments = _load_configs(arguments)
+    mandant, release_lines = _load_configs(arguments)
     print(
         json.dumps(
             {
                 "status": Status.CONFIG_VALIDATED.value,
                 "mandant": mandant["code"],
                 "repository": mandant["repository"],
-                "release_lines": sorted(deployments["release_lines"]),
+                "release_lines": sorted(release_lines),
             },
             sort_keys=True,
         )
@@ -121,11 +114,10 @@ def _validate_config(arguments: argparse.Namespace) -> Status:
 def _sync(arguments: argparse.Namespace) -> Status:
     """Stellt Ressourcen bereit und ruft bei Freigabe den M/Text-Adapter auf."""
 
-    mandant, deployments = _load_configs(arguments)
+    mandant, release_lines = _load_configs(arguments)
     release_line = resolve_sync_branch(
-        deployments, arguments.source_branch, arguments.environment
+        release_lines, arguments.source_branch, arguments.environment
     )
-    environment = resolve_environment(deployments, arguments.environment)
     commit = require_full_sha(arguments.commit)
     require_head(arguments.repository_root, commit)
     require_commit_on_branch(arguments.repository_root, commit, arguments.source_branch)
@@ -135,12 +127,12 @@ def _sync(arguments: argparse.Namespace) -> Status:
         print(json.dumps({"status": "STAGED", "projects": staged}, sort_keys=True))
         return Status.ARTIFACT_READY
     server_sync_root = resolve_server_sync_root(
-        deployments, release_line, environment
+        release_lines, release_line, arguments.environment
     )
     publish_server_sync(arguments.staging_dir, server_sync_root)
     response = call_adapter(
-        resolve_adapter_url(deployments, release_line, arguments.environment),
-        deployments["adapter"]["payload"],
+        resolve_adapter_url(release_lines, release_line, arguments.environment),
+        ADAPTER_PAYLOAD,
         timeout=arguments.timeout,
     )
     print(
@@ -159,9 +151,9 @@ def _sync(arguments: argparse.Namespace) -> Status:
 def _build_release(arguments: argparse.Namespace) -> Status:
     """Prüft den Release-Tag und erzeugt das zugehörige FULL oder DELTA."""
 
-    mandant, deployments = _load_configs(arguments)
-    validate_release_tag(deployments, arguments.tag)
-    required_branch = release_branch(deployments, arguments.tag[:4])
+    mandant, release_lines = _load_configs(arguments)
+    validate_release_tag(release_lines, arguments.tag)
+    required_branch = release_branch(release_lines, arguments.tag[:4])
     target_sha = require_tag_on_branch(
         arguments.repository_root, arguments.tag, required_branch
     )
@@ -188,9 +180,9 @@ def _build_release(arguments: argparse.Namespace) -> Status:
         arguments.repository_root,
         arguments.output,
         mandant,
-        deployments,
         repository_name=arguments.repository_name,
         release_tag=arguments.tag,
+        profile_name=release_profile(release_lines, arguments.tag[:4]),
         target_sha=target_sha,
         base_sha=base_sha,
         previous_tag=previous_tag,
@@ -213,9 +205,6 @@ def _build_release(arguments: argparse.Namespace) -> Status:
 def _publish(arguments: argparse.Namespace) -> Status:
     """Prüft ein Releaseartefakt und übergibt es optional an den Mainframe."""
 
-    deployments = load_deployments_config(
-        arguments.deployments_config, arguments.deployments_schema
-    )
     manifest = load_manifest(arguments.manifest)
     verify_artifacts(manifest, arguments.artifact_root)
     template = Path(arguments.template).read_text(encoding="ascii")

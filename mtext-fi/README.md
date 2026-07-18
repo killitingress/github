@@ -54,7 +54,7 @@ konfigurierbar. Repositoryinhalte, die nicht in der Projekt-Allowlist stehen,
 werden nicht ausgeliefert.
 
 Eine Änderung dieser Datei startet einen nebenwirkungsfreien Config-Check. Er
-prüft Schema, Repository-Identität und fachliche Eindeutigkeit, greift aber
+prüft Felder, Repository-Identität und fachliche Eindeutigkeit, greift aber
 weder auf M/Text noch auf den Mainframe zu. Der Check liefert frühes Feedback
 und ist kein technisch erzwungenes Gate; Sync und Release validieren die
 Konfiguration erneut. Config-Änderungen werden mit den für den Mandanten
@@ -62,7 +62,8 @@ benannten Verantwortlichen abgestimmt.
 
 ## Branch- und Releasefluss
 
-Für die gleichzeitig aktiven Linien existieren getrennte Stufenbranches, etwa
+Für die gleichzeitig aktiven Linien existieren getrennte Branches für die drei
+Stages, etwa
 `R261/Entwicklung`, `R261/Abnahme` und `R261/Bereitstellung`. Änderungen können
 bei Bedarf zunächst auf einem Feature-Branch entstehen; erst der direkte Push
 nach `R261/Entwicklung` löst die M/Text-Synchronisation aus. Nach erfolgreicher
@@ -80,20 +81,16 @@ Bereitstellungsstand und startet eine FULL- oder DELTA-Lieferung. `.100` ist
 FULL; andere gültige Tags derselben Linie sind kumulative DELTAs gegen `.100`.
 Bestehende Release-Tags sind gegen Änderung und Löschung geschützt.
 
-Aktuell ist `R261/Entwicklung` als Default Branch vorgesehen. Beim rollierenden
-Linienwechsel wird der Default Branch manuell auf den Entwicklungsbranch der
-neuen führenden Linie umgestellt. Ein zusätzlicher `main`-Branch ist nicht
-vorgesehen.
+`R261/Entwicklung` ist zunächst als Default Branch vorgesehen. Beim
+Linienwechsel wird der Entwicklungsbranch der führenden Linie als Default
+Branch gesetzt. Ein zusätzlicher `main`-Branch ist nicht vorgesehen.
 
-Bevor eine neu eingerichtete Releaselinie fachlich verwendet wird, wird ihr
-vollständiger konfigurierter Ressourcenstand einmal nach Entwicklung und
-einmal nach Abnahme synchronisiert. Basis ist immer der Commit des letzten
-tatsächlich ausgelieferten Release-Tags der bisherigen Linie; von ihm werden
-auch die neuen Stufenbranches abgeleitet. Für beide Zielstufen wird der
-vorhandene manuelle Start von **Sync M/Text resources** mit derselben
-Basis-SHA und dem jeweils neuen Stufenbranch verwendet. Diese initiale
-Vollsynchronisation ist eine M/Text-Bereitstellung und nicht mit der durch
-einen `.100`-Tag erzeugten FULL-Lieferung an den Mainframe zu verwechseln.
+Eine neue Releaselinie wird zentral in `config/release_lines.json` der
+technischen M/Text-Linie und einem vorhandenen Übergabeprofil zugeordnet. Ihre
+drei Stage-Branches entstehen aus dem fachlich bestätigten letzten Release-Tag
+der bisherigen Linie. Danach wird derselbe vollständige Stand über den
+manuellen Sync-Workflow einmal nach Entwicklung und einmal nach Abnahme
+übertragen.
 
 ## Stand des Entwicklungssystems
 

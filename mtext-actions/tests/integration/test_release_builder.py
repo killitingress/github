@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lbs_delivery.config import load_deployments_config, load_mandant_config
+from lbs_delivery.config import load_mandant_config, load_release_lines, release_profile
 from lbs_delivery.git_refs import diff_name_status, previous_release_tag, resolve_commit
 from lbs_delivery.manifest import load_manifest, sha256_file, verify_artifacts
 from lbs_delivery.release import build_release
@@ -70,18 +70,16 @@ class ReleaseBuilderTests(unittest.TestCase):
         )
         self.mandant = load_mandant_config(
             AUTOMATION_ROOT / "tests/fixtures/mandant.json",
-            AUTOMATION_ROOT / "config/mandant.schema.json",
             repository_name="mtext-fi",
         )
-        self.deployments = load_deployments_config(
-            AUTOMATION_ROOT / "config/deployments.json",
-            AUTOMATION_ROOT / "config/deployments.schema.json",
+        self.release_lines = load_release_lines(
+            AUTOMATION_ROOT / "config/release_lines.json"
         )
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def test_cumulative_delta_and_reproducible_archive(self) -> None:
+    def test_full_and_cumulative_delta_release(self) -> None:
         base_sha = resolve_commit(self.repository, "R261.100")
         target_sha = resolve_commit(self.repository, "R261.108")
         previous_sha = resolve_commit(self.repository, "R261.107")
@@ -95,9 +93,9 @@ class ReleaseBuilderTests(unittest.TestCase):
             self.repository,
             first,
             self.mandant,
-            self.deployments,
             repository_name="mtext-fi",
             release_tag="R261.108",
+            profile_name=release_profile(self.release_lines, "R261"),
             target_sha=target_sha,
             base_sha=base_sha,
             previous_tag="R261.107",
@@ -107,9 +105,9 @@ class ReleaseBuilderTests(unittest.TestCase):
             self.repository,
             second,
             self.mandant,
-            self.deployments,
             repository_name="mtext-fi",
             release_tag="R261.108",
+            profile_name=release_profile(self.release_lines, "R261"),
             target_sha=target_sha,
             base_sha=base_sha,
             previous_tag="R261.107",
@@ -142,7 +140,6 @@ class ReleaseBuilderTests(unittest.TestCase):
         )
         self.assertNotIn("baseline.txt", direct_change_lines)
 
-    def test_full_contains_complete_project_with_historical_dot_prefix(self) -> None:
         git(self.repository, "checkout", "--detach", "R261.100")
         target_sha = resolve_commit(self.repository, "R261.100")
         output = self.root / "full"
@@ -150,9 +147,9 @@ class ReleaseBuilderTests(unittest.TestCase):
             self.repository,
             output,
             self.mandant,
-            self.deployments,
             repository_name="mtext-fi",
             release_tag="R261.100",
+            profile_name=release_profile(self.release_lines, "R261"),
             target_sha=target_sha,
             base_sha=None,
             previous_tag=None,

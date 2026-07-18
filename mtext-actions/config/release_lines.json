@@ -1,0 +1,5 @@
+{
+  "R260": {"line": "en03", "handover_profile": "JUR"},
+  "R261": {"line": "en01", "handover_profile": "FKT"},
+  "R270": {"line": "en02", "handover_profile": "JUR"}
+}

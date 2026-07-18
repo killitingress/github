@@ -31,9 +31,7 @@ jobs:
 
       - name: Prepare approved Python runtime
         id: runtime
-        env:
-          LBS_WHEELHOUSE: ${{ vars.LBS_WHEELHOUSE }}
-        run: scripts/runner-preflight.sh requirements.lock
+        run: scripts/runner-preflight.sh
 
       - name: Run central tests without external side effects
         env:

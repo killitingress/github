@@ -27,10 +27,14 @@ _FIELD_PATTERNS = {
 }
 
 
-def render_jcl(template: str, values: Mapping[str, str]) -> str:
-    """Validiert den Platzhaltervertrag und rendert anschließend das Template."""
+def validate_jcl_values(
+    values: Mapping[str, str], *, include_member: bool = False
+) -> dict[str, str]:
+    """Prüft die fachlich erlaubten JCL-Werte aus Manifest oder Paket."""
 
     expected = set(_FIELD_PATTERNS)
+    if not include_member:
+        expected.remove("MEMBER")
     supplied = set(values)
     missing = sorted(expected - supplied)
     unknown = sorted(supplied - expected)
@@ -42,6 +46,21 @@ def render_jcl(template: str, values: Mapping[str, str]) -> str:
             details.append(f"unknown fields: {', '.join(unknown)}")
         raise JclRenderError("; ".join(details))
 
+    normalized: dict[str, str] = {}
+    for name in expected:
+        pattern = _FIELD_PATTERNS[name]
+        value = values[name]
+        if not isinstance(value, str) or pattern.fullmatch(value) is None:
+            raise JclRenderError(f"invalid value for {name}")
+        normalized[name] = value
+    return normalized
+
+
+def render_jcl(template: str, values: Mapping[str, str]) -> str:
+    """Validiert den Platzhaltervertrag und rendert anschließend das Template."""
+
+    normalized = validate_jcl_values(values, include_member=True)
+    expected = set(_FIELD_PATTERNS)
     markers = set(_MARKER_RE.findall(template))
     if markers != expected:
         missing_markers = sorted(expected - markers)
@@ -52,13 +71,6 @@ def render_jcl(template: str, values: Mapping[str, str]) -> str:
         if unknown_markers:
             details.append(f"template has unknown markers: {', '.join(unknown_markers)}")
         raise JclRenderError("; ".join(details))
-
-    normalized: dict[str, str] = {}
-    for name, pattern in _FIELD_PATTERNS.items():
-        value = values[name]
-        if not isinstance(value, str) or pattern.fullmatch(value) is None:
-            raise JclRenderError(f"invalid value for {name}")
-        normalized[name] = value
 
     rendered = _MARKER_RE.sub(lambda match: normalized[match.group(1)], template)
     if _MARKER_RE.search(rendered):

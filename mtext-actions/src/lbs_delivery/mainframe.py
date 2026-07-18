@@ -15,7 +15,6 @@ from .manifest import Manifest, PackageArtifact
 
 
 _MEMBER_RE = re.compile(r"[A-Z0-9]{1,8}")
-_DATASET_RE = re.compile(r"[A-Z0-9@$#.-]{1,44}")
 _FTP_ERRORS = (OSError, ValueError) + ftplib.all_errors
 MAINFRAME_DATASET = "IEA.LOMS.TONICZ"
 MAINFRAME_JES_TARGET = "LIT9028A"
@@ -77,8 +76,6 @@ def submit_package(
 
     if _MEMBER_RE.fullmatch(member) is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "invalid Mainframe member")
-    if _DATASET_RE.fullmatch(MAINFRAME_DATASET) is None:
-        raise DeliveryError(Status.VALIDATION_FAILED, "invalid Mainframe dataset")
     package = Path(package_path)
     jcl = Path(jcl_path)
     if not package.is_file() or not jcl.is_file():
