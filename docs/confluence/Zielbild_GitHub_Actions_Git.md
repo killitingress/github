@@ -190,17 +190,31 @@ mtext-<mandant>/
 ```
 
 Das zentrale Repository enthält die wiederverwendbaren Workflows, die
-gemeinsame Python-Anwendung, geprüfte Konfigurationsregeln, das JCL-Template
-und die automatisierten Tests:
+gemeinsame Python-Anwendung, die zentrale Releaselinienzuordnung, das
+JCL-Template und die automatisierten Akzeptanztests:
 
 ```text
 mtext-actions/
   .github/workflows/
   config/
   src/lbs_delivery/
+    cli.py
+    config.py
+    errors.py
+    git.py
+    mainframe.py
+    manifest.py
+    release.py
+    sync.py
   templates/
   tests/
 ```
+
+Die Module folgen den fachlichen Abläufen. `sync.py` enthält Staging,
+`serverSync` und Adapteraufruf; `mainframe.py` enthält JCL und FTP/JES.
+Pfad- und Wertprüfungen stehen direkt an der jeweils zuständigen Eingangs-
+oder Systemgrenze. Intern erzeugte Werte werden nicht in weiteren Schichten
+erneut validiert.
 
 `mtext-fi` dient als Muster für die Mandanten-Repositories. Alle sichtbaren
 Verzeichnisse in der Repositorywurzel werden synchronisiert und in
@@ -214,10 +228,11 @@ Ziel-Environments fest. Die Verarbeitung erfolgt durch die zentralen Workflows a
 diese zentralen Workflows noch eine nicht lauffähige Folge aus Nullen als
 Platzhalter.
 
-Im gemeinsamen Workspace liegen `mtext-fi` und `mtext-actions` derzeit als
-Verzeichnisse nebeneinander. Im Zielbetrieb werden sie als eigenständige
-GitHub-Repositories unter `j517120/mtext-fi` und `j520730/mtext-actions`
-geführt. Nach fachlicher Bestandsaufnahme und Freigabe werden auch
+Im gemeinsamen Workspace liegt der zur Übernahme vorgesehene Inhalt des
+zentralen Repositorys unter `mtext-actions/mtext-actions-next`. Im Zielbetrieb
+werden Mandanten und zentrale Automation als eigenständige GitHub-Repositories
+unter `j517120/mtext-fi` und `j520730/mtext-actions` geführt. Nach fachlicher
+Bestandsaufnahme und Freigabe werden auch
 `mtext-autonom`, `mtext-by`, `mtext-lh`, `mtext-nw`, `mtext-os` und
 `mtext-sa` nach diesem Muster eingerichtet.
 
@@ -352,10 +367,10 @@ validieren die verwendete Konfiguration vor ihrem externen Zugriff erneut.
 
 | Datei | Trigger | Jobs und Abhängigkeiten | Implementierung und Wirkung |
 |---|---|---|---|
-| [`reusable-validate-config.yml`](../../mtext-actions/.github/workflows/reusable-validate-config.yml) | `workflow_call` | Mandanten-Commit auschecken → Automation auschecken → Laufzeit vorbereiten → prüfen | `validate-config` |
-| [`reusable-sync-resources.yml`](../../mtext-actions/.github/workflows/reusable-sync-resources.yml) | `workflow_call` | Exakten Mandanten-Commit mit vollständiger Historie auschecken → Automation auschecken → Laufzeit vorbereiten → synchronisieren | `sync-resources --execute`. Schreibt nach `serverSync` und ruft den M/Text-Adapter per HTTPS auf |
-| [`reusable-release.yml`](../../mtext-actions/.github/workflows/reusable-release.yml) | `workflow_call` | Job `build` erzeugt das Artefakt. Job `publish` hat `needs: build`, lädt genau dieses Artefakt und bindet das Environment `Bereitstellung` | `build-release`, danach `publish-mainframe --execute`. Übergabe per FTP/JES nach Freigabe |
-| [`ci.yml`](../../mtext-actions/.github/workflows/ci.yml) | Pull Request oder Push auf `main` in `mtext-actions` | Automation auschecken → Laufzeit vorbereiten → Tests ausführen | `python -m unittest discover -s tests -v` |
+| [`reusable-validate-config.yml`](../../mtext-actions/mtext-actions-next/.github/workflows/reusable-validate-config.yml) | `workflow_call` | Mandanten-Commit auschecken → Automation auschecken → Laufzeit vorbereiten → prüfen | `validate-config` |
+| [`reusable-sync-resources.yml`](../../mtext-actions/mtext-actions-next/.github/workflows/reusable-sync-resources.yml) | `workflow_call` | Exakten Mandanten-Commit mit vollständiger Historie auschecken → Automation auschecken → Laufzeit vorbereiten → synchronisieren | `sync-resources --execute`. Schreibt nach `serverSync` und ruft den M/Text-Adapter per HTTPS auf |
+| [`reusable-release.yml`](../../mtext-actions/mtext-actions-next/.github/workflows/reusable-release.yml) | `workflow_call` | Job `build` erzeugt das Artefakt. Job `publish` hat `needs: build`, lädt genau dieses Artefakt und bindet das Environment `Bereitstellung` | `build-release`, danach `publish-mainframe --execute`. Übergabe per FTP/JES nach Freigabe |
+| [`ci.yml`](../../mtext-actions/mtext-actions-next/.github/workflows/ci.yml) | Pull Request oder Push auf `main` in `mtext-actions` | Automation auschecken → Laufzeit vorbereiten → Akzeptanztests ausführen | `python -m unittest discover -s tests -v` |
 
 Die wiederverwendbaren Workflows sind nur über `workflow_call` erreichbar.
 Alle zentralen Jobs verwenden Self-hosted Runner mit den Labels `self-hosted`,
@@ -365,14 +380,15 @@ Alle zentralen Jobs verwenden Self-hosted Runner mit den Labels `self-hosted`,
 
 | Kommando | Aufgerufen durch | Wesentliche Prüfungen und Abhängigkeiten | Ergebnis |
 |---|---|---|---|
-| `validate-config` | `reusable-validate-config.yml` | JSON-Schemas, Repositoryidentität, erlaubte Konfigurationsschlüssel, eindeutige Projekte und konsistente Releaselinien | Status `CONFIG_VALIDATED` |
-| `sync-resources` | `reusable-sync-resources.yml` | Branch und Environment stimmen überein. Vollständige SHA. Checkout entspricht SHA. Commit ist aus dem Remote-Branch erreichbar. Sichere Projektpfade | Vollständiger erlaubter Projektstand nach `serverSync`, HTTPS-Aufruf des Adapters, Status `ADAPTER_ACCEPTED` |
-| `build-release` | Job `build` in `reusable-release.yml` | Tagformat und Releaselinie. Tag aus Bereitstellungsbranch erreichbar. Checkout entspricht Tag-SHA. DELTA-Basis `.100`. Sichere Projektpfade | Reproduzierbare FULL-/DELTA-Archive, Informationsdateien und `manifest.json` mit SHA-256. Status `ARTIFACT_READY` |
-| `publish-mainframe` | Job `publish` in `reusable-release.yml` | Manifest, Querverweise, Pfade, Größen, SHA-256, JCL-Werte und FTP-Secrets | JCL je Paket, FTP-Übertragung und Übergabe an JES. Status `MAINFRAME_SUBMITTED` |
+| `validate-config` | `reusable-validate-config.yml` | Bekanntes Mandantenkürzel, Repositoryidentität, Hostprofil-Stages, eindeutige Projektcodes und vorhandene Hostprofile der Releaselinien | Status `CONFIG_VALIDATED` |
+| `sync-resources` | `reusable-sync-resources.yml` | Branch und Environment stimmen überein. Vollständige SHA. Checkout entspricht SHA. Commit ist aus dem Remote-Branch erreichbar. Projektbäume enthalten keine Symlinks | Vollständiger Projektstand nach `serverSync`, HTTPS-Aufruf des Adapters, Status `ADAPTER_ACCEPTED` |
+| `build-release` | Job `build` in `reusable-release.yml` | Tagformat und konfigurierte Releaselinie. Tag aus Bereitstellungsbranch erreichbar. Checkout entspricht Tag-SHA. DELTA-Basis `.100`. Projektbäume enthalten keine Symlinks | Reproduzierbare FULL-/DELTA-Archive, Informationsdateien und `manifest.json` mit SHA-256. Status `ARTIFACT_READY` |
+| `publish-mainframe` | Job `publish` in `reusable-release.yml` | Artefaktpfade, Dateigrößen und SHA-256 aus dem Manifest; JCL-Werte beim Rendern; FTP-Secrets vor der Übergabe | JCL je Paket, FTP-Übertragung und Übergabe an JES. Status `MAINFRAME_SUBMITTED` |
 
 Der Einstieg erfolgt über
-[`__main__.py`](../../mtext-actions/src/lbs_delivery/__main__.py) und
-[`cli.py`](../../mtext-actions/src/lbs_delivery/cli.py). Die CLI übersetzt
+[`__main__.py`](../../mtext-actions/mtext-actions-next/src/lbs_delivery/__main__.py)
+und
+[`cli.py`](../../mtext-actions/mtext-actions-next/src/lbs_delivery/cli.py). Die CLI übersetzt
 fachliche Fehler in stabile Statuswerte und Prozess-Exitcodes. Ein von null
 verschiedener Exitcode lässt den jeweiligen GitHub-Job fehlschlagen.
 
@@ -385,7 +401,7 @@ verschiedener Exitcode lässt den jeweiligen GitHub-Job fehlschlagen.
 | Mainframe-Secrets | Ausschließlich `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER` und `MAINFRAME_FTP_PASSWORD` im Publish-Job |
 | Sync-Serialisierung | Concurrency-Gruppe je Repository und Branch. Ein laufender Sync wird nicht aktiv abgebrochen. |
 | Release-Serialisierung | Je Repository und Tag. Die Mainframe-Übergabe wird zusätzlich je Mandanten-Repository serialisiert. |
-| Build-Publish-Grenze | Publish lädt genau das vom Build benannte Artefakt und prüft Manifest, Größen und SHA-256 erneut. |
+| Build-Publish-Grenze | Publish lädt genau das vom Build benannte Artefakt und vergleicht unmittelbar vor der externen Wirkung Pfad, Größe und SHA-256 jeder manifestierten Datei. |
 
 ## 8. Konfiguration
 
@@ -442,11 +458,13 @@ kumulatives DELTA gegen den `.100`-Tag. Ein Tag `R261.108` enthält somit alle
 neuen, geänderten und gelöschten Dateien seit `R261.100`. Frühere
 DELTA-Lieferungen müssen nicht lückenlos eingespielt worden sein.
 
-Zu jeder Lieferung wird ein Manifest erzeugt. Diese Begleitdatei nennt unter
-anderem Mandant, Release, Quellstand, enthaltene Dateien und deren Prüfsummen.
-Vor der Mainframe-Übergabe werden die Dateien erneut damit verglichen. So wird
-sichergestellt, dass genau das zuvor gebaute und freigegebene Paket übergeben
-wird.
+Zu jeder Lieferung wird ein Manifest erzeugt. Die Begleitdatei nennt
+Repository, Mandant, Release-Tag, Lieferart, Basis- und Vorgänger-Tag,
+Ziel-SHA, JCL-Werte sowie alle Paket- und Informationsdateien mit Pfad, Größe
+und SHA-256. Paketartefakte nennen zusätzlich ihren Mainframe-Member. Vor der
+Mainframe-Übergabe werden genau diese Dateien mit den manifestierten Angaben
+verglichen. So wird sichergestellt, dass das zuvor gebaute und freigegebene
+Paket übergeben wird.
 
 Ein fehlgeschlagener Übergabeversuch kann innerhalb desselben GitHub-Laufs mit
 dem unveränderten Paket wiederholt werden. Das Paket wird dabei nicht neu
@@ -454,16 +472,17 @@ gebaut.
 
 ## 10. Mainframe-Übergabe und JCL
 
-Die JCL liegt künftig als eigene versionierte Template-Datei vor. Änderungen
+Die JCL liegt als eigene versionierte Template-Datei vor. Änderungen
 an der Mainframe-Ansteuerung sind dadurch sichtbar und können unabhängig vom
 Programmcode geprüft werden.
 
-Für jede Übergabe werden ausschließlich die im bisherigen Verfahren
-benötigten, geprüften Werte in das Template eingesetzt. Historisch feste Werte
-bleiben fest. Nur tatsächlich mandantenspezifische Zuordnungen werden aus der
-Mandantenkonfiguration übernommen. Fehlende, unbekannte oder syntaktisch
-unzulässige Werte führen vor der Übergabe zu einem Fehler. Zugangsdaten werden
-weder in die JCL noch in die Protokolle geschrieben.
+Für jede Übergabe werden ausschließlich die fachlich festgelegten Werte in das
+Template eingesetzt. Historisch feste Werte bleiben fest. Nur tatsächlich
+mandantenspezifische Zuordnungen werden aus der Mandantenkonfiguration
+übernommen. Die Werte für ISPW, CodePipeline-Stage, Subsystem, Assignment und
+Mainframe-Member werden beim Rendern geprüft. Unbekannte Template-Marker führen
+vor der Übergabe zu einem Fehler. Zugangsdaten werden weder in die JCL noch in
+die Protokolle geschrieben.
 
 Der Release-Workflow trennt den Paketbau von der Mainframe-Übergabe. Der
 Paketbau benötigt keinen Zugriff auf das Zielsystem. Erst der Übergabeschritt

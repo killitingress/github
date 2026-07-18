@@ -314,15 +314,15 @@ Zuordnung angepasst werden. Das FI-Beispiel lautet:
 }
 ```
 
-| Feld | Bedeutung | Verwendung in der bestehenden JCL |
+| Feld | Bedeutung | Verwendung in der versionierten JCL |
 |---|---|---|
 | `subsystem` | Subsystem des Mandanten, für FI beispielsweise `LOMS` | wird als `SUBSYS` eingesetzt und dort für `APPLID` und `SUBAPPL` verwendet |
 | `assignment` | Assignment des Mandanten für das jeweilige Hostprofil | wird als `ASSIGNMENT` eingesetzt und dort für `PROJNO` verwendet |
 | `stage` | JCL-Stage-Code für das CodePipeline-`LEVEL`, beispielsweise `FKTE` oder `JURP` | wird in den `LEVEL`-Platzhalter eingesetzt und dort unter anderem für `CLVL` und `SLVL` verwendet |
 
-Die Namen `FKT` und `JUR` unter `hostprofile` bezeichnen die beiden aus dem
-bisherigen Verfahren übernommenen Hostprofile. Sie sind nicht selbst
-die Stage-Codes. Welche Releaselinie welches Profil verwendet, steht in der
+Die Namen `FKT` und `JUR` unter `hostprofile` bezeichnen die fachlich
+festgelegten Hostprofile. Sie sind nicht selbst die Stage-Codes. Welche
+Releaselinie welches Profil verwendet, steht in der
 zentralen Releaselinienzuordnung, aktuell `R260 → JUR`, `R261 → FKT` und
 `R270 → JUR`. Der Mandant
 pflegt innerhalb beider Profile seine jeweils gültige Kombination aus
@@ -346,13 +346,13 @@ eigenen Pfadregel.
 Ein Push mit einer Änderung an `.config.json` startet automatisch
 **Validate mandant configuration**. Dieser Check prüft die Datei ohne Zugriff
 auf M/Text oder den Mainframe und liefert frühzeitig eine verständliche
-Fehlermeldung. Er erkennt beispielsweise unbekannte Felder, ungültige Formate,
-ein unpassendes Repository, doppelte Ausschlüsse oder Projektverzeichnisse
-ohne freigegebene Liefercode-Zuordnung. `CONFIG_VALIDATED` bestätigt jedoch
-nicht, dass die technischen Betriebswerte fachlich richtig gewählt wurden.
-Der Status ersetzt deshalb keine fachliche Freigabe und ist kein technisches
-Gate. Synchronisation und Release validieren die verwendete Konfiguration auf
-ihrem tatsächlichen Ausführungspfad erneut.
+Fehlermeldung. Er erkennt ein unbekanntes Mandantenkürzel, ein unpassendes
+Repository, fehlende oder ungültige Hostprofile, mehrdeutige Liefercodes und
+Projektverzeichnisse ohne Liefercode-Zuordnung. `CONFIG_VALIDATED` bestätigt
+jedoch nicht, dass die technischen Betriebswerte fachlich richtig gewählt
+wurden. Der Status ersetzt deshalb keine fachliche Freigabe und ist kein
+technisches Gate. Synchronisation und Release laden dieselbe Konfiguration auf
+ihrem tatsächlichen Ausführungspfad.
 
 ## 3. Neue Releaselinie einrichten
 
@@ -460,9 +460,9 @@ Danach unter **Actions → Build and publish release** prüfen:
    30 Tage aufbewahrt.
 3. `Verify and hand over artifact to Mainframe` wartet im Environment
    `Bereitstellung` auf die eingerichtete manuelle Freigabe.
-4. Nach der Freigabe werden Manifest und Prüfsummen erneut geprüft, JCL wird
-   aus dem versionierten Template gerendert und Paket plus JCL werden per
-   FTP/JES übergeben.
+4. Nach der Freigabe werden Pfad, Größe und SHA-256 jeder manifestierten Datei
+   geprüft. Danach werden die JCL-Werte validiert, das versionierte Template
+   gerendert und Paket plus JCL per FTP/JES übergeben.
 
 `MAINFRAME_SUBMITTED` bedeutet ausschließlich, dass die unmittelbare
 FTP-/JES-Übergabe akzeptiert wurde. Der fachliche Abschluss des Mainframe-Jobs
@@ -472,9 +472,9 @@ wird in Ausbaustufe 1 nicht abgefragt.
 
 Ein noch verfügbarer Workflow-Lauf kann in GitHub über **Actions**, den
 betroffenen Lauf und **Re-run jobs** mit demselben Commit und derselben
-Git-Referenz wiederholt werden. Die folgenden manuellen Durchführungen der Workflows sind für Fälle
-gedacht, in denen ein neuer kontrollierter Lauf mit ausdrücklich angegebenem
-Commit oder Tag erforderlich ist.
+Git-Referenz wiederholt werden. Die folgenden manuellen Durchführungen der
+Workflows sind für Fälle gedacht, in denen ein neuer kontrollierter Lauf mit
+ausdrücklich angegebenem Commit oder Tag erforderlich ist.
 
 ### M/Text-Vollsynchronisation initial starten oder wiederholen
 
@@ -506,8 +506,8 @@ fachlichen Endstatus.
 | `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinienzuordnung sind technisch konsistent | Fachliche Abstimmung fortsetzen. Der Status ist keine automatische Freigabe für die nächste Stage |
 | `VALIDATION_FAILED` | Input, Konfiguration, Branchrichtung oder JCL ungültig | Erste Fehlermeldung lesen. Branch-/Tagformat und Konfiguration prüfen |
 | `SOURCE_FAILED` | Commit oder Tag/Basisreferenz nicht auflösbar | SHA, Tag, `.100`-Basis und Branch-Erreichbarkeit prüfen |
-| `PACKAGE_FAILED` | Paket, Informationsdatei oder Manifest konnte nicht sicher gebaut werden | Fehlende Projektpfade, Symlinks, leeres/benutztes Ausgabeverzeichnis prüfen |
-| `RESOURCE_TRANSFER_FAILED` | Veröffentlichung nach `serverSync` fehlgeschlagen | Fehler des gewählten Transportwegs prüfen. Bis zur Transportentscheidung bildet der aktuelle Code die Share-/NFS-Variante ab |
+| `PACKAGE_FAILED` | Paket, Informationsdatei oder manifestiertes Artefakt konnte nicht erstellt beziehungsweise geprüft werden | Fehlende Projekte, Symlinks, vorhandenes Ausgabeverzeichnis sowie Pfad, Größe und SHA-256 der Artefakte prüfen |
+| `RESOURCE_TRANSFER_FAILED` | Staging oder Veröffentlichung nach `serverSync` fehlgeschlagen | Runner-Dateisystem und Share-/NFS-Ziel einschließlich vorhandener temporärer Verzeichnisse prüfen |
 | `ADAPTER_FAILED` | Transportfehler oder Nicht-2xx vom Adapter | HTTP-Status und bereinigten Response-Body im Log prüfen |
 | `ADAPTER_ACCEPTED` | Unmittelbare Adapterannahme erfolgreich | Kein Beleg für einen nachgelagerten M/Text-Endstatus |
 | `ARTIFACT_READY` | Releaseartefakt lokal gebaut und geprüft | Publish-Freigabe beziehungsweise nächsten Job prüfen |

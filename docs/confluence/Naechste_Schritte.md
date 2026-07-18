@@ -7,7 +7,7 @@
 **Bedienung nach Aktivierung:** [Benutzeranleitung](./Benutzeranleitung.md)
 
 **Migration und Produktivsetzung:**
-[Migrations- und Cutover-Runbook](./Migration_und_Cutover_Runbook.md)
+[Migrations- und Cutover-Runbook](./Migration.md)
 
 **Ablauf:** [Soll-Architektur Ablaufdiagramm](../../Architektur_Soll_GitHub_Actions_Git.drawio)
 
@@ -21,6 +21,7 @@ verlinkten Dokumenten.
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
 | offen | Zentrales Repository `j520730/mtext-actions` und privates FI-Repository `j517120/mtext-fi` auf GitHub Enterprise anlegen beziehungsweise die lokalen Stände übernehmen | Das zentrale Repository ist nur für das Automatisierungsteam direkt zugänglich. Das FI-Repository enthält Ressourcen, Mandantenkonfiguration und schlanke Workflows |
+| bestätigt | Zentrale Implementierung gegen den fachlichen Vertrag prüfen | Die vier CLI-Kommandos, FULL und DELTA, Artefaktprüfung, JCL, FTP-/JES-Vertrag, Ressourcensynchronisation und Workflowgrenzen sind durch Akzeptanztests abgedeckt |
 | offen | Branches der aktiven Stages und Default Branch einrichten | Für `R260`, `R261` und `R270` bestehen jeweils Branches der Stages `Entwicklung`, `Abnahme` und `Bereitstellung`. Zunächst ist `R261/Entwicklung` der Default Branch |
 | offen | Zentrale Workflowversion pinnen und repositoryübergreifenden Actions-Zugriff freigeben | Alle aufrufenden Workflows verwenden denselben freigegebenen Commit-SHA. Nur vorgesehene Mandanten-Repositories rufen `mtext-actions` auf |
 | offen | Zentralen Checkout und mandantensichtbare Logs praktisch prüfen | Ein Testlauf funktioniert über beide Namespaces und zeigt keine Secrets oder unnötigen internen Details. Falls nötig, wird ein Installation-Token sicher in den Workflowvertrag aufgenommen |
@@ -68,6 +69,6 @@ verlinkten Dokumenten.
 
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
-| geplant November/Dezember 2026 | Ersten SVN-Abzug nach dem [Migrations- und Cutover-Runbook](./Migration_und_Cutover_Runbook.md) erstellen | Alle Mandanten-Repositories stehen mit dokumentiertem SVN-Ausgangsstand für Tests bereit. Jenkins und SVN bleiben produktiv |
+| geplant November/Dezember 2026 | Ersten SVN-Abzug nach dem [Migrations- und Cutover-Runbook](./Migration.md) erstellen | Alle Mandanten-Repositories stehen mit dokumentiertem SVN-Ausgangsstand für Tests bereit. Jenkins und SVN bleiben produktiv |
 | offen | Importumfang und Release-Basen je Mandant freigeben | Aktive Linien, Projekte, Dateinamen und Ausschlüsse sind inventarisiert. Je aktiver Linie werden mindestens der `.100`-Stand und alle späteren Tags übernommen |
 | offen | Nichtproduktiven End-to-End-Pilot abnehmen | Git-Clients, Schutzregeln, M/Text-Synchronisation sowie FULL- und DELTA-Release einschließlich Mainframe-Übergabe sind geprüft |

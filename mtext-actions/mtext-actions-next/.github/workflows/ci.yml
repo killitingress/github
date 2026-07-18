@@ -1,6 +1,6 @@
 name: Central tests
 
-# Die zentrale Prüfung läuft nur bei Änderungen an der Automatisierung und hat keine externen Seiteneffekte.
+# Die Prüfung besitzt keine externen Seiteneffekte und benötigt nur Leserechte.
 'on':
   pull_request:
   push:
@@ -10,11 +10,13 @@ name: Central tests
 permissions:
   contents: read
 
+# Neuere Commits ersetzen laufende Tests derselben Änderung.
 concurrency:
   group: central-tests-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # Der Job verwendet ausschließlich den freigegebenen Self-hosted Runner.
   test:
     name: Test central automation
     runs-on:
@@ -23,8 +25,7 @@ jobs:
       - mtext-delivery
     timeout-minutes: 20
     steps:
-      # Repository und Abhängigkeiten werden reproduzierbar aus festgelegten Quellen geladen.
-      - name: Check out automation
+      - name: Check out automation without persisted credentials
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
@@ -33,7 +34,7 @@ jobs:
         id: runtime
         run: scripts/runner-preflight.sh
 
-      - name: Run central tests without external side effects
+      - name: Run acceptance tests without external calls
         env:
           PYTHONPATH: src
         run: >-

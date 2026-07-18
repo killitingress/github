@@ -30,3 +30,4 @@ if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
 else
   command -v python3
 fi
+
