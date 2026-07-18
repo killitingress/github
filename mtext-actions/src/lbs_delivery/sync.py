@@ -16,8 +16,8 @@ from .errors import DeliveryError, Status
 from .git import require_checkout
 
 
-# Die Antwortgrenze verhindert unbeschränkten Speicherverbrauch durch den Adapter.
-ADAPTER_RESPONSE_LIMIT = 64 * 1024
+# Obergrenze für den gelesenen Adapter-Antwortkörper in Bytes; verhindert unbeschränkten Speicherverbrauch.
+ADAPTER_RESPONSE_LIMIT = 1024 * 1024 # 1 MB
 
 
 def stage_projects(
