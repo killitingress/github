@@ -9,15 +9,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from lbs_delivery.config import load_configuration
+from lbs_delivery.errors import DeliveryError, Status
 from lbs_delivery.mainframe import submit_package
 from lbs_delivery.sync import call_adapter, publish_server_sync, sync_resources
 
-from tests.support import git, write_mandant
-
-
-# Die produktionsnahe Releaselinienzuordnung gehört zum Testvertrag.
-AUTOMATION_ROOT = Path(__file__).resolve().parents[1]
+from tests.support import git, load_test_configuration, setup_sync_repository
 
 
 class SyncAndMainframeTests(unittest.TestCase):
@@ -27,30 +23,8 @@ class SyncAndMainframeTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        self.repository = self.root / "mtext-fi"
-        self.repository.mkdir()
-        git(self.repository, "init", "-b", "R261/Entwicklung")
-        git(self.repository, "config", "user.name", "Test")
-        git(self.repository, "config", "user.email", "test@example.invalid")
-        project = self.repository / "LOMS_Basis"
-        project.mkdir()
-        (project / "value.txt").write_text("new", encoding="utf-8")
-        git(self.repository, "add", ".")
-        git(self.repository, "commit", "-m", "sync")
-        git(
-            self.repository,
-            "update-ref",
-            "refs/remotes/origin/R261/Entwicklung",
-            "HEAD",
-        )
-        mandant = self.root / "mandant.json"
-        write_mandant(mandant)
-        self.configuration = load_configuration(
-            mandant,
-            AUTOMATION_ROOT / "config/releaselinien.json",
-            repository_name="mtext-fi",
-            repository_root=self.repository,
-        )
+        self.repository = setup_sync_repository(self.root)
+        self.configuration = load_test_configuration(self.root, self.repository)
 
     def test_sync_stages_and_replaces_complete_project(self) -> None:
         """Prüft den linearen lokalen Teil der Ressourcensynchronisation."""
@@ -85,6 +59,22 @@ class SyncAndMainframeTests(unittest.TestCase):
         )
         self.assertEqual((status, body), (200, "accepted"))
 
+    def test_sync_rejects_branch_environment_mismatch(self) -> None:
+        """Lehnt Kombinationen aus Branch und Zielumgebung ab."""
+
+        with self.assertRaises(DeliveryError) as context:
+            sync_resources(
+                self.configuration,
+                repository_root=self.repository,
+                commit=git(self.repository, "rev-parse", "HEAD"),
+                source_branch="R261/Entwicklung",
+                environment="Abnahme",
+                staging_root=self.root / "staging",
+                timeout=60.0,
+                execute=False,
+            )
+        self.assertEqual(context.exception.status, Status.VALIDATION_FAILED)
+
     def test_ftp_uses_existing_mainframe_contract(self) -> None:
         """Prüft Dataset, Member und JES-Ziel ohne eigene Antwortauswertung."""
 
@@ -115,4 +105,3 @@ class SyncAndMainframeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

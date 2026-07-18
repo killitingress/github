@@ -30,6 +30,8 @@ Kompatibilitätsregeln aus dem nur als Referenz gelesenen Jenkins-Hook
   entsprechen.
 - Archivnamen, Mainframe-Member, Löschlisten und Informationsdateien folgen dem
   bestehenden Jenkins-Vertrag.
+- Erkannte Dateikopien werden wie Hinzufügungen behandelt; Umbenennungen als
+  Löschung und Hinzufügung.
 - Gleiche Eingaben erzeugen bytegleiche Archive.
 
 ## Mainframe-Übergabe

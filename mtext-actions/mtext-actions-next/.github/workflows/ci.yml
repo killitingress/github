@@ -34,7 +34,7 @@ jobs:
         id: runtime
         run: scripts/runner-preflight.sh
 
-      - name: Run acceptance tests without external calls
+      - name: Run tests without external calls
         env:
           PYTHONPATH: src
         run: >-

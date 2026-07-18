@@ -7,17 +7,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lbs_delivery.config import load_configuration
 from lbs_delivery.errors import DeliveryError
 from lbs_delivery.mainframe import publish_mainframe
 from lbs_delivery.manifest import load_and_verify, sha256_file
 from lbs_delivery.release import build_release
 
-from tests.support import git, write_mandant
-
-
-# Diese Wurzel enthält die neue Releaselinienzuordnung und das JCL-Template.
-AUTOMATION_ROOT = Path(__file__).resolve().parents[1]
+from tests.support import (
+    AUTOMATION_ROOT,
+    git,
+    load_test_configuration,
+    setup_release_repository,
+)
 
 
 class ReleaseTests(unittest.TestCase):
@@ -27,48 +27,8 @@ class ReleaseTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        self.repository = self.root / "mtext-fi"
-        self.repository.mkdir()
-        git(self.repository, "init", "-b", "R261/Bereitstellung")
-        git(self.repository, "config", "user.name", "Test")
-        git(self.repository, "config", "user.email", "test@example.invalid")
-        project = self.repository / "LOMS_Basis"
-        project.mkdir()
-        (project / "baseline.txt").write_text("base\n", encoding="utf-8")
-        (project / "deleted.txt").write_text("delete\n", encoding="utf-8")
-        (project / "rename-old.txt").write_text("rename\n", encoding="utf-8")
-        git(self.repository, "add", ".")
-        git(self.repository, "commit", "-m", "full")
-        git(self.repository, "tag", "R261.100")
-        (project / "baseline.txt").write_text("changed\n", encoding="utf-8")
-        git(self.repository, "add", ".")
-        git(self.repository, "commit", "-m", "previous")
-        git(self.repository, "tag", "R261.107")
-        (project / "deleted.txt").unlink()
-        (project / "new.txt").write_text("new\n", encoding="utf-8")
-        git(
-            self.repository,
-            "mv",
-            "LOMS_Basis/rename-old.txt",
-            "LOMS_Basis/rename-new.txt",
-        )
-        git(self.repository, "add", "-A")
-        git(self.repository, "commit", "-m", "delta")
-        git(self.repository, "tag", "R261.108")
-        git(
-            self.repository,
-            "update-ref",
-            "refs/remotes/origin/R261/Bereitstellung",
-            "HEAD",
-        )
-        self.mandant_path = self.root / "mandant.json"
-        write_mandant(self.mandant_path)
-        self.configuration = load_configuration(
-            self.mandant_path,
-            AUTOMATION_ROOT / "config/releaselinien.json",
-            repository_name="mtext-fi",
-            repository_root=self.repository,
-        )
+        self.repository = setup_release_repository(self.root)
+        self.configuration = load_test_configuration(self.root, self.repository)
 
     def test_full_delta_and_publish_dry_run(self) -> None:
         """Prüft Archivvertrag, Reproduzierbarkeit, Manifest und gerenderte JCL."""

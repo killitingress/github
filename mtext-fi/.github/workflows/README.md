@@ -36,7 +36,7 @@ verwendete Konfiguration erneut.
 
 Ein Push auf `Rnnn/Entwicklung` oder `Rnnn/Abnahme` startet die zentrale
 Synchronisation für die passende M/Text-Umgebung. Der manuelle Start verlangt
-einen Commit-SHA und einen Stufenbranch. Die zentrale Umsetzung prüft beides
+einen Commit-SHA und den zugehörigen Branch. Die zentrale Umsetzung prüft beides
 und leitet daraus Releaselinie und Zielumgebung ab.
 
 Jede Synchronisation überträgt den vollständigen Stand aller sichtbaren

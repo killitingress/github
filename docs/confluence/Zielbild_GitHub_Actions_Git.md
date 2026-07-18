@@ -320,9 +320,9 @@ eigentliche Fachlogik liegt in Python.
 
 | Prozessschritt | Auslöser im Mandanten-Repository | Mandanten-Workflow | Zentraler Workflow | Python-Kommando | Ergebnis |
 |---|---|---|---|---|---|
-| Mandantenkonfiguration prüfen | Push mit Änderung an `.config.json` auf einem beliebigen Branch | `validate-config.yml` | `reusable-validate-config.yml` | `validate-config` | Konfiguration geprüft |
-| Entwicklung synchronisieren | Push nach `Rnnn/Entwicklung` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync-resources` | Vollständiger Ressourcenstand nach M/Text-Entwicklung synchronisiert |
-| Abnahme synchronisieren | Push nach `Rnnn/Abnahme` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync-resources` | Vollständiger Ressourcenstand nach M/Text-Abnahme synchronisiert |
+| Mandantenkonfiguration prüfen | Push mit Änderung an `.config.json` auf einen Branch | `validate-config.yml` | `reusable-validate-config.yml` | `validate-config` | Konfiguration geprüft |
+| Entwicklung synchronisieren | Push nach `Rnnn/Entwicklung` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync-resources` | Vollständiger Projektstand des Ziel-Commits nach M/Text-Entwicklung synchronisiert |
+| Abnahme synchronisieren | Push eines per Cherry-Pick übernommenen Commits nach `Rnnn/Abnahme` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync-resources` | Vollständiger Projektstand des Ziel-Commits nach M/Text-Abnahme synchronisiert |
 | Bereitstellungsstand fortschreiben | Cherry-Pick und Push nach `Rnnn/Bereitstellung` | keiner | keiner | keines | Nur Git-Branch fortgeschrieben. Noch keine Lieferung |
 | Release bauen und übergeben | Push eines Tags `Rnnn.nnn` oder manueller Start mit vorhandenem Tag | `release.yml` | `reusable-release.yml` | `build-release`, danach `publish-mainframe` | FULL/DELTA gebaut, geprüft und nach Freigabe per FTP/JES übergeben |
 | Zentrale Automation testen | Pull Request in `mtext-actions` oder Push auf dessen `main` | entfällt | `ci.yml` | `unittest discover` | Zentrale Testfälle und Workflowverträge geprüft |
@@ -334,15 +334,12 @@ hergestellt haben. Sie schreiben keine Commits, Branches oder Tags.
 
 | Ereignis | Konfigurationsprüfung | Sync Entwicklung | Sync Abnahme | Release |
 |---|---:|---:|---:|---:|
-| Push einer Ressourcenänderung auf einen Feature-Branch | nein | nein | nein | nein |
-| Push mit Änderung an `.config.json` auf einen Feature-Branch | ja | nein | nein | nein |
-| Beliebiger Push nach `Rnnn/Entwicklung` | nur bei geänderter Mandantenkonfiguration | ja | nein | nein |
-| Beliebiger Push nach `Rnnn/Abnahme` | nur bei geänderter Mandantenkonfiguration | nein | ja | nein |
-| Beliebiger Push nach `Rnnn/Bereitstellung` | nur bei geänderter Mandantenkonfiguration | nein | nein | nein |
+| Push auf einen Branch ohne Änderung an `.config.json` | nein | nur nach `Rnnn/Entwicklung` | nur nach `Rnnn/Abnahme` | nein |
+| Push auf einen Branch mit Änderung an `.config.json` | ja | nur nach `Rnnn/Entwicklung` | nur nach `Rnnn/Abnahme` | nein |
 | Push eines Tags `Rnnn.nnn` | nein | nein | nein | ja |
-| Manueller Sync mit Entwicklungsbranch | nein | ja | nein | nein |
-| Manueller Sync mit Abnahmebranch | nein | nein | ja | nein |
-| Manueller Release-Start mit vorhandenem Tag | nein | nein | nein | ja |
+| Manueller Sync eines Ziel-Commits aus `Rnnn/Entwicklung` | nein | ja | nein | nein |
+| Manueller Sync eines Ziel-Commits aus `Rnnn/Abnahme` | nein | nein | ja | nein |
+| Manueller Release-Start mit vorhandenem Tag `Rnnn.nnn` | nein | nein | nein | ja |
 | Pull Request im Mandanten-Repository | nein | nein | nein | nein |
 
 Der Sync-Workflow besitzt keinen Pfadfilter. Jeder Push nach Entwicklung oder
@@ -350,18 +347,19 @@ Abnahme startet daher den vollständigen Ressourcensync. Dabei werden die
 sichtbaren, nicht unter `excluded_projects` genannten Projektverzeichnisse
 übertragen.
 
-Der separate Konfigurationscheck ist kein vorgeschaltetes `needs`-Gate. Wenn
-ein Push nach Entwicklung oder Abnahme zugleich `.config.json` ändert,
-können Konfigurationscheck und Sync unabhängig laufen. Sync und Release
-validieren die verwendete Konfiguration vor ihrem externen Zugriff erneut.
+Die Synchronisation wartet nicht auf den Abschluss der separaten
+Konfigurationsprüfung. Wenn ein Push nach Entwicklung oder Abnahme zugleich
+`.config.json` ändert, können beide Abläufe unabhängig voneinander laufen.
+Synchronisation und Release-Erstellung prüfen die verwendete Konfiguration vor
+dem Zugriff auf externe Systeme erneut.
 
 ### Mandantenseitige YAML-Workflows
 
 | Datei | Automatischer Trigger | Manueller Trigger | Abhängigkeit und Zweck |
 |---|---|---|---|
-| [`validate-config.yml`](../../mtext-fi/.github/workflows/validate-config.yml) | Push auf jedem Branch, wenn `.config.json` geändert wurde | keiner | Ruft `reusable-validate-config.yml` zur Prüfung der Mandantenkonfiguration auf |
-| [`sync-resources.yml`](../../mtext-fi/.github/workflows/sync-resources.yml) | Jeder Push nach `Rnnn/Entwicklung` oder `Rnnn/Abnahme` | vollständige `commit_sha` und `source_branch` | Ruft abhängig von der Branchendung `reusable-sync-resources.yml` mit festem Ziel-Environment `Entwicklung` oder `Abnahme` auf |
-| [`release.yml`](../../mtext-fi/.github/workflows/release.yml) | Push eines Tags `Rnnn.nnn` | vorhandener `release_tag` | Ruft `reusable-release.yml` auf. Ein Push nach Bereitstellung allein ist kein Auslöser |
+| [`validate-config.yml`](../../mtext-fi/.github/workflows/validate-config.yml) | Push mit Änderung an `.config.json` auf einen Branch | keiner | Ruft `reusable-validate-config.yml` zur Prüfung der Mandantenkonfiguration auf |
+| [`sync-resources.yml`](../../mtext-fi/.github/workflows/sync-resources.yml) | Push nach `Rnnn/Entwicklung` oder `Rnnn/Abnahme` | `workflow_dispatch` mit vollständiger `commit_sha` und zugehörigem `source_branch` | Ruft abhängig von der Branchendung `reusable-sync-resources.yml` mit festem Ziel-Environment `Entwicklung` oder `Abnahme` auf |
+| [`release.yml`](../../mtext-fi/.github/workflows/release.yml) | Push eines Tags `Rnnn.nnn` | `workflow_dispatch` mit vorhandenem `release_tag` | Ruft `reusable-release.yml` auf. Ein Push nach Bereitstellung allein ist kein Auslöser |
 
 ### Zentrale YAML-Workflows
 

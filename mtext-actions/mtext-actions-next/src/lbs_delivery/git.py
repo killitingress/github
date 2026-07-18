@@ -95,7 +95,7 @@ def require_release_tag(repository: str | Path, tag: str, branch: str) -> str:
 
 
 def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:
-    """Liest den nullgetrennten Git-Diff einschließlich Umbenennungen."""
+    """Liest den nullgetrennten Git-Diff einschließlich Umbenennungen und Kopien."""
 
     output = _git(
         repository,
@@ -103,6 +103,7 @@ def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:
         "--name-status",
         "-z",
         "--find-renames",
+        "--find-copies-harder",
         base,
         target,
     )
@@ -113,7 +114,7 @@ def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:
     result: list[GitChange] = []
     for status_field in fields:
         status = status_field[0]
-        if status == "R":
+        if status in {"R", "C"}:
             old_path = next(fields)
             result.append(GitChange(status, next(fields), old_path))
         else:

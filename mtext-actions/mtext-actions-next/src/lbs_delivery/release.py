@@ -73,11 +73,12 @@ def _project_changes(
 
     prefix = f"{project}/"
     for change in git_changes:
-        projected = (
-            (("D", change.old_path), ("A", change.path))
-            if change.status == "R"
-            else ((change.status, change.path),)
-        )
+        if change.status == "R":
+            projected = (("D", change.old_path), ("A", change.path))
+        elif change.status == "C":
+            projected = (("A", change.path),)
+        else:
+            projected = ((change.status, change.path),)
         for status, path in projected:
             if path is not None and (path == project or path.startswith(prefix)):
                 yield status, path
