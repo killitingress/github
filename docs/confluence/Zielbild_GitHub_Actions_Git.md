@@ -48,9 +48,11 @@ Der Ablauf ist:
 4. Erst ein Release-Tag wie `R261.108` baut die Lieferung. Vor der technischen
    Übergabe an den Mainframe ist eine manuelle Freigabe erforderlich.
 
-Der M/Text-Adapter bleibt die zentrale Schnittstelle. Der Weg nach
-`serverSync` wird vor dem Integrationslauf festgelegt. Die Mainframe-Übergabe
-erfolgt weiterhin per FTP und JES.
+Der M/Text-Adapter bleibt die zentrale Schnittstelle. Für den Weg nach
+`serverSync` stehen ein PUT an den Adapter, der direkte Sharezugriff des
+Runners und der Download eines GitHub-Actions-Artefakts durch Adapter oder
+M/Text zur Wahl. Der Transportweg wird vor dem Integrationslauf festgelegt.
+Die Mainframe-Übergabe erfolgt weiterhin per FTP und JES.
 
 ## 2. Verbindliche Rahmenbedingungen
 
@@ -144,13 +146,15 @@ geändert werden.
 
 Die Text-Entwickler bearbeiten Briefressourcen in der M/Text Workbench und
 nutzen ihren Git-Client für Commit und Push. GitHub im Browser dient für
-Laufkontrolle, Wiederholungen, Freigaben und Release-Tags. Für die tägliche
-Arbeit ist keine Git-Kommandozeile nötig.
+Laufkontrolle, Wiederholungen, Freigaben und die Prüfung von Release-Tags. Für
+die tägliche Arbeit ist keine Git-Kommandozeile nötig.
 
 Für die gezielte Übernahme einzelner Änderungen zwischen den Stages erhalten
 die dafür berechtigten Text-Entwickler zusätzlich einen geeigneten Git-Client.
 Das konkrete Produkt, seine Bereitstellung und der verbindliche Bedienweg
-werden vor dem Pilotbetrieb festgelegt und abgenommen.
+werden vor dem Pilotbetrieb festgelegt und abgenommen. Das Release-Team
+verwendet diesen Client außerdem zum Anlegen, Pushen und kontrollierten Löschen
+von Release-Tags.
 
 Die Berechtigungen werden je Mandanten-Repository vergeben. Jeder Mandant
 benennt ein Release-Team, das als einzige reguläre Gruppe direkt nach
@@ -162,6 +166,8 @@ Stages bleiben verboten. Bis zur Freigabe des Publish-Jobs im Environment
 Abbruch des zugehörigen Workflow-Laufs löschen und neu anlegen. Mit der
 Freigabe werden Tagname und Ziel-Commit zur unveränderlichen
 Release-Identität; danach darf der Tag weder verschoben noch gelöscht werden.
+Verwendet werden ausschließlich Git-Tags. Zusätzliche GitHub Releases mit
+Titel, Release Notes oder Dateien gehören nicht zum Lieferprozess.
 
 Für jeden Lauf checkt GitHub Actions sowohl den ausgewählten Stand des
 Mandanten-Repositories als auch eine festgelegte Version der zentralen
@@ -172,9 +178,53 @@ Die Verteilung nach Entwicklung oder Abnahme überträgt alle nicht
 ausgeschlossenen Projektverzeichnisse des ausgewählten Commits. FULL und DELTA
 gelten nur für die spätere Mainframe-Lieferung.
 
-Auf `serverSync` müssen dieselben Pfade und Dateien liegen wie im bisherigen
-Verfahren. Der Transportweg und der Adaptervertrag stehen vor dem
-nichtproduktiven Integrationslauf fest.
+### M/Text-Transport nach `serverSync`
+
+Der heutige Ablauf schreibt den Ressourcenstand zuerst nach `serverSync` und
+sendet danach einen POST mit `MAN` und `INR` an den M/Text-Adapter. Dieser
+Ablauf ist die Ausgangslage, legt den künftigen Transport aber noch nicht fest.
+
+Unabhängig vom Transportweg entsteht auf `serverSync` derselbe vollständige
+Verzeichnisbaum mit denselben relativen Pfaden, Dateinamen und Dateiinhalten
+wie im bisherigen Jenkins-/SVN-Verfahren. Die Veröffentlichung erfolgt erst,
+nachdem der gesamte Stand erfolgreich übertragen und geprüft wurde. Entfernte
+oder neu ausgeschlossene Projekte dürfen nicht als veralteter Bestand liegen
+bleiben. Transportdateien und technische Metadaten gehören nicht in den von
+M/Text ausgewerteten Bestand.
+
+Für einen BY-Stand sieht der veröffentlichte Zielbaum beispielsweise so aus:
+
+```text
+serverSync/
+  LOMS_Basis[BY]/
+    <vollständiger Projektbaum>
+  LOMS_Autonom[BY]/
+    <vollständiger Projektbaum>
+```
+
+Es gibt keine zusätzliche Paketwurzel. Archiv, Manifest und andere
+Transportdateien liegen nicht unter `serverSync`.
+
+Für die Versorgung von `serverSync` werden drei Varianten bewertet:
+
+| Variante | Ablauf und Verantwortung | Vor der Entscheidung zu klären |
+|---|---|---|
+| PUT an den Adapter | Der Runner überträgt `MAN`, `INR` und die Ressourcendaten an den Adapter. Der Adapter prüft die Übertragung, schreibt zunächst in einen temporären Bereich, veröffentlicht den vollständigen Stand nach `serverSync` und startet die interne Synchronisation. Der Runner benötigt keinen Sharezugriff. | HTTP-Vertrag, Authentifizierung, Größenlimits, Prüfsummen, Zeitgrenzen, Wiederholung, Parallelität und Erfolgsstatus |
+| Direkter Sharezugriff des Runners | Der Runner stellt den vollständigen Stand auf dem NFS-/Netzlaufwerk bereit und ruft erst danach den Adapter mit `MAN` und `INR` auf. Staging, Veröffentlichung und Wiederanlauf liegen damit in der GitHub-Automatisierung. Diese Variante entspricht dem aktuellen Entwicklungsstand. | Verfügbarkeit und Einbindung des Shares, Pfad, Rechte, Kapazität, atomare Ersetzung, Schutz vor parallelen Schreibvorgängen und Bereinigung nach Fehlern |
+| Download eines Actions-Artefakts | Der Runner lädt den bereits für `serverSync` zusammengestellten Verzeichnisbaum als eigenes Sync-Artefakt hoch. Adapter oder M/Text laden es ohne Git-Checkout über die GitHub-Actions-Artefakt-API herunter, prüfen die Prüfsumme, entpacken es temporär, veröffentlichen den Stand nach `serverSync` und starten die interne Synchronisation. | Übergabe von Repository, Lauf- oder Artefakt-ID und Prüfsumme, technische Identität mit `Actions: read`, Erreichbarkeit, Aufbewahrungsfrist, Wiederholung und Bereinigung |
+
+Das Sync-Artefakt der Downloadvariante ist nur ein technischer
+Transportbehälter. Es enthält kein zusätzliches inneres M/Text-Paket und ist
+von den FULL-/DELTA-Releaseartefakten für den Mainframe getrennt.
+
+Vor dem nichtproduktiven Integrationslauf wird genau eine Variante ausgewählt.
+Die Entscheidung berücksichtigt Netzwerk- und Sicherheitsvorgaben,
+Betriebsverantwortung, Datenmengen und Laufzeiten, atomare Veröffentlichung,
+Parallelität, Wiederanlauf und Nachvollziehbarkeit. Anschließend werden der
+Adaptervertrag und die Zuständigkeiten für Übertragung, Prüfung,
+Veröffentlichung, Start der internen Synchronisation und Fehlerbehandlung
+verbindlich festgeschrieben. Implementiert wird nur der ausgewählte Weg; eine
+allgemeine Transportschicht für alle drei Varianten ist nicht vorgesehen.
 
 Der bestehende Prozess auf dem Mainframe-Zielsystem IZE9 bleibt unverändert.
 
@@ -284,7 +334,7 @@ umgesetzt.
 |---|---|
 | `Entwicklung` | Wird ausschließlich vom Sync-Job für den Entwicklungsbranch gebunden. Eine manuelle Freigabe und Secrets sind dafür nicht vorgesehen. |
 | `Abnahme` | Wird ausschließlich vom Sync-Job für den Abnahmebranch gebunden. Eine manuelle Freigabe und Secrets sind dafür nicht vorgesehen. |
-| `Bereitstellung` | Wird ausschließlich vom Publish-Job gebunden. Die benannten Verantwortlichen müssen die Mainframe-Übergabe manuell freigeben. Nur zulässige Release-Tags dürfen dieses Environment verwenden. |
+| `Bereitstellung` | Wird ausschließlich vom Publish-Job gebunden. Eine berechtigte Person muss die Mainframe-Übergabe manuell freigeben; ein verpflichtendes Vier-Augen-Prinzip oder eine Sperre der Selbstfreigabe ist nicht vorgesehen. Nur zulässige Release-Tags dürfen dieses Environment verwenden. |
 
 Die Mainframe-Zugangsdaten `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER` und
 `MAINFRAME_FTP_PASSWORD` liegen ausschließlich als Secrets im Environment
@@ -334,6 +384,8 @@ entscheidet die zentrale Releaselinienzuordnung.
 Ein Push nach `Rnnn/Bereitstellung` erzeugt noch keine Lieferung. Erst ein Tag
 im Format `Rnnn.nnn` startet den Paketbau. Dabei wird geprüft, ob der Tag zur
 angegebenen Releaselinie gehört und vom Bereitstellungsbranch erreichbar ist.
+Der Tag wird als Git-Tag mit dem freigegebenen zusätzlichen Git-Client angelegt
+und einzeln gepusht; ein GitHub Release wird nicht erzeugt.
 Bis zur Freigabe der Mainframe-Übergabe bezeichnet er einen Release-Kandidaten.
 Ein irrtümlicher Tag kann nach Abbruch des zugehörigen Workflow-Laufs gelöscht
 und neu angelegt werden. Erst die Freigabe bindet den Tagnamen dauerhaft an den
@@ -358,12 +410,17 @@ ausgewählten Branch gehört.
 
 Eine neue Linie erhält drei Branches, je einen für Entwicklung, Abnahme und
 Bereitstellung, sowie einen Eintrag in
-`config/releaselinien.json`. Der Eintrag enthält nur die fachliche
+[`config/releaselinien.json`](../../mtext-actions/config/releaselinien.json).
+Ein vollständiges Beispiel steht unter
+[Zentrale Releaselinienzuordnung](#zentrale-releaselinienzuordnung). Der
+Eintrag enthält nur die fachliche
 Releaselinie, die technische M/Text-Linie und den Namen eines in
 `.config.json` vorhandenen Hostprofils. Hosts, Stage-Suffixe,
 serverSync-Pfad und Tagformat werden unverändert zentral abgeleitet. Die
 JCL-Werte stammen aus der Mandantenkonfiguration und dem zugeordneten
-Hostprofil.
+Hostprofil. Die Zuordnung wird rollierend gepflegt: Beim Aufnehmen einer neuen
+Releaselinie wird die ausgeschiedene Zuordnung entfernt, sodass genau drei
+aktive Releaselinien enthalten sind.
 
 Ausgangspunkt der neuen Branches ist der fachlich bestätigte letzte
 Release-Tag der bisherigen Linie. Dessen vollständiger Projektstand wird über
@@ -487,15 +544,24 @@ zusätzlicher Levelwert wird nicht eingeführt. Diese Werte dürfen bei einer
 fachlich bestätigten Änderung der Mandantenzuordnung versioniert in
 `.config.json` angepasst werden. Zugangsdaten gehören nicht in diese Datei.
 
-Die zentrale Datei `config/releaselinien.json` enthält die wachsende Zuordnung
-der fachlichen zu den technischen Linien sowie das zugehörige Hostprofil. Die
-beiden Felder heißen `mtext_linie` und `hostprofil`. Aktuell gilt:
+### Zentrale Releaselinienzuordnung
 
-| Releaselinie | Technische M/Text-Linie |
-|---|---|
-| `R260` | `en03` |
-| `R261` | `en01` |
-| `R270` | `en02` |
+Die zentrale Datei
+[`config/releaselinien.json`](../../mtext-actions/config/releaselinien.json)
+enthält rollierend die Zuordnung von genau drei aktiven fachlichen
+Releaselinien zur jeweiligen technischen M/Text-Linie und zum zugehörigen
+Hostprofil. Ihr aktueller Inhalt ist:
+
+```json
+{
+  "R260": {"mtext_linie": "en03", "hostprofil": "JUR"},
+  "R261": {"mtext_linie": "en01", "hostprofil": "FKT"},
+  "R270": {"mtext_linie": "en02", "hostprofil": "JUR"}
+}
+```
+
+Die beiden Felder heißen verbindlich `mtext_linie` und `hostprofil`. Das
+genannte Hostprofil muss in der `.config.json` jedes Mandanten vorhanden sein.
 
 Vor einer Verteilung oder Lieferung wird die gesamte benötigte Konfiguration
 geprüft. Unbekannte Mandanten, Releaselinien, Zielumgebungen oder zusätzliche
@@ -519,6 +585,138 @@ kumulatives DELTA gegen den `.100`-Tag. Ein Tag `R261.108` enthält somit alle
 neuen, geänderten und gelöschten Dateien seit `R261.100`. Frühere
 DELTA-Lieferungen müssen nicht lückenlos eingespielt worden sein.
 Die `.100`-Basis muss in der Git-Historie ein Vorgänger des Ziel-Tags sein.
+Git bestimmt die geänderten, neuen, gelöschten und umbenannten Pfade mit
+`git diff`; Python erzeugt daraus das historisch kompatible TAR-Archiv, die
+Löschliste und die Informationsdatei mit reproduzierbaren Dateimetadaten.
+
+### CodePipeline-Elemente
+
+Für jedes ausgelieferte Projekt entsteht ein CodePipeline-Element. Sein Name
+ist zugleich der Mainframe-Member und setzt sich aus Mandantenkürzel,
+historischem Liefercode und Lieferart zusammen:
+
+```text
+<Mandantenkürzel><Liefercode><F|D>
+```
+
+Die Archivdatei trägt denselben Namen mit der Endung `.tgz`. Beispielsweise
+bezeichnet `BYAUTOND` das DELTA-Element für `LOMS_Autonom[BY]` und
+`FIBASISF` das FULL-Element für `LOMS_Basis` des Mandanten FI.
+
+| Projekt | Liefercode |
+|---|---|
+| `Configuration` | `CONFI` |
+| `Fonts` | `FONTS` |
+| `LOMS_Framework` | `FRAME` |
+| `LOMS_Basis` | `BASIS` |
+| `LOMS_PKA` | `PKA` |
+| `LOMS_Autonom` | `AUTON` |
+
+Fragmentprojekte wie `LOMS_Autonom[BY]` verwenden den Liefercode ihres
+Grundprojekts. Ein FULL-Element enthält den vollständigen Projektbaum. Ein
+DELTA-Element enthält die kumulativ seit `.100` neuen und geänderten Dateien
+sowie die Löschliste. Die `_INFO_...txt` gehört zum Releasebeleg, wird aber
+nicht als CodePipeline-Element registriert. Liefercodes und Elementnamen sind
+zentral festgelegt und keine Felder der Mandantenkonfiguration.
+
+### Historischer Übergabestand unter `/nfs/mtext/trans`
+
+Der Jenkins-Ablauf kopiert jedes erzeugte Projektpaket nach
+`/nfs/mtext/trans` und übergibt dasselbe Paket anschließend per FTP und JES an
+den Mainframe. Daneben legt er eine lesbare Informationsdatei ab. Der
+historische Bestand ist deshalb sowohl Beleg für den Mainframe-Vertrag als auch
+Referenz für Dateinamen, Archivstruktur und Informationsinhalt.
+
+Der logische Bestand folgt diesem Schema:
+
+```text
+/nfs/mtext/trans/
+  <Mandantenkürzel><Liefercode><F|D>.tgz
+  _INFO_<Mandantenkürzel>-<Projekt>-<FULL|DELTA>-<Release>-<Vorrelease>.txt
+```
+
+Vier seinerzeit ausgewertete Referenzdateien belegen zwei reale Lieferungen:
+
+| Referenzdatei | Bedeutung und belegter Inhalt |
+|---|---|
+| `BYAUTOND.tgz` | DELTA für `LOMS_Autonom[BY]`; enthält die seit dem `.100`-Stand neuen und geänderten Ressourcen sowie `BYAUTOND.txt` als Löschliste |
+| `_INFO_BY-LOMS_Autonom[BY]-DELTA-R260.234-R260.178.txt` | Informationsdatei zum DELTA; enthält den direkten Vergleich `R260.178` zu `R260.234` und die vollständige TAR-Inhaltsliste |
+| `OSAUTONF.tgz` | FULL für `LOMS_Autonom[OS]`; enthält den vollständigen Projektbaum des FULL-Releases |
+| `_INFO_OS-LOMS_Autonom[OS]-FULL-R260.100-R251.510.txt` | Informationsdatei zum FULL; enthält den direkten Vergleich `R251.510` zu `R260.100` und die vollständige TAR-Inhaltsliste |
+
+Die innere Struktur unterscheidet sich nach Lieferart:
+
+```text
+OSAUTONF.tgz
+  ./LOMS_Autonom[OS]/
+    <vollständiger Projektbaum>
+
+BYAUTOND.tgz
+  LOMS_Autonom[BY]/
+    <seit R260.100 neue oder geänderte Ressourcendateien>
+  BYAUTOND.txt
+```
+
+Die Löschliste liegt im Wurzelverzeichnis des DELTA-Archivs. Jede Zeile nennt
+einen relativen Ressourcenpfad ohne `VORRELEASE/`-Präfix. Die
+Informationsdatei enthält zunächst eine SVN-artige Zusammenfassung mit
+`A`, `M` und `D` für den Vergleich zum direkten Vorrelease und danach die
+ausführliche Inhaltsliste des erzeugten TAR-Archivs.
+
+Das gekürzte Format der beiden Textdateien sieht so aus:
+
+```text
+# BYAUTOND.txt
+LOMS_Autonom[BY]/<Pfad einer seit R260.100 gelöschten Ressource>
+
+# _INFO_BY-LOMS_Autonom[BY]-DELTA-R260.234-R260.178.txt
+Subject: Bereitstellung BY - LOMS_Autonom[BY] - DELTA - Release R260.234
+
+Folgende DIFFs wurden beim Vergleich zwischen R260.178 und R260.234 ... erkannt:
+M       VORRELEASE/LOMS_Autonom[BY]/<Pfad einer geänderten Ressource>
+D       VORRELEASE/LOMS_Autonom[BY]/<Pfad einer gelöschten Ressource>
+
+Folgender Inhalt ist im TAR-Archiv ... enthalten:
+LOMS_Autonom[BY]/<Pfad einer gelieferten Ressource>
+BYAUTOND.txt
+```
+
+Paketinhalt und Informationsvergleich haben unterschiedliche Bezugsstände.
+Beim BY-Beispiel nennt die Informationsdatei 14 Änderungen zwischen
+`R260.178` und `R260.234`; das DELTA-Archiv enthält dagegen 33 Dateien
+einschließlich der Löschliste. Auch die Löschliste enthält Pfade, die nicht im
+direkten Vorrelease-Vergleich vorkommen. Der Paketinhalt und die Löschliste
+werden somit kumulativ gegen `R260.100` gebildet. Die Informationsdatei
+dokumentiert nur die Änderungen gegen `R260.178` und bestimmt den Paketinhalt
+nicht.
+
+Die Paketnamen unter `trans` enthalten keinen Release-Tag. Eine neue Lieferung
+desselben Mandanten, Projekts und Liefertyps überschreibt daher das zuvor dort
+liegende Archiv. Der sichtbare Archivbestand ist die jeweils letzte kumulative
+Lieferung und keine Folge inkrementeller DELTA-Pakete. Der Releasebezug steht
+im Namen der Informationsdatei.
+
+Das historische FULL verwendet TAR-Pfade mit `./`-Präfix, das DELTA verwendet
+Pfade ohne dieses Präfix. Besitzer, Gruppe, Modus und Zeitstempel stammten aus
+dem Jenkins-Arbeitsbereich. Die GitHub-Automatisierung behält die logischen
+Pfade bei und setzt die Dateimetadaten reproduzierbar fest.
+
+### Actions-Artefakt und Manifest
+
+Im Zielablauf ersetzt das je Workflow-Lauf aufbewahrte Actions-Artefakt mit
+Manifest und Prüfsummen das feste Verzeichnis `trans` als technische Grenze
+zwischen Paketbau und Mainframe-Übergabe. Das veröffentlichte Paket behält
+seinen historisch festgelegten Dateinamen, seinen fachlichen Inhalt und seine
+logische Archivstruktur.
+
+Ein DELTA-Artefakt für ein FI-Projekt enthält beispielsweise:
+
+```text
+Release-Artefakt/
+  FIBASISD.tgz
+  _INFO_FI-LOMS_Basis-DELTA-R261.108-R261.107.txt
+  manifest.json
+```
 
 Zu jeder Lieferung wird ein Manifest erzeugt. Die Begleitdatei nennt
 Repository, Mandant, Release-Tag, Lieferart, Basis- und Vorgänger-Tag,
@@ -527,6 +725,45 @@ und SHA-256. Paketartefakte nennen zusätzlich ihren Mainframe-Member. Vor der
 Mainframe-Übergabe werden genau diese Dateien mit den manifestierten Angaben
 verglichen. So wird sichergestellt, dass das zuvor gebaute und freigegebene
 Paket übergeben wird.
+
+Der folgende gekürzte Ausschnitt zeigt die Verbindung zwischen Release,
+Paket, Mainframe-Member und JCL-Werten. Dateigröße und Prüfsummen stehen
+stellvertretend für die im jeweiligen Lauf berechneten Werte:
+
+```json
+{
+  "artifacts": [
+    {
+      "kind": "package",
+      "member": "FIBASISD",
+      "path": "FIBASISD.tgz",
+      "project": "LOMS_Basis",
+      "sha256": "<SHA-256 des Pakets>",
+      "size": 123456
+    },
+    {
+      "kind": "information",
+      "path": "_INFO_FI-LOMS_Basis-DELTA-R261.108-R261.107.txt",
+      "project": "LOMS_Basis",
+      "sha256": "<SHA-256 der Informationsdatei>",
+      "size": 1234
+    }
+  ],
+  "base_tag": "R261.100",
+  "delivery_type": "DELTA",
+  "jcl": {
+    "ASSIGNMENT": "LOMS000066",
+    "ISPW": "P",
+    "LEVEL": "FKTE",
+    "SUBSYS": "LOMS"
+  },
+  "mandant": "FI",
+  "previous_tag": "R261.107",
+  "release_tag": "R261.108",
+  "repository": "mtext-fi",
+  "target_sha": "<vollständige Commit-SHA>"
+}
+```
 
 Ein fehlgeschlagener Übergabeversuch kann innerhalb desselben GitHub-Laufs mit
 dem unveränderten Paket wiederholt werden. Das Paket wird dabei nicht neu
@@ -545,6 +782,13 @@ mandantenspezifische Zuordnungen werden aus der Mandantenkonfiguration
 Mainframe-Member werden beim Rendern geprüft. Unbekannte Template-Marker führen
 vor der Übergabe zu einem Fehler. Zugangsdaten werden weder in die JCL noch in
 die Protokolle geschrieben.
+
+Das Paket wird zunächst unter seinem Membernamen in
+`IEA.LOMS.TONICZ` übertragen. Die JCL kopiert diesen Member nach
+`IEA.ISPW<ISPW>.BOAS.<LEVEL>.TONICZ` und registriert ihn anschließend in
+CodePipeline. Dabei gelten `STRMNAME=BOAS`, `MTYPE=TONICZ` und
+`MNAME=<Membername>`. `APPLID` und `SUBAPPL` erhalten das Subsystem,
+`PROJNO` das Assignment sowie `CLVL` und `SLVL` den CodePipeline-Stage-Code.
 
 Der Release-Workflow trennt den Paketbau von der Mainframe-Übergabe. Der
 Paketbau benötigt keinen Zugriff auf das Zielsystem. Erst der Übergabeschritt
@@ -565,11 +809,11 @@ Die Lösung meldet nur den Status, den sie selbst sicher feststellen kann:
 | `SOURCE_FAILED` | Der angegebene Commit, Branch oder Tag konnte nicht eindeutig aufgelöst werden. |
 | `RESOURCE_TRANSFER_FAILED` | Die Ressourcen konnten nicht in den Übergabebereich für M/Text geschrieben werden. |
 | `ADAPTER_FAILED` | Der M/Text-Adapter war nicht erreichbar oder hat die Anfrage abgelehnt. |
-| `ADAPTER_ACCEPTED` | Der M/Text-Adapter hat die Anfrage unmittelbar angenommen. Dies ist noch kein fachlicher Endstatus. |
+| `ADAPTER_ACCEPTED` | Der M/Text-Adapter hat die Anfrage unmittelbar angenommen. Dies ist noch kein fachlicher Endstatus. Bei unklarer Wirkung ermittelt die Anwendungsbetreuung den technischen Anwendungsstatus. |
 | `PACKAGE_FAILED` | Paket, Informationsdatei oder Manifest konnten nicht korrekt erstellt werden. |
 | `ARTIFACT_READY` | Das Releasepaket wurde vollständig erstellt und geprüft. |
 | `MAINFRAME_TRANSFER_FAILED` | Die unmittelbare FTP-/JES-Übergabe ist fehlgeschlagen. |
-| `MAINFRAME_SUBMITTED` | Paket und JCL wurden technisch übergeben. Der spätere Mainframe-Job kann trotzdem noch fehlschlagen. |
+| `MAINFRAME_SUBMITTED` | Paket und JCL wurden technisch übergeben. Der spätere Mainframe-Job kann trotzdem noch fehlschlagen und wird durch das Release-Team auf dem Host kontrolliert. |
 
 Ein HTTP-Fehler des M/Text-Adapters gilt immer als fehlgeschlagener Lauf. Ein
 Status zwischen 200 und 299 bestätigt nur die unmittelbare Annahme der
@@ -617,12 +861,12 @@ Abnahmepunkte aktiviert. Besonders sicherheits- und betriebsrelevant sind:
   Tag-Ruleset den Wechsel vom Release-Kandidaten zum freigegebenen Tag nicht
   allein abbildet, wird die Sperre freigegebener Tags technisch oder durch eine
   revisionssicher überwachte Betriebsregel abgesichert.
-- Die Projekte werden erst vollständig gestaged und danach nacheinander unter
-  `serverSync` ersetzt. Der Adapter wird nur nach einer vollständigen
-  Veröffentlichung aufgerufen. Für einen Abbruch während der Ersetzung sowie
-  für entfernte oder neu ausgeschlossene Projekte muss der gewählte
-  Transportvertrag einen eindeutigen Wiederanlauf und einen vollständigen
-  Zielstand sicherstellen.
+- Der vollständige Ressourcenstand wird außerhalb des von M/Text ausgewerteten
+  Bereichs bereitgestellt und geprüft. Die interne Synchronisation beginnt erst
+  nach der vollständigen Veröffentlichung unter `serverSync`. Für einen Abbruch
+  während der Übertragung oder Veröffentlichung sowie für entfernte oder neu
+  ausgeschlossene Projekte muss der gewählte Transportvertrag einen eindeutigen
+  Wiederanlauf und einen vollständigen Zielstand sicherstellen.
 - Die repositoryübergreifende Freigabe der zentralen Workflows, die
   Authentifizierung des zentralen Codebezugs und die mandantensichtbaren Logs
   werden mit einem nichtproduktiven Lauf abgenommen.

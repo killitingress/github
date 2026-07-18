@@ -42,8 +42,8 @@ M/Text-Entwicklung.
 
 1. Den fachlich freigegebenen Commit mit dem bereitgestellten Git-Client per
    Cherry-Pick auf den Zielbranch übernehmen.
-2. Optional: SHA des Quell-Commits mit `cherry-pick -x` in der
-   Commit-Nachricht speichern.
+2. Die vollständige SHA des Quell-Commits mit `cherry-pick -x` oder einer
+   gleichwertigen festen Herkunftszeile in der Commit-Nachricht speichern.
 3. Den übernommenen Gesamtstand prüfen.
 4. Den Zielbranch pushen. Bei der Abnahme anschließend den Workflow
    **Sync M/Text resources** kontrollieren.
@@ -55,8 +55,9 @@ dem nächsten Push geprüft. Force-Pushes sind nicht zulässig.
 
 ## FULL- oder DELTA-Lieferung auslösen
 
-Das Mandanten-Release-Team setzt den Release-Tag auf den gewünschten Commit des
-Bereitstellungsbranches:
+Das Mandanten-Release-Team setzt mit dem freigegebenen zusätzlichen Git-Client
+einen Git-Tag auf den gewünschten Commit des Bereitstellungsbranches. Ein
+zusätzliches GitHub Release wird nicht angelegt:
 
 - `<Releaselinie>.100`, beispielsweise `R261.100`, erzeugt ein FULL.
 - Jeder weitere gültige Tag derselben Linie erzeugt ein kumulatives DELTA

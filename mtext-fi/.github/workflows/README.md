@@ -84,8 +84,7 @@ Secrets werden nicht als freie Inputs aus diesen schlanken Workflows
 weitergereicht. Die Sync-Jobs binden das zur Stufe gehörende GitHub Environment,
 benötigen derzeit aber keine Secrets. Nur der Publish-Job bindet das Environment
 `Bereitstellung` und liest dort die Mainframe-Secrets. Deren Namen und die
-Einrichtung sind im
-[README von `mtext-actions`](../../../mtext-actions/README.md) und unter
+Einrichtung sind unter
 [Nächste Schritte](../../../docs/confluence/Naechste_Schritte.md) beschrieben.
 Für den Zugriff von `j517120/mtext-fi` auf
 `j520730/mtext-actions` muss außerdem die GitHub-Enterprise-Actions-Freigabe
@@ -115,7 +114,8 @@ erzwungen werden:
   Automatisierungsverantwortlichen
 - `.config.json` von normalen Ressourcen-Pushes ausschließen und nur
   dem benannten technischen Verantwortlichenkreis zur Änderung erlauben
-- Erstellen und Löschen von Tags `Rnnn.nnn` auf das Release-Team begrenzen.
+- Es werden ausschließlich Git-Tags und keine GitHub Releases verwendet.
+  Erstellen und Löschen von Tags `Rnnn.nnn` auf das Release-Team begrenzen.
   Vor der Freigabe im Environment `Bereitstellung` darf es einen irrtümlichen
   Tag nach Abbruch des zugehörigen Laufs löschen und neu anlegen
 - freigegebene Release-Tags gegen Änderung, Force-Push und Löschung schützen.

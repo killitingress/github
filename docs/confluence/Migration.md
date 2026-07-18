@@ -126,9 +126,10 @@ fachlich bestätigten Werten erzeugt und durch `validate-config` geprüft:
 - `hostprofile` mit Assignment und gültigem CodePipeline-Stage-Code,
 - ausdrücklich ausgeschlossene Projekte.
 
-Die zentrale Datei `config/releaselinien.json` ordnet jeder aktiven
-Releaselinie ihre `mtext_linie` und ein im Mandanten vorhandenes `hostprofil`
-zu. Zugangsdaten werden nicht importiert und stehen nicht in Git.
+Die zentrale Datei `config/releaselinien.json` ordnet jeder der drei aktiven
+Releaselinien ihre `mtext_linie` und ein im Mandanten vorhandenes `hostprofil`
+zu. Die Zuordnung wird rollierend gepflegt. Zugangsdaten werden nicht
+importiert und stehen nicht in Git.
 
 ### Import nachweisen
 
