@@ -13,17 +13,14 @@ Alle `uses:`-Aufrufe zeigen auf `j520730/mtext-actions`. Bis zur Freigabe der
 ersten zentralen Version steht dort der technische Platzhalter
 `0000000000000000000000000000000000000000`.
 
-Die Einrichtungsautomation erhält genau eine freigegebene Version, trägt deren
-vollständigen Commit-SHA in allen `uses:`-Aufrufen und `automation_ref`-Werten
-ein und prüft die Übereinstimmung. Text-Entwickler und Release-Verantwortliche
+Der zentrale Einrichtungsworkflow in `mtext-actions` trägt nach Freigabe des
+FI-Runner-Kennzeichens den vollständigen Commit-SHA in allen `uses:`-Aufrufen
+und `automation_ref`-Werten ein. Text-Entwickler und Release-Verantwortliche
 pflegen diese technische Referenz nicht.
 
-Der Planmodus verändert keine Workflowdatei. Er weist notwendige Änderungen
-und bereits vorhandene Abweichungen beider Referenzen getrennt aus. Vor dem
-Anwendungsmodus werden alle betroffenen Workflowdateien geprüft; ein
-Vertragsfehler verhindert jeden Schreibzugriff. Nach der Anwendung bestätigt
-ein erneuter Plan ohne Änderungen und ohne Referenzabweichung den lokalen
-Zielzustand.
+Der Lauf validiert alle betroffenen Workflowdateien vor dem ersten
+Schreibzugriff. Ein Vertragsfehler verhindert jeden Commit. Ist der
+Zielzustand bereits erreicht, endet ein erneuter Lauf ohne weitere Commits.
 
 Ein Branchname wie `main` oder ein beweglicher Tag ist als Referenz nicht
 zulässig. Der zusätzliche Input `automation_ref` bezeichnet den Checkout der

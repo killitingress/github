@@ -6,12 +6,15 @@ import re
 import unittest
 from pathlib import Path
 
+from workflow_configuration import CONFIGURATION_WORKFLOW
+
 
 # Diese Wurzel enthält Code, Templates und zentrale Workflows des Neubaus.
 ROOT = Path(__file__).resolve().parents[1]
-# Die vier Dateien bilden die vollständige öffentliche Workflowoberfläche.
+# Diese Dateien bilden die vollständige zentrale Workflowoberfläche.
 EXPECTED_WORKFLOWS = {
     "ci.yml",
+    CONFIGURATION_WORKFLOW,
     "reusable-validate-config.yml",
     "reusable-sync-resources.yml",
     "reusable-release.yml",
@@ -33,7 +36,10 @@ class WorkflowTests(unittest.TestCase):
             # Erkennt den fest eingetragenen Runnerwert jedes Jobs.
             workflow_runners = re.findall(r"(?m)^\s*runs-on:\s*(.+?)\s*$", text)
             self.assertTrue(workflow_runners, path)
-            runner_values.update(workflow_runners)
+            if path.name == CONFIGURATION_WORKFLOW:
+                self.assertEqual(workflow_runners, ["${{ vars.FI_RUNNER_LABEL }}"])
+            else:
+                runner_values.update(workflow_runners)
             # Verhindert ein vom Aufrufer beeinflussbares Runnerfeld.
             self.assertNotRegex(text, r"(?m)^\s+runner_label:\s*")
             # Erkennt jede Action-Referenz bis zum nächsten Leerzeichen.
@@ -46,6 +52,20 @@ class WorkflowTests(unittest.TestCase):
         runner_value = next(iter(runner_values))
         self.assertNotIn("self-hosted", runner_value)
         self.assertNotIn("${{", runner_value)
+
+        configuration = (workflows / CONFIGURATION_WORKFLOW).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("workflow_dispatch:", configuration)
+        self.assertNotRegex(configuration, r"(?m)^\s+(?:push|pull_request):")
+        self.assertIn("environment: Einrichtung", configuration)
+        self.assertIn("secrets.WORKFLOW_CONFIGURATION_TOKEN", configuration)
+        self.assertIn("permissions:\n  contents: read", configuration)
+        self.assertNotIn("run: mandant/", configuration)
+        self.assertNotRegex(configuration, r"(?m)^\s+apply:")
+        self.assertEqual(configuration.count("-m workflow_configuration"), 1)
+        self.assertNotIn("git -C automation commit", configuration)
+        self.assertNotIn("git -C mandant commit", configuration)
 
         release = (workflows / "reusable-release.yml").read_text(encoding="utf-8")
         self.assertIn("environment: Bereitstellung", release)

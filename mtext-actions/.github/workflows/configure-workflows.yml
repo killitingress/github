@@ -1,0 +1,96 @@
+name: Configure workflow files
+
+# Dieser ausschließlich manuell gestartete Workflow trägt das bestätigte
+# Runner-Kennzeichen und die freigegebene zentrale Version in die
+# Workflowdateien ein. Er führt keinen Mandantencode aus.
+'on':
+  workflow_dispatch:
+    inputs:
+      mandant_repository:
+        description: Vollständiger Name des Mandanten-Repositories, zum Beispiel j517120/mtext-fi
+        required: true
+        type: string
+      mandant_ref:
+        description: Zu ändernder Branch des Mandanten-Repositories
+        required: true
+        type: string
+
+# Das normale GITHUB_TOKEN bleibt lesend. Schreibzugriffe verwenden nur das
+# auf die vorgesehenen Repositories begrenzte technische Token des Environments.
+permissions:
+  contents: read
+
+# Einrichtungsänderungen werden serialisiert, damit zwei Läufe nicht
+# gleichzeitig unterschiedliche zentrale Versionen verteilen.
+concurrency:
+  group: workflow-configuration
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    name: Configure central and mandant workflows
+    # Diese vorab gesetzte Repositoryvariable löst das Bootstrap-Problem. Alle
+    # übrigen zentralen Jobs erhalten durch diesen Lauf einen festen Runnerwert.
+    runs-on: ${{ vars.FI_RUNNER_LABEL }}
+    environment: Einrichtung
+    timeout-minutes: 20
+    # Alle technischen Commits erhalten eine feste, nicht personenbezogene Identität.
+    env:
+      GIT_AUTHOR_NAME: mtext-actions Einrichtung
+      GIT_AUTHOR_EMAIL: mtext-actions@users.noreply.github.com
+      GIT_COMMITTER_NAME: mtext-actions Einrichtung
+      GIT_COMMITTER_EMAIL: mtext-actions@users.noreply.github.com
+    steps:
+      # Das technische Token darf Workflowdateien im zentralen und in den
+      # ausdrücklich freigegebenen Mandanten-Repositories ändern. Die
+      # Checkout-Action entfernt die hinterlegten Zugangsdaten nach dem Job.
+      - name: Check out central automation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          path: automation
+          persist-credentials: true
+          ref: main
+          token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+
+      # Der Zielbranch wird nur als Dateienbestand geladen. Kein Programmcode
+      # aus dem Mandanten-Repository wird in diesem privilegierten Job ausgeführt.
+      - name: Check out mandant workflow files
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          path: mandant
+          persist-credentials: true
+          ref: ${{ inputs.mandant_ref }}
+          repository: ${{ inputs.mandant_repository }}
+          token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+
+      # Python und Git müssen bereits mit dem FI-Runner bereitgestellt sein.
+      - name: Prepare approved Python runtime
+        id: runtime
+        run: automation/scripts/runner-preflight.sh
+
+      # Die frühe Prüfung verhindert einen Push auf eine ungültige Git-Referenz.
+      - name: Validate mandant branch
+        env:
+          MANDANT_REF: ${{ inputs.mandant_ref }}
+        run: git check-ref-format "refs/heads/$MANDANT_REF"
+
+      # Die Python-Implementierung validiert beide Dateisätze vor dem ersten
+      # Schreibzugriff, erzeugt beide lokalen Commits in der richtigen
+      # SHA-Reihenfolge und erzwingt anschließend einen leeren Zielzustand.
+      - name: Prepare and verify workflow commits
+        env:
+          FI_RUNNER_LABEL: ${{ vars.FI_RUNNER_LABEL }}
+          PYTHONPATH: automation/src
+        run: >-
+          "${{ steps.runtime.outputs.python }}" -m workflow_configuration
+
+      # Die Diffs wurden vor den Commits ausgegeben. Der zentrale Push erfolgt
+      # zuerst; nach einem Fehler setzt ein erneuter Lauf idempotent fort.
+      - name: Push verified workflow commits
+        env:
+          MANDANT_REF: ${{ inputs.mandant_ref }}
+        run: |
+          git -C automation push origin HEAD:refs/heads/main
+          git -C mandant push origin "HEAD:refs/heads/$MANDANT_REF"

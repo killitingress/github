@@ -17,41 +17,42 @@ Architekturbegründungen, Bedienabläufe und das spätere Cutover stehen in den
 verlinkten Dokumenten.
 
 Wiederholbare technische Einstellungen werden nicht als Klickanleitung
-abgearbeitet. Ein zentrales, idempotentes Einrichtungskommando wendet sie über
-die GitHub-Enterprise-API an, zeigt Abweichungen vorab und prüft den erreichten
-Zustand. Manuell bleiben fachliche Entscheidungen, Rollenbesetzung,
-Zugangsdatenübergabe und praktische Abnahmen.
+abgearbeitet. Ein zentraler Einrichtungsworkflow validiert und setzt die
+Workflowwerte; der noch offene API-Teil übernimmt die übrigen
+GitHub-Einstellungen. Manuell bleiben fachliche Entscheidungen,
+Rollenbesetzung, Zugangsdatenübergabe und praktische Abnahmen.
 
 ## 1. GitHub-Grundaufbau herstellen
 
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
-| in Vorbereitung | Einrichtungsautomation erstellen und im Testbereich abnehmen | Die lokale Workflowfinalisierung besitzt bereits einen reinen Planmodus und einen idempotenten Anwendungsmodus. Der noch offene API-Teil verwaltet Repositoryeinstellungen, Branches, Default Branches, Rulesets, Environments und Actions-Zugriffe für alle Mandanten. Secret-Werte bleiben außerhalb; vorhandene Secret-Namen und nicht automatisierbare Voraussetzungen werden nur geprüft |
 | offen | Zentrales Repository `j520730/mtext-actions` und privates FI-Repository `j517120/mtext-fi` auf GitHub Enterprise anlegen beziehungsweise die lokalen Stände übernehmen | Das zentrale Repository ist nur für das Automatisierungsteam direkt zugänglich. Das FI-Repository enthält Ressourcen, Mandantenkonfiguration und schlanke Workflows |
+| offen | FI-Runner für den Einrichtungsworkflow bereitstellen | Das offizielle `runs-on`-Kennzeichen des von FI bereitgestellten Runnerangebots ist bestätigt, der Runner ist in GitHub verfügbar und das Kennzeichen steht in `mtext-actions` als Repositoryvariable `FI_RUNNER_LABEL` bereit |
+| offen | Technische Einrichtungsberechtigung hinterlegen | Das Environment `Einrichtung` enthält `WORKFLOW_CONFIGURATION_TOKEN`. Die technische Identität ist auf `mtext-actions` und die vorgesehenen Mandanten-Repositories begrenzt und besitzt den erforderlichen Zugriff auf die freigegebenen Branches. Der Einrichtungsworkflow nimmt ausschließlich `.github/workflows` in seine Commits auf |
+| in Vorbereitung | Einrichtungsautomation im Testbereich abnehmen | `configure-workflows.yml` validiert beide Dateisätze, erzeugt die zentralen und mandantenseitigen Commits in der benötigten SHA-Reihenfolge und pusht sie erst nach einer leeren Abschlussprüfung. Der noch offene API-Teil verwaltet Repositoryeinstellungen, Branches, Default Branches, Rulesets, weitere Environments und Actions-Zugriffe für alle Mandanten. Secret-Werte bleiben außerhalb; vorhandene Secret-Namen und nicht automatisierbare Voraussetzungen werden nur geprüft |
 | bestätigt | Zentrale Implementierung gegen den fachlichen Vertrag prüfen | Die vier CLI-Kommandos, FULL und DELTA, Artefaktprüfung, JCL, FTP-/JES-Vertrag, Ressourcensynchronisation und Workflowgrenzen sind durch Akzeptanztests abgedeckt |
-| offen | Branches der aktiven Stages und Default Branch einrichten | Die Einrichtungsautomation stellt für `R260`, `R261` und `R270` jeweils die Branches `Entwicklung`, `Abnahme` und `Bereitstellung` sowie zunächst `R261/Entwicklung` als Default Branch her und weist Abweichungen aus |
-| offen | Zentrale Workflowversion und repositoryübergreifenden Zugriff einrichten | Die Einrichtungsautomation verteilt genau eine freigegebene Version auf alle Aufrufe. Der Plan weist notwendige Änderungen und bereits bestehende Abweichungen zwischen Workflowaufruf und Codebezug getrennt aus. Nur vorgesehene Mandanten-Repositories dürfen `mtext-actions` aufrufen. Für den Checkout der zentralen Python-Implementierung ist eine nur lesende technische Berechtigung festgelegt, da das `GITHUB_TOKEN` des Aufrufers auf dessen Repository begrenzt ist |
+| offen | Branches der aktiven Stages und Default Branch einrichten | Die Einrichtungsautomation stellt für `R260`, `R261` und `R270` jeweils die Branches `Entwicklung`, `Abnahme` und `Bereitstellung` sowie zunächst `R261/Entwicklung` als Default Branch her |
+| offen | Zentrale Workflowversion und repositoryübergreifenden Zugriff einrichten | Der Einrichtungsworkflow setzt Workflowaufruf und Codebezug auf dieselbe vollständige Commit-SHA von `mtext-actions` und prüft diesen Zielzustand vor dem Push. Nur vorgesehene Mandanten-Repositories dürfen `mtext-actions` aufrufen. Für den Checkout der zentralen Python-Implementierung ist eine nur lesende technische Berechtigung festgelegt, da das `GITHUB_TOKEN` des Aufrufers auf dessen Repository begrenzt ist |
 | offen | Git-Clients für Ressourcenarbeit, Stage-Weitergabe und Release-Tags abnehmen | M/Text Workbench und zusätzlicher Git-Client unterstützen gemeinsam die in der [Benutzeranleitung](./Benutzeranleitung.md#benötigte-git-funktionen) beschriebenen Funktionen einschließlich Konfliktbehandlung, verbindlicher Herkunftszeile beim Cherry-Pick, kontrollierter lokaler Ablage, Gegen-Commit nach einem Push sowie Anlegen, gezieltem Pushen und Löschen eines Git-Tags |
 | bestätigt | GitHub-Plattform festhalten | GitHub Enterprise Server 3.20.4 |
 
-Die lokale Workflowfinalisierung ist bereits vorbereitet:
-`mtext-actions/scripts/configure-workflows.py` plant oder setzt das
-FI-Runner-Kennzeichen und die gemeinsame zentrale Workflowversion für beliebig
-viele Mandanten-Repositories. Es prüft alle angegebenen Workflowdateien vor dem
-ersten Schreibzugriff. Nach dem Anwendungsmodus muss ein erneuter Planlauf weder
-notwendige Änderungen noch abweichende technische Referenzen melden. Der
-API-Teil der Einrichtungsautomation folgt nach Bestätigung von GitHub-Host,
+Der Einrichtungsworkflow ist bereits vorbereitet. Er wird in `mtext-actions`
+manuell für genau ein Mandanten-Repository und einen Zielbranch gestartet. Der
+Lauf erzeugt zuerst den zentralen Stand und anschließend den daran gebundenen
+Mandanten-Commit. Vor dem ersten Push erzwingt er einen leeren Zielzustand; eine
+Wiederholung erzeugt keine weiteren Commits. Der API-Teil der
+Einrichtungsautomation folgt nach Bestätigung von GitHub-Host,
 Repositoryeigentümern, Team- und Reviewer-IDs, Bypass-Zuordnungen,
 Ausgangs-Commits der Stage-Branches, Actions-Zugriffsebene sowie der technischen
-Leseberechtigung. Sein Anwendungsmodus darf erst starten, wenn diese Pflichtwerte
-vollständig sind; vorher bleibt er lesend.
+Leseberechtigung. Änderungen über den API-Teil dürfen erst starten, wenn diese
+Pflichtwerte vollständig sind.
 
 ## 2. Schutz- und Freigaberegeln konfigurieren
 
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
 | offen | Mandantenspezifische Verantwortliche benennen | Team für Ressourcenarbeit, technischer Konfigurationskreis und kleines Release-Team sind festgelegt |
-| offen | Branchschutz für die drei Stages einrichten | Die Einrichtungsautomation lässt berechtigte Text-Entwickler nach Entwicklung und Abnahme pushen, begrenzt Bereitstellung auf das Release-Team und sperrt Löschen sowie Force-Pushes. Der Prüfmodus weist Regelabweichungen aus |
+| offen | Branchschutz für die drei Stages einrichten | Die Einrichtungsautomation lässt berechtigte Text-Entwickler nach Entwicklung und Abnahme pushen, begrenzt Bereitstellung auf das Release-Team und sperrt Löschen sowie Force-Pushes. Nach der Einrichtung wird der erreichte Zustand geprüft |
 | offen | Zentrale Aufrufdateien und `.github/config.json` schützen | Die Einrichtungsautomation verhindert Änderungen an `.github/workflows/**/*` und der Mandantenkonfiguration durch normale Ressourcen-Pushes und begrenzt notwendige Bypässe. Vollständige Commit-SHAs für freigegebene Actions und wiederverwendbare Workflows werden zentral geprüft |
 | offen | GitHub Environments konfigurieren | Die Einrichtungsautomation legt `Entwicklung`, `Abnahme` und `Bereitstellung` mit ihren Branch- beziehungsweise Tagregeln an. Nur die Mainframe-Übergabe in `Bereitstellung` braucht eine manuelle Freigabe. Eine berechtigte Person darf den selbst ausgelösten Lauf freigeben; ein verpflichtendes Vier-Augen-Prinzip ist nicht vorgesehen |
 | offen | Lebenszyklus und Betriebsregel für Git-Tags einrichten | Die Einrichtungsautomation begrenzt Tags nach dem Muster `R[0-9][0-9][0-9].[0-9][0-9][0-9]` auf das Release-Team, soweit GHES dies statisch abbildet. Vor der Freigabe darf das Team einen irrtümlichen Tag erst nach Abbruch des zugehörigen Laufs zurücknehmen. Nach der Freigabe sind Verschieben und Löschen betrieblich verboten; Korrekturen verwenden einen neuen Commit und einen neuen Tag. Bei einer nachträglichen Abweichung werden weitere Freigaben gestoppt, der Tag auf der im freigegebenen Lauf ausgewiesenen Ziel-SHA wiederhergestellt und der Vorgang als Betriebsstörung gemeldet |
@@ -61,7 +62,6 @@ vollständig sind; vorher bleibt er lesend.
 
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
-| offen | FI-Runner für die Workflows festlegen | Das offizielle `runs-on`-Kennzeichen des von FI bereitgestellten Runnerangebots ist bestätigt und in den zentralen Workflows fest eingetragen. Bereitstellung, Absicherung, Wartung und Bereinigung des Runners sind als FI-Leistung bestätigt und liegen außerhalb des Projekts |
 | offen | Laufzeit auf dem FI-Runner prüfen | Python 3.14, Git und die Ausführung der verwendeten Node-20-Actions sind verfügbar. `scripts/runner-preflight.sh` ist erfolgreich |
 | offen | GHES-Artefakt-Actions prüfen | Die in den Workflows gepinnten Node-20-Varianten von `upload-artifact` v3.2.2 und `download-artifact` v3.1.0 sind auf GHES 3.20.4 verfügbar. Version 4 wird nicht verwendet |
 | offen | Zertifikate und Netzwerkpfade prüfen | Die interne CA ist im Truststore. Der Runner erreicht die gewählten M/Text-Ziele sowie Mainframe-FTP und JES, ohne die TLS-Prüfung zu deaktivieren |

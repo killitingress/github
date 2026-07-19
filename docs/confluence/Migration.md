@@ -60,17 +60,18 @@ müssen zusätzlich alle aktivierungsrelevanten Punkte aus
 - Die zentrale Einrichtungsprüfung bestätigt für alle Mandanten-Workflows
   dieselbe unveränderliche, freigegebene Version von `mtext-actions`.
   Technische Platzhalter oder bewegliche Referenzen sind nicht vorhanden. Der
-  abschließende lokale Planlauf meldet weder ausstehende Dateiänderungen noch
-  Abweichungen zwischen Workflowaufruf und Codebezug.
+  abschließende Lauf des zentralen Einrichtungsworkflows erzeugt keine neuen
+  Commits und endet mit einer erfolgreichen Abschlussprüfung.
 - Der repositoryübergreifende Workflowaufruf, der technisch nur lesende
   Checkout der zentralen Implementierung und alle vollständig gepinnten Actions
   funktionieren auf GitHub Enterprise Server 3.20.4.
 - Rulesets schützen Stage-Branches, `.github/workflows/**/*` und
   `.github/config.json`. Force-Pushes und das Löschen der Stage-Branches sind
   gesperrt.
-- Die Environments `Entwicklung`, `Abnahme` und `Bereitstellung` sind
-  eingerichtet. Nur der Publish-Job kann `Bereitstellung` verwenden und muss
-  dort manuell freigegeben werden.
+- Die Environments `Einrichtung`, `Entwicklung`, `Abnahme` und `Bereitstellung`
+  sind eingerichtet. Nur der Einrichtungsworkflow erhält die technische
+  Schreibberechtigung; nur der Publish-Job kann `Bereitstellung` verwenden und
+  muss dort manuell freigegeben werden.
 - Der Lebenszyklus der Release-Tags ist eingerichtet und abgenommen. Ein
   Release-Kandidat kann vor der Freigabe kontrolliert zurückgenommen werden;
   nach der Freigabe sind Änderung und Löschung gemäß der verbindlichen
@@ -181,12 +182,11 @@ Nachweise vorliegen:
    und nach dem Import entfernen. Importierte freigegebene Tags anschließend
    mit ihren vollständigen Ziel-SHAs im Cutover-Protokoll festhalten; sie
    unterliegen unmittelbar der Betriebsregel für freigegebene Tags.
-8. Die zentrale Einrichtungsprüfung mit der freigegebenen Workflowversion und
-   dem bestätigten FI-Runner-Kennzeichen ausführen. Der lokale Plan muss für
-   alle Mandanten ohne ausstehende Dateiänderung und ohne Abweichung zwischen
-   Workflowaufruf und Codebezug enden. Zusätzlich bestätigen, dass alle
+8. Den zentralen Einrichtungsworkflow für alle betroffenen Mandanten-Branches
+   ausführen. Jeder Lauf muss ohne neuen Commit und mit erfolgreicher
+   Abschlussprüfung enden. Zusätzlich bestätigen, dass alle
    Mandanten-Workflows dieselbe unveränderliche Version der zentralen
-   Automation verwenden.
+   Automatisierung verwenden.
 9. Die zweite Go-/No-Go-Entscheidung protokollieren. Bei No-Go bleiben Jenkins
    und SVN führend und der GitHub-Stand wird nicht produktiv freigegeben.
 

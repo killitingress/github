@@ -1,37 +1,40 @@
-"""Prüft die idempotente Finalisierung der Workflowdateien."""
+"""Prüft die vollständige Vorbereitung der zentralen Workflow-Commits."""
 
 from __future__ import annotations
 
-import json
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import workflow_configuration
+from workflow_configuration import CONFIGURATION_WORKFLOW
 
 
-# Diese Wurzel enthält das Einrichtungskommando und die zentralen Workflowvorlagen.
+# Diese Wurzel enthält die Einrichtungslogik und die zentralen Workflowvorlagen.
 ROOT = Path(__file__).resolve().parents[1]
-# Das Kommando läuft wie bei der tatsächlichen Einrichtung als eigener Prozess.
-SCRIPT = ROOT / "scripts/configure-workflows.py"
-# Diese Testversion ist ein gültiger Commit und kein technischer Nullwert.
-AUTOMATION_SHA = "1" * 40
+# Das Modul läuft wie im Einrichtungsworkflow als eigener Python-Prozess.
+MODULE = "workflow_configuration"
 
 
 class ConfigureWorkflowsTests(unittest.TestCase):
     def setUp(self) -> None:
-        """Erzeugt getrennte zentrale und mandantenseitige Workflowverzeichnisse."""
+        """Erzeugt zwei getrennte temporäre Git-Repositories mit Workflowdateien."""
 
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        self.automation_root = self.root / "mtext-actions"
+        self.automation_root = self.root / "automation"
         shutil.copytree(
             ROOT / ".github/workflows",
             self.automation_root / ".github/workflows",
         )
-        self.mandant_root = self.root / "mtext-fi"
+
+        self.mandant_root = self.root / "mandant"
         mandant_workflows = self.mandant_root / ".github/workflows"
         mandant_workflows.mkdir(parents=True)
         self.mandant_workflow = mandant_workflows / "sync-resources.yml"
@@ -41,143 +44,132 @@ class ConfigureWorkflowsTests(unittest.TestCase):
     uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
     with:
       automation_ref: 0000000000000000000000000000000000000000
-  sync-abnahme:
-    uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
-    with:
-      automation_ref: 0000000000000000000000000000000000000000
 """,
             encoding="utf-8",
         )
+        for repository in (self.automation_root, self.mandant_root):
+            self.run_git(repository, "init", "-q")
+            self.run_git(repository, "config", "user.name", "Test")
+            self.run_git(repository, "config", "user.email", "test@example.invalid")
+            self.run_git(repository, "add", ".")
+            self.run_git(repository, "commit", "-q", "-m", "Ausgangsstand")
 
-    def run_script(
-        self,
-        *extra: str,
-        automation_sha: str = AUTOMATION_SHA,
-        runner_label: str = "fi-runner",
-    ) -> subprocess.CompletedProcess[str]:
-        """Startet Plan oder Anwendung mit den temporären Repositorypfaden."""
+    def run_git(self, repository: Path, *arguments: str) -> str:
+        """Führt eine erwartbar erfolgreiche Git-Operation im Test-Repository aus."""
 
-        return subprocess.run(
-            [
-                sys.executable,
-                str(SCRIPT),
-                "--automation-sha",
-                automation_sha,
-                "--runner-label",
-                runner_label,
-                "--automation-root",
-                str(self.automation_root),
-                "--mandant-root",
-                str(self.mandant_root),
-                *extra,
-            ],
+        result = subprocess.run(
+            ["git", "-C", str(repository), *arguments],
             check=False,
             capture_output=True,
             text=True,
         )
-
-    def test_plan_does_not_change_files(self) -> None:
-        """Listet Änderungen, ohne die technischen Platzhalter zu ersetzen."""
-
-        result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stderr)
-        report = json.loads(result.stdout)
-        self.assertEqual(report["status"], "PLANNED")
-        self.assertEqual(report["pin_mismatches"], [])
-        workflow = self.mandant_workflow.read_text(encoding="utf-8")
-        self.assertIn("0" * 40, workflow)
+        return result.stdout.strip()
 
-    def test_apply_is_idempotent(self) -> None:
-        """Schreibt beide Pins und den Runner genau einmal in alle Workflowdateien."""
+    def run_module(
+        self, runner_label: str = "fi-runner"
+    ) -> subprocess.CompletedProcess[str]:
+        """Startet dieselbe einmalige Vorbereitung wie der GitHub-Workflow."""
 
-        applied = self.run_script("--apply")
-        self.assertEqual(applied.returncode, 0, applied.stderr)
-        self.assertTrue(json.loads(applied.stdout)["changed_files"])
+        return subprocess.run(
+            [sys.executable, "-m", MODULE],
+            check=False,
+            capture_output=True,
+            cwd=self.root,
+            env={
+                **os.environ,
+                "FI_RUNNER_LABEL": runner_label,
+                "PYTHONPATH": str(ROOT / "src"),
+            },
+            text=True,
+        )
+
+    def test_prepares_verified_commits_in_sha_order_and_is_idempotent(self) -> None:
+        """Prüft den vollständigen Zwei-Repository-Ablauf und seine Wiederholung."""
+
+        initial_sha = self.run_git(self.automation_root, "rev-parse", "HEAD")
+        result = self.run_module()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        automation_sha = self.run_git(self.automation_root, "rev-parse", "HEAD")
+        mandant_sha = self.run_git(self.mandant_root, "rev-parse", "HEAD")
+        self.assertNotEqual(automation_sha, initial_sha)
+        self.assertIn(automation_sha, result.stdout)
+
         for path in (self.automation_root / ".github/workflows").glob("*.yml"):
             workflow = path.read_text(encoding="utf-8")
-            self.assertNotIn("FI_RUNNER_LABEL_TO_BE_SET", workflow)
-            self.assertIn('runs-on: "fi-runner"', workflow)
-        release_workflow = (
-            self.automation_root / ".github/workflows/reusable-release.yml"
-        ).read_text(encoding="utf-8")
-        self.assertEqual(release_workflow.count('runs-on: "fi-runner"'), 2)
+            if path.name == CONFIGURATION_WORKFLOW:
+                self.assertIn("runs-on: ${{ vars.FI_RUNNER_LABEL }}", workflow)
+            else:
+                self.assertNotIn("FI_RUNNER_LABEL_TO_BE_SET", workflow)
+                self.assertIn('runs-on: "fi-runner"', workflow)
         mandant_workflow = self.mandant_workflow.read_text(encoding="utf-8")
-        self.assertEqual(mandant_workflow.count(AUTOMATION_SHA), 4)
-
-        repeated = self.run_script("--apply")
+        self.assertEqual(mandant_workflow.count(automation_sha), 2)
+        self.assertIn(
+            "[skip ci]",
+            self.run_git(self.mandant_root, "log", "-1", "--pretty=%s"),
+        )
+        repeated = self.run_module()
         self.assertEqual(repeated.returncode, 0, repeated.stderr)
-        self.assertEqual(json.loads(repeated.stdout)["changed_files"], [])
-
-    def test_reports_different_workflow_and_code_pins(self) -> None:
-        """Weist eine bestehende Abweichung beider technischen Referenzen aus."""
-
-        workflow = self.mandant_workflow.read_text(encoding="utf-8")
-        self.mandant_workflow.write_text(
-            workflow.replace(
-                "automation_ref: " + "0" * 40,
-                "automation_ref: " + "2" * 40,
-                1,
-            ),
-            encoding="utf-8",
-        )
-
-        result = self.run_script()
-        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
-            json.loads(result.stdout)["pin_mismatches"],
-            [str(self.mandant_workflow)],
+            self.run_git(self.automation_root, "rev-parse", "HEAD"), automation_sha
+        )
+        self.assertEqual(
+            self.run_git(self.mandant_root, "rev-parse", "HEAD"), mandant_sha
         )
 
-    def test_ignores_different_pins_across_jobs(self) -> None:
-        """Meldet nur abweichende Paare innerhalb desselben Jobs, nicht zwischen Jobs."""
-
-        self.mandant_workflow.write_text(
-            f"""jobs:
-  sync-entwicklung:
-    uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@{"1" * 40}
-    with:
-      automation_ref: {"1" * 40}
-  sync-abnahme:
-    uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@{"2" * 40}
-    with:
-      automation_ref: {"2" * 40}
-""",
-            encoding="utf-8",
-        )
-
-        result = self.run_script()
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["pin_mismatches"], [])
-
-    def test_invalid_mandant_workflow_prevents_all_writes(self) -> None:
-        """Validiert den gesamten Dateisatz vor dem ersten Schreibzugriff."""
+    def test_validates_every_file_before_creating_central_commit(self) -> None:
+        """Lässt eine ungültige Mandantendatei ohne zentrale Änderung scheitern."""
 
         broken = self.mandant_root / ".github/workflows/broken.yml"
         broken.write_text("jobs: {}\n", encoding="utf-8")
+        initial_sha = self.run_git(self.automation_root, "rev-parse", "HEAD")
 
-        result = self.run_script("--apply")
+        result = self.run_module()
         self.assertNotEqual(result.returncode, 0)
-        self.assertNotIn("Traceback", result.stderr)
         self.assertIn("Workflowreferenzen fehlen", result.stderr)
-        central = (
-            self.automation_root / ".github/workflows/reusable-release.yml"
-        ).read_text(encoding="utf-8")
+        self.assertEqual(
+            self.run_git(self.automation_root, "rev-parse", "HEAD"), initial_sha
+        )
+        central = (self.automation_root / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("FI_RUNNER_LABEL_TO_BE_SET", central)
 
-    def test_rejects_null_sha(self) -> None:
-        """Verhindert die Aktivierung mit dem technischen Versionsplatzhalter."""
+    def test_rejects_unconfirmed_runner_label(self) -> None:
+        """Verhindert die Einrichtung mit dem technischen Runner-Platzhalter."""
 
-        result = self.run_script(automation_sha="0" * 40)
+        result = self.run_module(runner_label="FI_RUNNER_LABEL_TO_BE_SET")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Nullwert", result.stderr)
+        self.assertIn("Runner-Kennzeichen", result.stderr)
 
-    def test_rejects_runner_placeholder(self) -> None:
-        """Verhindert die Aktivierung ohne bestätigtes FI-Runner-Kennzeichen."""
+    def test_fails_when_final_verification_finds_a_remaining_change(self) -> None:
+        """Macht den leeren Zielzustand zu einer verbindlichen Erfolgsbedingung."""
 
-        result = self.run_script(runner_label="FI_RUNNER_LABEL_TO_BE_SET")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("runner-label", result.stderr)
+        original = workflow_configuration._automation_changes
+        calls = 0
 
+        def report_remaining_change(
+            automation_root: Path, runner_label: str
+        ) -> dict[Path, str]:
+            """Simuliert ausschließlich bei der Abschlussprüfung eine Abweichung."""
+
+            nonlocal calls
+            calls += 1
+            changes = original(automation_root, runner_label)
+            if calls == 2:
+                path = automation_root / ".github/workflows/ci.yml"
+                changes[path] = path.read_text(encoding="utf-8")
+            return changes
+
+        with patch("builtins.print"), patch.object(
+            workflow_configuration, "_automation_changes", side_effect=report_remaining_change
+        ):
+            with self.assertRaisesRegex(RuntimeError, "Einrichtungsprüfung"):
+                workflow_configuration.prepare_workflow_configuration(
+                    self.automation_root,
+                    self.mandant_root,
+                    "fi-runner",
+                )
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,7 +9,7 @@ Die Lösung führt M/Text-Ressourcen eines Mandanten über die drei Stages
 `Entwicklung`, `Abnahme` und `Bereitstellung`. Pushes nach Entwicklung und
 Abnahme lösen die jeweilige M/Text-Synchronisation aus. Der Push nach
 Bereitstellung liefert noch nichts aus. Erst ein Release-Tag startet eine
-FULL- oder DELTA-Lieferung mit anschließender Mainframe-Übergabe an IZE9.
+FULL- oder DELTA-Lieferung mit anschließender Mainframe-Übergabe an die IZE9.
 
 ### Abgrenzung
 
@@ -23,9 +23,9 @@ kleinen Kreis von Release-Verantwortlichen.
 ## 2. Begriffe und Namensregeln
 
 Eine **Stage** ist in dieser Anleitung ein Abschnitt des Freigabe- und
-Lieferprozesses. Die drei Prozess-Stages heißen `Entwicklung`, `Abnahme` und
-`Bereitstellung`. Jede Releaselinie besitzt einen eigenen Branch für jede
-dieser Stages.
+Lieferprozesses. Die drei Prozess-Stages heißen bei uns weiterhin
+`Entwicklung`, `Abnahme` und `Bereitstellung`. Jede Releaselinie besitzt einen
+eigenen Branch für jede dieser Stages.
 
 | Element | Verbindliches Format | Beispiel |
 |---|---|---|
@@ -33,8 +33,8 @@ dieser Stages.
 | Optionaler Feature-Branch | `feature/Rnnn/<Issue>-<kurzname>` | `feature/R270/0711-komplizierte-Arbeiten` |
 | Release-Tag | `Rnnn.nnn` | `R261.100`, `R261.108` |
 
-Groß-/Kleinschreibung der Stage-Namen ist verbindlich. Aktive Linien sind
-`R260`, `R261` und `R270`.
+Groß-/Kleinschreibung der Stage-Namen ist verbindlich. Aktive Linien sind zum
+Zeitpunkt der Erstellung der Dokumentation `R260`, `R261` und `R270`.
 
 ## 3. Grundlagen zu Git
 
@@ -51,19 +51,6 @@ darin, wie Änderungen gespeichert und mit anderen geteilt werden.
 | Neue Stände erhalten fortlaufende Revisionsnummern wie `r12345`. | Jeder Stand erhält eine eindeutige Commit-SHA. |
 | Branches werden vergleichsweise selten und eher für länger getrennte Entwicklungslinien verwendet. | Branches lassen sich leicht als vorübergehende Arbeitsbereiche für einzelne Änderungen nutzen. |
 
-### SVN-Pfad und Git-Branch unterscheiden
-
-Im bisherigen SVN-Aufbau sind Stage und Releaselinie Bestandteile des Pfads.
-Bei der Migration werden diese Informationen auf Git-Branches abgebildet:
-
-```text
-SVN: branches/Entwicklung/R260.100_MText/<Projekt>
-Git: Branch R260/Entwicklung, darin Pfad <Projekt>
-```
-
-Releaselinie und Stage stehen im Branch-Namen. Im Arbeitsbereich beginnt der
-Pfad direkt mit dem Projektverzeichnis.
-
 Für die tägliche Arbeit bedeutet das vor allem: **Committen und Pushen sind in
 Git zwei getrennte Schritte.** Ein lokaler Commit sichert den eigenen
 Arbeitsstand, verändert aber noch nichts auf GitHub und löst keine
@@ -74,54 +61,6 @@ Workflow.
 Git und GitHub sind dabei nicht dasselbe: **Git** ist die
 Versionsverwaltung. **GitHub** stellt das gemeinsame Repository, die
 Oberfläche, Berechtigungen und die GitHub-Actions-Automation bereit.
-
-### Push-Ablehnung und Konflikt unterscheiden
-
-Wenn zwei Personen vom selben GitHub-Stand aus arbeiten und eine Person zuerst
-pusht, baut der lokale Commit der zweiten Person noch auf dem vorherigen Stand
-auf. Git lehnt deren Push deshalb üblicherweise als `non-fast-forward` ab. Das
-kann auch geschehen, wenn beide Personen unterschiedliche Dateien geändert
-haben.
-
-Diese Ablehnung ist noch kein inhaltlicher Konflikt. Sie bedeutet zunächst nur,
-dass der lokale Branch nicht mehr aktuell ist. Der neue GitHub-Stand muss
-zuerst übernommen werden. Sind die Änderungen unabhängig, kann Git sie
-automatisch kombinieren. Überschneiden oder widersprechen sie sich, entsteht
-dabei ein Konflikt.
-
-### Merge, Rebase und Pull einfach erklärt
-
-Ein **Merge** verbindet zwei Entwicklungsverläufe. Die vorhandenen Commits
-bleiben unverändert. Gegebenenfalls entsteht ein zusätzlicher Merge-Commit.
-
-Ein **Rebase** setzt eigene, noch nicht veröffentlichte Commits auf einen
-neueren Ausgangsstand. Die Änderungen werden erneut angewendet und erhalten
-dabei neue SHAs. Bereits veröffentlichte oder von anderen Personen verwendete
-Commits dürfen in diesem Prozess nicht per Rebase umgeschrieben werden.
-
-Ein **Pull** holt den GitHub-Stand und integriert ihn anschließend. Je nach
-Git-Client geschieht dies durch Merge oder Rebase. Der verbindliche Bedienweg
-und die zu verwendende Pull-Variante werden deshalb zusammen mit dem
-zusätzlichen Git-Client festgelegt und praktisch geprüft.
-
-### Feature-Branch einfach erklärt
-
-Ein **Feature-Branch** ist ein eigener Arbeitsbereich für eine einzelne
-Änderung. Sofern der integrierte Git-Client der M/Text Workbench diesen Ablauf
-unterstützt und er für den Mandanten freigegeben ist, kann dort ein noch
-unfertiger Stand gespeichert und nach GitHub gepusht werden, ohne bereits das
-M/Text-Entwicklungssystem zu aktualisieren. Das ist besonders nützlich, wenn
-eine Änderung mehrere Tage dauert, mehrere Personen daran arbeiten oder der
-Zwischenstand zunächst geprüft werden soll.
-
-Für eine kleine, fertig vorbereitete Änderung ist kein Feature-Branch nötig.
-Sie kann direkt auf dem passenden Entwicklungsbranch bearbeitet und gepusht
-werden. Ist die Arbeit auf einem Feature-Branch abgeschlossen, wird der
-gewünschte Commit nach `<Releaselinie>/Entwicklung` übernommen. Erst der Push
-dieses Entwicklungsbranches startet die M/Text-Synchronisation. Der
-Feature-Branch selbst bezeichnet keine Stage des Lieferprozesses und löst
-weder eine M/Text-Synchronisation noch einen Release aus. Nur wenn
-`.github/config.json` geändert wird, läuft dort der Config-Check.
 
 ### Commit und SHA einfach erklärt
 
@@ -146,6 +85,38 @@ Nummernsystem gebunden und verwendet daher die Commit-SHA als eindeutige
 Kennung. Der Zweck ist vergleichbar: Beide Angaben machen einen konkreten
 Quellstand nachvollziehbar. Die Git-Kennung ist lediglich technisch anders
 aufgebaut und weniger leicht zu merken.
+
+### SVN-Pfad und Git-Branch unterscheiden
+
+Im bisherigen SVN-Aufbau sind Stage und Releaselinie Bestandteile des Pfads.
+Bei der Migration werden diese Informationen auf Git-Branches abgebildet:
+
+```text
+SVN: branches/Entwicklung/R260.100_MText/<Projekt>
+Git: Branch R260/Entwicklung, darin Pfad <Projekt>
+```
+
+Releaselinie und Stage stehen im Branch-Namen. Im Arbeitsbereich beginnt der
+Pfad direkt mit dem Projektverzeichnis.
+
+### Feature-Branch einfach erklärt
+
+Ein **Feature-Branch** ist ein eigener Arbeitsbereich für eine einzelne
+Änderung. Sofern der integrierte Git-Client der M/Text Workbench diesen Ablauf
+unterstützt und er für den Mandanten freigegeben ist, kann dort ein noch
+unfertiger Stand gespeichert und nach GitHub gepusht werden, ohne bereits das
+M/Text-Entwicklungssystem zu aktualisieren. Das ist besonders nützlich, wenn
+eine Änderung mehrere Tage dauert, mehrere Personen daran arbeiten oder der
+Zwischenstand zunächst geprüft werden soll.
+
+Für eine kleine, fertig vorbereitete Änderung ist kein Feature-Branch nötig.
+Sie kann direkt auf dem passenden Entwicklungsbranch bearbeitet und gepusht
+werden. Ist die Arbeit auf einem Feature-Branch abgeschlossen, wird der
+gewünschte Commit nach `<Releaselinie>/Entwicklung` übernommen. Erst der Push
+dieses Entwicklungsbranches startet die M/Text-Synchronisation. Der
+Feature-Branch selbst bezeichnet keine Stage des Lieferprozesses und löst
+weder eine M/Text-Synchronisation noch einen Release aus. Nur wenn
+`.github/config.json` geändert wird, läuft dort der Config-Check.
 
 ### Cherry-Pick einfach erklärt
 
@@ -208,6 +179,36 @@ in ihrer ursprünglichen Reihenfolge übernommen. Meldet der Git-Client einen
 Konflikt, wird nicht einfach weitergepusht: Die Abweichung muss fachlich
 geklärt, die Konfliktauflösung geprüft und erst danach als Commit festgeschrieben
 und gepusht werden. Force-Pushes bleiben verboten.
+
+
+### Push-Ablehnung und Konflikt unterscheiden
+
+Wenn zwei Personen vom selben GitHub-Stand aus arbeiten und eine Person zuerst
+pusht, baut der lokale Commit der zweiten Person noch auf dem vorherigen Stand
+auf. Git lehnt deren Push deshalb üblicherweise als `non-fast-forward` ab. Das
+kann auch geschehen, wenn beide Personen unterschiedliche Dateien geändert
+haben.
+
+Diese Ablehnung ist noch kein inhaltlicher Konflikt. Sie bedeutet zunächst nur,
+dass der lokale Branch nicht mehr aktuell ist. Der neue GitHub-Stand muss
+zuerst übernommen werden. Sind die Änderungen unabhängig, kann Git sie
+automatisch kombinieren. Überschneiden oder widersprechen sie sich, entsteht
+dabei ein Konflikt.
+
+### Merge, Rebase und Pull einfach erklärt
+
+Ein **Merge** verbindet zwei Entwicklungsverläufe. Die vorhandenen Commits
+bleiben unverändert. Gegebenenfalls entsteht ein zusätzlicher Merge-Commit.
+
+Ein **Rebase** setzt eigene, noch nicht veröffentlichte Commits auf einen
+neueren Ausgangsstand. Die Änderungen werden erneut angewendet und erhalten
+dabei neue SHAs. Bereits veröffentlichte oder von anderen Personen verwendete
+Commits dürfen in diesem Prozess nicht per Rebase umgeschrieben werden.
+
+Ein **Pull** holt den GitHub-Stand und integriert ihn anschließend. Je nach
+Git-Client geschieht dies durch Merge oder Rebase. Der verbindliche Bedienweg
+und die zu verwendende Pull-Variante werden deshalb zusammen mit dem
+zusätzlichen Git-Client festgelegt und praktisch geprüft.
 
 ## 4. Git-Anwendungen bedienen
 
