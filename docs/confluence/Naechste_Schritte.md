@@ -12,89 +12,109 @@
 **Ablauf:** [Soll-Architektur Ablaufdiagramm](../../Architektur_Soll_GitHub_Actions_Git.drawio)
 
 Diese Seite ist die Arbeitsliste für die erstmalige Einrichtung und die
-nichtproduktive Abnahme. Bestätigte Punkte bleiben zur Orientierung sichtbar.
-Architekturbegründungen, Bedienabläufe und das spätere Cutover stehen in den
-verlinkten Dokumenten.
+nichtproduktive Abnahme. Die Nummerierung gibt die vorgesehene
+Ausführungsreihenfolge wieder. Bestätigte Schritte sind bereits erfüllt, bleiben
+aber als Voraussetzungen sichtbar. Vorbereitungen ohne technische Abhängigkeit
+dürfen parallel erfolgen; angewendet und abgenommen werden die Ergebnisse in
+der hier beschriebenen Reihenfolge.
+
+Die letzte Spalte enthält für jeden nummerierten Schritt die einzeln prüfbaren
+Abnahmekriterien als Liste.
 
 Wiederholbare technische Einstellungen werden nicht als Klickanleitung
-abgearbeitet. Ein zentraler Einrichtungsworkflow validiert und setzt die
-Workflowwerte; der noch offene API-Teil übernimmt die übrigen
-GitHub-Einstellungen. Manuell bleiben fachliche Entscheidungen,
-Rollenbesetzung, Zugangsdatenübergabe und praktische Abnahmen.
+abgearbeitet. Der Workflow **Configure workflow files** richtet die
+Workflowdateien ein und aktualisiert sie bei späteren Rollouts. Der noch offene
+API-Teil übernimmt die übrigen GitHub-Einstellungen. Manuell bleiben fachliche
+Entscheidungen, Rollenbesetzung, Zugangsdatenübergabe und praktische Abnahmen.
 
-## 1. GitHub-Grundaufbau herstellen
+## 1. Technische Grundlagen festlegen
 
-| Status | Tätigkeit | Ergebnis |
-|---|---|---|
-| offen | Zentrales Repository `j520730/mtext-actions` und privates Repository der FI `j517120/mtext-fi` auf GitHub Enterprise anlegen beziehungsweise die lokalen Stände übernehmen | `mtext-actions` ist nur für das Automatisierungsteam direkt zugänglich. Das Repository der FI enthält Ressourcen, Mandantenkonfiguration und schlanke Workflows |
-| offen | Runner der FI für den Einrichtungsworkflow bereitstellen | Das offizielle `runs-on`-Kennzeichen des von der FI bereitgestellten Runnerangebots ist bestätigt, der Runner ist in GitHub verfügbar und das Kennzeichen steht in `mtext-actions` als Repositoryvariable `FI_RUNNER_LABEL` bereit |
-| offen | Technische Einrichtungsberechtigung hinterlegen | Das Environment `Einrichtung` enthält `WORKFLOW_CONFIGURATION_TOKEN`. Die technische Identität ist auf `mtext-actions` und die vorgesehenen Mandanten-Repositories begrenzt und besitzt den erforderlichen Zugriff auf die freigegebenen Branches. Der Einrichtungsworkflow nimmt ausschließlich `.github/workflows` in seine Commits auf |
-| in Vorbereitung | Einrichtungsautomation im Testbereich abnehmen | `configure-workflows.yml` validiert beide Dateisätze, erzeugt die erforderlichen Commits in der benötigten SHA-Reihenfolge und pusht sie erst nach einer leeren Abschlussprüfung. Der noch offene API-Teil verwaltet Repositoryeinstellungen, Branches, Default Branches, Rulesets, weitere Environments und Actions-Zugriffe für alle Mandanten. Secret-Werte bleiben außerhalb; vorhandene Secret-Namen und nicht automatisierbare Voraussetzungen werden nur geprüft |
-| bestätigt | `mtext-actions` gegen den fachlichen Vertrag prüfen | Die vier CLI-Kommandos, FULL und DELTA, Artefaktprüfung, JCL, FTP-/JES-Vertrag, Ressourcensynchronisation und Workflowgrenzen sind durch Akzeptanztests abgedeckt |
-| offen | Branches der aktiven Stages und Default Branch einrichten | Die Einrichtungsautomation stellt für `R260`, `R261` und `R270` jeweils die Branches `Entwicklung`, `Abnahme` und `Bereitstellung` sowie zunächst `R261/Entwicklung` als Default Branch her |
-| offen | `mtext-actions`-Version und repositoryübergreifenden Zugriff einrichten | Der Einrichtungsworkflow erhält die vollständige SHA der freigegebenen `mtext-actions`-Version als Pflichtangabe, checkt exakt diesen Stand aus und setzt Workflowaufruf sowie Codebezug auf dieselbe SHA. Nur vorgesehene Mandanten-Repositories dürfen `mtext-actions` aufrufen. Für den Checkout der Python-Implementierung aus `mtext-actions` ist eine nur lesende technische Berechtigung festgelegt, da das von GitHub automatisch für den Job erzeugte `GITHUB_TOKEN` auf das aufrufende Repository begrenzt ist |
-| offen | Rollout-Matrix für `mtext-actions`-Versionen festlegen | Für jede freigegebene `mtext-actions`-SHA stehen die zu aktualisierenden Mandanten-Repositories und Branches fest. Der Rollout-Nachweis hält je Eintrag Workflow-Lauf, erzeugten Mandanten-Commit und Ergebnis fest |
-| offen | Git-Clients für Ressourcenarbeit, Stage-Weitergabe und Release-Tags abnehmen | M/Text Workbench und zusätzlicher Git-Client unterstützen gemeinsam die in der [Benutzeranleitung](./Benutzeranleitung.md#benötigte-git-funktionen) beschriebenen Funktionen einschließlich Konfliktbehandlung, verbindlicher Herkunftszeile beim Cherry-Pick, kontrollierter lokaler Ablage, Gegen-Commit nach einem Push sowie Anlegen, gezieltem Pushen und Löschen eines Git-Tags |
-| bestätigt | GitHub-Plattform festhalten | GitHub Enterprise Server 3.20.4 |
+| Nr. | Status | Tätigkeit | Ergebnis |
+|---|---|---|---|
+| 1.1 | bestätigt | **GitHub-Plattform festhalten** | <ul><li>GitHub Enterprise Server 3.20.4 ist als Zielplattform verbindlich festgelegt.</li></ul> |
+| 1.2 | offen | **Repositories anlegen oder übernehmen** | <ul><li>`j520730/mtext-actions` und `j517120/mtext-fi` bestehen auf der Zielplattform.</li><li>Nur das Automatisierungsteam hat direkten Zugriff auf `mtext-actions`.</li><li>`mtext-fi` enthält Ressourcen, Mandantenkonfiguration und aufrufende Workflows der FI.</li></ul> |
+| 1.3 | bestätigt | **`mtext-actions` gegen den fachlichen Vertrag prüfen** | <ul><li>Die Akzeptanztests für `workflow_configuration` und die vier fachlichen CLI-Kommandos sind erfolgreich.</li><li>FULL und DELTA, Artefaktprüfung, JCL, FTP-/JES-Übergabe, Ressourcensynchronisation und Workflowgrenzen sind abgedeckt.</li></ul> |
+| 1.4 | offen | **Mandantenspezifische Verantwortliche benennen** | <ul><li>Für jeden Mandanten sind die Personen für Ressourcenarbeit, technische Konfiguration und Releases namentlich zugeordnet.</li></ul> |
+| 1.5 | offen | **Pflichtangaben für den API-Teil bestätigen** | <ul><li>GitHub-Host und Repositoryeigentümer sind festgelegt.</li><li>Team-, Reviewer- und Bypass-IDs sind den benannten Verantwortlichen zugeordnet.</li><li>Ausgangs-Commits der Stage-Branches, Actions-Zugriffsebene und technische Leseberechtigung sind dokumentiert und freigegeben.</li></ul> |
 
-Der Einrichtungsworkflow ist bereits vorbereitet. Er wird in `mtext-actions`
-manuell mit einer freigegebenen Commit-SHA von `mtext-actions` für genau ein
-Mandanten-Repository und einen Zielbranch gestartet. Bei der erstmaligen
-Runner-Finalisierung kann daraus noch ein neuer zentraler Commit entstehen;
-dessen SHA wird für alle weiteren Einträge der Rollout-Matrix verwendet. Vor
-dem ersten Push erzwingt der Lauf einen leeren Zielzustand; eine Wiederholung
-mit derselben SHA erzeugt keine weiteren Commits. Der API-Teil der
-Einrichtungsautomation folgt nach Bestätigung von GitHub-Host,
-Repositoryeigentümern, Team- und Reviewer-IDs, Bypass-Zuordnungen,
-Ausgangs-Commits der Stage-Branches, Actions-Zugriffsebene sowie der technischen
-Leseberechtigung. Änderungen über den API-Teil dürfen erst starten, wenn diese
-Pflichtwerte vollständig sind.
+## 2. Runnerangebot der FI bereitstellen und prüfen
 
-## 2. Schutz- und Freigaberegeln konfigurieren
+| Nr. | Status | Tätigkeit | Ergebnis |
+|---|---|---|---|
+| 2.1 | offen | **Runner der FI bereitstellen** | <ul><li>Der Runner ist in GitHub verfügbar.</li><li>Sein bestätigtes `runs-on`-Kennzeichen ist in `mtext-actions` als Repositoryvariable `FI_RUNNER_LABEL` hinterlegt.</li></ul> |
+| 2.2 | offen | **Einheitliche Laufzeitvorbereitung bestätigen** | <ul><li>Alle Workflows verwenden `scripts/runner-preflight.sh` als gemeinsame Laufzeitvorbereitung.</li><li>Die nachfolgenden Workflow-Schritte verwenden den vom Skript bereitgestellten Python-Pfad und müssen die Laufzeit nicht selbst bestimmen.</li></ul> |
+| 2.3 | offen | **GHES-Artefakt-Actions prüfen** | <ul><li>`upload-artifact` v3.2.2 läuft auf GHES 3.20.4 erfolgreich.</li><li>`download-artifact` v3.1.0 läuft auf GHES 3.20.4 erfolgreich.</li></ul> |
 
-| Status | Tätigkeit | Ergebnis |
-|---|---|---|
-| offen | Mandantenspezifische Verantwortliche benennen | Team für Ressourcenarbeit, technischer Konfigurationskreis und kleines Release-Team sind festgelegt |
-| offen | Branchschutz für die drei Stages einrichten | Die Einrichtungsautomation lässt berechtigte Text-Entwickler nach Entwicklung und Abnahme pushen, begrenzt Bereitstellung auf das Release-Team und sperrt Löschen sowie Force-Pushes. Nach der Einrichtung wird der erreichte Zustand geprüft |
-| offen | Zentrale Aufrufdateien und `.github/config.json` schützen | Die Einrichtungsautomation verhindert Änderungen an `.github/workflows/**/*` und der Mandantenkonfiguration durch normale Ressourcen-Pushes und begrenzt notwendige Bypässe. Vollständige Commit-SHAs für freigegebene Actions und wiederverwendbare Workflows werden zentral geprüft |
-| offen | GitHub Environments konfigurieren | Die Einrichtungsautomation legt `Entwicklung`, `Abnahme` und `Bereitstellung` mit ihren Branch- beziehungsweise Tagregeln an. Nur die Mainframe-Übergabe in `Bereitstellung` braucht eine manuelle Freigabe. Eine berechtigte Person darf den selbst ausgelösten Lauf freigeben; ein verpflichtendes Vier-Augen-Prinzip ist nicht vorgesehen |
-| offen | Lebenszyklus und Betriebsregel für Git-Tags einrichten | Die Einrichtungsautomation begrenzt Tags nach dem Muster `R[0-9][0-9][0-9].[0-9][0-9][0-9]` auf das Release-Team, soweit GHES dies statisch abbildet. Vor der Freigabe darf das Team einen irrtümlichen Tag erst nach Abbruch des zugehörigen Laufs zurücknehmen. Nach der Freigabe sind Verschieben und Löschen betrieblich verboten; Korrekturen verwenden einen neuen Commit und einen neuen Tag. Bei einer nachträglichen Abweichung werden weitere Freigaben gestoppt, der Tag auf der im freigegebenen Lauf ausgewiesenen Ziel-SHA wiederhergestellt und der Vorgang als Betriebsstörung gemeldet |
-| offen | Cherry-Pick und Release-Tag praktisch abnehmen | Auswahl nach SHA, verbindliche Herkunftszeile, Konfliktbehandlung und Push auf den Zielbranch sind dokumentiert. Die durch den ausgewählten Git-Client erzeugte Tag-Art wird festgelegt und mit dem Workflow geprüft. Ein nichtproduktiver Git-Tag startet genau einen Release-Workflow. Der Test weist nach, dass seine Löschung keine Übergabe auslöst und dass ein irrtümlicher Tag vor der Freigabe kontrolliert zurückgenommen werden kann |
+## 3. GitHub-Einstellungen und Berechtigungen einrichten
 
-## 3. Runnerangebot der FI und technische Abhängigkeiten prüfen
+| Nr. | Status | Tätigkeit | Ergebnis |
+|---|---|---|---|
+| 3.1 | offen | **Technische Einrichtungsberechtigung hinterlegen** | <ul><li>Das Environment `Einrichtung` enthält `WORKFLOW_CONFIGURATION_TOKEN`.</li><li>Die technische Identität kann nur auf `mtext-actions` und die vorgesehenen Mandanten-Repositories zugreifen.</li><li>Der Zugriff auf Mandanten-Repositories ist auf die freigegebenen Branches begrenzt.</li></ul> |
+| 3.2 | offen | **API-Teil implementieren und im Testbereich abnehmen** | <ul><li>Der API-Teil stellt den freigegebenen Zielzustand eines Test-Repositories her.</li><li>Die anschließende Rückleseprüfung bestätigt den vollständigen Zielzustand.</li><li>Eine Wiederholung erzeugt keine Änderung.</li><li>Secret-Werte werden weder gelesen noch geschrieben.</li></ul> |
+| 3.3 | offen | **Stage-Branches und Default Branch einrichten** | <ul><li>Für `R260`, `R261` und `R270` bestehen jeweils `Entwicklung`, `Abnahme` und `Bereitstellung`.</li><li>`R261/Entwicklung` ist als erster Default Branch eingestellt.</li></ul> |
+| 3.4 | offen | **Repositoryübergreifenden Zugriff auf `mtext-actions` einrichten** | <ul><li>Nur die vorgesehenen Mandanten-Repositories können die wiederverwendbaren Workflows aus `mtext-actions` aufrufen.</li><li>Der technische Checkout der Python-Implementierung aus `mtext-actions` ist ausschließlich lesend.</li><li>Workflowaufruf und Checkout wurden praktisch geprüft.</li></ul> |
+| 3.5 | offen | **Branchschutz für die drei Stages einrichten** | <ul><li>Berechtigte Text-Entwickler können nach Entwicklung und Abnahme pushen.</li><li>Nur das Release-Team kann nach Bereitstellung pushen.</li><li>Nicht berechtigte Pushes werden abgewiesen.</li><li>Löschen und Force-Pushes werden auf allen Stage-Branches abgewiesen.</li></ul> |
+| 3.6 | offen | **Workflowdateien und Mandantenkonfiguration schützen** | <ul><li>Normale Ressourcen-Pushes mit Änderungen an `.github/workflows/**/*` werden abgewiesen.</li><li>Änderungen an `.github/config.json` sind auf den technischen Konfigurationskreis begrenzt.</li><li>Bypässe bestehen nur für die jeweils benannten technischen Identitäten.</li></ul> |
+| 3.7 | offen | **GitHub Environments konfigurieren** | <ul><li>`Entwicklung`, `Abnahme` und `Bereitstellung` besitzen die vorgesehenen Branch- beziehungsweise Tagregeln.</li><li>Entwicklung und Abnahme benötigen keine manuelle Freigabe.</li><li>Nur der Publish-Job kann `Bereitstellung` verwenden.</li><li>Der Publish-Job wartet dort auf die Freigabe einer berechtigten Person.</li><li>Ein verpflichtendes Vier-Augen-Prinzip und eine Sperre der Selbstfreigabe sind nicht vorgesehen.</li></ul> |
+| 3.8 | offen | **Technische Tagberechtigungen abnehmen** | <ul><li>Ein praktischer Test hält fest, welche Tagoperationen GHES 3.20.4 technisch begrenzen kann.</li><li>Alle technisch abbildbaren Operationen auf Tags im Format `Rnnn.nnn` sind auf das Release-Team beschränkt.</li></ul> |
+| 3.9 | offen | **Rücknahme irrtümlicher Release-Tags abnehmen** | <ul><li>Das Release-Team kann einen irrtümlichen Tag löschen.</li><li>Vor dem Löschen wird der dadurch gestartete Workflow-Lauf abgebrochen.</li><li>Ein neu angelegter Tag startet genau einen neuen Release-Workflow.</li><li>Das Löschen eines Tags nimmt eine bereits erfolgte Mainframe-Übergabe nicht zurück.</li></ul> |
 
-| Status | Tätigkeit | Ergebnis |
-|---|---|---|
-| offen | Laufzeit auf dem Runner der FI prüfen | Python 3.14, Git und die Ausführung der verwendeten Node-20-Actions sind verfügbar. `scripts/runner-preflight.sh` ist erfolgreich |
-| offen | GHES-Artefakt-Actions prüfen | Die in den Workflows gepinnten Node-20-Varianten von `upload-artifact` v3.2.2 und `download-artifact` v3.1.0 sind auf GHES 3.20.4 verfügbar. Version 4 wird nicht verwendet |
-| offen | Zertifikate und Netzwerkpfade prüfen | Die interne CA ist im Truststore. Der Runner erreicht die gewählten M/Text-Ziele sowie Mainframe-FTP und JES, ohne die TLS-Prüfung zu deaktivieren |
+## 4. Workflowdateien einrichten und aktualisieren
 
-## 4. M/Text-Transport entscheiden und abnehmen
+Der Workflow **Configure workflow files** aus
+[`configure-workflows.yml`](../../mtext-actions/.github/workflows/configure-workflows.yml)
+bearbeitet pro Lauf genau einen Mandantenbranch. Das Python-Modul
+`workflow_configuration` bereitet die geprüften Commits vor; der Workflow
+pusht sie erst nach erfolgreicher Abschlussprüfung.
 
-| Status | Tätigkeit | Ergebnis |
-|---|---|---|
-| bestätigt | Linien- und URL-Mapping | `R260→en03`, `R261→en01`, `R270→en02`. Die Hosts heißen jeweils `enXXe` und `enXXa` |
-| bestätigt | Heutigen Adaptervertrag als Ausgangslage festhalten | Der bestehende Ablauf schreibt zuerst nach `serverSync` und sendet danach einen POST mit `MAN` und `INR`. Dies legt den künftigen Transport noch nicht fest |
-| offen | Transportweg nach `serverSync` entscheiden und Zielvertrag festschreiben | Genau eine der im [Zielbild](./Zielbild_GitHub_Actions_Git.md#mtext-transport-nach-serversync) beschriebenen Varianten wird ausgewählt: PUT an den Adapter, Sharezugriff des Runners oder Download eines Actions-Artefakts durch Adapter beziehungsweise M/Text. Verantwortlichkeiten, Authentifizierung, Prüfung und Wiederanlauf sind geklärt |
-| offen | Kompatibilität des gewählten Transports nachweisen | Auf `serverSync` liegen dieselben Dateien und Verzeichnisse wie im bisherigen Verfahren. Transportdateien und Metadaten bleiben nicht im ausgewerteten Bestand |
-| offen | Fehler- und Wiederanlaufverhalten des Zielstands abnehmen | Ein Abbruch während der Übertragung oder Veröffentlichung startet die interne Synchronisation nicht. Ein Wiederanlauf stellt den vollständigen Commit her. Entfernte oder neu ausgeschlossene Projekte bleiben nicht als veralteter Bestand unter `serverSync` liegen |
-| offen | Config-Check und Synchronisation nichtproduktiv prüfen | Der Config-Check liefert `CONFIG_VALIDATED`. Ein vollständiger Projektstand wird erfolgreich über den gewählten Transport bereitgestellt und der Wiederanlauf ist geprüft |
-| offen | Betriebsweg für einen unklaren M/Text-Endstatus festlegen | Anwender bewerten keine technischen Anwendungsprotokolle. Bei unklarer Wirkung übernimmt die benannte Anwendungsbetreuung die technische Statusklärung; Kontaktweg, benötigte Laufangaben und Rückmeldung an den Anwender sind festgelegt |
+| Nr. | Status | Tätigkeit | Ergebnis |
+|---|---|---|---|
+| 4.1 | in Vorbereitung | **`Configure workflow files` im Testbereich abnehmen** | <ul><li>Der Lauf verlangt eine vollständige freigegebene `mtext-actions`-SHA, ein Mandanten-Repository und einen Zielbranch.</li><li>Beide Workflowdateisätze werden vor der ersten Änderung validiert.</li><li>Der Mandanten-Commit enthält ausschließlich Änderungen unter `.github/workflows`.</li><li>Workflowaufruf und Python-Checkout verwenden dieselbe `mtext-actions`-SHA.</li><li>Die Diffs werden vor dem Push im Workflow-Log angezeigt.</li><li>Die Abschlussprüfung ist leer, bevor ein Commit gepusht wird.</li><li>Eine Wiederholung für den erreichten Zielzustand erzeugt keinen Commit.</li></ul> |
+| 4.2 | offen | **Rollout-Matrix festlegen** | <ul><li>Die Matrix enthält jedes zu aktualisierende Mandanten-Repository mit jedem betroffenen Branch.</li><li>Für alle Einträge ist dieselbe freigegebene Ausgangs-SHA angegeben.</li><li>Workflow-Lauf, Mandanten-Commit und Ergebnis werden je Eintrag nachgewiesen.</li></ul> |
+| 4.3 | offen | **Ersten Rollout-Lauf ausführen** | <ul><li>Der Lauf verwendet die freigegebene Ausgangs-SHA.</li><li>Fehlt das feste Runner-Kennzeichen noch, erzeugt der Lauf einmalig einen Commit in `mtext-actions`.</li><li>Die im Log ausgewiesene SHA dieses Commits wird als Rollout-SHA in die Matrix übernommen.</li><li>Der bereits bearbeitete Mandantenbranch verweist auf diese Rollout-SHA.</li></ul> |
+| 4.4 | offen | **Verbleibende Mandantenbranches aktualisieren** | <ul><li>Für jeden verbleibenden Matrixeintrag läuft **Configure workflow files** mit derselben Rollout-SHA.</li><li>Workflowaufruf und Python-Checkout jedes bearbeiteten Branches verweisen auf diese SHA.</li><li>Der erzeugte Mandanten-Commit und der erfolgreiche Lauf sind in der Matrix vermerkt.</li></ul> |
+| 4.5 | offen | **Rollout abschließend prüfen** | <ul><li>Für jeden Matrixeintrag wird ein Kontrolllauf mit der Rollout-SHA ausgeführt.</li><li>Jeder Kontrolllauf endet erfolgreich und ohne neuen Commit.</li><li>Alle vorgesehenen Mandantenbranches verwenden dieselbe `mtext-actions`-Version.</li></ul> |
 
-## 5. Mainframe-Übergabe einrichten und abnehmen
+Bei späteren `mtext-actions`-Versionen werden die Schritte 4.2 bis 4.5
+wiederholt. Das Runner-Kennzeichen ist dann bereits fest eingetragen, sodass
+kein zusätzlicher Commit in `mtext-actions` entsteht.
 
-| Status | Tätigkeit | Ergebnis |
-|---|---|---|
-| offen | FTP-Secrets im GitHub Environment `Bereitstellung` hinterlegen | `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER` und `MAINFRAME_FTP_PASSWORD` werden sicher hinterlegt; die Einrichtungsprüfung bestätigt nur ihr Vorhandensein, ohne Werte auszulesen |
-| bestätigt | Historischen JCL-Eingabevertrag fachlich bestätigen | Der mandantenspezifische Zielcode wird wie bisher über genau einen vorhandenen JCL-Platzhalter eingesetzt. Die Mandantenkonfiguration enthält die ISPW-Instanz und begrenzt sie auf `T` oder `P` |
-| offen | Historischen `trans`-Vertrag gegen Referenzlieferungen abnehmen | Paketnamen, FULL- und DELTA-Pfade, Löschliste, Informationsdatei und kumulativer DELTA-Inhalt entsprechen dem im [Zielbild](./Zielbild_GitHub_Actions_Git.md#historischer-übergabestand-unter-nfsmtexttrans) dokumentierten Bestand |
-| offen | JCL und unmittelbare Übergabe nichtproduktiv prüfen | Die konfigurierte ISPW-Instanz wird korrekt in Dataset und Programmaufruf eingesetzt. FTP-Antworten, `SITE FILETYPE=JES`, Submit, gerendertes JCL und Wiederholung mit demselben geprüften Artefakt sind abgenommen |
-| offen | Fachliche Host-Endkontrolle festlegen | Das Release-Team kann den weiteren Jobstatus nach `MAINFRAME_SUBMITTED` selbst auf dem Host prüfen. Erfolgsmerkmal, Nachweis, Abbruchgrenze und Vorgehen bei unklarem oder fehlgeschlagenem Status sind dokumentiert |
+## 5. M/Text-Transport entscheiden und abnehmen
 
-## 6. Test-Parallelbetrieb vorbereiten
+| Nr. | Status | Tätigkeit | Ergebnis |
+|---|---|---|---|
+| 5.1 | bestätigt | **Linien- und URL-Mapping bestätigen** | <ul><li>`R260` verwendet `en03`, `R261` verwendet `en01` und `R270` verwendet `en02`.</li><li>Die Hosts heißen je Linie `enXXe` für Entwicklung und `enXXa` für Abnahme.</li></ul> |
+| 5.2 | bestätigt | **Heutigen Adaptervertrag als Ausgangslage festhalten** | <ul><li>Der bestehende Ablauf schreibt zuerst nach `serverSync`.</li><li>Danach sendet er einen POST mit `MAN` und `INR`.</li><li>Dieser Istzustand legt den künftigen Transport nicht fest.</li></ul> |
+| 5.3 | offen | **Transportweg nach `serverSync` festlegen** | <ul><li>Genau eine der im [Zielbild](./Zielbild_GitHub_Actions_Git.md#mtext-transport-nach-serversync) beschriebenen Varianten ist ausgewählt.</li><li>Verantwortlichkeiten und Authentifizierung sind dokumentiert.</li><li>Erfolgsprüfung, Fehlergrenzen und Wiederanlauf sind vertraglich festgelegt.</li></ul> |
+| 5.4 | offen | **Zertifikate und M/Text-Netzwerkpfade prüfen** | <ul><li>Die interne CA ist im Truststore des Runners vorhanden.</li><li>Der Runner erreicht die ausgewählten M/Text-Ziele.</li><li>Die TLS-Prüfung bleibt aktiviert.</li></ul> |
+| 5.5 | offen | **Kompatibilität des gewählten Transports nachweisen** | <ul><li>Dateien und Verzeichnisse unter `serverSync` entsprechen dem bisherigen Verfahren.</li><li>Transportdateien und Metadaten liegen nicht im ausgewerteten Bestand.</li></ul> |
+| 5.6 | offen | **Fehler- und Wiederanlaufverhalten abnehmen** | <ul><li>Ein Abbruch während Übertragung oder Veröffentlichung startet keine interne Synchronisation.</li><li>Ein Wiederanlauf stellt den vollständigen Ziel-Commit her.</li><li>Entfernte oder neu ausgeschlossene Projekte bleiben nicht als veralteter Bestand unter `serverSync` liegen.</li></ul> |
+| 5.7 | offen | **Config-Check und Synchronisation nichtproduktiv prüfen** | <ul><li>Der Config-Check endet mit `CONFIG_VALIDATED`.</li><li>Der vollständige Projektstand eines festgelegten Commits wird über den gewählten Transport bereitgestellt.</li><li>Der Wiederanlauf desselben Commits ist erfolgreich.</li></ul> |
+| 5.8 | offen | **Betriebsweg für einen unklaren M/Text-Endstatus festlegen** | <ul><li>Eine benannte Anwendungsbetreuung übernimmt die technische Statusklärung.</li><li>Kontaktweg und benötigte Angaben zum Workflow-Lauf sind dokumentiert.</li><li>Der Anwender erhält eine fachlich verständliche Rückmeldung und muss keine technischen Anwendungsprotokolle bewerten.</li></ul> |
 
-| Status | Tätigkeit | Ergebnis |
-|---|---|---|
-| geplant November/Dezember 2026 | Ersten SVN-Abzug nach dem [Migrations- und Cutover-Runbook](./Migration.md) erstellen | Alle Mandanten-Repositories stehen mit dokumentiertem SVN-Ausgangsstand für Tests bereit. Jenkins und SVN bleiben produktiv |
-| offen | Importumfang und Release-Basen je Mandant freigeben | Aktive Linien, Projekte, Dateinamen und Ausschlüsse sind inventarisiert. Je aktiver Linie werden mindestens der `.100`-Stand und alle späteren Tags übernommen |
-| offen | Nichtproduktiven End-to-End-Pilot abnehmen | Git-Clients, Schutzregeln, M/Text-Synchronisation sowie FULL- und DELTA-Release einschließlich Mainframe-Übergabe sind geprüft |
+## 6. Mainframe-Übergabe einrichten und abnehmen
+
+| Nr. | Status | Tätigkeit | Ergebnis |
+|---|---|---|---|
+| 6.1 | offen | **FTP-Secrets hinterlegen** | <ul><li>Das Environment `Bereitstellung` enthält `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER` und `MAINFRAME_FTP_PASSWORD`.</li><li>Die Einrichtungsprüfung bestätigt nur das Vorhandensein der Secret-Namen.</li><li>Secret-Werte werden nicht ausgelesen oder protokolliert.</li></ul> |
+| 6.2 | offen | **Mainframe-Netzwerkpfade prüfen** | <ul><li>Der Runner erreicht Mainframe-FTP und JES.</li><li>Die vorgesehene Zertifikatsprüfung ist aktiv.</li></ul> |
+| 6.3 | bestätigt | **Historischen JCL-Eingabevertrag bestätigen** | <ul><li>Der mandantenspezifische Zielcode wird über den vorhandenen JCL-Platzhalter eingesetzt.</li><li>Die Mandantenkonfiguration enthält die ISPW-Instanz und erlaubt dort nur `T` oder `P`.</li></ul> |
+| 6.4 | offen | **Historischen `trans`-Vertrag abnehmen** | <ul><li>Paketnamen, FULL- und DELTA-Pfade entsprechen den Referenzlieferungen.</li><li>Löschliste und Informationsdatei entsprechen den Referenzlieferungen.</li><li>Das kumulative DELTA entspricht dem im [Zielbild](./Zielbild_GitHub_Actions_Git.md#historischer-übergabestand-unter-nfsmtexttrans) dokumentierten Vertrag.</li></ul> |
+| 6.5 | offen | **JCL und unmittelbare Übergabe nichtproduktiv prüfen** | <ul><li>Die konfigurierte ISPW-Instanz erscheint korrekt in Dataset und Programmaufruf.</li><li>FTP-Anmeldung, Übertragung und `SITE FILETYPE=JES` sind erfolgreich.</li><li>Das gerenderte JCL wird erfolgreich übergeben.</li><li>Die Wiederholung verwendet dasselbe zuvor geprüfte Artefakt.</li></ul> |
+| 6.6 | offen | **Fachliche Host-Endkontrolle festlegen** | <ul><li>Das Release-Team kann den Status nach `MAINFRAME_SUBMITTED` auf dem Host prüfen.</li><li>Erfolgsmerkmal und erforderlicher Nachweis sind dokumentiert.</li><li>Abbruchgrenze und Vorgehen bei unklarem oder fehlgeschlagenem Status sind festgelegt.</li></ul> |
+
+## 7. Git-Clients und Bedienabläufe abnehmen
+
+| Nr. | Status | Tätigkeit | Ergebnis |
+|---|---|---|---|
+| 7.1 | offen | **Aktualisierung des lokalen Branches abnehmen** | <ul><li>Für die M/Text Workbench ist die verwendete Bedienfunktion dokumentiert und praktisch geprüft.</li><li>Für den zusätzlichen Git-Client ist die verwendete Bedienfunktion dokumentiert und praktisch geprüft.</li><li>Der lokale Branch lässt sich ohne automatischen Merge auf den aktuellen GitHub-Stand bringen.</li><li>Der erreichte Commit ist im jeweiligen Client prüfbar.</li></ul> |
+| 7.2 | offen | **Ressourcenarbeit, Stage-Weitergabe und Rücknahme abnehmen** | <ul><li>Status, Änderungen, Commit und Push sind in den vorgesehenen Clients praktisch geprüft.</li><li>Ein Cherry-Pick dokumentiert die vollständige Quell-SHA und kann bei einem Konflikt fortgesetzt oder vollständig abgebrochen werden.</li><li>Eine lokale Zwischenablage kann kontrolliert wiederhergestellt werden.</li><li>Ein bereits gepushter Commit kann durch einen Gegen-Commit korrigiert werden.</li><li>Die Abläufe entsprechen der [Benutzeranleitung](./Benutzeranleitung.md#benötigte-git-funktionen).</li></ul> |
+| 7.3 | offen | **Release-Tag praktisch abnehmen** | <ul><li>Tag-Art und Bedienweg sind für den ausgewählten Git-Client festgelegt.</li><li>Der Client überträgt gezielt genau den vorgesehenen Tag nach GitHub.</li><li>Die Übertragung startet genau einen Release-Workflow.</li><li>Die Löschung des Tags startet keine Mainframe-Übergabe.</li><li>Vor dem Löschen eines irrtümlichen Tags wird der dadurch gestartete Workflow-Lauf abgebrochen.</li></ul> |
+
+## 8. Test-Parallelbetrieb vorbereiten
+
+| Nr. | Status | Tätigkeit | Ergebnis |
+|---|---|---|---|
+| 8.1 | offen | **Importumfang und Release-Basen freigeben** | <ul><li>Aktive Releaselinien, Projekte, Dateinamen und Ausschlüsse sind je Mandant inventarisiert.</li><li>Je aktiver Releaselinie sind mindestens der `.100`-Stand und alle späteren als Releases benötigten Tags zur Übernahme benannt.</li></ul> |
+| 8.2 | geplant November/Dezember 2026 | **Ersten SVN-Abzug erstellen** | <ul><li>Der Abzug folgt dem [Migrations- und Cutover-Runbook](./Migration.md).</li><li>Alle Mandanten-Repositories besitzen einen dokumentierten SVN-Ausgangsstand für die Tests.</li><li>Jenkins und SVN bleiben während des Test-Parallelbetriebs produktiv.</li></ul> |
+| 8.3 | offen | **Nichtproduktiven End-to-End-Pilot abnehmen** | <ul><li>Git-Clients und Schutzregeln sind praktisch geprüft.</li><li>M/Text-Synchronisation und Wiederanlauf sind erfolgreich.</li><li>FULL- und DELTA-Release einschließlich Mainframe-Übergabe sind erfolgreich.</li></ul> |

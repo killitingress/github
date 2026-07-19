@@ -116,7 +116,7 @@ class ConfigTests(unittest.TestCase):
             json.dumps(
                 {
                     "R261": {
-                        "mtext_linie": "en01",
+                        "etaps_linie": "en01",
                         "hostprofil": "FKT",
                         "unbekannt": "Wert",
                     }
@@ -155,7 +155,7 @@ class ConfigTests(unittest.TestCase):
         releaselinien = self.root / "releaselinien.json"
         releaselinien.write_text(
             json.dumps(
-                {"R261": {"mtext_linie": "en01", "hostprofil": "MISSING"}}
+                {"R261": {"etaps_linie": "en01", "hostprofil": "MISSING"}}
             ),
             encoding="utf-8",
         )

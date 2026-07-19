@@ -81,7 +81,7 @@
         <mxCell id="divider-2" style="shape=line;strokeColor=#b3b3b3;dashed=1" vertex="1" parent="1">
           <mxGeometry x="45" y="685" width="1890" height="1" as="geometry"/>
         </mxCell>
-        <mxCell id="stage-rel" value="3. Bereitstellung und Release-Kandidat" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#a65a00" vertex="1" parent="1">
+        <mxCell id="stage-rel" value="3. Bereitstellung und Release-Auslösung" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#a65a00" vertex="1" parent="1">
           <mxGeometry x="45" y="700" width="350" height="30" as="geometry"/>
         </mxCell>
         <mxCell id="rel-user" value="Mandanten-Release-Team&#xa;freigegebene Commits auswählen&#xa;Cherry-Pick nach Bereitstellung&#xa;kein Force-Push" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
@@ -90,23 +90,23 @@
         <mxCell id="rel-branch" value="Rnnn/Bereitstellung&#xa;neuer Commit / neue SHA&#xa;Push erzeugt keine Lieferung" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="310" y="755" width="190" height="105" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-tag" value="Release-Tag Rnnn.nnn&#xa;Release-Kandidat&#xa;vor Freigabe: Lauf abbrechen,&#xa;irrtümlichen Tag löschen und neu anlegen&#xa;z. B. R261.100 / R261.108" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="rel-tag" value="Release-Tag Rnnn.nnn&#xa;startet den Release-Workflow&#xa;bei Irrtum: Lauf abbrechen,&#xa;Tag löschen und ggf. neu anlegen&#xa;z. B. R261.100 / R261.108" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="525" y="735" width="220" height="145" as="geometry"/>
         </mxCell>
         <mxCell id="rel-caller" value="release.yml&#xa;Tag-Push oder manueller Start&#xa;mit vorhandenem Tag&#xa;ruft reusable-release.yml&#xa;per freigegebener Commit-SHA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
           <mxGeometry x="805" y="745" width="285" height="130" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-note" value="Das Veröffentlichen des GitHub-Releases ist noch keine Freigabe.&#xa;Maßgeblich ist die manuelle Freigabe des Publish-Jobs." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
+        <mxCell id="rel-note" value="Der Tag startet den Paketbau.&#xa;Die manuelle Freigabe gilt ausschließlich für die Mainframe-Übergabe." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="1120" y="765" width="390" height="90" as="geometry"/>
         </mxCell>
 
         <mxCell id="divider-3" style="shape=line;strokeColor=#b3b3b3;dashed=1" vertex="1" parent="1">
           <mxGeometry x="45" y="905" width="1890" height="1" as="geometry"/>
         </mxCell>
-        <mxCell id="stage-publish" value="4. Releasebau, Freigabe und Mainframe-Übergabe" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#6b3d7c" vertex="1" parent="1">
+        <mxCell id="stage-publish" value="4. Paketbau und Mainframe-Übergabe" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#6b3d7c" vertex="1" parent="1">
           <mxGeometry x="45" y="920" width="430" height="30" as="geometry"/>
         </mxCell>
-        <mxCell id="release-summary" value="Release-Team kontrolliert&#xa;Tag, Ziel-Commit und Build-Protokoll&#xa;vor der Freigabe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6" vertex="1" parent="1">
+        <mxCell id="release-summary" value="Release-Workflow&#xa;baut und prüft das Artefakt&#xa;Publish wartet auf Freigabe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6" vertex="1" parent="1">
           <mxGeometry x="50" y="995" width="195" height="105" as="geometry"/>
         </mxCell>
         <mxCell id="release-source" value="Getaggter Mandantenstand&#xa;.github/config.json enthält u. a.&#xa;ispw T|P, subsystem und hostprofile" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
@@ -121,7 +121,7 @@
         <mxCell id="artifact" value="Artefakt desselben Laufs&#xa;&lt;Kürzel&gt;&lt;Liefercode&gt;&lt;F|D&gt;.tgz&#xa;FULL oder kumulatives DELTA&#xa;+ Information + manifest.json&#xa;Tag, Ziel-SHA, Größe, SHA-256&#xa;ARTIFACT_READY" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1080" y="975" width="200" height="150" as="geometry"/>
         </mxCell>
-        <mxCell id="approval" value="Environment Bereitstellung&#xa;manuelle Freigabe&#xa;Secrets erst nach Freigabe&#xa;ab hier: Tagname + Ziel-Commit&#xa;unveränderliche Release-Identität" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="approval" value="Environment Bereitstellung&#xa;manuelle Freigabe der&#xa;Mainframe-Übergabe&#xa;Secrets erst danach" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1310" y="965" width="220" height="170" as="geometry"/>
         </mxCell>
         <mxCell id="jcl-input" value="Versioniertes JCL-Template&#xa;ISPW aus ispw T|P&#xa;LEVEL + ASSIGNMENT aus Hostprofil&#xa;SUBSYS aus Mandant" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6" vertex="1" parent="1">
@@ -164,8 +164,8 @@
         <mxCell id="e-release-source" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="release-source" target="build-job"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-release-workflow" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="release-workflow" target="build-job"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-build-artifact" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="build-job" target="artifact"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-artifact-approval" value="prüfen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="artifact" target="approval"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-approval-publish" value="freigegeben" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0" edge="1" parent="1" source="approval" target="publish-job"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-artifact-approval" value="zur Freigabe" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="artifact" target="approval"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-approval-publish" value="Übergabe freigegeben" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0" edge="1" parent="1" source="approval" target="publish-job"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-jcl-publish" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="jcl-input" target="publish-job"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-publish-mainframe" value="FTP / JES" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="publish-job" target="mainframe"><mxGeometry relative="1" as="geometry"/></mxCell>
       </root>

@@ -173,8 +173,8 @@ def load_configuration(
     for values in releaselinien.values():
         if (
             not isinstance(values, dict)
-            or set(values) != {"mtext_linie", "hostprofil"}
-            or not isinstance(values.get("mtext_linie"), str)
+            or set(values) != {"etaps_linie", "hostprofil"}
+            or not isinstance(values.get("etaps_linie"), str)
             or values.get("hostprofil") not in hostprofile
         ):
             raise DeliveryError(

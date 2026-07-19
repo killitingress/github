@@ -146,13 +146,13 @@ def sync_resources(
     if not execute:
         return {"status": Status.ARTIFACT_READY.value, "projects": projects}
 
-    mtext_linie = configuration.releaselinien[releaselinie]["mtext_linie"]
+    etaps_linie = configuration.releaselinien[releaselinie]["etaps_linie"]
     path_suffix, host_suffix = SYNC_STAGES[environment]
     publish_server_sync(
-        staging_root, f"/nfs/mtext/{mtext_linie}{path_suffix}/serverSync"
+        staging_root, f"/nfs/mtext/{etaps_linie}{path_suffix}/serverSync"
     )
     status, body = call_adapter(
-        f"https://{mtext_linie}{host_suffix}.ltoma.intern/vMtextAdapter/sync",
+        f"https://{etaps_linie}{host_suffix}.ltoma.intern/vMtextAdapter/sync",
         timeout=timeout,
     )
     return {

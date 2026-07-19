@@ -141,13 +141,11 @@ Zielzustand und ist keine manuelle Klickanleitung.
   dem benannten technischen Verantwortlichenkreis zur Änderung erlauben
 - Es werden ausschließlich Git-Tags und keine GitHub Releases verwendet.
   Erstellen und Löschen von Tags `Rnnn.nnn` auf das Release-Team begrenzen.
-  Vor der Freigabe im Environment `Bereitstellung` darf es einen irrtümlichen
-  Tag nach Abbruch des zugehörigen Laufs löschen und neu anlegen
-- freigegebene Tags weder verschieben noch löschen. Fachliche Korrekturen
-  verwenden einen neuen Commit und einen neuen Tag. Bei einer dennoch
-  eingetretenen Abweichung weitere Freigaben stoppen, den Tag ausschließlich
-  auf der im freigegebenen Workflow-Lauf ausgewiesenen Ziel-SHA
-  wiederherstellen und den Vorgang als Betriebsstörung melden
+  Vor dem Löschen eines irrtümlichen Tags den dadurch gestarteten
+  Workflow-Lauf abbrechen
+- die manuelle Freigabe im Environment `Bereitstellung` ausschließlich auf die
+  Mainframe-Übergabe beziehen. Das Löschen eines Tags nimmt eine bereits
+  erfolgte Lieferung nicht zurück
 - freigegebene Actions und wiederverwendbare Workflows ausschließlich über
   vollständige Commit-SHAs referenzieren
 - die drei gemeinsamen GitHub Environments `Entwicklung`, `Abnahme` und

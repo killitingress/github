@@ -72,10 +72,9 @@ müssen zusätzlich alle aktivierungsrelevanten Punkte aus
   sind eingerichtet. Nur der Einrichtungsworkflow erhält die technische
   Schreibberechtigung; nur der Publish-Job kann `Bereitstellung` verwenden und
   muss dort manuell freigegeben werden.
-- Der Lebenszyklus der Release-Tags ist eingerichtet und abgenommen. Ein
-  Release-Kandidat kann vor der Freigabe kontrolliert zurückgenommen werden;
-  nach der Freigabe sind Änderung und Löschung gemäß der verbindlichen
-  Betriebsregel unzulässig.
+- Die Berechtigungen für Release-Tags und die Rücknahme irrtümlicher Tags sind
+  eingerichtet und abgenommen. Vor dem Löschen eines Tags wird der dadurch
+  gestartete Workflow-Lauf abgebrochen.
 - Das offizielle `runs-on`-Kennzeichen des ausgewählten Runnerangebots der FI ist
   eingetragen. Python-Laufzeit, Git, Zertifikate und die benötigten
   Netzwerkpfade sind auf diesem Runner geprüft. Bereitstellung, Absicherung,
@@ -115,7 +114,7 @@ Ersatz für eine Korrektur des wiederholbaren Migrationsverfahrens.
 | offen | Projektausschlüsse festlegen | Testdatenprojekte dürfen in Git liegen, werden aber über `excluded_projects` von Synchronisation und Lieferung ausgeschlossen |
 | separate Aufgabe | SVN-Autoren zuordnen | Bestehende SVN-Namen sind eindeutig Git-Identitäten zugeordnet |
 | offen | SVN-Eigenschaften behandeln | `svn:externals`, EOL, Keywords, executable, leere Verzeichnisse, Mergeinfo und große Dateien sind inventarisiert und ihre Behandlung dokumentiert |
-| optional | Weitere Historie übernehmen | Zusätzliche Historie und ältere freigegebene Tags werden nur mit dokumentiertem Umfang importiert |
+| optional | Weitere Historie übernehmen | Zusätzliche Historie und ältere für Lieferungen verwendete Tags werden nur mit dokumentiertem Umfang importiert |
 
 Ein normalisierter Tag darf nur genau einem SVN-Tag und genau einem Ziel-Commit
 zugeordnet sein. Eine Namenskollision oder ein widersprüchlicher Ziel-Commit
@@ -133,7 +132,7 @@ fachlich bestätigten Werten erzeugt und durch `validate-config` geprüft:
 - ausdrücklich ausgeschlossene Projekte.
 
 Die zentrale Datei `config/releaselinien.json` ordnet jeder der drei aktiven
-Releaselinien ihre `mtext_linie` und ein im Mandanten vorhandenes `hostprofil`
+Releaselinien ihre `etaps_linie` und ein im Mandanten vorhandenes `hostprofil`
 zu. Die Zuordnung wird rollierend gepflegt. Zugangsdaten werden nicht
 importiert und stehen nicht in Git.
 
@@ -179,9 +178,8 @@ Nachweise vorliegen:
 6. Je importiertem DELTA die Erreichbarkeit vom Bereitstellungsbranch und die
    Abstammung vom zugehörigen `.100`-Tag automatisch prüfen.
 7. Einen für den Import benötigten zeitlich begrenzten Bypass protokollieren
-   und nach dem Import entfernen. Importierte freigegebene Tags anschließend
-   mit ihren vollständigen Ziel-SHAs im Cutover-Protokoll festhalten; sie
-   unterliegen unmittelbar der Betriebsregel für freigegebene Tags.
+   und nach dem Import entfernen. Importierte Release-Tags anschließend mit
+   ihren vollständigen Ziel-SHAs im Cutover-Protokoll festhalten.
 8. Die vollständige SHA der freigegebenen `mtext-actions`-Version festhalten
    und den Einrichtungsworkflow damit für alle Einträge der Rollout-Matrix aus
    Mandanten-Repository und Branch ausführen. Jeder abschließende Kontrolllauf
@@ -211,11 +209,10 @@ Nach dem zweiten Go wird in dieser Reihenfolge umgeschaltet:
 7. Den bestätigten Stand nach `Rnnn/Bereitstellung` übernehmen und nachweisen,
    dass dieser Push allein keine Lieferung startet.
 8. Die freigegebenen FULL- und DELTA-Smoke-Tests mit vorab benannten Tags
-   ausführen. Vor der manuellen Freigabe werden Tag, Ziel-Commit, Manifest und
-   Build-Protokoll kontrolliert.
+   ausführen, das Build-Ergebnis prüfen und die Mainframe-Übergabe manuell
+   freigeben.
 9. Nach der Freigabe die unmittelbare FTP-/JES-Annahme sowie den
-   nachgelagerten fachlichen Mainframe-Status separat bestätigen. Ein
-   freigegebener Tag wird weder verschoben noch gelöscht.
+   nachgelagerten fachlichen Mainframe-Status separat bestätigen.
 10. Ergebnisse, verwendete Commits, Tags, Artefakte, Freigaben und fachliche
     Bestätigungen im Cutover-Protokoll festhalten.
 
@@ -242,9 +239,10 @@ dokumentierter Entscheidung auf Jenkins und das weiterhin unveränderte SVN
 zurückgeschaltet werden. Der nicht freigegebene GitHub-Import wird dabei
 gesperrt und als fehlgeschlagener Lauf dokumentiert.
 
-Sind nach der Umschaltung bereits neue Git-Commits, freigegebene Tags oder
-externe Wirkungen entstanden, ist eine automatische Rückkehr unzulässig. Die
-Cutover-Leitung friert weitere Änderungen ein. Migrationsteam, Release-Team
+Sind nach der Umschaltung bereits neue Git-Commits, für Lieferungen verwendete
+Tags oder externe Wirkungen entstanden, ist eine automatische Rückkehr
+unzulässig. Die Cutover-Leitung friert weitere Änderungen ein.
+Migrationsteam, Release-Team
 und Zielsystembetrieb gleichen Git- und SVN-Stände sowie bereits erfolgte
 M/Text- und Mainframe-Wirkungen ab und entscheiden dokumentiert über
 Fortsetzung oder kontrollierte Rückmigration. Eine Mainframe-Übergabe wird bei
@@ -269,14 +267,14 @@ und im Cutover-Protokoll bestätigt sind:
 - Alle Mandanten-Repositories verwenden laut zentraler Einrichtungsprüfung
   dieselbe unveränderliche, freigegebene Version von `mtext-actions`; weitere
   Actions sind vollständig gepinnt.
-- Rulesets, Environments, Tag-Betriebsregel, Runner-Zuordnung der FI und minimale
-  Berechtigungen sind praktisch wirksam.
+- Rulesets, Environments, Tagberechtigungen, Runner-Zuordnung der FI und
+  minimale Berechtigungen sind praktisch wirksam.
 - Pushes nach Entwicklung und Abnahme synchronisieren genau den bestätigten
   Commit. Ein Push nach Bereitstellung erzeugt ohne Tag keine Lieferung.
-- `.100` erzeugt FULL. Jeder importierte oder neu freigegebene DELTA-Tag besitzt
+- `.100` erzeugt FULL. Jeder importierte oder neu angelegte DELTA-Tag besitzt
   `.100` als Vorgänger und erzeugt das kumulative DELTA gegen diese Basis.
-- Irrtümliche Release-Kandidaten können vor der Freigabe kontrolliert
-  zurückgenommen werden. Freigegebene Tags sind unveränderlich.
+- Irrtümliche Release-Tags können nach Abbruch des dadurch gestarteten
+  Workflow-Laufs zurückgenommen werden.
 - Ressourcenbereitstellung, Wiederanlauf, Adapterantwort, Artefaktprüfung,
   JCL, konfigurierte ISPW-Instanz und unmittelbare Mainframe-Übergabe sind
   erfolgreich geprüft.

@@ -65,12 +65,10 @@ zusätzliches GitHub Release wird nicht angelegt:
 
 Der Release-Workflow prüft den Tag, baut die Lieferdateien und wartet vor der
 Mainframe-Übergabe auf die Freigabe im GitHub Environment `Bereitstellung`.
-Bis zu dieser Freigabe kann das Release-Team einen irrtümlich angelegten Tag
-nach Abbruch des zugehörigen Workflow-Laufs löschen und bei Bedarf neu
-anlegen. Mit der Freigabe werden Tagname und Ziel-Commit zur unveränderlichen
-Release-Identität; danach darf der Tag weder verschoben noch gelöscht werden.
-Eine fachliche Korrektur erfolgt mit einem neuen Commit und einem neuen
-Release-Tag.
+Einen irrtümlich angelegten Tag kann das Release-Team nach Abbruch des
+zugehörigen Workflow-Laufs löschen und bei Bedarf neu anlegen. Die manuelle
+Freigabe gilt ausschließlich für die Mainframe-Übergabe, nicht für den Tag.
+Das Löschen eines Tags nimmt eine bereits erfolgte Lieferung nicht zurück.
 
 ## Mandantenkonfiguration
 

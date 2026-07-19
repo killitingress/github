@@ -49,7 +49,7 @@
 - Insbesondere heißt es `Releaselinie`, nicht `Release-Line` oder
   `release_line`, und `Mandantenkürzel`, nicht `Mandant-Code`.
 - Die zugehörigen JSON-Felder heißen `kuerzel`, `releaselinie`,
-  `mtext_linie`, `hostprofil` und `hostprofile`. Bei Feldnamen werden
+  `etaps_linie`, `hostprofil` und `hostprofile`. Bei Feldnamen werden
   Umlaute als `ae`, `oe` und `ue` geschrieben.
 - Namen in Code, Fehlermeldungen, Kommentaren und Dokumentation müssen dieselbe
   Fachsprache verwenden. Unveränderliche technische Namen externer Verträge
@@ -84,7 +84,7 @@
   oder Sonderfälle aus vermutetem Future-Proofing erfinden.
 - Werte einer kleinen zentralen und versionierten Zuordnung nicht zusätzlich
   durch eine abgeleitete Namenskonvention einschränken. Beispielsweise legt
-  `releaselinien.json` die `mtext_linie` selbst verbindlich fest; dafür gibt es
+  `releaselinien.json` die `etaps_linie` selbst verbindlich fest; dafür gibt es
   keine zusätzliche Regex-Regel.
 - Jede Formatregel hat genau einen Eigentümer. Andere Module importieren diese
   Regel oder leiten ihre Prüfung daraus ab, statt dieselbe Regel erneut zu

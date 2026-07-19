@@ -30,10 +30,9 @@ Repository `mtext-actions`. So bleiben die Mandantendaten getrennt, während
 alle Mandanten dieselben geprüften Abläufe verwenden.
 
 Eine Änderung durchläuft weiterhin die drei Prozess-Stages Entwicklung,
-Abnahme und Bereitstellung. Als Stage wird in diesem Dokument ein Abschnitt
-des Freigabe- und Lieferprozesses bezeichnet.
+Abnahme und Bereitstellung für die Freigabe und Lieferung.
 
-Der Ablauf ist:
+Der generelle Ablauf ist:
 
 1. Ein Push nach `Rnnn/Entwicklung` verteilt den Stand an das
    M/Text-Entwicklungssystem (z.B. en01e.ltoms.intern).
@@ -44,11 +43,10 @@ Der Ablauf ist:
 4. Erst ein Release-Tag wie `R261.108` baut die Lieferung. Vor der technischen
    Übergabe an den Mainframe ist eine manuelle Freigabe erforderlich.
 
-Der M/Text-Adapter bleibt die zentrale Schnittstelle. Für den Weg nach
-`serverSync` stehen ein PUT an den Adapter, der direkte Sharezugriff des von der FI
-bereitgestellten Runners und der Download eines GitHub-Actions-Artefakts durch
-Adapter oder M/Text zur Wahl. Der Transportweg wird vor dem Integrationslauf
-festgelegt. Die Mainframe-Übergabe erfolgt weiterhin per FTP und JES.
+Der M/Text-Adapter (LTOMA) bleibt die zentrale Schnittstelle. Für den Weg nach
+`serverSync` (LTOMS) muss noch ein Transportweg festgelegt werden (siehe
+unten). Die Übergabe an die IZE9 / CodePipeline erfolgt weiterhin per FTP und
+JES.
 
 ## 2. Verbindliche Rahmenbedingungen
 
@@ -57,23 +55,13 @@ festgelegt. Die Mainframe-Übergabe erfolgt weiterhin per FTP und JES.
 - Das bisherige Jenkins-Skript wird nicht weiterentwickelt oder technisch
   portiert. Nur die weiterhin benötigten Regeln, Zuordnungen und
   Übergabeverfahren werden übernommen.
-- Jeder Mandant erhält ein eigenes privates GitHub-Repository. Namen und
-  grundsätzlicher Aufbau orientieren sich an den bisherigen
-  Mandantenstrukturen.
-- Die Automatisierung in `mtext-actions` wird zentral durch die FI verwaltet
-  und von den Mandanten-Repositories in einer ausdrücklich festgelegten
-  Version verwendet.
+- Jeder Mandant erhält ein eigenes GitHub-Repository. Namen und grundsätzlicher
+  Aufbau orientieren sich an den bisherigen Mandantenstrukturen. Darin befinden
+  sich die M/Text (Fragment-)Projekte.
+- Die CI/CD-Automatisierung wird durch die FI zentral in `mtext-actions`
+  versioniert und von den Mandanten-Repositories verwendet.
 - `mtext-actions` ist ein privates Repository. Direkten Zugriff erhalten nur
-  die zentralen Automatisierungsverantwortlichen. Text-Entwickler der
-  Mandanten werden dort nicht als Repositorymitglieder berechtigt.
-- Jeder Lauf verarbeitet genau einen Git-Stand, den die Commit-SHA kennzeichnet.
-- Der Mandant ergibt sich aus dem Repository und seiner Konfiguration. Er kann
-  beim Start eines Laufs nicht frei gewählt werden.
-- Die Releaselinien `R260`, `R261` und `R270` erhalten getrennte Branches für
-  Entwicklung, Abnahme und Bereitstellung.
-- Geheimnisse und Zugangsdaten liegen in den GitHub-Einstellungen, nicht in Git.
-- Eine weitergehende Statusabfrage bei M/Text oder auf dem Mainframe wird in
-  der ersten Ausbaustufe nicht eingeführt.
+  die Prozess-Verantwortlichen der FI.
 
 ## 3. Was aus dem bisherigen Verfahren übernommen wird
 
@@ -91,8 +79,8 @@ mit einem frisch ausgecheckten, eindeutig bestimmten Git-Stand.
 Die bisherigen Lieferdateien geben folgende Kompatibilitätsregeln vor:
 
 - FULL- und DELTA-Pakete behalten ihre historisch festgelegten Dateinamen. Der
-  dafür benötigte Liefercode ist dem freigegebenen Projektnamen zentral
-  zugeordnet und kann nicht im Mandanten-Repository geändert werden.
+  dafür benötigte Liefercode (~ Dateiname) ist dem freigegebenen Projektnamen
+  zentral zugeordnet und kann nicht im Mandanten-Repository geändert werden.
 - Ein DELTA-Paket enthält weiterhin die nach dem CodePipeline-Element benannte
   Löschliste.
 - Ressourcen behalten ihre fachlichen Projektpfade. Bei Fragmentprojekten
@@ -113,72 +101,53 @@ Die Lösung besteht aus vier Bereichen:
 
 | Bereich | Verantwortung |
 |---|---|
-| Mandanten-Repository | M/Text-Ressourcen, Mandantenkonfiguration und schlanke aufrufende Workflows |
-| Zentrales Repository `mtext-actions` | Gemeinsame Prüfungen, Synchronisation, Paketbau und Mainframe-Übergabe |
+| Mandanten-Repository | M/Text-Ressourcen, Mandantenkonfiguration und Workflow-Trigger |
+| Automatisierungs-Repository `mtext-actions` | Prüfungen, Synchronisation, Paketbau und Mainframe-Übergabe |
 | GitHub Actions | Ausführung der Abläufe, Freigaben und Protokollierung |
-| Von der FI bereitgestellter GitHub-Actions-Runner | Ausführung der Workflows auf dem offiziell verfügbaren Runnerangebot der FI. Bereitstellung, Absicherung, Wartung und Bereinigung des Runnerangebots liegen außerhalb des Projekts |
+| GitHub-Actions-Runner (FI) | Ausführung der Workflows auf dem offiziell verfügbaren Runnerangebot der FI. Bereitstellung, Absicherung, Wartung und Bereinigung des Runnerangebots liegen außerhalb des Projekts |
 
-Ein Mandanten-Repository enthält ausschließlich die Ressourcen und Angaben
-des jeweiligen Mandanten. Das zentrale Repository enthält keine
-Mandantenressourcen, sondern nur die gemeinsam verwendete Automatisierung.
+Ein Mandanten-Repository enthält ausschließlich die Ressourcen und die für
+GitHub relevante Konfiguration des jeweiligen Mandanten. Das zentrale
+Automatisierungs-Repository `mtext-actions` enthält keine Mandantenressourcen,
+sondern nur die gemeinsam verwendete Automatisierung.
 
-Mandanten-Repositories dürfen die freigegebenen wiederverwendbaren Workflows
-über die GitHub-Actions-Zugriffsrichtlinie aufrufen. Diese technische Freigabe
-erteilt ihren Benutzern keinen direkten Zugriff auf `mtext-actions`. Die Logs
-der aufgerufenen Jobs sind dagegen im Mandanten-Repository sichtbar und
-enthalten deshalb weder Secrets noch unnötige interne Details.
+Mandanten-Repositories dürfen die wiederverwendbaren Workflows über eine
+GitHub-Actions-Zugriffsrichtlinie aufrufen. Die Logs der aufgerufenen Jobs sind
+im Mandanten-Repository sichtbar und enthalten deshalb weder Secrets noch
+unnötige interne Details.
 
-Zu Beginn jedes Jobs stellt GitHub automatisch ein `GITHUB_TOKEN` bereit. Der
-Job authentifiziert sich damit gegenüber GitHub, beispielsweise beim Checkout
-des eigenen privaten Repositories oder bei einem API-Aufruf. Das Token gilt nur
-für den Job; seine Rechte werden im Workflow über `permissions` begrenzt und
-beziehen sich ausschließlich auf das Repository, in dem der Workflow läuft.
+Die Administratoren legen die Berechtigungsregeln für GitHub Actions fest.
+GitHub erzeugt für jeden Job ein `GITHUB_TOKEN` mit den daraus resultierenden
+Rechten.
 
-Der Checkout der zentralen Python-Implementierung verwendet deshalb eine
-gesonderte, nur lesende technische Berechtigung. Das automatisch erzeugte
-`GITHUB_TOKEN` des Mandantenlaufs kann diesen repositoryübergreifenden Checkout
-nicht übernehmen. Auch die gesonderte Berechtigung vermittelt den Benutzern
-keinen direkten Repositoryzugriff.
-
-Push-Rulesets schützen die aufrufenden Workflows vor Änderungen durch
-Text-Entwickler. Die Mandantenkonfiguration ist ebenfalls von der normalen
-Ressourcenpflege getrennt. Die konkreten Rollen und Bypässe beschreibt
+Push-Rulesets schützen die Workflow-Trigger in den Mandanten-Repositories vor
+ungewünschten Änderungen. Die Mandantenkonfiguration ist ebenfalls von der
+normalen Ressourcenpflege getrennt. Die konkreten Rollen und Bypässe beschreibt
 Kapitel 6.
 
 Die Text-Entwickler bearbeiten Briefressourcen in der M/Text Workbench und
-nutzen ihren Git-Client für Commit und Push. GitHub im Browser dient für
-Laufkontrolle, Wiederholungen, Freigaben und die Prüfung von Release-Tags. Für
-die tägliche Arbeit ist keine Git-Kommandozeile nötig.
-
-Für die gezielte Übernahme einzelner Änderungen zwischen den Stages erhalten
-die dafür berechtigten Text-Entwickler zusätzlich einen geeigneten Git-Client.
-Das konkrete Produkt, seine Bereitstellung und der verbindliche Bedienweg
-werden vor dem Pilotbetrieb festgelegt und abgenommen. Das Release-Team
-verwendet diesen Client außerdem zum Anlegen, Pushen und kontrollierten Löschen
-von Release-Tags.
+nutzen darüber hinaus ihren Git-Client für weitere Aktionen wie Cherry-Picking
+oder das Erstellen von Release-Tags. GitHub im Browser dient für Laufkontrolle,
+Wiederholungen, Freigaben und die Prüfung von Release-Tags. Für die tägliche
+Arbeit ist keine Git-Kommandozeile nötig.
 
 Jeder Mandant benennt ein Release-Team für den Bereitstellungsbranch und die
-Release-Tags. Die Verantwortlichen können sich je Mandant unterscheiden, ohne
-die Automatisierung in `mtext-actions` zu verzweigen. Verwendet werden
-ausschließlich Git-Tags; GitHub Releases gehören nicht zum Lieferprozess.
-Schutzregeln und Tag-Lebenszyklus sind in Kapitel 6 festgelegt, der Bedienablauf
-in Kapitel 7.
+Release-Tags. Die Verantwortlichen können sich je Mandant unterscheiden.
+Schutzregeln für Branches, Pfade und Tags sind in Kapitel 6 festgelegt, der
+Bedienablauf in Kapitel 7.
 
 Für jeden Lauf checkt GitHub Actions sowohl den ausgewählten Stand des
 Mandanten-Repositories als auch eine festgelegte `mtext-actions`-Version aus.
 Dadurch ist später nachvollziehbar, welche Quellen und
-welche Automatisierung verwendet wurden.
-
-Die Verteilung nach Entwicklung oder Abnahme überträgt alle nicht
-ausgeschlossenen Projektverzeichnisse des ausgewählten Commits. FULL und DELTA
-gelten nur für die spätere Mainframe-Lieferung.
+welche Automatisierung tatsächlich verwendet wurden.
 
 ### M/Text-Transport nach `serverSync`
 
-Der heutige Ablauf schreibt den Ressourcenstand zuerst nach `serverSync` (via
-NFS-Share) und sendet danach einen POST-Request an den M/Text-Adapter (LTOMA).
-Dieser Ablauf ist die Ausgangslage, legt den künftigen Transport aber noch
-nicht fest.
+Der heutige Ablauf stellt die zu synchronisierenden Ressourcen zuerst nach
+`serverSync` (via NFS-Share) und sendet danach einen POST-Request an den
+M/Text-Adapter (LTOMA), welcher intern die Synchronsiation mit dem M/Text
+Server (LTOMS) triggert. Dieser Ablauf ist die Ausgangslage, der künftige
+Transportweg ist jedoch noch nicht geklärt.
 
 Unabhängig vom Transportweg entsteht auf `serverSync` derselbe vollständige
 Verzeichnisbaum mit denselben relativen Pfaden, Dateinamen und Dateiinhalten
@@ -188,7 +157,7 @@ ausgeschlossene Projekte dürfen nicht als veralteter Bestand liegen bleiben.
 Transportdateien und technische Metadaten gehören nicht in den von M/Text
 ausgewerteten Bestand.
 
-Für einen BY-Stand sieht der veröffentlichte Zielbaum beispielsweise so aus:
+Beispiel:
 
 ```text
 serverSync/
@@ -201,26 +170,19 @@ serverSync/
 Es gibt keine zusätzliche Paketwurzel. Archiv, Manifest und andere
 Transportdateien liegen nicht unter `serverSync`.
 
-Für die Versorgung von `serverSync` werden drei Varianten bewertet:
+Für die Versorgung von `serverSync` werden drei mögliche Varianten geprüft:
 
 | Variante | Ablauf und Verantwortung | Vor der Entscheidung zu klären | Aufwand |
 |---|---|---|---|
 | PUT an den Adapter | Der Runner überträgt die Ressourcendaten per PUT-Request an den Adapter. Der Adapter prüft die Übertragung, schreibt zunächst in einen temporären Bereich, veröffentlicht den vollständigen Stand nach `serverSync` und startet die interne Synchronisation. Der Runner benötigt keinen Sharezugriff. | HTTP-Vertrag, Authentifizierung, Größenlimits, Prüfsummen, Zeitgrenzen, Wiederholung, Parallelität und Erfolgsstatus | mittel bis hoch |
 | Direkter Sharezugriff des Runners | Der Runner stellt den vollständigen Stand auf dem NFS-/Netzlaufwerk des M/Text-Servers bereit und ruft erst danach den Adapter auf. Staging, Veröffentlichung und Wiederanlauf liegen damit in der GitHub-Automatisierung. Diese Variante entspricht dem aktuellen Entwicklungsstand. | Verfügbarkeit und Einbindung des Shares, Pfad, Rechte, Kapazität, atomare Ersetzung, Schutz vor parallelen Schreibvorgängen und Bereinigung nach Fehlern | gering |
-| Download eines Actions-Artefakts | Der Runner lädt den bereits für `serverSync` zusammengestellten Verzeichnisbaum als eigenes Sync-Artefakt hoch. Adapter oder M/Text laden ihn über die GitHub-Actions-Artefakt-API herunter, prüfen die Prüfsumme, entpacken ihn temporär, veröffentlichen den Stand nach `serverSync` und starten die interne Synchronisation. | Übergabe von Repository, Lauf- oder Artefakt-ID und Prüfsumme, technische Identität mit `Actions: read`, Erreichbarkeit, Aufbewahrungsfrist, Wiederholung und Bereinigung | mittel |
-
-Das Sync-Artefakt der Downloadvariante ist nur ein technischer
-Transportbehälter. Es enthält kein zusätzliches inneres M/Text-Paket und ist
-von den FULL-/DELTA-Releaseartefakten für den Mainframe getrennt.
+| Download aus dem Artefaktspeicher von GitHub Actions | Der Workflow speichert den für `serverSync` vorbereiteten Verzeichnisbaum im Artefaktspeicher seines GitHub-Actions-Laufs. Der Adapter (oder sogar M/Text?) lädt diesen Stand aus GitHub herunter, prüfen die Prüfsumme und entpackt ihn nach `serverSync`; anschließend startet die interne Synchronisation. Die Releaseartefakte für die Mainframe-Lieferung entstehen in einem davon unabhängigen Ablauf. | Eindeutige Identifikation des gespeicherten Stands durch Repository, Workflow-Lauf und Artefakt-ID, technische Identität mit `Actions: read`, Prüfsumme, Erreichbarkeit, Aufbewahrungsfrist, Wiederholung und Bereinigung | mittel |
 
 Vor dem nichtproduktiven Integrationslauf wird genau eine Variante ausgewählt.
 Die Entscheidung berücksichtigt Netzwerk- und Sicherheitsvorgaben,
 Betriebsverantwortung, Datenmengen und Laufzeiten, atomare Veröffentlichung,
-Parallelität, Wiederanlauf und Nachvollziehbarkeit. Anschließend werden der
-Adaptervertrag und die Zuständigkeiten für Übertragung, Prüfung,
-Veröffentlichung, Start der internen Synchronisation und Fehlerbehandlung
-verbindlich festgeschrieben. Implementiert wird nur der ausgewählte Weg; eine
-allgemeine Transportschicht für alle drei Varianten ist nicht vorgesehen.
+Parallelität, Wiederanlauf und Nachvollziehbarkeit. Implementiert wird nur der
+ausgewählte Weg.
 
 Der bestehende Prozess auf dem Mainframe-Zielsystem IZE9 bleibt unverändert.
 
@@ -245,9 +207,12 @@ JCL-Template und die automatisierten Akzeptanztests:
 
 ```text
 mtext-actions/
-  .github/workflows/
+  .github/
+    workflows/
   config/
+    releaselinien.json
   scripts/
+    runner-preflight.sh
   src/lbs_delivery/
     cli.py
     config.py
@@ -258,6 +223,7 @@ mtext-actions/
     release.py
     sync.py
   templates/
+    mainframe-upload.jcl
   tests/
 ```
 
@@ -265,7 +231,8 @@ Die Module folgen den fachlichen Abläufen. `sync.py` enthält Staging,
 `serverSync` und Adapteraufruf; `mainframe.py` enthält JCL und FTP/JES.
 Pfad- und Wertprüfungen stehen direkt an der jeweils zuständigen Eingangs-
 oder Systemgrenze. Intern erzeugte Werte werden nicht in weiteren Schichten
-erneut validiert.
+erneut validiert. `runner-preflight.sh` ist der Einstiegspunkt in die
+Python-Automatisierung.
 
 `mtext-fi` dient als Muster für die Mandanten-Repositories. Alle sichtbaren
 Verzeichnisse in der Repositorywurzel werden synchronisiert und in
@@ -273,78 +240,64 @@ Releasepakete aufgenommen. `LOMS_Testdaten` soll ebenfalls in das Repository
 übernommen werden, ist aber über `excluded_projects` in `.github/config.json`
 von der Synchronisation und den Releasepaketen ausgeschlossen.
 
-Die Workflows im Mandanten-Repository legen nur Auslöser und die zugehörigen
-GitHub Environments fest; die Verarbeitung erfolgt in `mtext-actions`. Im
-aktuellen Entwicklungsstand enthalten die zentralen Workflows noch den
-Platzhalter für das Runner-Kennzeichen der FI. Die Mandanten-Workflows verwenden
-für den zentralen Workflow- und Codebezug noch eine nicht lauffähige Folge aus
-Nullen.
+Im Mandanten-Repository stehen nur kleine Workflowdateien. Sie legen fest, wann
+eine Automatisierung startet und welches GitHub Environment sie verwendet. Die
+eigentlichen Arbeitsschritte liegen im Repository `mtext-actions`. Bei der
+Einrichtung (und bei späteren Updates) informiert ein besonderer Workflow die
+Mandanten-Workflows darüber, welche Version von `mtext-actions` zu verwenden
+ist.
 
-Im gemeinsamen Workspace liegt der zur Übernahme vorgesehene Inhalt des
-zentralen Repositorys unter `mtext-actions`. Im Zielbetrieb werden das
-Mandanten-Repository und das Automatisierungs-Repository `mtext-actions` als
-eigenständige GitHub-Repositories unter `j517120/mtext-fi` und
-`j520730/mtext-actions` geführt. Nach fachlicher
-Bestandsaufnahme und Freigabe folgen `mtext-autonom`, `mtext-by`, `mtext-lh`,
-`mtext-nw`, `mtext-os` und `mtext-sa` demselben Muster.
+Im Zielbetrieb werden das jeweilige Mandanten-Repository, das
+Automatisierungs-Repository `mtext-actions` als eigenständige GitHub-Repositories
+geführt. Für Mandanten-Repository und Automatisierung sind
+`<mtext-team-mandant>/mtext-<mandant>` und `<mtext-team>/mtext-actions`
+vorgesehen; die genauen Repository-Owner sind noch unklar. Die weiteren
+Mandanten-Repositories `mtext-autonom`, `mtext-by`, `mtext-lh`, `mtext-nw`,
+`mtext-os` und `mtext-sa` folgen demselben Muster. Desweiteren wird es
+mindestens die weiteren Repositories `mtext-support` (als zentrales
+Issue-Board) und `mtext-adapter` (für die Entwicklung von LTOMA) geben.
 
 Vor dem ersten Integrationslauf werden Runner-Kennzeichen und zentrale
-Workflowversion finalisiert. GitHub Enterprise erlaubt den vorgesehenen
-Mandanten-Repositories den Workflowaufruf, ohne deren Benutzer direkt am
-zentralen Repository zu berechtigen. Die noch ausstehenden Einrichtungs- und
+Workflowversion finalisiert. Die noch ausstehenden Einrichtungs- und
 Abnahmepunkte stehen in [Nächste Schritte](./Naechste_Schritte.md).
 
 ## 6. GitHub-Konfiguration
 
-Die Zielplattform ist GitHub Enterprise Server 3.20.4. Die folgenden
-Einstellungen bilden den verbindlichen Zielzustand. Ihre Einrichtung und
-praktische Abnahme werden in [Nächste Schritte](./Naechste_Schritte.md)
-nachgehalten.
+Als Zielplattform wird aktuell GitHub Enterprise Server 3.20.4 angenommen. Die
+folgenden Einstellungen definieren den gewünschten Zielzustand.
 
 ### Repositories und Zugriffe
 
 | Gegenstand | Zielzustand |
 |---|---|
-| Mandanten-Repositories | Für jeden Mandanten besteht ein eigenes privates Repository. Die berechtigten Text-Entwickler sehen und bearbeiten nur die für sie vorgesehenen Mandanten-Repositories. |
-| Zentrales Repository | `mtext-actions` ist privat und nur für das zentrale Automatisierungsteam direkt zugänglich. Mandanten-Repositories dürfen ausschließlich die freigegebenen wiederverwendbaren Workflows aufrufen. |
-| Default Branch | Der Entwicklungsbranch der führenden Releaselinie ist eingestellt, zunächst `R261/Entwicklung`. Beim Wechsel der führenden Linie wird die Einstellung angepasst. |
-| Technischer Konfigurationskreis | Nur der benannte Verantwortlichenkreis darf `.github/config.json` ändern. |
-| Mandanten-Release-Team | Nur das jeweilige Release-Team darf nach `Rnnn/Bereitstellung` pushen und Release-Tags anlegen oder im erlaubten Zeitraum zurücknehmen. |
+| Mandanten-Repositories | Für jeden Mandanten besteht ein eigenes privates Repository. |
+| Zentrales Repository | `mtext-actions` ist privat und nur für das zentrale Automatisierungsteam direkt zugänglich. |
+| Default Branch | Der Entwicklungsbranch der führenden Releaselinie - zunächst `R261/Entwicklung` - ist bei einem neuen Release zu ändern. |
+| Technischer Konfigurationskreis | Der benannte Verantwortlichenkreis der die Mandantenkonfiguration in `.github/config.json` ändern darf. |
+| Mandanten-Release-Team | Der benannte Verantwortlichenkreis der nach `Rnnn/Bereitstellung` pushen sowie Release-Tags anlegen darf. |
 
 ### Schutzregeln für Branches, Pfade und Tags
 
-| Schutzbereich | Zielzustand |
+| Schutzbereich | Regel |
 |---|---|
 | `Rnnn/Entwicklung` und `Rnnn/Abnahme` | Berechtigte Text-Entwickler dürfen pushen. Force-Pushes und das Löschen der Branches sind gesperrt. |
 | `Rnnn/Bereitstellung` | Reguläre Pushes sind auf das Mandanten-Release-Team begrenzt. Force-Pushes und das Löschen des Branches sind gesperrt. |
-| `.github/workflows/**/*` | Ein Push-Ruleset schützt die zentral vorgegebenen Aufrufdateien auf allen Branches. Nur das zentrale Automatisierungsteam besitzt einen kontrollierten Bypass. |
-| `.github/config.json` | Eine Pfadregel trennt Änderungen der Mandantenkonfiguration von der normalen Ressourcenpflege. Nur der technische Konfigurationskreis besitzt den erforderlichen Bypass. |
-| Tags `Rnnn.nnn` | Nur das Mandanten-Release-Team darf passende Tags erstellen. Ein irrtümlicher Tag darf nur vor der Freigabe des Publish-Jobs und nach Abbruch des zugehörigen Laufs gelöscht und neu angelegt werden. Nach der Freigabe sind Änderung und Löschung gemäß der verbindlichen Betriebsregel unzulässig. |
+| `.github/workflows/**/*` | Ein Push-Ruleset schützt die zentral vorgegebenen Aufrufdateien auf allen Branches. |
+| `.github/config.json` | Eine Pfadregel trennt Änderungen der Mandantenkonfiguration von der normalen Ressourcenpflege. |
+| Tags `Rnnn.nnn` | Nur das Mandanten-Release-Team darf passende Tags erstellen oder löschen. |
 
-Ein statisches Tag-Ruleset kann den Wechsel vom Release-Kandidaten zum
-freigegebenen Tag nicht allein abbilden. Deshalb gilt folgende Betriebsregel:
-
-1. Bis zur Freigabe des Publish-Jobs ist der Tag ein Release-Kandidat. Bei
-   einem Irrtum bricht das Release-Team zuerst den zugehörigen Workflow-Lauf
-   ab. Erst danach darf es den Tag löschen, den Bereitstellungsstand
-   korrigieren und den Tag erneut anlegen.
-2. Unmittelbar vor der Freigabe vergleicht das Release-Team Tagname und
-   vollständige Ziel-SHA aus dem Build-Ergebnis mit dem vorgesehenen Stand des
-   Bereitstellungsbranches.
-3. Mit der Freigabe ist der Tag freigegeben. Ab diesem Zeitpunkt darf er weder
-   verschoben noch gelöscht werden. Eine fachliche Korrektur erfolgt durch
-   einen neuen Commit und einen neuen Release-Tag.
-4. Wird ein freigegebener Tag dennoch verändert oder gelöscht, werden weitere
-   Freigaben gestoppt. Das Release-Team stellt den Tag ausschließlich auf der
-   im freigegebenen Workflow-Lauf ausgewiesenen Ziel-SHA wieder her und meldet
-   den Vorgang als Betriebsstörung.
+Das Pushen eines Release-Tags startet den Release-Workflow. Wurde der Tag
+irrtümlich angelegt, bricht das Release-Team deshalb zuerst den zugehörigen
+Workflow-Lauf ab, löscht den Tag und legt bei Bedarf den richtigen Tag neu an.
+Für die Übergabe an CodePipeline ist eine manuelle Freigabe im Environment
+`Bereitstellung` notwendig.
 
 ### Environments und Secrets
 
-Ein GitHub Environment bildet eine Zielstufe ab und bündelt die dafür geltenden
+Ein GitHub Environment bildet eine Zielstufe ab und enthält alle dafür geltenden
 Schutzregeln, etwa zulässige Branches oder Tags und erforderliche Freigaben.
-Seine Secrets stehen ausschließlich Jobs zur Verfügung, die dieses Environment
-binden und dessen Schutzregeln erfüllen.
+Seine Secrets stehen ausschließlich Jobs zur Verfügung, die an dieses Environment
+gebunden sind und dessen Schutzregeln erfüllen.
 
 | Environment | Verwendung und Schutz |
 |---|---|
@@ -365,31 +318,28 @@ folgenden technischen Festlegungen:
 
 | Gegenstand | Ergebnis der Einrichtung |
 |---|---|
-| Zentrale Workflowversion | Jeder Aufruf verwendet die für seinen Rollout festgelegte unveränderliche Version von `mtext-actions`. Deren vollständige Commit-SHA wird vom zentralen Automatisierungsteam freigegeben und ist keine Eingabe der Text-Entwickler oder Release-Verantwortlichen. |
-| Actions-Zugriff | Nur die vorgesehenen Mandanten-Repositories dürfen die wiederverwendbaren Workflows aus `mtext-actions` aufrufen. Der zentrale Codebezug erhält eine gesonderte technische Leseberechtigung. Weitere Actions sind auf freigegebene und vollständig gepinnte Versionen begrenzt. |
-| `GITHUB_TOKEN` | GitHub erzeugt das kurzlebige Token automatisch für jeden Job. Die fachlichen Workflows begrenzen seine Rechte auf das Lesen des aufrufenden Mandanten-Repositories; Schreibrechte auf Branches oder Tags sind nicht vorgesehen. |
-| Einrichtungsberechtigung | Nur der Einrichtungsworkflow erhält über das Environment `Einrichtung` das Secret `WORKFLOW_CONFIGURATION_TOKEN`. Die technische Identität ist auf `mtext-actions` und die vorgesehenen Mandanten-Repositories begrenzt und besitzt dort den erforderlichen Zugriff auf die geschützten Branches. Der Workflow nimmt ausschließlich `.github/workflows` in seine Commits auf. |
-| Runnerangebot der FI | Die Jobs verwenden einen offiziell von der FI bereitgestellten GitHub-Actions-Runner. Das zugehörige `runs-on`-Kennzeichen wird aus dem Runnerangebot der FI übernommen und in den zentralen Workflows fest eingetragen. Bereitstellung, Absicherung, Wartung und Bereinigung des Runners liegen außerhalb des Projekts. |
-| Laufzeitvoraussetzungen | Für die Workflows müssen Python 3.14, Git, die verwendeten Node-20-Actions sowie die benötigten Netzwerk- und Zertifikatspfade verfügbar sein. `runner-preflight.sh` prüft die benötigten Programme zu Beginn jedes Jobs. |
-| Logs | Ausgaben wiederverwendbarer Workflows sind im Mandanten-Repository sichtbar. Sie enthalten keine Secrets und keine unnötigen internen Angaben. |
+| Zentrale Workflowversion | Jeder Aufruf verwendet die für seinen Rollout festgelegte Version von `mtext-actions`. |
+| Actions-Zugriff | Die Mandanten-Repositories dürfen die wiederverwendbaren Workflows aus `mtext-actions` aufrufen. |
+| Einrichtungsberechtigung | Der Einrichtungsworkflow erhält über das Environment `Einrichtung` das Secret `WORKFLOW_CONFIGURATION_TOKEN`. |
+| Runnerangebot der FI | Die Jobs verwenden einen offiziell von der FI bereitgestellten GitHub-Actions-Runner. Das zugehörige `runs-on`-Kennzeichen wird aus dem Runnerangebot der FI übernommen und in den zentralen Workflows fest eingetragen. |
+| Laufzeitvorbereitung | `runner-preflight.sh` ist der gemeinsame Einstieg in die Python-Automatisierung. Es setzt die versionierte Laufzeitvorgabe aus `.python-version` durch und stellt den verwendeten Python-Pfad den folgenden Schritten bereit. Dadurch laufen alle Workflows mit derselben technischen Voraussetzung. |
+| Logs | Ausgaben wiederverwendbarer Workflows sind im Mandanten-Repository sichtbar. |
 | Artefakte | Releaseartefakte werden standardmäßig 30 Tage aufbewahrt. Ihre Namen enthalten Repository und Release-Tag. |
 
 ### Reproduzierbare Einrichtung und Aktualisierung
 
-Der manuelle Workflow **Configure workflow files** in `mtext-actions` richtet
-die Workflowdateien eines Mandanten erstmals ein und aktualisiert sie bei jeder
-neuen freigegebenen `mtext-actions`-Version. Er setzt den Aufruf der zentralen
-Workflows und den Checkout der Python-Implementierung auf dieselbe
-unveränderliche Commit-SHA. Damit ist für jeden Mandantenbranch eindeutig
-festgelegt, welche Version der Automatisierung er verwendet.
+Der manuelle Workflow **Configure workflow files** wird genutzt um die
+Workflow-Trigger eines Mandanten initial zu verdrahten und bei Updates von
+`mtext-actions` aktuell zu halten. Dadurch wird für jeden Mandantenbranch
+eindeutig festgelegt, welche Version der Automatisierung er verwendet.
 
 Vor dem ersten Lauf werden der Runner der FI, dessen Repositoryvariable
 `FI_RUNNER_LABEL` sowie das Environment `Einrichtung` mit dem Secret
 `WORKFLOW_CONFIGURATION_TOKEN` bereitgestellt. Der Workflow wird in GitHub mit
 drei Angaben gestartet:
 
-- vollständige Commit-SHA der freigegebenen `mtext-actions`-Version,
-- vollständiger Name des Mandanten-Repositories,
+- Commit-SHA der freigegebenen `mtext-actions`-Version,
+- Name des zu pflegenden Mandanten-Repositories,
 - zu aktualisierender Mandantenbranch.
 
 Ein Lauf bearbeitet genau diesen einen Mandantenbranch:
@@ -411,36 +361,14 @@ Mandanten-Commit und alle weiteren Rollout-Ziele. Spätere Versionen enthalten
 das Runner-Kennzeichen bereits und benötigen keinen zusätzlichen Commit in
 `mtext-actions`.
 
-Auch die Aktualisierung der Mandanten läuft ausschließlich über diesen
-Workflow. Für eine neue freigegebene `mtext-actions`-Version legt das zentrale
-Automatisierungsteam eine Rollout-Matrix aus Mandanten-Repositories und
-Branches fest und startet für jeden Eintrag einen Lauf mit derselben SHA. Ein
-erneuter Lauf für einen bereits erreichten Zielzustand erzeugt keinen weiteren
-Commit. Der Rollout ist abgeschlossen, wenn alle vorgesehenen Branches auf die
-freigegebene SHA verweisen; bereits laufende Workflows behalten ihre beim Start
-festgelegte Version.
-
-Das technische Token ist auf `mtext-actions` und die vorgesehenen
-Mandanten-Repositories begrenzt. Der privilegierte Job führt keinen Code aus
-dem Mandanten-Repository aus. Seine Python-Implementierung liegt versioniert
-unter `src/workflow_configuration.py` in `mtext-actions`.
-
-Nicht zu diesem Workflow gehört der noch offene API-Teil für Repositories,
-Stage-Branches, Default Branches, Rulesets, weitere Environments und
-Actions-Zugriffe. Er prüft den erreichten Zustand nach jeder Änderung erneut,
-speichert keine geheimen Werte und kontrolliert bei Secrets nur die
-vereinbarten Namen. Fachliche Entscheidungen, Rollenbesetzung,
-Zugangsdatenübergabe sowie Pilot-, Freigabe- und Go-/No-Go-Entscheidungen
-bleiben menschliche Aufgaben.
-
 ## 7. Branches, Weitergabe und Auslöser
 
 Jede aktive Releaselinie besitzt drei Branches, zum Beispiel:
 
 ```text
-R260/Entwicklung
-R260/Abnahme
-R260/Bereitstellung
+R261/Entwicklung
+R261/Abnahme
+R261/Bereitstellung
 ```
 
 Damit ist aus jedem Branchnamen eindeutig erkennbar, zu welcher Releaselinie
@@ -465,11 +393,10 @@ Ein Push nach `Rnnn/Bereitstellung` erzeugt noch keine Lieferung. Erst ein Tag
 im Format `Rnnn.nnn` startet den Paketbau. Dabei wird geprüft, ob der Tag zur
 angegebenen Releaselinie gehört und vom Bereitstellungsbranch erreichbar ist.
 Der Tag wird als Git-Tag mit dem freigegebenen zusätzlichen Git-Client angelegt
-und einzeln gepusht; ein GitHub Release wird nicht erzeugt. Bis zur Freigabe
-der Mainframe-Übergabe ist er ein Release-Kandidat und kann nach der in Kapitel
-6 festgelegten Betriebsregel kontrolliert zurückgenommen werden. Die Freigabe
-bindet den Tagnamen dauerhaft an den geprüften Ziel-Commit. Eine spätere
-Korrektur verwendet einen neuen Commit und einen neuen Release-Tag.
+und einzeln gepusht; ein GitHub Release wird nicht erzeugt. Wurde ein Tag
+irrtümlich angelegt, wird der dadurch gestartete Workflow-Lauf vor dem Löschen
+oder Korrigieren des Tags abgebrochen. Die spätere manuelle Freigabe betrifft
+ausschließlich die Mainframe-Übergabe.
 
 Der zusätzliche Git-Client für die Auswahl und Übernahme einzelner Änderungen
 in Abnahme und Bereitstellung wird vor dem Pilotbetrieb ausgewählt,
@@ -481,30 +408,27 @@ Default Branch dient der Entwicklungsbranch der aktuell führenden Linie,
 zunächst `R261/Entwicklung`. Beim Wechsel der führenden Linie aktualisiert die
 Einrichtungsautomation diese Einstellung.
 
-Manuelle Wiederholungen sind möglich, müssen aber denselben Commit verwenden.
-Vor einer erneuten M/Text-Verteilung prüft der Workflow, ob dieser Commit zum
-ausgewählten Branch gehört.
+Manuelle Wiederholungen eines Workflows sind möglich, müssen aber denselben
+Commit verwenden. Vor einer erneuten M/Text-Verteilung prüft der Workflow, ob
+dieser Commit zum ausgewählten Branch gehört.
 
 ### Neue Releaselinie einrichten
 
 Eine neue Linie erhält drei Branches, je einen für Entwicklung, Abnahme und
 Bereitstellung, sowie einen Eintrag in
 [`config/releaselinien.json`](../../mtext-actions/config/releaselinien.json).
-Ein vollständiges Beispiel steht unter
-[Zentrale Releaselinienzuordnung](#zentrale-releaselinienzuordnung). Der
-Eintrag enthält nur die fachliche Releaselinie, die technische M/Text-Linie und
-den Namen eines in
-`.github/config.json` vorhandenen Hostprofils. Hosts, Stage-Suffixe,
-serverSync-Pfad und Tagformat werden unverändert zentral abgeleitet. Die
+(siehe [Zentrale Releaselinienzuordnung](#zentrale-releaselinienzuordnung)).
+Der Eintrag enthält die fachliche Releaselinie, die technische ETAPS-Linie
+und den Namen eines in `.github/config.json` vorhandenen Hostprofils. Die
 JCL-Werte stammen aus der Mandantenkonfiguration und dem zugeordneten
 Hostprofil. Die Zuordnung wird rollierend gepflegt: Beim Aufnehmen einer neuen
-Releaselinie wird die ausgeschiedene Zuordnung entfernt, sodass genau drei
+Releaselinie wird die ausgeschiedene Zuordnung entfernt, sodass immer drei
 aktive Releaselinien enthalten sind.
 
-Ausgangspunkt der neuen Branches ist der fachlich bestätigte letzte
-Release-Tag der bisherigen Linie. Dessen vollständiger Projektstand wird über
-den manuellen Sync-Workflow einmal nach Entwicklung und einmal nach Abnahme
-übertragen und anschließend in M/Text fachlich geprüft.
+Ausgangspunkt der neuen Branches ist normaler Weise der letzte Release-Tag der
+bisherigen Linie. Dessen vollständiger Projektstand wird über den manuellen
+Sync-Workflow einmal nach Entwicklung und einmal nach Abnahme übertragen und
+anschließend in M/Text fachlich geprüft.
 
 ## 8. Workflows, Trigger und Abhängigkeiten
 
@@ -630,36 +554,29 @@ zusätzlicher Levelwert wird nicht eingeführt. Fachlich bestätigte Änderungen
 der Mandantenzuordnung werden mit der Konfiguration versioniert. Zugangsdaten
 gehören nicht in diese Datei.
 
-Die FI ist für die unfragmentierten Basisprojekte maßgeblich, `mtext-autonom` für
-`LOMS_Autonom`. Die übrigen Mandanten enthalten Fragmentprojekte mit dem
-Mandantenkürzel in eckigen Klammern. Testdatenprojekte werden nach Git
-übernommen, aber über `excluded_projects` nicht ausgeliefert.
+Die FI ist für die unfragmentierten Basisprojekte verantwortlich,
+`mtext-autonom` für `LOMS_Autonom`. Die übrigen Mandanten verwalten
+Fragmentprojekte mit dem Mandantenkürzel in eckigen Klammern. Testdatenprojekte
+werden nach Git übernommen, aber üblicher Weise über `excluded_projects` nicht
+von der Auslieferung ausgeschlossen.
 
 ### Zentrale Releaselinienzuordnung
 
-Die zentrale Datei
-[`config/releaselinien.json`](../../mtext-actions/config/releaselinien.json)
-enthält rollierend die Zuordnung von genau drei aktiven fachlichen
-Releaselinien zur jeweiligen technischen M/Text-Linie und zum zugehörigen
-Hostprofil. Ihr aktueller Inhalt ist:
+Die zentrale Datei `config/releaselinien.json` enthält rollierend die Zuordnung
+von drei aktiven fachlichen Releaselinien zur jeweiligen technischen
+ETAPS-Linie und dem zugehörigen Hostprofil. Ihr aktueller Inhalt ist:
 
 ```json
 {
-  "R260": {"mtext_linie": "en03", "hostprofil": "JUR"},
-  "R261": {"mtext_linie": "en01", "hostprofil": "FKT"},
-  "R270": {"mtext_linie": "en02", "hostprofil": "JUR"}
+  "R260": {"etaps_linie": "en03", "hostprofil": "JUR"},
+  "R261": {"etaps_linie": "en01", "hostprofil": "FKT"},
+  "R270": {"etaps_linie": "en02", "hostprofil": "JUR"}
 }
 ```
 
-Die beiden Felder heißen verbindlich `mtext_linie` und `hostprofil`. Das
-genannte Hostprofil muss in der jeweiligen `.github/config.json` vorhanden
-sein.
-
 Vor einer Verteilung oder Lieferung wird die gesamte benötigte Konfiguration
 geprüft. Unbekannte Mandanten, Releaselinien, Zielumgebungen oder zusätzliche
-Konfigurationsfelder führen zu einem Fehler. Es gibt keine stillschweigende
-Rückfallregel auf Werte der FI. Den Auslöser des Config-Checks beschreibt Kapitel
-8.
+Konfigurationsfelder führen zu einem Fehler.
 
 ## 10. FULL- und DELTA-Lieferungen
 
@@ -679,15 +596,15 @@ Löschliste und die Informationsdatei mit reproduzierbaren Dateimetadaten.
 
 Für jedes ausgelieferte Projekt entsteht ein CodePipeline-Element. Sein Name
 ist zugleich der Mainframe-Member und setzt sich aus Mandantenkürzel,
-historischem Liefercode und Lieferart zusammen:
+Liefercode und Lieferart zusammen. Dies wird unverändert beibehalten.
 
 ```text
 <Mandantenkürzel><Liefercode><F|D>
 ```
 
-Die Archivdatei trägt denselben Namen mit der Endung `.tgz`. Beispielsweise
-bezeichnet `BYAUTOND` das DELTA-Element für `LOMS_Autonom[BY]` und
-`FIBASISF` das FULL-Element für `LOMS_Basis` des Mandanten mit dem Kürzel `FI`.
+Beispielsweise bezeichnet `BYAUTOND` das DELTA-Element für `LOMS_Autonom[BY]`
+und `FIBASISF` das FULL-Element für `LOMS_Basis` des Mandanten mit dem Kürzel
+`FI`.
 
 | Projekt | Liefercode |
 |---|---|
@@ -698,12 +615,9 @@ bezeichnet `BYAUTOND` das DELTA-Element für `LOMS_Autonom[BY]` und
 | `LOMS_PKA` | `PKA` |
 | `LOMS_Autonom` | `AUTON` |
 
-Bei Fragmentprojekten wird für die Namensbildung das Mandantenkürzel in
-eckigen Klammern entfernt. `LOMS_Autonom[BY]` verwendet daher die Zuordnung
-`LOMS_Autonom` → `AUTON`; daraus entstehen `BYAUTONF` und `BYAUTOND`. Ein
-FULL-Element enthält den vollständigen Projektbaum. Ein DELTA-Element enthält
-die kumulativ seit `.100` neuen und geänderten Dateien sowie die Löschliste.
-Die `_INFO_...txt` gehört zum Releasebeleg, wird aber nicht als
+Ein FULL-Element enthält den vollständigen Projektbaum. Ein DELTA-Element
+enthält die kumulativ seit `.100` neuen und geänderten Dateien sowie die
+Löschliste.  Die `_INFO_...txt` gehört zum Releasebeleg, wird aber nicht als
 CodePipeline-Element registriert. Liefercodes und Elementnamen sind zentral
 festgelegt und keine Felder der Mandantenkonfiguration.
 
@@ -723,9 +637,7 @@ Der logische Bestand folgt diesem Schema:
   _INFO_<Mandantenkürzel>-<Projekt>-<FULL|DELTA>-<Release>-<Vorrelease>.txt
 ```
 
-Vier seinerzeit ausgewertete Referenzdateien belegen zwei reale Lieferungen:
-
-| Referenzdatei | Bedeutung und belegter Inhalt |
+| Beispiel | Bedeutung und Inhalt |
 |---|---|
 | `BYAUTOND.tgz` | DELTA für `LOMS_Autonom[BY]`; enthält die seit dem `.100`-Stand neuen und geänderten Ressourcen sowie `BYAUTOND.txt` als Löschliste |
 | `_INFO_BY-LOMS_Autonom[BY]-DELTA-R260.234-R260.178.txt` | Informationsdatei zum DELTA; enthält den direkten Vergleich `R260.178` zu `R260.234` und die vollständige TAR-Inhaltsliste |
@@ -785,17 +697,18 @@ Lieferung und keine Folge inkrementeller DELTA-Pakete. Der Releasebezug steht
 im Namen der Informationsdatei.
 
 Das historische FULL verwendet TAR-Pfade mit `./`-Präfix, das DELTA verwendet
-Pfade ohne dieses Präfix. Besitzer, Gruppe, Modus und Zeitstempel stammten aus
-dem Jenkins-Arbeitsbereich. Die GitHub-Automatisierung behält die logischen
-Pfade bei und setzt die Dateimetadaten reproduzierbar fest.
+Pfade ohne dieses Präfix - dies wird zunächst beibehalten. Besitzer, Gruppe,
+Modus und Zeitstempel stammten aus dem Jenkins-Arbeitsbereich. Die
+GitHub-Automatisierung behält die logischen Pfade bei und setzt die
+Dateimetadaten reproduzierbar fest.
 
-### Actions-Artefakt und Manifest
+### Releaseartefakt und Manifest
 
-Im Zielablauf ersetzt das je Workflow-Lauf aufbewahrte Actions-Artefakt mit
-Manifest und Prüfsummen das feste Verzeichnis `trans` als technische Grenze
-zwischen Paketbau und Mainframe-Übergabe. Das veröffentlichte Paket behält
-seinen historisch festgelegten Dateinamen, seinen fachlichen Inhalt und seine
-logische Archivstruktur.
+Für jeden Release-Lauf speichert GitHub Actions die erzeugten Pakete zusammen
+mit Manifest und Prüfsummen als Releaseartefakt. Der Publish-Job verwendet
+genau dieses Artefakt für die Mainframe-Übergabe. Das bisherige feste
+Verzeichnis `trans` wird für diesen Zweck nicht mehr benötigt. Dateinamen,
+fachlicher Inhalt und Archivstruktur der Pakete bleiben unverändert.
 
 Ein DELTA-Artefakt für ein Projekt der FI enthält beispielsweise:
 
@@ -854,8 +767,8 @@ stellvertretend für die im jeweiligen Lauf berechneten Werte:
 ```
 
 Ein fehlgeschlagener Übergabeversuch kann innerhalb desselben GitHub-Laufs mit
-dem unveränderten Paket wiederholt werden. Das Paket wird dabei nicht neu
-gebaut.
+dem unveränderten Paket wiederholt werden (das Paket wird dabei nicht neu
+gebaut).
 
 ## 11. Mainframe-Übergabe und JCL
 
@@ -927,7 +840,7 @@ Die folgenden Eigenschaften gelten für alle Mandanten:
 |---|---|
 | Durchgängiger Gesamtablauf | Die fachliche Kette führt geradlinig von Entwicklung über Abnahme und Bereitstellung zum Release-Tag, zum geprüften Artefakt und erst nach Freigabe zur externen Übergabe. Jeder Übergang besitzt einen eindeutigen Auslöser und ein überprüfbares Ergebnis; verdeckte Nebenwege oder parallele Lieferlogiken entstehen nicht. |
 | Wartbare Automatisierung in `mtext-actions` | Die Mandanten-Workflows enthalten nur Trigger, feste Zielzuordnung und den Aufruf der freigegebenen zentralen Workflows in `mtext-actions`. Eine gemeinsame Python-Implementierung, wenige CLI-Kommandos, die zentrale Releaselinienzuordnung und getrennte Konfigurationen begrenzen Abhängigkeiten und Änderungsstellen. Jobs, Freigabegrenzen und externe Wirkung bleiben in den Workflows sichtbar; neue Mandanten benötigen keine Kopie der Fachlogik. |
-| Eindeutige und reproduzierbare Lieferung | Jeder Lauf verarbeitet einen vollständigen Commit-SHA. Mit der Freigabe bilden Tagname und Ziel-Commit die dem Bereitstellungsbranch zugeordnete, unveränderliche Release-Identität. Gleiche Eingaben erzeugen bytegleiche Archive; historische Namen, Verzeichnisstrukturen, Löschlisten und JCL-Verträge bleiben erhalten. |
+| Eindeutige und reproduzierbare Lieferung | Jeder Lauf verarbeitet einen vollständigen Commit-SHA. Das Manifest ordnet Release-Tag, Ziel-Commit und erzeugte Dateien eindeutig einander zu. Gleiche Eingaben erzeugen bytegleiche Archive; historische Namen, Verzeichnisstrukturen, Löschlisten und JCL-Verträge bleiben erhalten. |
 | Getrennte Verantwortlichkeiten | Mandantenressourcen und -konfiguration liegen in den Mandanten-Repositories, die gemeinsame Implementierung in `mtext-actions`, Schutz und Freigaben in GitHub und die Runnerbereitstellung bei der FI. Dadurch bleiben fachliche Pflege, die Automatisierung in `mtext-actions` und Plattformbetrieb getrennt. |
 | Minimale Berechtigungen und kontrollierte Wirkung | Die fachlichen Workflows erhalten nur Leserechte auf Repositoryinhalte. Ausschließlich der manuelle Einrichtungsworkflow besitzt über sein geschütztes Environment eine auf die vorgesehenen Repositories begrenzte Schreibberechtigung und nimmt nur `.github/workflows` in seine Commits auf. Zugangsdaten liegen in GitHub Environments und werden erst im jeweils berechtigten Job verwendet. Konfigurationsprüfung und Paketbau benötigen keinen Zielsystemzugriff; Synchronisation und Mainframe-Übergabe erfolgen nur in den vorgesehenen Jobs und werden je Ziel serialisiert. |
 | Geprüfte Build-Publish-Grenze | Der Paketbau ist von der Mainframe-Übergabe getrennt. Das einmal erzeugte Artefakt wird unmittelbar vor der externen Wirkung anhand von Pfad, Größe und SHA-256 geprüft. |

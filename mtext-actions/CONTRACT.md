@@ -17,7 +17,7 @@ Kompatibilitätsregeln aus dem nur als Referenz gelesenen Jenkins-Hook
 - Sichtbare Projektverzeichnisse bilden den Lieferumfang; ausdrücklich
   ausgeschlossene Verzeichnisse werden ignoriert.
 - Jedes Projekt muss einem historisch festgelegten Liefercode zugeordnet sein.
-- Eine Releaselinie nennt M/Text-Linie und Hostprofil.
+- Eine Releaselinie nennt ETAPS-Linie und Hostprofil.
 
 ## Ressourcensynchronisation
 
@@ -38,14 +38,11 @@ Kompatibilitätsregeln aus dem nur als Referenz gelesenen Jenkins-Hook
   Git-Historie.
 - Der Tag muss vom Bereitstellungsbranch erreichbar sein und dem Checkout
   entsprechen.
-- Bis zur Freigabe des Publish-Jobs im Environment `Bereitstellung` kann das
-  Release-Team einen irrtümlichen Tag nach Abbruch des zugehörigen Laufs
-  löschen und neu anlegen. Die Freigabe bindet Tagname und Ziel-Commit; danach
-  ist diese Release-Identität unveränderlich.
-- Eine fachliche Korrektur nach der Freigabe verwendet einen neuen Commit und
-  einen neuen Release-Tag. Ein dennoch veränderter oder gelöschter
-  freigegebener Tag stoppt weitere Freigaben und wird ausschließlich auf der
-  im freigegebenen Workflow-Lauf ausgewiesenen Ziel-SHA wiederhergestellt.
+- Das Release-Team kann einen irrtümlichen Tag nach Abbruch des zugehörigen
+  Workflow-Laufs löschen und neu anlegen.
+- Die manuelle Freigabe im Environment `Bereitstellung` gilt für die
+  Mainframe-Übergabe, nicht für den Tag. Das Löschen eines Tags nimmt eine
+  bereits erfolgte Lieferung nicht zurück.
 - Archivnamen, Mainframe-Member, Löschlisten und Informationsdateien folgen dem
   bestehenden Jenkins-Vertrag.
 - Erkannte Dateikopien werden wie Hinzufügungen behandelt; Umbenennungen als
