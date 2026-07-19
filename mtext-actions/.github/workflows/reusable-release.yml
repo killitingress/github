@@ -15,15 +15,8 @@ name: Reusable release
         required: false
         default: ''
         type: string
-      automation_repository:
-        required: true
-        type: string
       automation_ref:
         required: true
-        type: string
-      runner_label:
-        required: false
-        default: mtext-delivery
         type: string
       retention_days:
         required: false
@@ -42,10 +35,9 @@ jobs:
   # Dieser Job besitzt keinen Zugriff auf Bereitstellungsdaten und erzeugt ausschließlich Release-Dateien.
   build:
     name: Build FULL or DELTA artifact
-    runs-on:
-      - self-hosted
-      - linux
-      - ${{ inputs.runner_label }}
+    # Das Platzhalter-Label wird durch das offizielle runs-on-Kennzeichen des
+    # von FI bereitgestellten Runners ersetzt.
+    runs-on: FI_RUNNER_LABEL_TO_BE_SET
     timeout-minutes: 30
     outputs:
       artifact_name: ${{ steps.metadata.outputs.artifact_name }}
@@ -65,12 +57,12 @@ jobs:
       - name: Check out pinned automation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          repository: ${{ inputs.automation_repository }}
+          repository: j520730/mtext-actions
           ref: ${{ inputs.automation_ref }}
           path: automation
           persist-credentials: false
 
-      # Prüft den Self-hosted Runner und stellt den Pfad zur freigegebenen
+      # Prüft den von FI bereitgestellten Runner und stellt den Pfad zur freigegebenen
       # Python-Laufzeit als Ausgabe für den Build bereit.
       - name: Prepare approved Python runtime
         id: runtime
@@ -87,7 +79,6 @@ jobs:
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery build-release
           --repository-root source
-          --mandant-config source/.config.json
           --releaselinien automation/config/releaselinien.json
           --repository-name "$INPUT_REPOSITORY_NAME"
           --tag "$INPUT_RELEASE_TAG"
@@ -118,10 +109,9 @@ jobs:
   publish:
     name: Verify and hand over artifact to Mainframe
     needs: build
-    runs-on:
-      - self-hosted
-      - linux
-      - ${{ inputs.runner_label }}
+    # Auch der freizugebende Publish-Job verwendet ausschließlich den zentral
+    # festgelegten FI-Runner und keine Auswahl des Mandanten-Workflows.
+    runs-on: FI_RUNNER_LABEL_TO_BE_SET
     environment: Bereitstellung
     concurrency:
       group: ${{ inputs.serialize_publication && format('mainframe-{0}', github.repository) || format('mainframe-{0}-{1}', github.repository, github.run_id) }}
@@ -133,7 +123,7 @@ jobs:
       - name: Check out pinned automation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          repository: ${{ inputs.automation_repository }}
+          repository: j520730/mtext-actions
           ref: ${{ inputs.automation_ref }}
           path: automation
           persist-credentials: false
@@ -146,7 +136,7 @@ jobs:
           name: ${{ needs.build.outputs.artifact_name }}
           path: dist
 
-      # Prüft den Self-hosted Runner und stellt den Pfad zur freigegebenen
+      # Prüft den von FI bereitgestellten Runner und stellt den Pfad zur freigegebenen
       # Python-Laufzeit als Ausgabe für die Mainframe-Übergabe bereit.
       - name: Prepare approved Python runtime
         id: runtime

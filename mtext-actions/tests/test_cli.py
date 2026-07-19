@@ -23,14 +23,15 @@ class CliTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.repository = setup_repository(self.root, branch="R261/Entwicklung")
-        self.mandant_path = self.root / "mandant.json"
+        self.mandant_path = self.repository / ".github/config.json"
+        self.mandant_path.parent.mkdir()
         write_mandant(self.mandant_path)
+        git(self.repository, "add", ".github/config.json")
+        git(self.repository, "commit", "-m", "config")
         self.releaselinien = RELEASELINIEN
         self.common = [
             "--repository-root",
             str(self.repository),
-            "--mandant-config",
-            str(self.mandant_path),
             "--releaselinien",
             str(self.releaselinien),
             "--repository-name",
@@ -46,8 +47,8 @@ class CliTests(unittest.TestCase):
             exit_code = main(list(arguments))
         return exit_code, stdout.getvalue(), stderr.getvalue()
 
-    def test_validate_config_prints_json_result(self) -> None:
-        """Gibt CONFIG_VALIDATED als sortiertes JSON auf stdout aus."""
+    def test_validate_config_uses_repository_configuration(self) -> None:
+        """Lädt den CLI-Default aus dem Repository und gibt das Prüfergebnis aus."""
 
         exit_code, stdout, stderr = self._run("validate-config", *self.common)
         self.assertEqual(exit_code, 0)

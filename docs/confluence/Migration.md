@@ -43,7 +43,7 @@ besetzt:
 
 Jeder Migrationslauf erhält ein Protokoll mit verantwortlicher Person, Beginn
 und Ende, SVN-Quelle und -Revision, Version des Migrationsverfahrens,
-Ziel-Repository, freigegebenem Commit-SHA von `mtext-actions`, Ergebnis der
+Ziel-Repository, freigegebener Version von `mtext-actions`, Ergebnis der
 Prüfungen und getroffener Fortsetzungsentscheidung.
 
 ## 2. Voraussetzungen und Go-/No-Go
@@ -57,23 +57,26 @@ müssen zusätzlich alle aktivierungsrelevanten Punkte aus
 
 - Die Ziel-Repositories, die Branches `Rnnn/Entwicklung`, `Rnnn/Abnahme` und
   `Rnnn/Bereitstellung` sowie der vorgesehene Default Branch sind eingerichtet.
-- Alle Mandanten-Workflows verwenden denselben freigegebenen vollständigen
-  Commit-SHA von `mtext-actions`. Technische Null-SHAs oder bewegliche
-  Referenzen sind nicht mehr vorhanden.
-- Der repositoryübergreifende Workflowzugriff und alle vollständig gepinnten
-  Actions funktionieren auf GitHub Enterprise Server 3.20.4.
+- Die zentrale Einrichtungsprüfung bestätigt für alle Mandanten-Workflows
+  dieselbe unveränderliche, freigegebene Version von `mtext-actions`.
+  Technische Platzhalter oder bewegliche Referenzen sind nicht vorhanden.
+- Der repositoryübergreifende Workflowaufruf, der technisch nur lesende
+  Checkout der zentralen Implementierung und alle vollständig gepinnten Actions
+  funktionieren auf GitHub Enterprise Server 3.20.4.
 - Rulesets schützen Stage-Branches, `.github/workflows/**/*` und
-  `.config.json`. Force-Pushes und das Löschen der Stage-Branches sind
+  `.github/config.json`. Force-Pushes und das Löschen der Stage-Branches sind
   gesperrt.
 - Die Environments `Entwicklung`, `Abnahme` und `Bereitstellung` sind
   eingerichtet. Nur der Publish-Job kann `Bereitstellung` verwenden und muss
   dort manuell freigegeben werden.
 - Der Lebenszyklus der Release-Tags ist eingerichtet und abgenommen. Ein
   Release-Kandidat kann vor der Freigabe kontrolliert zurückgenommen werden;
-  ein freigegebener Tag ist gegen Änderung und Löschung geschützt.
-- Self-hosted Runner, Runner-Gruppen, Bereinigung, Python-Laufzeit,
-  Zertifikate und Netzwerkpfade sind geprüft. CI-Läufe sind von Runnern mit
-  Zielsystemzugriff getrennt.
+  nach der Freigabe sind Änderung und Löschung gemäß der verbindlichen
+  Betriebsregel unzulässig.
+- Das offizielle `runs-on`-Kennzeichen des ausgewählten FI-Runnerangebots ist
+  eingetragen. Python-Laufzeit, Git, Zertifikate und die benötigten
+  Netzwerkpfade sind auf diesem Runner geprüft. Bereitstellung, Absicherung,
+  Wartung und Bereinigung des Runners liegen außerhalb des Projekts.
 - M/Text-Transport, `serverSync`-Zielstand, Wiederanlauf und das Entfernen
   veralteter Projekte sind abgenommen.
 - Mainframe-Secrets liegen ausschließlich im Environment `Bereitstellung`.
@@ -117,7 +120,7 @@ stoppt den Import.
 
 ### Mandantenkonfiguration erzeugen
 
-Für jedes Ziel-Repository wird eine `.config.json` mit mindestens folgenden
+Für jedes Ziel-Repository wird eine `.github/config.json` mit mindestens folgenden
 fachlich bestätigten Werten erzeugt und durch `validate-config` geprüft:
 
 - `kuerzel` und exakter Repositoryname,
@@ -168,15 +171,17 @@ Nachweise vorliegen:
    GitHub-Konfiguration sichern.
 4. Den freigegebenen SVN-Endstand mit derselben versionierten und im
    Testabzug abgenommenen Migrationslogik importieren.
-5. `.config.json`, Stage-Branches, Default Branch, Projekte, Dateien und
+5. `.github/config.json`, Stage-Branches, Default Branch, Projekte, Dateien und
    Release-Tags anhand der Nachweise aus Kapitel 3 prüfen.
 6. Je importiertem DELTA die Erreichbarkeit vom Bereitstellungsbranch und die
    Abstammung vom zugehörigen `.100`-Tag automatisch prüfen.
 7. Einen für den Import benötigten zeitlich begrenzten Bypass protokollieren
    und nach dem Import entfernen. Importierte freigegebene Tags anschließend
-   gegen Änderung und Löschung schützen.
-8. Bestätigen, dass alle Mandanten-Workflows denselben freigegebenen
-   Commit-SHA der zentralen Automation verwenden und keine Null-SHA enthalten.
+   mit ihren vollständigen Ziel-SHAs im Cutover-Protokoll festhalten; sie
+   unterliegen unmittelbar der Betriebsregel für freigegebene Tags.
+8. Die zentrale Einrichtungsprüfung ausführen und bestätigen, dass alle
+   Mandanten-Workflows dieselbe unveränderliche, freigegebene Version der
+   zentralen Automation verwenden.
 9. Die zweite Go-/No-Go-Entscheidung protokollieren. Bei No-Go bleiben Jenkins
    und SVN führend und der GitHub-Stand wird nicht produktiv freigegeben.
 
@@ -189,7 +194,7 @@ Nach dem zweiten Go wird in dieser Reihenfolge umgeschaltet:
 2. SVN für diesen Prozess schreibschützen. Eine endgültige Stilllegung erfolgt
    erst nach Ablauf des vereinbarten Beobachtungszeitraums.
 3. Git und GitHub Actions für den Prozess als führende Quelle freigeben.
-4. Rulesets, Environments, Workflowzugriff, Runner-Zuordnung und minimale
+4. Rulesets, Environments, Workflowzugriff, FI-Runner-Kennzeichen und minimale
    `GITHUB_TOKEN`-Rechte nochmals in der produktiven Einstellung kontrollieren.
 5. Einen festgelegten Commit nach `Rnnn/Entwicklung` pushen und sowohl
    `ADAPTER_ACCEPTED` als auch den fachlich richtigen Stand in
@@ -217,7 +222,7 @@ Der Cutover wird mindestens bei einem der folgenden Ereignisse angehalten:
 
 - Quellrevision, Branch-, Tag- oder Dateizuordnung ist nicht eindeutig.
 - Ein Pflichtnachweis oder eine erforderliche Freigabe fehlt.
-- Workflow-Pin, Ruleset, Environment, Runner, Netzwerkpfad oder Secret ist
+- Workflowversion, Ruleset, Environment, FI-Runner, Netzwerkpfad oder Secret ist
   nicht wie abgenommen verfügbar.
 - Der Zielstand in M/Text weicht vom freigegebenen Commit ab.
 - FULL, DELTA, Manifest, JCL oder konfigurierte ISPW-Instanz weichen vom
@@ -254,9 +259,10 @@ und im Cutover-Protokoll bestätigt sind:
   Projektbestand, Konfiguration und alle importierten Release-Tags geprüft.
 - Sicherungs-, Sonder- und nicht freigegebene Stände wurden nur im
   ausdrücklich freigegebenen Umfang übernommen.
-- Alle Mandanten-Repositories verwenden dieselbe freigegebene Version der
-  zentralen Automation; Workflows und Actions sind vollständig gepinnt.
-- Rulesets, Environments, Tag-Schutz, Runner-Gruppen und minimale
+- Alle Mandanten-Repositories verwenden laut zentraler Einrichtungsprüfung
+  dieselbe unveränderliche, freigegebene Version der Automation; weitere
+  Actions sind vollständig gepinnt.
+- Rulesets, Environments, Tag-Betriebsregel, FI-Runner-Zuordnung und minimale
   Berechtigungen sind praktisch wirksam.
 - Pushes nach Entwicklung und Abnahme synchronisieren genau den bestätigten
   Commit. Ein Push nach Bereitstellung erzeugt ohne Tag keine Lieferung.

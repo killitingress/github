@@ -10,9 +10,9 @@ FI ist der Master-Mandant, verantwortlich für die Projekte:
 - `LOMS_PKA`
 
 `LOMS_Testdaten` gehört zum Repository, ist aber von der Synchronisierung
-mittels `excluded_projects` in .config.json ausgeschlossen.
-Dateien im Wurzelpfad, deren Namen mit einem Punkt (.) beginnen, und diese
-README Datei, sind ebenfalls ausgeschlossen.
+mittels `excluded_projects` in `.github/config.json` ausgeschlossen.
+Reguläre Dateien in der Repositorywurzel werden nicht als Projekte verarbeitet.
+Verzeichnisse, deren Namen mit einem Punkt beginnen, werden ebenfalls ignoriert.
 
 ## Branches
 
@@ -24,9 +24,9 @@ Jede aktive Releaselinie besitzt drei Branches:
 | `<Releaselinie>/Abnahme` | freigegebene Änderungen nach M/Text-Abnahme synchronisieren |
 | `<Releaselinie>/Bereitstellung` | abgenommene Änderungen für eine Lieferung zusammenstellen |
 
-Zusätzliche Feature-Branches können für länger laufende Arbeiten verwendet
-werden. Der Default Branch ist die eingestellt führende Releaselinie,
-beispielsweise `R261/Entwicklung` - dies ist je Release umzustellen.
+Zusätzlich können Feature-Branches verwendet werden.
+Der Default Branch ist der Entwicklungsbranch der führenden Releaselinie,
+beispielsweise `R261/Entwicklung`.
 
 ## Änderung nach Entwicklung bringen
 
@@ -69,10 +69,12 @@ Bis zu dieser Freigabe kann das Release-Team einen irrtümlich angelegten Tag
 nach Abbruch des zugehörigen Workflow-Laufs löschen und bei Bedarf neu
 anlegen. Mit der Freigabe werden Tagname und Ziel-Commit zur unveränderlichen
 Release-Identität; danach darf der Tag weder verschoben noch gelöscht werden.
+Eine fachliche Korrektur erfolgt mit einem neuen Commit und einem neuen
+Release-Tag.
 
 ## Mandantenkonfiguration
 
-[`.config.json`](.config.json) legt das Mandantenkürzel, das Repository, das
+[`.github/config.json`](.github/config.json) legt das Mandantenkürzel, das Repository, das
 Mainframe-Subsystem, die ISPW-Instanz `T` oder `P`, die Hostprofile und
 optionale Projektausschlüsse fest.
 Alle anderen sichtbaren Verzeichnisse in der Repositorywurzel werden als

@@ -17,15 +17,8 @@ name: Reusable M/Text resource sync
       target_environment:
         required: true
         type: string
-      automation_repository:
-        required: true
-        type: string
       automation_ref:
         required: true
-        type: string
-      runner_label:
-        required: false
-        default: mtext-delivery
         type: string
 
 permissions:
@@ -34,10 +27,9 @@ permissions:
 jobs:
   sync:
     name: Sync exact commit to M/Text
-    runs-on:
-      - self-hosted
-      - linux
-      - ${{ inputs.runner_label }}
+    # Das Platzhalter-Label wird durch das offizielle runs-on-Kennzeichen des
+    # von FI bereitgestellten Runners ersetzt.
+    runs-on: FI_RUNNER_LABEL_TO_BE_SET
     # Das Environment liefert die stufenspezifische Konfiguration und begrenzt sie auf diesen Job.
     environment: ${{ inputs.target_environment }}
     timeout-minutes: 30
@@ -57,12 +49,12 @@ jobs:
       - name: Check out pinned automation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          repository: ${{ inputs.automation_repository }}
+          repository: j520730/mtext-actions
           ref: ${{ inputs.automation_ref }}
           path: automation
           persist-credentials: false
 
-      # Prüft den Self-hosted Runner und stellt den Pfad zur freigegebenen
+      # Prüft den von FI bereitgestellten Runner und stellt den Pfad zur freigegebenen
       # Python-Laufzeit als Ausgabe für die Synchronisation bereit.
       - name: Prepare approved Python runtime
         id: runtime
@@ -80,7 +72,6 @@ jobs:
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery sync-resources
           --repository-root source
-          --mandant-config source/.config.json
           --releaselinien automation/config/releaselinien.json
           --repository-name "$INPUT_REPOSITORY_NAME"
           --commit "$INPUT_COMMIT_SHA"

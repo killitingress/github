@@ -121,7 +121,7 @@ gewünschte Commit nach `<Releaselinie>/Entwicklung` übernommen. Erst der Push
 dieses Entwicklungsbranches startet die M/Text-Synchronisation. Der
 Feature-Branch selbst bezeichnet keine Stage des Lieferprozesses und löst
 weder eine M/Text-Synchronisation noch einen Release aus. Nur wenn
-`.config.json` geändert wird, läuft dort der Config-Check.
+`.github/config.json` geändert wird, läuft dort der Config-Check.
 
 ### Commit und SHA einfach erklärt
 
@@ -273,7 +273,7 @@ Der verbindliche Standardablauf ist:
    Bearbeitung auf den aktuellen GitHub-Stand bringen.
 3. Die Briefressourcen in der M/Text Workbench bearbeiten und fachlich prüfen.
 4. Im integrierten Git-Client die geänderten Dateien kontrollieren. Dateien
-   unter `.github/workflows/` und `.config.json` gehören nicht zu einer
+   unter `.github/workflows/` und `.github/config.json` gehören nicht zu einer
    normalen Ressourcenänderung.
 5. Nur die zusammengehörigen Änderungen für den Commit auswählen und eine
    aussagekräftige Commit-Nachricht eintragen.
@@ -405,11 +405,11 @@ Secrets gehören nicht zur normalen Benutzerarbeit. Der verbindliche
 Zielzustand steht im [Zielbild](./Zielbild_GitHub_Actions_Git.md#6-github-konfiguration),
 Einrichtung und Abnahme in [Nächste Schritte](./Naechste_Schritte.md).
 
-## 5. Mandantenkonfiguration in `.config.json`
+## 5. Mandantenkonfiguration in `.github/config.json`
 
-Die Datei `.config.json` liegt in der Wurzel des Mandanten-Repositorys und
-gehört wie die M/Text-Ressourcen zum versionierten Lieferstand. Sie beantwortet
-drei Fragen:
+Die Datei `.github/config.json` liegt im Verzeichnis `.github` des
+Mandanten-Repositorys und gehört wie die M/Text-Ressourcen zum versionierten
+Lieferstand. Sie beantwortet drei Fragen:
 
 1. Zu welchem Mandanten und Repository gehört der Stand?
 2. Welche Projektverzeichnisse werden ausdrücklich ausgeschlossen?
@@ -452,7 +452,7 @@ Das FI-Beispiel schließt die Testdaten aus:
 
 Die technischen Namen der daraus erzeugten Lieferdateien sind historisch
 festgelegt und werden zentral aus dem Projektnamen abgeleitet. Sie werden
-nicht von Text-Entwicklern in `.config.json` eingetragen oder geändert.
+nicht von Text-Entwicklern in `.github/config.json` eingetragen oder geändert.
 
 Für einzelne Releaselinien oder Stages gibt es keine zusätzlichen Projekte
 und keine Sonderkonfiguration.
@@ -461,7 +461,7 @@ und keine Sonderkonfiguration.
 
 Gemeint sind insbesondere ISPW-Instanz, Subsystem, Assignment und der
 JCL-Stage-Code, der das CodePipeline-`LEVEL` bezeichnet. Diese Werte sind für
-den Mandanten relevant, werden in `.config.json` verständlich beschrieben und
+den Mandanten relevant, werden in `.github/config.json` verständlich beschrieben und
 können bei einer tatsächlichen Änderung der Zuordnung angepasst werden. Das
 FI-Beispiel lautet:
 
@@ -507,7 +507,7 @@ Als Stage-Codes akzeptiert die Konfiguration ausschließlich `FKTE`,
 `FKTF`, `JURJ`, `JURP`, `SVTS` und `VPTV`. Das davon getrennte Feld `ispw`
 ist für jeden Mandanten verpflichtend und akzeptiert ausschließlich `T` für
 Test oder `P` für Produktion. Zugangsdaten gehören weiterhin nicht in
-`.config.json`.
+`.github/config.json`.
 
 Eine Änderung an `ispw`, `subsystem`, `assignment` oder `stage` verändert die
 spätere technische Übergabe. Sie ist deshalb keine gewöhnliche Änderung an
@@ -515,10 +515,10 @@ einer Briefressource, aber ausdrücklich zulässig, wenn sich die fachlich
 bestätigte Mandantenzuordnung ändert. Die Änderung erfolgt versioniert durch
 den dafür berechtigten Verantwortlichenkreis und wird mit den Mandanten- und
 Betriebsverantwortlichen abgestimmt. Normale Workbench-Pushes dürfen
-`.config.json` nicht verändern. GitHub schützt die Datei mit einer eigenen
+`.github/config.json` nicht verändern. GitHub schützt die Datei mit einer eigenen
 Pfadregel.
 
-Ein Push mit einer Änderung an `.config.json` startet automatisch
+Ein Push mit einer Änderung an `.github/config.json` startet automatisch
 **Validate mandant configuration**. Dieser Check prüft die Datei ohne Zugriff
 auf M/Text oder den Mainframe und liefert frühzeitig eine verständliche
 Fehlermeldung. Er erkennt ein unbekanntes Mandantenkürzel, ein unpassendes
@@ -539,7 +539,7 @@ Das zentrale Automatisierungsteam ergänzt in
 [`config/releaselinien.json`](../../mtext-actions/config/releaselinien.json)
 genau eine Zuordnung aus neuer Releaselinie, technischer M/Text-Linie und
 vorhandenem Hostprofil. Die Felder heißen `mtext_linie` und `hostprofil`. Der
-Profilname muss unter `hostprofile` in `.config.json` vorhanden sein. Ein
+Profilname muss unter `hostprofile` in `.github/config.json` vorhanden sein. Ein
 vollständiges Beispiel steht im Zielbild unter
 [Zentrale Releaselinienzuordnung](./Zielbild_GitHub_Actions_Git.md#zentrale-releaselinienzuordnung).
 Beim Aufnehmen der neuen Releaselinie wird die ausgeschiedene Zuordnung
@@ -653,7 +653,9 @@ Danach unter **Actions → Build and publish release** prüfen:
    30 Tage aufbewahrt.
 3. `Verify and hand over artifact to Mainframe` wartet im Environment
    `Bereitstellung` auf die eingerichtete manuelle Freigabe.
-4. Nach der Freigabe werden Pfad, Größe und SHA-256 jeder manifestierten Datei
+4. Tagname und vollständige Ziel-SHA des Release-Kandidaten erneut mit
+   dem Build-Ergebnis vergleichen und den Publish-Job freigeben.
+5. Nach der Freigabe werden Pfad, Größe und SHA-256 jeder manifestierten Datei
    geprüft. Danach werden die JCL-Werte validiert, das versionierte Template
    gerendert und Paket plus JCL per FTP/JES übergeben.
 
@@ -669,6 +671,12 @@ angelegte Tag startet einen neuen, vollständig zu prüfenden Lauf.
 Nach der Freigabe ist diese Korrektur nicht mehr zulässig. Scheitert die
 technische Übergabe nach der Freigabe, wird der kontrollierte Wiederanlauf mit
 demselben Tag und demselben geprüften Artefakt durchgeführt.
+
+Wird ein bereits freigegebener Tag dennoch verändert oder gelöscht, startet
+das Release-Team keine weitere Freigabe. Es stellt den Tag ausschließlich auf
+der im freigegebenen Workflow-Lauf ausgewiesenen Ziel-SHA wieder her und meldet
+den Vorgang als Betriebsstörung. Fachliche Korrekturen erfolgen immer mit
+einem neuen Commit und einem neuen Release-Tag.
 
 `MAINFRAME_SUBMITTED` bedeutet ausschließlich, dass die unmittelbare
 FTP-/JES-Übergabe akzeptiert wurde. Der fachliche Abschluss des Mainframe-Jobs
@@ -717,7 +725,7 @@ fachlichen Endstatus.
 
 | Status oder sichtbares Symptom | Bedeutung | Nächste Prüfung |
 |---|---|---|
-| Workflow kann zentrale Datei am Null-SHA nicht laden | Technischer Platzhalter ist noch eingetragen | Zentrale Automatisierungsverantwortliche informieren. Anwender ändern den SHA nicht selbst |
+| Workflow kann die zentrale Version nicht laden | Technische Einrichtung ist unvollständig oder der zentrale Zugriff fehlt | Zentrale Automatisierungsverantwortliche informieren; Anwender ändern die Workflowdateien nicht selbst |
 | `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinienzuordnung sind technisch konsistent | Fachliche Abstimmung fortsetzen. Der Status ist keine automatische Freigabe für die nächste Stage |
 | `VALIDATION_FAILED` | Input, Konfiguration, Branchrichtung oder JCL ungültig | Erste Fehlermeldung lesen. Branch-/Tagformat und Konfiguration prüfen |
 | `SOURCE_FAILED` | Commit oder Tag/Basisreferenz nicht auflösbar | SHA, Tag, `.100`-Basis und Branch-Erreichbarkeit prüfen |

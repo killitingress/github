@@ -28,6 +28,9 @@ class WorkflowTests(unittest.TestCase):
         )
         for path in workflows.glob("*.yml"):
             text = path.read_text(encoding="utf-8")
+            self.assertNotRegex(text, r"(?m)^\s*runs-on:\s*.*self-hosted")
+            self.assertNotRegex(text, r"(?m)^\s+runner_label:\s*")
+            self.assertIn("runs-on: FI_RUNNER_LABEL_TO_BE_SET", text)
             # Reguläre Ausdrücke für unveränderlich gebundene Actions.
             # Erkennt jede Action-Referenz bis zum nächsten Leerzeichen.
             references = re.findall(r"uses:\s+([^\s]+)", text)
@@ -39,6 +42,16 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("environment: Bereitstellung", release)
         self.assertIn("secrets.MAINFRAME_FTP_PASSWORD", release)
         self.assertIn("--execute", release)
+        for name in (
+            "reusable-validate-config.yml",
+            "reusable-sync-resources.yml",
+            "reusable-release.yml",
+        ):
+            workflow = (workflows / name).read_text(encoding="utf-8")
+            self.assertIn("repository: j520730/mtext-actions", workflow)
+            self.assertNotRegex(workflow, r"(?m)^\s+automation_repository:\s*")
+            self.assertNotIn("--mandant-config", workflow)
+
         validation = (workflows / "reusable-validate-config.yml").read_text(
             encoding="utf-8"
         )
@@ -48,4 +61,3 @@ class WorkflowTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

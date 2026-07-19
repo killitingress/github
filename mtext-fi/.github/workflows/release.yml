@@ -29,10 +29,10 @@ jobs:
     name: Build and publish release
     uses: j520730/mtext-actions/.github/workflows/reusable-release.yml@0000000000000000000000000000000000000000
     with:
-      # Die Null-SHAs sind technische Platzhalter und werden vor dem ersten Integrationslauf ersetzt.
+      # Die Einrichtungsautomation ersetzt beide technischen Platzhalter gemeinsam
+      # durch die freigegebene zentrale Workflowversion.
       repository_name: ${{ github.event.repository.name }}
       release_tag: ${{ inputs.release_tag || github.ref_name }}
       trigger_sha: ${{ github.event_name == 'push' && github.sha || '' }}
-      automation_repository: j520730/mtext-actions
       automation_ref: 0000000000000000000000000000000000000000
       serialize_publication: true

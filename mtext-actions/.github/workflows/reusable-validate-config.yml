@@ -11,15 +11,8 @@ name: Reusable mandant configuration validation
       commit_sha:
         required: true
         type: string
-      automation_repository:
-        required: true
-        type: string
       automation_ref:
         required: true
-        type: string
-      runner_label:
-        required: false
-        default: mtext-delivery
         type: string
 
 permissions:
@@ -28,10 +21,9 @@ permissions:
 jobs:
   validate:
     name: Validate mandant configuration
-    runs-on:
-      - self-hosted
-      - linux
-      - ${{ inputs.runner_label }}
+    # Das Platzhalter-Label wird durch das offizielle runs-on-Kennzeichen des
+    # von FI bereitgestellten Runners ersetzt.
+    runs-on: FI_RUNNER_LABEL_TO_BE_SET
     timeout-minutes: 20
     steps:
       # Lädt genau den zu prüfenden Mandanten-Commit in einen getrennten Pfad und
@@ -48,18 +40,18 @@ jobs:
       - name: Check out pinned automation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          repository: ${{ inputs.automation_repository }}
+          repository: j520730/mtext-actions
           ref: ${{ inputs.automation_ref }}
           path: automation
           persist-credentials: false
 
-      # Prüft den Self-hosted Runner und stellt den Pfad zur freigegebenen
+      # Prüft den von FI bereitgestellten Runner und stellt den Pfad zur freigegebenen
       # Python-Laufzeit als Ausgabe für die Validierung bereit.
       - name: Prepare approved Python runtime
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
-      # Prüft Struktur und fachliche Zuordnungen der .config.json für das
+      # Prüft Struktur und fachliche Zuordnungen der .github/config.json für das
       # aufrufende Repository; dieser Schritt führt keine externe Übergabe aus.
       - name: Validate configuration without external access
         env:
@@ -68,6 +60,5 @@ jobs:
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery validate-config
           --repository-root source
-          --mandant-config source/.config.json
           --releaselinien automation/config/releaselinien.json
           --repository-name "$INPUT_REPOSITORY_NAME"

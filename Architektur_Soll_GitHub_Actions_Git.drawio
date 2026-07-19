@@ -37,7 +37,7 @@
         <mxCell id="dev-caller" value="sync-resources.yml&#xa;schlanker Aufrufworkflow&#xa;Ziel: Entwicklung&#xa;zentrale Version per Commit-SHA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
           <mxGeometry x="525" y="195" width="205" height="115" as="geometry"/>
         </mxCell>
-        <mxCell id="config-source" value="Änderung an .config.json auf jedem Branch&#xa;kuerzel / repository / ispw T|P / subsystem&#xa;hostprofile / excluded_projects" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
+        <mxCell id="config-source" value="Änderung an .github/config.json auf jedem Branch&#xa;kuerzel / repository / ispw T|P / subsystem&#xa;hostprofile / excluded_projects" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="310" y="325" width="420" height="85" as="geometry"/>
         </mxCell>
         <mxCell id="dev-sync" value="reusable-sync-resources.yml&#xa;Environment Entwicklung&#xa;Checkout: Mandant + gepinnte Automation&#xa;Prüfung von Config, Branch, SHA und Historie&#xa;sync-resources --execute" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
@@ -46,7 +46,7 @@
         <mxCell id="dev-staging" value="Laufbezogenes Staging&#xa;unter RUNNER_TEMP&#xa;vollständiger Projektstand&#xa;Symlinks gesperrt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656" vertex="1" parent="1">
           <mxGeometry x="1120" y="200" width="195" height="110" as="geometry"/>
         </mxCell>
-        <mxCell id="config-validate" value="reusable-validate-config.yml&#xa;.config.json + config/releaselinien.json&#xa;frühes Feedback, kein Zielzugriff&#xa;kein Gate; Sync und Release prüfen erneut" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
+        <mxCell id="config-validate" value="reusable-validate-config.yml&#xa;.github/config.json + config/releaselinien.json&#xa;frühes Feedback, kein Zielzugriff&#xa;kein Gate; Sync und Release prüfen erneut" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="805" y="340" width="310" height="70" as="geometry"/>
         </mxCell>
         <mxCell id="dev-target" value="M/Text-Entwicklung / serverSync&#xa;Transport vor Integration festlegen:&#xa;PUT an Adapter | Runner-Share |&#xa;Actions-Artefakt herunterladen&#xa;vollständig veröffentlichen, dann synchronisieren&#xa;ADAPTER_ACCEPTED" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
@@ -109,7 +109,7 @@
         <mxCell id="release-summary" value="Release-Team kontrolliert&#xa;Tag, Ziel-Commit und Build-Protokoll&#xa;vor der Freigabe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6" vertex="1" parent="1">
           <mxGeometry x="50" y="995" width="195" height="105" as="geometry"/>
         </mxCell>
-        <mxCell id="release-source" value="Getaggter Mandantenstand&#xa;.config.json enthält u. a.&#xa;ispw T|P, subsystem und hostprofile" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
+        <mxCell id="release-source" value="Getaggter Mandantenstand&#xa;.github/config.json enthält u. a.&#xa;ispw T|P, subsystem und hostprofile" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
           <mxGeometry x="310" y="990" width="205" height="115" as="geometry"/>
         </mxCell>
         <mxCell id="release-workflow" value="Mandantenworkflow bleibt schlank&#xa;keine Secrets&#xa;contents: read&#xa;Serialisierung je Repository und Tag" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
@@ -133,7 +133,7 @@
         <mxCell id="mainframe" value="Mainframe IZE9 / CodePipeline&#xa;FTP: IEA.LOMS.TONICZ(&lt;Member&gt;)&#xa;JCL kopiert und registriert&#xa;BOAS / TONICZ / &lt;LEVEL&gt;&#xa;MNAME = &lt;Kürzel&gt;&lt;Liefercode&gt;&lt;F|D&gt;&#xa;MAINFRAME_SUBMITTED&#xa;kein nachgelagertes Status-Polling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1605" y="1165" width="330" height="170" as="geometry"/>
         </mxCell>
-        <mxCell id="controls" value="Querschnittliche Schutzgrenzen: vollständige Commit-SHAs | zentrale Workflows und Actions fest gepinnt | GITHUB_TOKEN nur contents: read | Self-hosted Runner-Gruppen | Rulesets für Branches, Workflows und .config.json | kontrollierte Wiederanläufe mit demselben Commit beziehungsweise Tag" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
+        <mxCell id="controls" value="Querschnittliche Schutzgrenzen: vollständige Commit-SHAs | zentrale Workflows und Actions fest gepinnt | GITHUB_TOKEN nur contents: read | von FI bereitgestellte Runner | Rulesets für Branches, Workflows und .github/config.json | kontrollierte Wiederanläufe mit demselben Commit beziehungsweise Tag" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="310" y="1360" width="1220" height="65" as="geometry"/>
         </mxCell>
 

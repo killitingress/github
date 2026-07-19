@@ -63,9 +63,15 @@ def load_configuration(
     repository_name: str,
     repository_root: str | Path,
 ) -> Configuration:
-    """Lädt den Mandanten und verknüpft ihn mit den Releaselinien."""
+    """Lädt den Mandanten aus dem Repository und verknüpft ihn mit den Releaselinien."""
 
-    mandant_configuration = _read_json(mandant_path)
+    root = Path(repository_root)
+    mandant_file = Path(mandant_path)
+    # Ein relativer Mandantenpfad bezeichnet immer eine Datei im ausgecheckten
+    # Mandanten-Repository und ist unabhängig vom Arbeitsverzeichnis des Aufrufers.
+    if not mandant_file.is_absolute():
+        mandant_file = root / mandant_file
+    mandant_configuration = _read_json(mandant_file)
     releaselinien = _read_json(releaselinien_path)
     if (
         not isinstance(mandant_configuration, dict)
@@ -136,7 +142,6 @@ def load_configuration(
         ):
             raise DeliveryError(Status.VALIDATION_FAILED, "Hostprofil ist ungültig")
 
-    root = Path(repository_root)
     try:
         names = sorted(
             item.name

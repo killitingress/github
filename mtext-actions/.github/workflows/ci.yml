@@ -17,13 +17,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Der Job verwendet ausschließlich den freigegebenen Self-hosted Runner.
+  # Das Platzhalter-Label wird vor dem Integrationslauf durch das offizielle
+  # runs-on-Kennzeichen des von FI bereitgestellten Runners ersetzt.
   test:
     name: Test central automation
-    runs-on:
-      - self-hosted
-      - linux
-      - mtext-delivery
+    runs-on: FI_RUNNER_LABEL_TO_BE_SET
     timeout-minutes: 20
     steps:
       # Lädt den zu prüfenden Automatisierungsstand in den Arbeitsbereich und
@@ -33,7 +31,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # Prüft den Self-hosted Runner und stellt den Pfad zur freigegebenen
+      # Prüft den von FI bereitgestellten Runner und stellt den Pfad zur freigegebenen
       # Python-Laufzeit als Ausgabe für die nachfolgenden Schritte bereit.
       - name: Prepare approved Python runtime
         id: runtime

@@ -16,7 +16,7 @@ from .sync import sync_resources
 def _add_configuration_arguments(parser: argparse.ArgumentParser) -> None:
     """Ergänzt die drei Kommandos mit gemeinsamer Lieferkonfiguration."""
 
-    parser.add_argument("--mandant-config", default=".config.json")
+    parser.add_argument("--mandant-config", default=".github/config.json")
     parser.add_argument("--repository-root", default=".")
     parser.add_argument("--releaselinien", required=True)
     parser.add_argument("--repository-name", required=True)
