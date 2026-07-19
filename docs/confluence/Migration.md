@@ -59,7 +59,9 @@ müssen zusätzlich alle aktivierungsrelevanten Punkte aus
   `Rnnn/Bereitstellung` sowie der vorgesehene Default Branch sind eingerichtet.
 - Die zentrale Einrichtungsprüfung bestätigt für alle Mandanten-Workflows
   dieselbe unveränderliche, freigegebene Version von `mtext-actions`.
-  Technische Platzhalter oder bewegliche Referenzen sind nicht vorhanden.
+  Technische Platzhalter oder bewegliche Referenzen sind nicht vorhanden. Der
+  abschließende lokale Planlauf meldet weder ausstehende Dateiänderungen noch
+  Abweichungen zwischen Workflowaufruf und Codebezug.
 - Der repositoryübergreifende Workflowaufruf, der technisch nur lesende
   Checkout der zentralen Implementierung und alle vollständig gepinnten Actions
   funktionieren auf GitHub Enterprise Server 3.20.4.
@@ -179,9 +181,12 @@ Nachweise vorliegen:
    und nach dem Import entfernen. Importierte freigegebene Tags anschließend
    mit ihren vollständigen Ziel-SHAs im Cutover-Protokoll festhalten; sie
    unterliegen unmittelbar der Betriebsregel für freigegebene Tags.
-8. Die zentrale Einrichtungsprüfung ausführen und bestätigen, dass alle
-   Mandanten-Workflows dieselbe unveränderliche, freigegebene Version der
-   zentralen Automation verwenden.
+8. Die zentrale Einrichtungsprüfung mit der freigegebenen Workflowversion und
+   dem bestätigten FI-Runner-Kennzeichen ausführen. Der lokale Plan muss für
+   alle Mandanten ohne ausstehende Dateiänderung und ohne Abweichung zwischen
+   Workflowaufruf und Codebezug enden. Zusätzlich bestätigen, dass alle
+   Mandanten-Workflows dieselbe unveränderliche Version der zentralen
+   Automation verwenden.
 9. Die zweite Go-/No-Go-Entscheidung protokollieren. Bei No-Go bleiben Jenkins
    und SVN führend und der GitHub-Stand wird nicht produktiv freigegeben.
 

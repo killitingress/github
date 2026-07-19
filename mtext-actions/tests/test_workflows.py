@@ -26,17 +26,26 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(
             {path.name for path in workflows.glob("*.yml")}, EXPECTED_WORKFLOWS
         )
+        runner_values: set[str] = set()
         for path in workflows.glob("*.yml"):
             text = path.read_text(encoding="utf-8")
-            self.assertNotRegex(text, r"(?m)^\s*runs-on:\s*.*self-hosted")
+            # Reguläre Ausdrücke prüfen Runnerfelder und feste Action-Pins.
+            # Erkennt den fest eingetragenen Runnerwert jedes Jobs.
+            workflow_runners = re.findall(r"(?m)^\s*runs-on:\s*(.+?)\s*$", text)
+            self.assertTrue(workflow_runners, path)
+            runner_values.update(workflow_runners)
+            # Verhindert ein vom Aufrufer beeinflussbares Runnerfeld.
             self.assertNotRegex(text, r"(?m)^\s+runner_label:\s*")
-            self.assertIn("runs-on: FI_RUNNER_LABEL_TO_BE_SET", text)
-            # Reguläre Ausdrücke für unveränderlich gebundene Actions.
             # Erkennt jede Action-Referenz bis zum nächsten Leerzeichen.
             references = re.findall(r"uses:\s+([^\s]+)", text)
-            # Prüft jeden Pin auf eine vollständige kleingeschriebene SHA.
             for reference in references:
+                # Prüft den Pin auf eine vollständige kleingeschriebene SHA.
                 self.assertRegex(reference.rpartition("@")[2], r"^[0-9a-f]{40}$")
+
+        self.assertEqual(len(runner_values), 1)
+        runner_value = next(iter(runner_values))
+        self.assertNotIn("self-hosted", runner_value)
+        self.assertNotIn("${{", runner_value)
 
         release = (workflows / "reusable-release.yml").read_text(encoding="utf-8")
         self.assertIn("environment: Bereitstellung", release)
@@ -49,6 +58,7 @@ class WorkflowTests(unittest.TestCase):
         ):
             workflow = (workflows / name).read_text(encoding="utf-8")
             self.assertIn("repository: j520730/mtext-actions", workflow)
+            # Verhindert eine vom Mandanten wählbare Quelle der zentralen Automation.
             self.assertNotRegex(workflow, r"(?m)^\s+automation_repository:\s*")
             self.assertNotIn("--mandant-config", workflow)
 

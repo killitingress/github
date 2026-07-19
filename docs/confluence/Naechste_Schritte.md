@@ -26,13 +26,25 @@ Zugangsdatenübergabe und praktische Abnahmen.
 
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
-| offen | Einrichtungsautomation erstellen und im Testbereich abnehmen | Ein versioniertes Kommando besitzt einen reinen Prüfmodus und einen Anwendungsmodus. Es verwaltet die vereinbarten Repositoryeinstellungen, Branches, Default Branches, Rulesets, Environments, Actions-Zugriffe und die zentrale Workflowversion für alle Mandanten. Secret-Werte bleiben außerhalb; vorhandene Secret-Namen und nicht automatisierbare Voraussetzungen werden nur geprüft |
+| in Vorbereitung | Einrichtungsautomation erstellen und im Testbereich abnehmen | Die lokale Workflowfinalisierung besitzt bereits einen reinen Planmodus und einen idempotenten Anwendungsmodus. Der noch offene API-Teil verwaltet Repositoryeinstellungen, Branches, Default Branches, Rulesets, Environments und Actions-Zugriffe für alle Mandanten. Secret-Werte bleiben außerhalb; vorhandene Secret-Namen und nicht automatisierbare Voraussetzungen werden nur geprüft |
 | offen | Zentrales Repository `j520730/mtext-actions` und privates FI-Repository `j517120/mtext-fi` auf GitHub Enterprise anlegen beziehungsweise die lokalen Stände übernehmen | Das zentrale Repository ist nur für das Automatisierungsteam direkt zugänglich. Das FI-Repository enthält Ressourcen, Mandantenkonfiguration und schlanke Workflows |
 | bestätigt | Zentrale Implementierung gegen den fachlichen Vertrag prüfen | Die vier CLI-Kommandos, FULL und DELTA, Artefaktprüfung, JCL, FTP-/JES-Vertrag, Ressourcensynchronisation und Workflowgrenzen sind durch Akzeptanztests abgedeckt |
 | offen | Branches der aktiven Stages und Default Branch einrichten | Die Einrichtungsautomation stellt für `R260`, `R261` und `R270` jeweils die Branches `Entwicklung`, `Abnahme` und `Bereitstellung` sowie zunächst `R261/Entwicklung` als Default Branch her und weist Abweichungen aus |
-| offen | Zentrale Workflowversion und repositoryübergreifenden Zugriff einrichten | Die Einrichtungsautomation verteilt genau eine freigegebene Version auf alle Aufrufe und prüft die Übereinstimmung der technischen Referenzen. Nur vorgesehene Mandanten-Repositories dürfen `mtext-actions` aufrufen. Für den Checkout der zentralen Python-Implementierung ist eine nur lesende technische Berechtigung festgelegt, da das `GITHUB_TOKEN` des Aufrufers auf dessen Repository begrenzt ist |
+| offen | Zentrale Workflowversion und repositoryübergreifenden Zugriff einrichten | Die Einrichtungsautomation verteilt genau eine freigegebene Version auf alle Aufrufe. Der Plan weist notwendige Änderungen und bereits bestehende Abweichungen zwischen Workflowaufruf und Codebezug getrennt aus. Nur vorgesehene Mandanten-Repositories dürfen `mtext-actions` aufrufen. Für den Checkout der zentralen Python-Implementierung ist eine nur lesende technische Berechtigung festgelegt, da das `GITHUB_TOKEN` des Aufrufers auf dessen Repository begrenzt ist |
 | offen | Git-Clients für Ressourcenarbeit, Stage-Weitergabe und Release-Tags abnehmen | M/Text Workbench und zusätzlicher Git-Client unterstützen gemeinsam die in der [Benutzeranleitung](./Benutzeranleitung.md#benötigte-git-funktionen) beschriebenen Funktionen einschließlich Konfliktbehandlung, verbindlicher Herkunftszeile beim Cherry-Pick, kontrollierter lokaler Ablage, Gegen-Commit nach einem Push sowie Anlegen, gezieltem Pushen und Löschen eines Git-Tags |
 | bestätigt | GitHub-Plattform festhalten | GitHub Enterprise Server 3.20.4 |
+
+Die lokale Workflowfinalisierung ist bereits vorbereitet:
+`mtext-actions/scripts/configure-workflows.py` plant oder setzt das
+FI-Runner-Kennzeichen und die gemeinsame zentrale Workflowversion für beliebig
+viele Mandanten-Repositories. Es prüft alle angegebenen Workflowdateien vor dem
+ersten Schreibzugriff. Nach dem Anwendungsmodus muss ein erneuter Planlauf weder
+notwendige Änderungen noch abweichende technische Referenzen melden. Der
+API-Teil der Einrichtungsautomation folgt nach Bestätigung von GitHub-Host,
+Repositoryeigentümern, Team- und Reviewer-IDs, Bypass-Zuordnungen,
+Ausgangs-Commits der Stage-Branches, Actions-Zugriffsebene sowie der technischen
+Leseberechtigung. Sein Anwendungsmodus darf erst starten, wenn diese Pflichtwerte
+vollständig sind; vorher bleibt er lesend.
 
 ## 2. Schutz- und Freigaberegeln konfigurieren
 

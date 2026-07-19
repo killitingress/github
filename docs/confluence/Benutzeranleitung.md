@@ -206,8 +206,8 @@ nachträglich ein.
 Bei mehreren voneinander abhängigen Commits werden alle freigegebenen Commits
 in ihrer ursprünglichen Reihenfolge übernommen. Meldet der Git-Client einen
 Konflikt, wird nicht einfach weitergepusht: Die Abweichung muss fachlich
-geklärt, die Konfliktauflösung geprüft und erst danach committed und gepusht
-werden. Force-Pushes bleiben verboten.
+geklärt, die Konfliktauflösung geprüft und erst danach als Commit festgeschrieben
+und gepusht werden. Force-Pushes bleiben verboten.
 
 ## 4. Git-Anwendungen bedienen
 
