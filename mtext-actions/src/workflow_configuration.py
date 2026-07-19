@@ -11,7 +11,7 @@ from pathlib import Path
 
 # Dieses Repository ist die freigegebene Quelle der wiederverwendbaren Workflows.
 AUTOMATION_REPOSITORY = "j520730/mtext-actions"
-# Dieses Kennzeichen markiert die noch ausstehende Festlegung des FI-Runners.
+# Dieses Kennzeichen markiert die noch ausstehende Festlegung des Runners der FI.
 RUNNER_PLACEHOLDER = "FI_RUNNER_LABEL_TO_BE_SET"
 # Nur der Einrichtungsworkflow benötigt zur Bootstrap-Zeit einen variablen Runner.
 CONFIGURATION_WORKFLOW = "configure-workflows.yml"
@@ -119,7 +119,10 @@ def _commit(repository: Path, message: str) -> str:
 
 
 def prepare_workflow_configuration(
-    automation_root: Path, mandant_root: Path, runner_label: str
+    automation_root: Path,
+    mandant_root: Path,
+    runner_label: str,
+    freigegebene_automation_sha: str,
 ) -> str:
     """Erzeugt beide lokalen Commits und erzwingt den vollständigen Zielzustand."""
 
@@ -129,17 +132,22 @@ def prepare_workflow_configuration(
         or runner_label == RUNNER_PLACEHOLDER
     ):
         raise ValueError(
-            "Runner-Kennzeichen muss ein bestätigter einzeiliger FI-Wert sein"
+            "Runner-Kennzeichen muss ein bestätigter einzeiliger Wert der FI sein"
         )
+    checkout_sha = _git(
+        automation_root, "rev-parse", "--verify", "HEAD^{commit}"
+    ).stdout.strip()
+    if checkout_sha != freigegebene_automation_sha:
+        raise ValueError("zentraler Checkout entspricht nicht der freigegebenen SHA")
 
     # Beide Dateisätze werden vollständig validiert, bevor eine Datei geändert wird.
     automation_changes = _automation_changes(automation_root, runner_label)
-    _mandant_changes(mandant_root, "0" * 40)
+    _mandant_changes(mandant_root, freigegebene_automation_sha)
 
     for path, text in automation_changes.items():
         path.write_text(text, encoding="utf-8")
     automation_sha = _commit(
-        automation_root, "FI-Runner in zentralen Workflows einrichten"
+        automation_root, "Runner der FI in zentralen Workflows einrichten"
     )
 
     mandant_changes = _mandant_changes(mandant_root, automation_sha)
@@ -162,6 +170,7 @@ def main() -> int:
             Path("automation"),
             Path("mandant"),
             os.environ.get("FI_RUNNER_LABEL", ""),
+            os.environ.get("AUTOMATION_SHA", ""),
         )
     except (OSError, RuntimeError, ValueError) as error:
         raise SystemExit(f"Einrichtung kann nicht vorbereitet werden: {error}") from None

@@ -28,7 +28,7 @@ def git(repository: Path, *arguments: str) -> str:
 
 
 def write_mandant(path: Path, **overrides: object) -> None:
-    """Schreibt die kleinste produktionsnahe FI-Konfiguration."""
+    """Schreibt die kleinste produktionsnahe Konfiguration der FI."""
 
     mandant: dict[str, object] = {
         "kuerzel": "FI",

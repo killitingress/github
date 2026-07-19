@@ -133,7 +133,7 @@
         <mxCell id="mainframe" value="Mainframe IZE9 / CodePipeline&#xa;FTP: IEA.LOMS.TONICZ(&lt;Member&gt;)&#xa;JCL kopiert und registriert&#xa;BOAS / TONICZ / &lt;LEVEL&gt;&#xa;MNAME = &lt;Kürzel&gt;&lt;Liefercode&gt;&lt;F|D&gt;&#xa;MAINFRAME_SUBMITTED&#xa;kein nachgelagertes Status-Polling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1605" y="1165" width="330" height="170" as="geometry"/>
         </mxCell>
-        <mxCell id="controls" value="Querschnittliche Schutzgrenzen: vollständige Commit-SHAs | zentrale Workflows und Actions fest gepinnt | GITHUB_TOKEN nur contents: read | von FI bereitgestellte Runner | Rulesets für Branches, Workflows und .github/config.json | kontrollierte Wiederanläufe mit demselben Commit beziehungsweise Tag" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
+        <mxCell id="controls" value="Querschnittliche Schutzgrenzen: vollständige Commit-SHAs | zentrale Workflows und Actions fest gepinnt | GITHUB_TOKEN nur contents: read | von der FI bereitgestellte Runner | Rulesets für Branches, Workflows und .github/config.json | kontrollierte Wiederanläufe mit demselben Commit beziehungsweise Tag" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="310" y="1360" width="1220" height="65" as="geometry"/>
         </mxCell>
 

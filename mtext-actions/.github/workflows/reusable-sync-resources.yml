@@ -28,7 +28,7 @@ jobs:
   sync:
     name: Sync exact commit to M/Text
     # Das Platzhalter-Label wird durch das offizielle runs-on-Kennzeichen des
-    # von FI bereitgestellten Runners ersetzt.
+    # von der FI bereitgestellten Runners ersetzt.
     runs-on: FI_RUNNER_LABEL_TO_BE_SET
     # Das Environment liefert die stufenspezifische Konfiguration und begrenzt sie auf diesen Job.
     environment: ${{ inputs.target_environment }}
@@ -54,7 +54,7 @@ jobs:
           path: automation
           persist-credentials: false
 
-      # Prüft den von FI bereitgestellten Runner und stellt den Pfad zur freigegebenen
+      # Prüft den von der FI bereitgestellten Runner und stellt den Pfad zur freigegebenen
       # Python-Laufzeit als Ausgabe für die Synchronisation bereit.
       - name: Prepare approved Python runtime
         id: runtime

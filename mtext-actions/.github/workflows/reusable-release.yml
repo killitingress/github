@@ -36,7 +36,7 @@ jobs:
   build:
     name: Build FULL or DELTA artifact
     # Das Platzhalter-Label wird durch das offizielle runs-on-Kennzeichen des
-    # von FI bereitgestellten Runners ersetzt.
+    # von der FI bereitgestellten Runners ersetzt.
     runs-on: FI_RUNNER_LABEL_TO_BE_SET
     timeout-minutes: 30
     outputs:
@@ -62,7 +62,7 @@ jobs:
           path: automation
           persist-credentials: false
 
-      # Prüft den von FI bereitgestellten Runner und stellt den Pfad zur freigegebenen
+      # Prüft den von der FI bereitgestellten Runner und stellt den Pfad zur freigegebenen
       # Python-Laufzeit als Ausgabe für den Build bereit.
       - name: Prepare approved Python runtime
         id: runtime
@@ -110,7 +110,7 @@ jobs:
     name: Verify and hand over artifact to Mainframe
     needs: build
     # Auch der freizugebende Publish-Job verwendet ausschließlich den zentral
-    # festgelegten FI-Runner und keine Auswahl des Mandanten-Workflows.
+    # festgelegten Runner der FI und keine Auswahl des Mandanten-Workflows.
     runs-on: FI_RUNNER_LABEL_TO_BE_SET
     environment: Bereitstellung
     concurrency:
@@ -136,7 +136,7 @@ jobs:
           name: ${{ needs.build.outputs.artifact_name }}
           path: dist
 
-      # Prüft den von FI bereitgestellten Runner und stellt den Pfad zur freigegebenen
+      # Prüft den von der FI bereitgestellten Runner und stellt den Pfad zur freigegebenen
       # Python-Laufzeit als Ausgabe für die Mainframe-Übergabe bereit.
       - name: Prepare approved Python runtime
         id: runtime

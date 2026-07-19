@@ -13,10 +13,16 @@ Alle `uses:`-Aufrufe zeigen auf `j520730/mtext-actions`. Bis zur Freigabe der
 ersten zentralen Version steht dort der technische Platzhalter
 `0000000000000000000000000000000000000000`.
 
-Der zentrale Einrichtungsworkflow in `mtext-actions` trägt nach Freigabe des
-FI-Runner-Kennzeichens den vollständigen Commit-SHA in allen `uses:`-Aufrufen
-und `automation_ref`-Werten ein. Text-Entwickler und Release-Verantwortliche
-pflegen diese technische Referenz nicht.
+Der zentrale Einrichtungsworkflow in `mtext-actions` trägt nach Bestätigung des
+Runner-Kennzeichens durch die FI den vollständigen Commit-SHA in allen
+`uses:`-Aufrufen und `automation_ref`-Werten ein. Text-Entwickler und
+Release-Verantwortliche pflegen diese technische Referenz nicht.
+
+Bei einer später freigegebenen Version startet das zentrale
+Automatisierungsteam denselben Workflow mit deren vollständiger Commit-SHA für
+jeden betroffenen Mandantenbranch. Der technische Commit aktualisiert beide
+Referenzen gemeinsam. Andere Branches und bereits laufende Workflow-Läufe
+bleiben bis zu ihrer eigenen Umstellung auf der bisherigen Version.
 
 Der Lauf validiert alle betroffenen Workflowdateien vor dem ersten
 Schreibzugriff. Ein Vertragsfehler verhindert jeden Commit. Ist der
@@ -111,8 +117,8 @@ Die Zielplattform ist GitHub Enterprise Server 3.20.4. Der zentrale
 Release-Workflow verwendet daher die offiziellen Node-20-v3-Varianten der
 Artefakt-Actions statt der auf GHES nicht unterstützten v4-Varianten. Die
 Verfügbarkeit der fest gepinnten Action-SHAs und die Node-20-Unterstützung des
-von FI bereitgestellten Runners werden vor dem ersten Integrationslauf praktisch
-geprüft.
+von der FI bereitgestellten Runners werden vor dem ersten Integrationslauf
+praktisch geprüft.
 
 ## Außerhalb der Dateien zu konfigurierende GitHub-Einstellungen
 

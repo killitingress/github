@@ -1,7 +1,7 @@
 # Bedienungsanleitung für `mtext-fi`
 
-Dieses Repository enthält die M/Text Brief-Ressourcen des Mandanten.
-FI ist der Master-Mandant, verantwortlich für die Projekte:
+Dieses Repository enthält die M/Text-Briefressourcen der FI. Die FI führt den
+Master-Mandanten und ist für die folgenden Projekte verantwortlich:
 
 - `Configuration`
 - `Fonts`

@@ -99,6 +99,42 @@ Git: Branch R260/Entwicklung, darin Pfad <Projekt>
 Releaselinie und Stage stehen im Branch-Namen. Im Arbeitsbereich beginnt der
 Pfad direkt mit dem Projektverzeichnis.
 
+### Lokales Repository vor der Arbeit aktualisieren
+
+Vor einer Bearbeitung, einem Cherry-Pick oder dem Anlegen eines Release-Tags
+muss der verwendete lokale Branch auf dem aktuellen GitHub-Stand sein. Für die
+Arbeit auf Entwicklung geschieht das normalerweise im integrierten Git-Client
+der M/Text Workbench. Für die Weitergabe nach Abnahme und Bereitstellung sowie
+für Release-Tags wird der zusätzliche Git-Client verwendet.
+
+Git unterscheidet das Abrufen neuer GitHub-Stände vom Aktualisieren des
+ausgecheckten Branches:
+
+| Git-Vorgang | Wirkung auf den lokalen Stand |
+|---|---|
+| `fetch` | Lädt neue Commits und Branchstände von GitHub, verändert aber weder den ausgecheckten lokalen Branch noch dessen Dateien |
+| `pull` | Ruft den GitHub-Stand ab und aktualisiert den ausgecheckten Branch |
+
+Welche Bedienfunktion diese Vorgänge in der M/Text Workbench und im
+zusätzlichen Git-Client ausführt und wie sie dort heißt, wird erst bei der
+praktischen Abnahme festgelegt. Die freigegebene Funktion muss den lokalen
+Branch ohne automatischen Merge auf den aktuellen GitHub-Stand bringen.
+
+Der sichere Standardablauf ist in beiden Git-Clients gleich:
+
+1. Das richtige Mandanten-Repository und den vorgesehenen Branch auswählen.
+2. Prüfen, dass keine noch nicht abgeschlossene Git-Operation und keine
+   ungesicherte lokale Bearbeitung vorliegt.
+3. Den lokalen Branch mit der dafür abgenommenen Bedienfunktion auf den
+   aktuellen GitHub-Stand bringen. Ein reiner `fetch` genügt dafür noch nicht.
+4. Kontrollieren, dass lokaler Branch und GitHub-Branch anschließend auf
+   denselben Commit zeigen.
+5. Erst danach mit Bearbeitung, Cherry-Pick oder Tag-Erzeugung beginnen.
+
+Lehnt die Aktualisierung wegen eigener lokaler Commits ab, wird weder ein Merge
+noch ein Force-Push erzwungen. Dann gilt der Abschnitt
+[Push-Ablehnung mit Rebase statt Merge beheben](#push-ablehnung-mit-rebase-statt-merge-beheben).
+
 ### Feature-Branch einfach erklärt
 
 Ein **Feature-Branch** ist ein eigener Arbeitsbereich für eine einzelne
@@ -180,8 +216,7 @@ Konflikt, wird nicht einfach weitergepusht: Die Abweichung muss fachlich
 geklärt, die Konfliktauflösung geprüft und erst danach als Commit festgeschrieben
 und gepusht werden. Force-Pushes bleiben verboten.
 
-
-### Push-Ablehnung und Konflikt unterscheiden
+### Push-Ablehnung mit Rebase statt Merge beheben
 
 Wenn zwei Personen vom selben GitHub-Stand aus arbeiten und eine Person zuerst
 pusht, baut der lokale Commit der zweiten Person noch auf dem vorherigen Stand
@@ -195,20 +230,54 @@ zuerst übernommen werden. Sind die Änderungen unabhängig, kann Git sie
 automatisch kombinieren. Überschneiden oder widersprechen sie sich, entsteht
 dabei ein Konflikt.
 
-### Merge, Rebase und Pull einfach erklärt
+Ein **Rebase** ist dann hilfreich, wenn der GitHub-Branch inzwischen
+fortgeschritten ist und zusätzlich eigene, noch nicht gepushte Commits
+vorliegen. Nach `fetch` setzt der Rebase diese eigenen Commits auf den aktuellen
+Remote-Branch. Überschneidungen werden dabei Commit für Commit aufgelöst. Ein
+Rebase ist ausschließlich für eigene, noch nicht veröffentlichte Commits
+zulässig, weil er neue Commit-SHAs erzeugt.
 
-Ein **Merge** verbindet zwei Entwicklungsverläufe. Die vorhandenen Commits
-bleiben unverändert. Gegebenenfalls entsteht ein zusätzlicher Merge-Commit.
+Ein **Merge** verbindet zwei Entwicklungsverläufe, ohne vorhandene Commits
+umzuschreiben, und kann dabei einen zusätzlichen Merge-Commit erzeugen. Er ist
+in diesem Prozess weder zur Behebung einer Push-Ablehnung noch zur Weitergabe
+zwischen den Stage-Branches vorgesehen. Eigene noch nicht gepushte Commits
+werden per Rebase auf den aktuellen Stand gesetzt; freigegebene Änderungen
+werden per Cherry-Pick in die nächste Stage übernommen.
 
-Ein **Rebase** setzt eigene, noch nicht veröffentlichte Commits auf einen
-neueren Ausgangsstand. Die Änderungen werden erneut angewendet und erhalten
-dabei neue SHAs. Bereits veröffentlichte oder von anderen Personen verwendete
-Commits dürfen in diesem Prozess nicht per Rebase umgeschrieben werden.
+| Situation | Geeignetes Vorgehen | Ergebnis |
+|---|---|---|
+| Push wird abgelehnt, weil GitHub fortgeschritten ist, und die eigenen Commits sind noch nicht gepusht | `fetch`, danach `rebase` auf den Remote-Branch | Eigene Commits werden auf dem aktuellen GitHub-Stand neu erzeugt |
+| Cherry-Pick in die nächste Stage meldet einen Konflikt | Konflikt innerhalb des laufenden Cherry-Picks auflösen oder den Cherry-Pick vollständig abbrechen | Nur die ausgewählte Änderung wird in den Zielbranch übernommen |
+| Fehlerhafter Commit ist bereits gepusht | Gegen-Commit nach dem beschriebenen Rücknahmeverfahren | Gemeinsame Historie bleibt unverändert nachvollziehbar |
 
-Ein **Pull** holt den GitHub-Stand und integriert ihn anschließend. Je nach
-Git-Client geschieht dies durch Merge oder Rebase. Der verbindliche Bedienweg
-und die zu verwendende Pull-Variante werden deshalb zusammen mit dem
-zusätzlichen Git-Client festgelegt und praktisch geprüft.
+### Konflikt bei Rebase oder Cherry-Pick auflösen
+
+Ein Konflikt bedeutet, dass Git den gewünschten Dateiinhalt nicht eindeutig
+bestimmen kann. Er wird im freigegebenen Git-Client wie folgt bearbeitet:
+
+1. Nicht pushen und zunächst prüfen, ob gerade ein Rebase oder ein Cherry-Pick
+   läuft und welche Dateien betroffen sind.
+2. Für jede Konfliktstelle den bisherigen Inhalt des Zielbranches, die zu
+   übernehmende Änderung und den gemeinsamen Ausgangsstand vergleichen. Nicht
+   pauschal eine komplette Dateiversion auswählen, wenn dadurch fachliche
+   Änderungen der anderen Seite verloren gehen.
+3. Den fachlich richtigen Zielinhalt herstellen, alle Konfliktmarkierungen
+   entfernen und die aufgelösten Dateien zur Fortsetzung auswählen.
+4. Die laufende Operation fortsetzen. Treten weitere Konflikte auf, werden
+   dieselben Schritte für den nächsten Commit wiederholt.
+5. Nach Abschluss Arbeitsstand, Änderungen und Commit-Historie prüfen. Erst
+   danach darf der Branch ohne Force-Push übertragen werden.
+
+| Laufende Operation | Nach geprüfter Auflösung fortsetzen | Vollständig abbrechen |
+|---|---|---|
+| Rebase | Dateien mit `add` als aufgelöst markieren, danach `rebase --continue` | `rebase --abort` |
+| Cherry-Pick | Dateien mit `add` als aufgelöst markieren, danach `cherry-pick --continue` | `cherry-pick --abort` |
+
+Ist die fachlich richtige Auflösung nicht eindeutig, wird die Operation
+abgebrochen und die Abweichung mit den Verantwortlichen der betroffenen
+Änderungen geklärt. Die normale Aktualisierungsfunktion benötigt keinen solchen
+Auflösungsablauf: Kann sie den lokalen Branch nicht direkt auf den GitHub-Stand
+setzen, bricht sie ohne automatischen Merge ab.
 
 ## 4. Git-Anwendungen bedienen
 
@@ -222,32 +291,42 @@ verwendet:
 | GitHub im Browser | Commits, Release-Tags und Läufe prüfen, manuelle Läufe starten und Freigaben erteilen | Text-Entwickler sowie die jeweils berechtigten Verantwortlichen |
 
 Für die normale Ressourcenarbeit ist keine Git-Kommandozeile erforderlich.
-Einen direkten Zugriff auf das zentrale Automatisierungs-Repository
-`mtext-actions` benötigen und erhalten Mandantenbenutzer nicht.
+Einen direkten Zugriff auf das Automatisierungs-Repository `mtext-actions`
+benötigen und erhalten Mandantenbenutzer nicht.
+
+Neue freigegebene `mtext-actions`-Versionen werden zentral und automatisiert
+über **Configure workflow files** in die vorgesehenen Mandanten-Repositories
+und Branches ausgerollt. Das zentrale Automatisierungsteam startet und
+überwacht diese Läufe; Mandantenbenutzer aktualisieren die Workflowdateien
+nicht selbst.
 
 ### Benötigte Git-Funktionen
 
 Die Bezeichnungen der Schaltflächen unterscheiden sich je Git-Client. Folgende
 Git-Funktionen müssen im freigegebenen Bedienweg eindeutig erkennbar sein:
 
-| Anwendungsfall | Git-Funktion beziehungsweise Befehlsentsprechung |
-|---|---|
-| Arbeitsstand und ausgewählte Änderungen prüfen | `status` und `diff` |
-| GitHub-Stand abrufen und lokalen Branch ohne zusätzlichen Merge aktualisieren | `fetch` und Fast-forward-Aktualisierung; auf der Kommandozeile `pull --ff-only` |
-| Stage-Branch auswählen | `switch` beziehungsweise die Branchauswahl des Clients |
-| Dateien auswählen, Commit erzeugen und übertragen | `add`, `commit` und `push` |
-| Commit-Historie, vollständige SHA und konkrete Änderungen prüfen | `log` und `show` |
-| Letzten lokalen, noch nicht gepushten Commit ergänzen oder seine Nachricht korrigieren | `commit --amend`; nur vor dem Push, da dabei eine neue Commit-SHA entsteht |
-| Ausgewählten Commit in die nächste Stage übernehmen und Konflikte behandeln | `cherry-pick -x`, nach der geprüften Auflösung `cherry-pick --continue` oder zum vollständigen Abbruch `cherry-pick --abort` |
-| Release-Tag auf einem bestätigten Commit anlegen, einzeln pushen und vor der Freigabe bei Bedarf wieder löschen | `tag` sowie gezielter Push oder Löschung der betreffenden Tag-Referenz; die konkrete Bedienung wird mit dem zusätzlichen Git-Client abgenommen |
-| Inzwischen fortgeschrittenen Remote-Branch mit eigenen, noch nicht gepushten Commits zusammenführen | `fetch`, danach kontrolliertes `rebase` auf den Remote-Branch; Konflikte auflösen und mit `rebase --continue` fortfahren oder mit `rebase --abort` abbrechen |
-| Noch nicht committete Arbeit vor einem Branchwechsel vorübergehend beiseitelegen | `stash push` und später `stash pop`; danach wiederhergestellte Änderungen vollständig prüfen |
-| Lokale Änderung, lokalen Commit oder gepushten Commit zurücknehmen | je nach Zustand `restore`, `reset` oder `revert` wie im Abschnitt [Änderung oder Commit zurücknehmen](#änderung-oder-commit-zurücknehmen) beschrieben |
+Die SVN-Angaben in der dritten Spalte sind fachliche Vergleiche und keine
+vollständigen 1:1-Entsprechungen. Insbesondere veröffentlicht `svn commit` die
+Änderung sofort, während Git den lokalen `commit` und den `push` nach GitHub
+trennt.
 
-Ein `rebase` ist nur für eigene, noch nicht gepushte Commits zulässig. Die
-Weitergabe zwischen den Stages erfolgt per Cherry-Pick und nicht durch einen
-Merge ganzer Branches. `stash` ist nur eine vorübergehende lokale Ablage und
-kein Ersatz für einen geprüften Commit. `clean` gehört nicht zum normalen
+| Anwendungsfall | Git-Funktion beziehungsweise Befehlsentsprechung | Nächstliegende SVN-Funktion |
+|---|---|---|
+| Arbeitsstand und ausgewählte Änderungen prüfen | `status` und `diff` | `svn status` und `svn diff` |
+| GitHub-Stand abrufen und lokalen Branch ohne zusätzlichen Merge aktualisieren | `fetch` und anschließend `pull` beziehungsweise die freigegebene Aktualisierungsfunktion des Clients | `svn update` |
+| Stage-Branch auswählen | `switch` beziehungsweise die Branchauswahl des Clients | `svn switch <URL>` |
+| Dateien auswählen, Commit erzeugen und übertragen | `add`, `commit` und `push` | `svn add` und `svn commit`; der Commit überträgt die Änderung zugleich |
+| Commit-Historie, vollständige SHA und konkrete Änderungen prüfen | `log` und `show` | `svn log` und `svn diff -c <Revision>` |
+| Letzten lokalen, noch nicht gepushten Commit ergänzen oder seine Nachricht korrigieren | `commit --amend`; nur vor dem Push, da dabei eine neue Commit-SHA entsteht | Keine direkte Entsprechung, weil ein SVN-Commit bereits veröffentlicht ist |
+| Ausgewählten Commit in die nächste Stage übernehmen und Konflikte behandeln | `cherry-pick -x`, nach der geprüften Auflösung `cherry-pick --continue` oder zum vollständigen Abbruch `cherry-pick --abort` | `svn merge -c <Revision> <URL>`; Konflikte werden vor dem anschließenden `svn commit` in der Arbeitskopie aufgelöst |
+| Release-Tag auf einem bestätigten Commit anlegen, einzeln pushen und vor der Freigabe bei Bedarf wieder löschen | `tag` sowie gezielter Push oder Löschung der betreffenden Tag-Referenz; die konkrete Bedienung wird mit dem zusätzlichen Git-Client abgenommen | `svn copy <Quell-URL> <Tag-URL>` beziehungsweise `svn delete <Tag-URL>`; ein SVN-Tag ist ein Repositorypfad |
+| Inzwischen fortgeschrittenen Remote-Branch mit eigenen, noch nicht gepushten Commits zusammenführen | `fetch`, danach kontrolliertes `rebase` auf den Remote-Branch; Konflikte auflösen und mit `rebase --continue` fortfahren oder mit `rebase --abort` abbrechen | `svn update` integriert lokale, noch nicht committete Änderungen; lokale SVN-Commits gibt es nicht |
+| Noch nicht committete Arbeit vor einem Branchwechsel vorübergehend beiseitelegen | `stash push` und später `stash pop`; danach wiederhergestellte Änderungen vollständig prüfen | Keine direkte, durchgängig verfügbare Standardentsprechung |
+| Lokale Änderung, lokalen Commit oder gepushten Commit zurücknehmen | je nach Zustand `restore`, `reset` oder `revert` wie im Abschnitt [Änderung oder Commit zurücknehmen](#änderung-oder-commit-zurücknehmen) beschrieben | Lokal `svn revert`; veröffentlichte Änderung durch umgekehrten Merge und anschließenden `svn commit` korrigieren |
+
+Die Weitergabe zwischen den Stages erfolgt per Cherry-Pick und nicht durch
+einen Merge ganzer Branches. `stash` ist nur eine vorübergehende lokale Ablage
+und kein Ersatz für einen geprüften Commit. `clean` gehört nicht zum normalen
 Bedienweg, weil es nicht versionierte und damit möglicherweise noch nicht
 gesicherte Ressourcendateien unwiederbringlich entfernen kann. Release-Tags
 werden ausschließlich durch das Mandanten-Release-Team nach dem beschriebenen
@@ -271,7 +350,9 @@ Der verbindliche Standardablauf ist:
 1. Das richtige Mandanten-Repository öffnen und die Verbindung zu GitHub
    prüfen.
 2. Den Entwicklungsbranch der vorgesehenen Releaselinie auswählen und vor der
-   Bearbeitung auf den aktuellen GitHub-Stand bringen.
+   Bearbeitung nach dem Abschnitt
+   [Lokales Repository vor der Arbeit aktualisieren](#lokales-repository-vor-der-arbeit-aktualisieren)
+   auf den aktuellen GitHub-Stand bringen.
 3. Die Briefressourcen in der M/Text Workbench bearbeiten und fachlich prüfen.
 4. Im integrierten Git-Client die geänderten Dateien kontrollieren. Dateien
    unter `.github/workflows/` und `.github/config.json` gehören nicht zu einer
@@ -306,7 +387,9 @@ Der verbindliche Standardablauf ist:
 
 1. Das richtige Mandanten-Repository öffnen und die neuesten GitHub-Stände
    abrufen.
-2. Den Zielbranch auschecken und vor dem Cherry-Pick aktualisieren.
+2. Den Zielbranch auschecken und nach dem Abschnitt
+   [Lokales Repository vor der Arbeit aktualisieren](#lokales-repository-vor-der-arbeit-aktualisieren)
+   auf den aktuellen GitHub-Stand bringen.
 3. Den fachlich freigegebenen Quell-Commit anhand seiner vollständigen SHA
    auswählen.
 4. Den Commit per Cherry-Pick übernehmen. Die vollständige Quell-SHA muss mit
@@ -314,8 +397,9 @@ Der verbindliche Standardablauf ist:
    Commit-Nachricht dokumentiert werden.
 5. Abhängige Commits in ihrer ursprünglichen Reihenfolge übernehmen.
 6. Bei einem Konflikt nicht pushen. Den Cherry-Pick entweder vollständig
-   abbrechen oder die Abweichung fachlich klären, kontrolliert auflösen und das
-   Ergebnis erneut prüfen.
+   abbrechen oder nach dem Abschnitt
+   [Konflikt bei Rebase oder Cherry-Pick auflösen](#konflikt-bei-rebase-oder-cherry-pick-auflösen)
+   kontrolliert abschließen.
 7. Geänderte Dateien, Ziel-Commit und dokumentierte Quell-SHA kontrollieren.
 8. Den Zielbranch ohne Force-Push nach GitHub pushen und dort den entstandenen
    Commit prüfen.
@@ -443,7 +527,7 @@ ignoriert. Deshalb wird beispielsweise `.github` nicht als Projekt behandelt.
 
 Die optionale Liste `excluded_projects` enthält ausschließlich Verzeichnisse,
 die trotz ihrer Lage in der Repositorywurzel nicht verarbeitet werden sollen.
-Das FI-Beispiel schließt die Testdaten aus:
+Das Beispiel der FI schließt die Testdaten aus:
 
 ```json
 "excluded_projects": [
@@ -464,7 +548,7 @@ Gemeint sind insbesondere ISPW-Instanz, Subsystem, Assignment und der
 JCL-Stage-Code, der das CodePipeline-`LEVEL` bezeichnet. Diese Werte sind für
 den Mandanten relevant, werden in `.github/config.json` verständlich beschrieben und
 können bei einer tatsächlichen Änderung der Zuordnung angepasst werden. Das
-FI-Beispiel lautet:
+Beispiel der FI lautet:
 
 ```json
 "ispw": "P",
@@ -484,7 +568,7 @@ FI-Beispiel lautet:
 | Feld | Bedeutung | Verwendung in der versionierten JCL |
 |---|---|---|
 | `ispw` | ISPW-Instanz des Mandanten: `T` für Test oder `P` für Produktion | wird als `ISPW` unter anderem in Datasetnamen und im Aufruf von `WZZRCJOB` eingesetzt |
-| `subsystem` | Subsystem des Mandanten, für FI beispielsweise `LOMS` | wird als `SUBSYS` eingesetzt und dort für `APPLID` und `SUBAPPL` verwendet |
+| `subsystem` | Subsystem des Mandanten, für die FI beispielsweise `LOMS` | wird als `SUBSYS` eingesetzt und dort für `APPLID` und `SUBAPPL` verwendet |
 | `assignment` | Assignment des Mandanten für das jeweilige Hostprofil | wird als `ASSIGNMENT` eingesetzt und dort für `PROJNO` verwendet |
 | `stage` | JCL-Stage-Code für das CodePipeline-`LEVEL`, beispielsweise `FKTE` oder `JURP` | wird in den `LEVEL`-Platzhalter eingesetzt und dort unter anderem für `CLVL` und `SLVL` verwendet |
 
@@ -726,7 +810,7 @@ fachlichen Endstatus.
 
 | Status oder sichtbares Symptom | Bedeutung | Nächste Prüfung |
 |---|---|---|
-| Workflow kann die zentrale Version nicht laden | Technische Einrichtung ist unvollständig oder der zentrale Zugriff fehlt | Zentrale Automatisierungsverantwortliche informieren; Anwender ändern die Workflowdateien nicht selbst |
+| Workflow kann die `mtext-actions`-Version nicht laden | Technische Einrichtung ist unvollständig oder der Zugriff auf `mtext-actions` fehlt | Zentrale Automatisierungsverantwortliche informieren; Anwender ändern die Workflowdateien nicht selbst |
 | `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinienzuordnung sind technisch konsistent | Fachliche Abstimmung fortsetzen. Der Status ist keine automatische Freigabe für die nächste Stage |
 | `VALIDATION_FAILED` | Input, Konfiguration, Branchrichtung oder JCL ungültig | Erste Fehlermeldung lesen. Branch-/Tagformat und Konfiguration prüfen |
 | `SOURCE_FAILED` | Commit oder Tag/Basisreferenz nicht auflösbar | SHA, Tag, `.100`-Basis und Branch-Erreichbarkeit prüfen |

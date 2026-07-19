@@ -76,7 +76,7 @@ müssen zusätzlich alle aktivierungsrelevanten Punkte aus
   Release-Kandidat kann vor der Freigabe kontrolliert zurückgenommen werden;
   nach der Freigabe sind Änderung und Löschung gemäß der verbindlichen
   Betriebsregel unzulässig.
-- Das offizielle `runs-on`-Kennzeichen des ausgewählten FI-Runnerangebots ist
+- Das offizielle `runs-on`-Kennzeichen des ausgewählten Runnerangebots der FI ist
   eingetragen. Python-Laufzeit, Git, Zertifikate und die benötigten
   Netzwerkpfade sind auf diesem Runner geprüft. Bereitstellung, Absicherung,
   Wartung und Bereinigung des Runners liegen außerhalb des Projekts.
@@ -182,11 +182,12 @@ Nachweise vorliegen:
    und nach dem Import entfernen. Importierte freigegebene Tags anschließend
    mit ihren vollständigen Ziel-SHAs im Cutover-Protokoll festhalten; sie
    unterliegen unmittelbar der Betriebsregel für freigegebene Tags.
-8. Den zentralen Einrichtungsworkflow für alle betroffenen Mandanten-Branches
-   ausführen. Jeder Lauf muss ohne neuen Commit und mit erfolgreicher
-   Abschlussprüfung enden. Zusätzlich bestätigen, dass alle
-   Mandanten-Workflows dieselbe unveränderliche Version der zentralen
-   Automatisierung verwenden.
+8. Die vollständige SHA der freigegebenen `mtext-actions`-Version festhalten
+   und den Einrichtungsworkflow damit für alle Einträge der Rollout-Matrix aus
+   Mandanten-Repository und Branch ausführen. Jeder abschließende Kontrolllauf
+   muss ohne neuen Commit und mit erfolgreicher Abschlussprüfung enden.
+   Zusätzlich bestätigen, dass alle Mandanten-Workflows dieselbe
+   unveränderliche `mtext-actions`-Version verwenden.
 9. Die zweite Go-/No-Go-Entscheidung protokollieren. Bei No-Go bleiben Jenkins
    und SVN führend und der GitHub-Stand wird nicht produktiv freigegeben.
 
@@ -199,8 +200,9 @@ Nach dem zweiten Go wird in dieser Reihenfolge umgeschaltet:
 2. SVN für diesen Prozess schreibschützen. Eine endgültige Stilllegung erfolgt
    erst nach Ablauf des vereinbarten Beobachtungszeitraums.
 3. Git und GitHub Actions für den Prozess als führende Quelle freigeben.
-4. Rulesets, Environments, Workflowzugriff, FI-Runner-Kennzeichen und minimale
-   `GITHUB_TOKEN`-Rechte nochmals in der produktiven Einstellung kontrollieren.
+4. Rulesets, Environments, Workflowzugriff, Runner-Kennzeichen der FI und die
+   minimalen Rechte des von GitHub automatisch erzeugten `GITHUB_TOKEN`
+   nochmals in der produktiven Einstellung kontrollieren.
 5. Einen festgelegten Commit nach `Rnnn/Entwicklung` pushen und sowohl
    `ADAPTER_ACCEPTED` als auch den fachlich richtigen Stand in
    M/Text-Entwicklung bestätigen.
@@ -227,7 +229,7 @@ Der Cutover wird mindestens bei einem der folgenden Ereignisse angehalten:
 
 - Quellrevision, Branch-, Tag- oder Dateizuordnung ist nicht eindeutig.
 - Ein Pflichtnachweis oder eine erforderliche Freigabe fehlt.
-- Workflowversion, Ruleset, Environment, FI-Runner, Netzwerkpfad oder Secret ist
+- Workflowversion, Ruleset, Environment, Runner der FI, Netzwerkpfad oder Secret ist
   nicht wie abgenommen verfügbar.
 - Der Zielstand in M/Text weicht vom freigegebenen Commit ab.
 - FULL, DELTA, Manifest, JCL oder konfigurierte ISPW-Instanz weichen vom
@@ -265,9 +267,9 @@ und im Cutover-Protokoll bestätigt sind:
 - Sicherungs-, Sonder- und nicht freigegebene Stände wurden nur im
   ausdrücklich freigegebenen Umfang übernommen.
 - Alle Mandanten-Repositories verwenden laut zentraler Einrichtungsprüfung
-  dieselbe unveränderliche, freigegebene Version der Automation; weitere
+  dieselbe unveränderliche, freigegebene Version von `mtext-actions`; weitere
   Actions sind vollständig gepinnt.
-- Rulesets, Environments, Tag-Betriebsregel, FI-Runner-Zuordnung und minimale
+- Rulesets, Environments, Tag-Betriebsregel, Runner-Zuordnung der FI und minimale
   Berechtigungen sind praktisch wirksam.
 - Pushes nach Entwicklung und Abnahme synchronisieren genau den bestätigten
   Commit. Ein Push nach Bereitstellung erzeugt ohne Tag keine Lieferung.

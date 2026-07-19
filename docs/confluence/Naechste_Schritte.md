@@ -26,21 +26,24 @@ Rollenbesetzung, Zugangsdatenübergabe und praktische Abnahmen.
 
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
-| offen | Zentrales Repository `j520730/mtext-actions` und privates FI-Repository `j517120/mtext-fi` auf GitHub Enterprise anlegen beziehungsweise die lokalen Stände übernehmen | Das zentrale Repository ist nur für das Automatisierungsteam direkt zugänglich. Das FI-Repository enthält Ressourcen, Mandantenkonfiguration und schlanke Workflows |
-| offen | FI-Runner für den Einrichtungsworkflow bereitstellen | Das offizielle `runs-on`-Kennzeichen des von FI bereitgestellten Runnerangebots ist bestätigt, der Runner ist in GitHub verfügbar und das Kennzeichen steht in `mtext-actions` als Repositoryvariable `FI_RUNNER_LABEL` bereit |
+| offen | Zentrales Repository `j520730/mtext-actions` und privates Repository der FI `j517120/mtext-fi` auf GitHub Enterprise anlegen beziehungsweise die lokalen Stände übernehmen | `mtext-actions` ist nur für das Automatisierungsteam direkt zugänglich. Das Repository der FI enthält Ressourcen, Mandantenkonfiguration und schlanke Workflows |
+| offen | Runner der FI für den Einrichtungsworkflow bereitstellen | Das offizielle `runs-on`-Kennzeichen des von der FI bereitgestellten Runnerangebots ist bestätigt, der Runner ist in GitHub verfügbar und das Kennzeichen steht in `mtext-actions` als Repositoryvariable `FI_RUNNER_LABEL` bereit |
 | offen | Technische Einrichtungsberechtigung hinterlegen | Das Environment `Einrichtung` enthält `WORKFLOW_CONFIGURATION_TOKEN`. Die technische Identität ist auf `mtext-actions` und die vorgesehenen Mandanten-Repositories begrenzt und besitzt den erforderlichen Zugriff auf die freigegebenen Branches. Der Einrichtungsworkflow nimmt ausschließlich `.github/workflows` in seine Commits auf |
-| in Vorbereitung | Einrichtungsautomation im Testbereich abnehmen | `configure-workflows.yml` validiert beide Dateisätze, erzeugt die zentralen und mandantenseitigen Commits in der benötigten SHA-Reihenfolge und pusht sie erst nach einer leeren Abschlussprüfung. Der noch offene API-Teil verwaltet Repositoryeinstellungen, Branches, Default Branches, Rulesets, weitere Environments und Actions-Zugriffe für alle Mandanten. Secret-Werte bleiben außerhalb; vorhandene Secret-Namen und nicht automatisierbare Voraussetzungen werden nur geprüft |
-| bestätigt | Zentrale Implementierung gegen den fachlichen Vertrag prüfen | Die vier CLI-Kommandos, FULL und DELTA, Artefaktprüfung, JCL, FTP-/JES-Vertrag, Ressourcensynchronisation und Workflowgrenzen sind durch Akzeptanztests abgedeckt |
+| in Vorbereitung | Einrichtungsautomation im Testbereich abnehmen | `configure-workflows.yml` validiert beide Dateisätze, erzeugt die erforderlichen Commits in der benötigten SHA-Reihenfolge und pusht sie erst nach einer leeren Abschlussprüfung. Der noch offene API-Teil verwaltet Repositoryeinstellungen, Branches, Default Branches, Rulesets, weitere Environments und Actions-Zugriffe für alle Mandanten. Secret-Werte bleiben außerhalb; vorhandene Secret-Namen und nicht automatisierbare Voraussetzungen werden nur geprüft |
+| bestätigt | `mtext-actions` gegen den fachlichen Vertrag prüfen | Die vier CLI-Kommandos, FULL und DELTA, Artefaktprüfung, JCL, FTP-/JES-Vertrag, Ressourcensynchronisation und Workflowgrenzen sind durch Akzeptanztests abgedeckt |
 | offen | Branches der aktiven Stages und Default Branch einrichten | Die Einrichtungsautomation stellt für `R260`, `R261` und `R270` jeweils die Branches `Entwicklung`, `Abnahme` und `Bereitstellung` sowie zunächst `R261/Entwicklung` als Default Branch her |
-| offen | Zentrale Workflowversion und repositoryübergreifenden Zugriff einrichten | Der Einrichtungsworkflow setzt Workflowaufruf und Codebezug auf dieselbe vollständige Commit-SHA von `mtext-actions` und prüft diesen Zielzustand vor dem Push. Nur vorgesehene Mandanten-Repositories dürfen `mtext-actions` aufrufen. Für den Checkout der zentralen Python-Implementierung ist eine nur lesende technische Berechtigung festgelegt, da das `GITHUB_TOKEN` des Aufrufers auf dessen Repository begrenzt ist |
+| offen | `mtext-actions`-Version und repositoryübergreifenden Zugriff einrichten | Der Einrichtungsworkflow erhält die vollständige SHA der freigegebenen `mtext-actions`-Version als Pflichtangabe, checkt exakt diesen Stand aus und setzt Workflowaufruf sowie Codebezug auf dieselbe SHA. Nur vorgesehene Mandanten-Repositories dürfen `mtext-actions` aufrufen. Für den Checkout der Python-Implementierung aus `mtext-actions` ist eine nur lesende technische Berechtigung festgelegt, da das von GitHub automatisch für den Job erzeugte `GITHUB_TOKEN` auf das aufrufende Repository begrenzt ist |
+| offen | Rollout-Matrix für `mtext-actions`-Versionen festlegen | Für jede freigegebene `mtext-actions`-SHA stehen die zu aktualisierenden Mandanten-Repositories und Branches fest. Der Rollout-Nachweis hält je Eintrag Workflow-Lauf, erzeugten Mandanten-Commit und Ergebnis fest |
 | offen | Git-Clients für Ressourcenarbeit, Stage-Weitergabe und Release-Tags abnehmen | M/Text Workbench und zusätzlicher Git-Client unterstützen gemeinsam die in der [Benutzeranleitung](./Benutzeranleitung.md#benötigte-git-funktionen) beschriebenen Funktionen einschließlich Konfliktbehandlung, verbindlicher Herkunftszeile beim Cherry-Pick, kontrollierter lokaler Ablage, Gegen-Commit nach einem Push sowie Anlegen, gezieltem Pushen und Löschen eines Git-Tags |
 | bestätigt | GitHub-Plattform festhalten | GitHub Enterprise Server 3.20.4 |
 
 Der Einrichtungsworkflow ist bereits vorbereitet. Er wird in `mtext-actions`
-manuell für genau ein Mandanten-Repository und einen Zielbranch gestartet. Der
-Lauf erzeugt zuerst den zentralen Stand und anschließend den daran gebundenen
-Mandanten-Commit. Vor dem ersten Push erzwingt er einen leeren Zielzustand; eine
-Wiederholung erzeugt keine weiteren Commits. Der API-Teil der
+manuell mit einer freigegebenen Commit-SHA von `mtext-actions` für genau ein
+Mandanten-Repository und einen Zielbranch gestartet. Bei der erstmaligen
+Runner-Finalisierung kann daraus noch ein neuer zentraler Commit entstehen;
+dessen SHA wird für alle weiteren Einträge der Rollout-Matrix verwendet. Vor
+dem ersten Push erzwingt der Lauf einen leeren Zielzustand; eine Wiederholung
+mit derselben SHA erzeugt keine weiteren Commits. Der API-Teil der
 Einrichtungsautomation folgt nach Bestätigung von GitHub-Host,
 Repositoryeigentümern, Team- und Reviewer-IDs, Bypass-Zuordnungen,
 Ausgangs-Commits der Stage-Branches, Actions-Zugriffsebene sowie der technischen
@@ -58,11 +61,11 @@ Pflichtwerte vollständig sind.
 | offen | Lebenszyklus und Betriebsregel für Git-Tags einrichten | Die Einrichtungsautomation begrenzt Tags nach dem Muster `R[0-9][0-9][0-9].[0-9][0-9][0-9]` auf das Release-Team, soweit GHES dies statisch abbildet. Vor der Freigabe darf das Team einen irrtümlichen Tag erst nach Abbruch des zugehörigen Laufs zurücknehmen. Nach der Freigabe sind Verschieben und Löschen betrieblich verboten; Korrekturen verwenden einen neuen Commit und einen neuen Tag. Bei einer nachträglichen Abweichung werden weitere Freigaben gestoppt, der Tag auf der im freigegebenen Lauf ausgewiesenen Ziel-SHA wiederhergestellt und der Vorgang als Betriebsstörung gemeldet |
 | offen | Cherry-Pick und Release-Tag praktisch abnehmen | Auswahl nach SHA, verbindliche Herkunftszeile, Konfliktbehandlung und Push auf den Zielbranch sind dokumentiert. Die durch den ausgewählten Git-Client erzeugte Tag-Art wird festgelegt und mit dem Workflow geprüft. Ein nichtproduktiver Git-Tag startet genau einen Release-Workflow. Der Test weist nach, dass seine Löschung keine Übergabe auslöst und dass ein irrtümlicher Tag vor der Freigabe kontrolliert zurückgenommen werden kann |
 
-## 3. FI-Runnerangebot und technische Abhängigkeiten prüfen
+## 3. Runnerangebot der FI und technische Abhängigkeiten prüfen
 
 | Status | Tätigkeit | Ergebnis |
 |---|---|---|
-| offen | Laufzeit auf dem FI-Runner prüfen | Python 3.14, Git und die Ausführung der verwendeten Node-20-Actions sind verfügbar. `scripts/runner-preflight.sh` ist erfolgreich |
+| offen | Laufzeit auf dem Runner der FI prüfen | Python 3.14, Git und die Ausführung der verwendeten Node-20-Actions sind verfügbar. `scripts/runner-preflight.sh` ist erfolgreich |
 | offen | GHES-Artefakt-Actions prüfen | Die in den Workflows gepinnten Node-20-Varianten von `upload-artifact` v3.2.2 und `download-artifact` v3.1.0 sind auf GHES 3.20.4 verfügbar. Version 4 wird nicht verwendet |
 | offen | Zertifikate und Netzwerkpfade prüfen | Die interne CA ist im Truststore. Der Runner erreicht die gewählten M/Text-Ziele sowie Mainframe-FTP und JES, ohne die TLS-Prüfung zu deaktivieren |
 

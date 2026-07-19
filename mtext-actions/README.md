@@ -32,14 +32,14 @@ PYTHONPATH=src python3 -m lbs_delivery --help
 
 ## Workflowdateien über GitHub einrichten
 
-Der manuell gestartete Workflow **Configure workflow files** setzt das
-bestätigte FI-Runner-Kennzeichen in den zentralen Fach- und Testjobs und bindet
+Der manuell gestartete Workflow **Configure workflow files** setzt das von der
+FI bestätigte Runner-Kennzeichen in den zentralen Fach- und Testjobs und bindet
 Workflowaufruf sowie Python-Checkout eines Mandanten-Repositories gemeinsam an
 den daraus entstehenden vollständigen Commit-SHA von `mtext-actions`.
 
 Vor dem ersten Lauf werden in GitHub eingerichtet:
 
-- der abgenommene FI-Runner,
+- der abgenommene Runner der FI,
 - die Repositoryvariable `FI_RUNNER_LABEL` in `mtext-actions`,
 - das Environment `Einrichtung` mit dem Secret
   `WORKFLOW_CONFIGURATION_TOKEN`.
@@ -48,14 +48,25 @@ Das technische Token ist auf `mtext-actions` und die vorgesehenen
 Mandanten-Repositories begrenzt. Es benötigt dort die Berechtigung, geschützte
 Workflowdateien auf den ausgewählten Branches festzuschreiben.
 
-Unter **Actions** wird **Configure workflow files** mit dem vollständigen
-Mandanten-Repository und dem Zielbranch gestartet. Der Lauf validiert beide
-Dateisätze, erzeugt zunächst den zentralen Commit und bindet danach den
-Mandanten-Commit an dessen vollständige SHA. Erst wenn die abschließende Prüfung
-keine Änderung mehr ermittelt, werden beide Commits in dieser Reihenfolge
-gepusht. Die vorgenommenen Änderungen bleiben als Diffs im Workflow-Log
-sichtbar. Ein erneuter Lauf erzeugt keine weiteren Commits. Für jedes weitere
-Repository oder jeden weiteren Zielbranch wird der Ablauf wiederholt.
+Unter **Actions** wird **Configure workflow files** mit drei Angaben gestartet:
+
+- vollständige Commit-SHA der freigegebenen `mtext-actions`-Version,
+- vollständiger Name des Mandanten-Repositories,
+- zu aktualisierender Mandantenbranch.
+
+Der Lauf checkt exakt die angegebene zentrale SHA aus und lehnt einen
+abweichenden Stand ab. Bei der erstmaligen Einrichtung kann die Finalisierung
+des Runner-Kennzeichens noch einen zentralen Commit erzeugen; dessen im Log
+ausgewiesene SHA ist anschließend die gemeinsame Rollout-Version. Spätere
+Versionen enthalten bereits das feste Runner-Kennzeichen und verändern das
+zentrale Repository nicht mehr.
+
+Der Mandanten-Commit bindet Workflowaufruf und Python-Checkout gemeinsam an die
+Rollout-Version. Erst wenn die abschließende Prüfung keine Änderung mehr
+ermittelt, wird er gepusht. Die vorgenommenen Änderungen bleiben als Diffs im
+Workflow-Log sichtbar. Ein erneuter Lauf mit derselben SHA erzeugt keine
+weiteren Commits. Der Lauf wird für jeden Eintrag der freigegebenen
+Rollout-Matrix aus Mandanten-Repository und Branch wiederholt.
 
 Die technische Umsetzung liegt außerhalb der Lieferlogik unter
 `src/workflow_configuration.py`. Der Workflow führt keinen Code aus dem

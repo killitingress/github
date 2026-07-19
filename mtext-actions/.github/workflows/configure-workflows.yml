@@ -6,6 +6,10 @@ name: Configure workflow files
 'on':
   workflow_dispatch:
     inputs:
+      automation_sha:
+        description: Vollständige Commit-SHA der freigegebenen mtext-actions-Version
+        required: true
+        type: string
       mandant_repository:
         description: Vollständiger Name des Mandanten-Repositories, zum Beispiel j517120/mtext-fi
         required: true
@@ -41,6 +45,13 @@ jobs:
       GIT_COMMITTER_NAME: mtext-actions Einrichtung
       GIT_COMMITTER_EMAIL: mtext-actions@users.noreply.github.com
     steps:
+      # Der Zielbranch muss eine gültige Branchreferenz sein. Die zentrale
+      # Python-Logik prüft die freigegebene SHA nach dem Checkout verbindlich.
+      - name: Validate mandant branch
+        env:
+          MANDANT_REF: ${{ inputs.mandant_ref }}
+        run: git check-ref-format "refs/heads/$MANDANT_REF"
+
       # Das technische Token darf Workflowdateien im zentralen und in den
       # ausdrücklich freigegebenen Mandanten-Repositories ändern. Die
       # Checkout-Action entfernt die hinterlegten Zugangsdaten nach dem Job.
@@ -50,7 +61,7 @@ jobs:
           fetch-depth: 0
           path: automation
           persist-credentials: true
-          ref: main
+          ref: ${{ inputs.automation_sha }}
           token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
 
       # Der Zielbranch wird nur als Dateienbestand geladen. Kein Programmcode
@@ -65,22 +76,17 @@ jobs:
           repository: ${{ inputs.mandant_repository }}
           token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
 
-      # Python und Git müssen bereits mit dem FI-Runner bereitgestellt sein.
+      # Python und Git müssen bereits auf dem Runner der FI bereitgestellt sein.
       - name: Prepare approved Python runtime
         id: runtime
         run: automation/scripts/runner-preflight.sh
-
-      # Die frühe Prüfung verhindert einen Push auf eine ungültige Git-Referenz.
-      - name: Validate mandant branch
-        env:
-          MANDANT_REF: ${{ inputs.mandant_ref }}
-        run: git check-ref-format "refs/heads/$MANDANT_REF"
 
       # Die Python-Implementierung validiert beide Dateisätze vor dem ersten
       # Schreibzugriff, erzeugt beide lokalen Commits in der richtigen
       # SHA-Reihenfolge und erzwingt anschließend einen leeren Zielzustand.
       - name: Prepare and verify workflow commits
         env:
+          AUTOMATION_SHA: ${{ inputs.automation_sha }}
           FI_RUNNER_LABEL: ${{ vars.FI_RUNNER_LABEL }}
           PYTHONPATH: automation/src
         run: >-
@@ -90,7 +96,10 @@ jobs:
       # zuerst; nach einem Fehler setzt ein erneuter Lauf idempotent fort.
       - name: Push verified workflow commits
         env:
+          AUTOMATION_SHA: ${{ inputs.automation_sha }}
           MANDANT_REF: ${{ inputs.mandant_ref }}
         run: |
-          git -C automation push origin HEAD:refs/heads/main
+          if [[ "$(git -C automation rev-parse HEAD)" != "$AUTOMATION_SHA" ]]; then
+            git -C automation push origin HEAD:refs/heads/main
+          fi
           git -C mandant push origin "HEAD:refs/heads/$MANDANT_REF"

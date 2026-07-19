@@ -6,6 +6,7 @@ import re
 import unittest
 from pathlib import Path
 
+from lbs_delivery.git import FULL_SHA_RE
 from workflow_configuration import CONFIGURATION_WORKFLOW
 
 
@@ -45,8 +46,10 @@ class WorkflowTests(unittest.TestCase):
             # Erkennt jede Action-Referenz bis zum nächsten Leerzeichen.
             references = re.findall(r"uses:\s+([^\s]+)", text)
             for reference in references:
-                # Prüft den Pin auf eine vollständige kleingeschriebene SHA.
-                self.assertRegex(reference.rpartition("@")[2], r"^[0-9a-f]{40}$")
+                # Prüft den Pin mit der zentralen Regel für vollständige Git-SHAs.
+                self.assertIsNotNone(
+                    FULL_SHA_RE.fullmatch(reference.rpartition("@")[2])
+                )
 
         self.assertEqual(len(runner_values), 1)
         runner_value = next(iter(runner_values))
@@ -57,6 +60,9 @@ class WorkflowTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("workflow_dispatch:", configuration)
+        self.assertIn("automation_sha:", configuration)
+        self.assertIn("ref: ${{ inputs.automation_sha }}", configuration)
+        self.assertNotIn("ref: main", configuration)
         self.assertNotRegex(configuration, r"(?m)^\s+(?:push|pull_request):")
         self.assertIn("environment: Einrichtung", configuration)
         self.assertIn("secrets.WORKFLOW_CONFIGURATION_TOKEN", configuration)

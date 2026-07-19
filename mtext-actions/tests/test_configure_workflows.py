@@ -67,10 +67,15 @@ class ConfigureWorkflowsTests(unittest.TestCase):
         return result.stdout.strip()
 
     def run_module(
-        self, runner_label: str = "fi-runner"
+        self,
+        runner_label: str = "fi-runner",
+        automation_sha: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         """Startet dieselbe einmalige Vorbereitung wie der GitHub-Workflow."""
 
+        automation_sha = automation_sha or self.run_git(
+            self.automation_root, "rev-parse", "HEAD"
+        )
         return subprocess.run(
             [sys.executable, "-m", MODULE],
             check=False,
@@ -78,6 +83,7 @@ class ConfigureWorkflowsTests(unittest.TestCase):
             cwd=self.root,
             env={
                 **os.environ,
+                "AUTOMATION_SHA": automation_sha,
                 "FI_RUNNER_LABEL": runner_label,
                 "PYTHONPATH": str(ROOT / "src"),
             },
@@ -116,6 +122,44 @@ class ConfigureWorkflowsTests(unittest.TestCase):
         self.assertEqual(
             self.run_git(self.mandant_root, "rev-parse", "HEAD"), mandant_sha
         )
+
+    def test_rolls_out_an_explicit_new_automation_sha(self) -> None:
+        """Bindet einen Mandanten ohne zentralen Folgecommit an die gewählte Version."""
+
+        initial = self.run_module()
+        self.assertEqual(initial.returncode, 0, initial.stderr)
+        central_workflow = self.automation_root / ".github/workflows/ci.yml"
+        central_workflow.write_text(
+            central_workflow.read_text(encoding="utf-8") + "\n# Freigegebene Änderung\n",
+            encoding="utf-8",
+        )
+        self.run_git(self.automation_root, "add", ".github/workflows/ci.yml")
+        self.run_git(
+            self.automation_root, "commit", "-q", "-m", "Neue zentrale Version"
+        )
+        freigegebene_sha = self.run_git(
+            self.automation_root, "rev-parse", "HEAD"
+        )
+
+        result = self.run_module(automation_sha=freigegebene_sha)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            self.run_git(self.automation_root, "rev-parse", "HEAD"),
+            freigegebene_sha,
+        )
+        self.assertEqual(
+            self.mandant_workflow.read_text(encoding="utf-8").count(
+                freigegebene_sha
+            ),
+            2,
+        )
+
+    def test_rejects_a_checkout_other_than_the_released_sha(self) -> None:
+        """Verhindert einen Rollout aus einem anderen zentralen Commit."""
+
+        result = self.run_module(automation_sha="1" * 40)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Checkout entspricht nicht", result.stderr)
 
     def test_validates_every_file_before_creating_central_commit(self) -> None:
         """Lässt eine ungültige Mandantendatei ohne zentrale Änderung scheitern."""
@@ -169,6 +213,7 @@ class ConfigureWorkflowsTests(unittest.TestCase):
                     self.automation_root,
                     self.mandant_root,
                     "fi-runner",
+                    self.run_git(self.automation_root, "rev-parse", "HEAD"),
                 )
 
 if __name__ == "__main__":
