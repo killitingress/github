@@ -58,7 +58,7 @@ müssen zusätzlich alle aktivierungsrelevanten Punkte aus
 
 - Die Ziel-Repositories, die Branches `Rnnn/Entwicklung`, `Rnnn/Abnahme` und
   `Rnnn/Bereitstellung` sowie der vorgesehene Default Branch sind eingerichtet.
-- Die zentrale Einrichtungsprüfung bestätigt für alle Mandanten-Workflows
+- Die zentrale Einrichtungsprüfung bestätigt für alle Trigger-Workflows
   dieselbe unveränderliche, freigegebene Version von `mtext-actions`.
   Technische Platzhalter oder bewegliche Referenzen sind nicht vorhanden. Der
   abschließende Lauf des zentralen Einrichtungsworkflows erzeugt keine neuen
@@ -186,7 +186,7 @@ Nachweise vorliegen:
    und den Einrichtungsworkflow damit für alle Einträge der Rollout-Matrix aus
    Mandanten-Repository und Branch ausführen. Jeder abschließende Kontrolllauf
    muss ohne neuen Commit und mit erfolgreicher Abschlussprüfung enden.
-   Zusätzlich bestätigen, dass alle Mandanten-Workflows dieselbe
+   Zusätzlich bestätigen, dass alle Trigger-Workflows dieselbe
    unveränderliche `mtext-actions`-Version verwenden.
 9. Die zweite Go-/No-Go-Entscheidung protokollieren. Bei No-Go bleiben Jenkins
    und SVN führend und der GitHub-Stand wird nicht produktiv freigegeben.

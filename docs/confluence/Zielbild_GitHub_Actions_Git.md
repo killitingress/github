@@ -316,11 +316,11 @@ Releasepakete aufgenommen. `LOMS_Testdaten` soll ebenfalls in das Repository
 übernommen werden, ist aber über `excluded_projects` in `.github/config.json`
 von der Synchronisation und den Releasepaketen ausgeschlossen.
 
-Im Mandanten-Repository stehen nur kleine Workflowdateien. Sie legen fest, wann
-eine Automatisierung startet und welches GitHub Environment sie verwendet. Die
+Im Mandanten-Repository stehen nur kleine Trigger-Workflows. Sie legen fest,
+wann eine Automatisierung startet und welches GitHub Environment sie verwendet. Die
 eigentlichen Arbeitsschritte liegen im Repository `mtext-actions`. Bei der
 Einrichtung (und bei späteren Updates) informiert ein besonderer Workflow die
-Mandanten-Workflows darüber, welche Version von `mtext-actions` zu verwenden
+Trigger-Workflows darüber, welche Version von `mtext-actions` zu verwenden
 ist.
 
 Im Zielbetrieb werden die Mandanten-Repositories und `mtext-actions` als
@@ -512,7 +512,7 @@ eigentliche Fachlogik liegt in Python.
 
 ### Gesamtzusammenhang
 
-| Prozessschritt | Auslöser | Mandanten-Workflow | Zentraler Workflow | Python-Kommando | Ergebnis |
+| Prozessschritt | Auslöser | Trigger-Workflow | Zentraler Workflow | Python-Kommando | Ergebnis |
 |---|---|---|---|---|---|
 | Workflowdateien einrichten oder `mtext-actions`-Version ausrollen | Manueller Start in `mtext-actions` mit freigegebener vollständiger SHA | keiner | `configure-workflows.yml` | `python -m workflow_configuration` | Zentrale Runnerwerte und Mandanten-Pins auf die gewählte Version geprüft und festgeschrieben |
 | Mandantenkonfiguration prüfen | Push mit Änderung an `.github/config.json` auf einen Branch | `validate-config.yml` | `reusable-validate-config.yml` | `validate-config` | Konfiguration geprüft |
@@ -550,7 +550,7 @@ Konfigurationsprüfung. Wenn ein Push nach Entwicklung oder Abnahme zugleich
 Synchronisation und Release-Erstellung prüfen die verwendete Konfiguration vor
 dem Zugriff auf externe Systeme erneut.
 
-### Mandantenseitige YAML-Workflows
+### Mandantenseitige Trigger-Workflows
 
 | Datei | Automatischer Trigger | Manueller Trigger | Abhängigkeit und Zweck |
 |---|---|---|---|
@@ -951,7 +951,7 @@ noch offenen Grenzen wichtig.
 | Qualitätsmerkmal | Umsetzung und Nutzen |
 |---|---|
 | Durchgängiger Gesamtablauf | Die fachliche Kette führt von Entwicklung über Abnahme und Bereitstellung zum Release-Tag. Erst das geprüfte Artefakt und die manuelle Freigabe führen zur externen Übergabe. Jeder Übergang hat einen eindeutigen Auslöser und ein prüfbares Ergebnis. |
-| Zentral gepflegte Automatisierung | Die Mandanten-Workflows enthalten nur Trigger und feste Zielzuordnungen. Die gemeinsame Fachlogik liegt in wiederverwendbaren Workflows und einer Python-Implementierung in `mtext-actions`. Änderungen müssen dadurch nicht je Mandant kopiert werden. |
+| Zentral gepflegte Automatisierung | Die Trigger-Workflows enthalten nur Auslöser und feste Zielzuordnungen. Die gemeinsame Fachlogik liegt in wiederverwendbaren Workflows und einer Python-Implementierung in `mtext-actions`. Änderungen müssen dadurch nicht je Mandant kopiert werden. |
 | Eindeutige und reproduzierbare Lieferung | Jeder Lauf verarbeitet einen vollständigen Commit-SHA. Das Manifest verbindet Release-Tag, Ziel-Commit und erzeugte Dateien. Gleiche Eingaben erzeugen bytegleiche Archive. Historische Namen, Verzeichnisstrukturen, Löschlisten und JCL-Verträge bleiben erhalten. |
 | Getrennte Verantwortlichkeiten | Mandantenressourcen und -konfiguration, gemeinsame Automatisierung, GitHub-Schutzregeln und Runnerbetrieb haben jeweils einen klaren Eigentümer. |
 | Minimale Berechtigungen und kontrollierte Wirkung | Die fachlichen Workflows erhalten nur Leserechte auf Repositoryinhalte. Die technische Schreibberechtigung ist auf den Einrichtungsworkflow und die vorgesehenen Workflowdateien begrenzt. Zugangsdaten liegen in Environments und stehen erst im berechtigten Job zur Verfügung. |
