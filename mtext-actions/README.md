@@ -1,7 +1,12 @@
 # `mtext-actions`
 
-Dieses Repository enthält die zentrale M/Text-Lieferautomation. Sie stellt
-vier CLI-Kommandos für die wiederverwendbaren GitHub-Workflows bereit:
+Dieses Dokument richtet sich an Entwickler und technische Verantwortliche der
+zentralen M/Text-Automatisierung. Die Bedienung in den Mandanten-Repositories
+ist in der [Benutzeranleitung](../docs/confluence/Benutzeranleitung.md)
+beschrieben.
+
+Das Repository stellt vier CLI-Kommandos für die wiederverwendbaren
+GitHub-Workflows bereit:
 
 - `validate-config`
 - `sync-resources`
@@ -56,7 +61,7 @@ Unter **Actions** wird **Configure workflow files** mit drei Angaben gestartet:
 
 Der Lauf checkt exakt die angegebene zentrale SHA aus und lehnt einen
 abweichenden Stand ab. Bei der erstmaligen Einrichtung kann die Finalisierung
-des Runner-Kennzeichens noch einen zentralen Commit erzeugen; dessen im Log
+des Runner-Kennzeichens noch einen zentralen Commit erzeugen. Dessen im Log
 ausgewiesene SHA ist anschließend die gemeinsame Rollout-Version. Spätere
 Versionen enthalten bereits das feste Runner-Kennzeichen und verändern das
 zentrale Repository nicht mehr.
@@ -72,6 +77,7 @@ Die technische Umsetzung liegt außerhalb der Lieferlogik unter
 `src/workflow_configuration.py`. Der Workflow führt keinen Code aus dem
 Mandanten-Repository aus.
 
-Rulesets, weitere Environments, Team-Zuordnungen und Actions-Zugriffe werden
-erst über den noch offenen API-Teil der Einrichtungsautomation angewendet, wenn
-die dafür benötigten Rollen und IDs bestätigt sind.
+Rulesets, weitere Environments, Team-Zuordnungen und Actions-Zugriffe gehören
+nicht zum derzeitigen Workflow. Ihre Umsetzung und Abnahme sind in
+[Nächste Schritte](../docs/confluence/Naechste_Schritte.md) als offener
+API-Teil geführt.

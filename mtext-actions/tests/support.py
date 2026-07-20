@@ -62,12 +62,19 @@ def track_remote_branch(repository: Path, branch: str) -> None:
 
 
 def setup_repository(root: Path, *, branch: str) -> Path:
-    """Erzeugt ein Mandanten-Repository mit einem gültigen Basisprojekt."""
+    """Erzeugt ein Mandanten-Repository mit dem aktuellen FI-Referenzstand."""
 
     repository = init_repository(root, branch=branch)
-    project = repository / "LOMS_Basis"
-    project.mkdir()
-    (project / "value.txt").write_text("content\n", encoding="utf-8")
+    for project_name in (
+        "Configuration",
+        "Fonts",
+        "LOMS_Framework",
+        "LOMS_Basis",
+        "LOMS_PKA",
+    ):
+        project = repository / project_name
+        project.mkdir()
+        (project / "value.txt").write_text("content\n", encoding="utf-8")
     git(repository, "add", ".")
     git(repository, "commit", "-m", "init")
     return repository
@@ -124,6 +131,7 @@ def load_test_configuration(
     mandant_path: Path | None = None,
     releaselinien_path: Path | None = None,
     mandant: dict[str, object] | None = None,
+    repository_name: str = "mtext-fi",
 ) -> Configuration:
     """Schreibt die Mandantenkonfiguration und lädt den Testvertrag."""
 
@@ -132,6 +140,6 @@ def load_test_configuration(
     return load_configuration(
         path,
         releaselinien_path or RELEASELINIEN,
-        repository_name="mtext-fi",
+        repository_name=repository_name,
         repository_root=repository,
     )

@@ -100,11 +100,31 @@ class ReleaseTests(unittest.TestCase):
             tag="R261.100",
             trigger_sha=git(self.repository, "rev-parse", "HEAD"),
         )
-        load_and_verify(full_manifest, full)
+        _manifest, full_packages = load_and_verify(full_manifest, full)
+        self.assertEqual(
+            [package["member"] for package in full_packages],
+            ["FIBASISF", "FIBASISD"],
+        )
         with tarfile.open(full / "FIBASISF.tgz", "r:gz") as archive:
             full_names = archive.getnames()
         self.assertIn("./LOMS_Basis/baseline.txt", full_names)
         self.assertIn("./LOMS_Basis/deleted.txt", full_names)
+
+        with tarfile.open(full / "FIBASISD.tgz", "r:gz") as archive:
+            reset_names = archive.getnames()
+            reset_deletion = archive.extractfile("FIBASISD.txt")
+            self.assertIsNotNone(reset_deletion)
+            self.assertEqual(reset_deletion.read(), b"")
+        self.assertEqual(reset_names, ["FIBASISD.txt", "LOMS_Basis"])
+
+        full_publish = publish_mainframe(
+            manifest_path=full_manifest,
+            artifact_root=full,
+            template_path=AUTOMATION_ROOT / "templates/mainframe-upload.jcl",
+            temporary_directory=self.root / "full-jcl",
+            execute=False,
+        )
+        self.assertEqual(full_publish["packages"], ["FIBASISF", "FIBASISD"])
 
     def test_publish_rejects_changed_artifact(self) -> None:
         """Lehnt eine Paketänderung nach dem Releasebau vor der Übergabe ab."""
@@ -121,6 +141,35 @@ class ReleaseTests(unittest.TestCase):
         (output / "FIBASISD.tgz").write_bytes(b"tampered")
         with self.assertRaises(DeliveryError):
             load_and_verify(manifest_path, output)
+
+    def test_release_packages_new_project_with_derived_code(self) -> None:
+        """Paketiert ein zusätzliches Projekt ohne gepflegte Projektzuordnung."""
+
+        project = self.repository / "LOMS_Dokumente"
+        project.mkdir()
+        (project / "value.txt").write_text("content\n", encoding="utf-8")
+        git(self.repository, "add", ".")
+        git(self.repository, "commit", "-m", "additional project")
+        git(self.repository, "tag", "R261.109")
+        git(
+            self.repository,
+            "update-ref",
+            "refs/remotes/origin/R261/Bereitstellung",
+            "HEAD",
+        )
+        configuration = load_test_configuration(self.root, self.repository)
+        output = self.root / "additional-project"
+        manifest_path = build_release(
+            configuration,
+            repository_root=self.repository,
+            output_directory=output,
+            repository_name="mtext-fi",
+            tag="R261.109",
+            trigger_sha=git(self.repository, "rev-parse", "HEAD"),
+        )
+        _manifest, packages = load_and_verify(manifest_path, output)
+        self.assertIn("FIDOKUMD", [package["member"] for package in packages])
+        self.assertTrue((output / "FIDOKUMD.tgz").is_file())
 
     def test_release_uses_mandant_ispw_instance(self) -> None:
         """Übernimmt die konfigurierte Testinstanz in Manifest und JCL."""

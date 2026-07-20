@@ -118,7 +118,7 @@
         <mxCell id="build-job" value="Job build&#xa;kein Zugriff auf Zielsystem-Secrets&#xa;Tag / Branch / Mandant / Releaselinie prüfen&#xa;FULL bei .100, sonst DELTA&#xa;.100 muss Vorgänger sein&#xa;build-release" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="805" y="970" width="245" height="155" as="geometry"/>
         </mxCell>
-        <mxCell id="artifact" value="Artefakt desselben Laufs&#xa;&lt;Kürzel&gt;&lt;Liefercode&gt;&lt;F|D&gt;.tgz&#xa;FULL oder kumulatives DELTA&#xa;+ Information + manifest.json&#xa;Tag, Ziel-SHA, Größe, SHA-256&#xa;ARTIFACT_READY" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="artifact" value="Artefakt desselben Laufs&#xa;&lt;Kürzel&gt;&lt;Projektcode&gt;&lt;F|D&gt;.tgz&#xa;FULL oder kumulatives DELTA&#xa;+ Information + manifest.json&#xa;Tag, Ziel-SHA, Größe, SHA-256&#xa;ARTIFACT_READY" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1080" y="975" width="200" height="150" as="geometry"/>
         </mxCell>
         <mxCell id="approval" value="Environment Bereitstellung&#xa;manuelle Freigabe der&#xa;Mainframe-Übergabe&#xa;Secrets erst danach" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
@@ -130,7 +130,7 @@
         <mxCell id="publish-job" value="Job publish&#xa;needs: build, je Mandant serialisiert&#xa;exaktes Artefakt herunterladen&#xa;Pfad, Größe und SHA-256 erneut prüfen&#xa;JCL strikt rendern&#xa;publish-mainframe --execute" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1245" y="1170" width="280" height="155" as="geometry"/>
         </mxCell>
-        <mxCell id="mainframe" value="Mainframe IZE9 / CodePipeline&#xa;FTP: IEA.LOMS.TONICZ(&lt;Member&gt;)&#xa;JCL kopiert und registriert&#xa;BOAS / TONICZ / &lt;LEVEL&gt;&#xa;MNAME = &lt;Kürzel&gt;&lt;Liefercode&gt;&lt;F|D&gt;&#xa;MAINFRAME_SUBMITTED&#xa;kein nachgelagertes Status-Polling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="mainframe" value="Mainframe IZE9 / CodePipeline&#xa;FTP: IEA.LOMS.TONICZ(&lt;Member&gt;)&#xa;JCL kopiert und registriert&#xa;BOAS / TONICZ / &lt;LEVEL&gt;&#xa;MNAME = &lt;Kürzel&gt;&lt;Projektcode&gt;&lt;F|D&gt;&#xa;MAINFRAME_SUBMITTED&#xa;kein nachgelagertes Status-Polling" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1605" y="1165" width="330" height="170" as="geometry"/>
         </mxCell>
         <mxCell id="controls" value="Querschnittliche Schutzgrenzen: vollständige Commit-SHAs | zentrale Workflows und Actions fest gepinnt | GITHUB_TOKEN nur contents: read | von der FI bereitgestellte Runner | Rulesets für Branches, Workflows und .github/config.json | kontrollierte Wiederanläufe mit demselben Commit beziehungsweise Tag" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">

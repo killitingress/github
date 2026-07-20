@@ -57,6 +57,16 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result["status"], Status.CONFIG_VALIDATED.value)
         self.assertEqual(result["mandanten_kuerzel"], "FI")
         self.assertIn("R261", result["releaselinien"])
+        self.assertNotIn("warnungen", result)
+
+    def test_validate_config_prints_reference_warning(self) -> None:
+        """Gibt eine Abweichung lokal als deutschsprachige Warnung aus."""
+
+        (self.repository / "LOMS_Dokumente").mkdir()
+        exit_code, stdout, stderr = self._run("validate-config", *self.common)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("WARNUNG: Projekte sind", stderr)
+        self.assertTrue(json.loads(stdout)["warnungen"])
 
     def test_validate_config_returns_validation_exit_code(self) -> None:
         """Übersetzt Konfigurationsfehler in Exitcode 2."""

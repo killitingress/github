@@ -1,7 +1,11 @@
-# Bedienungsanleitung für `mtext-fi`
+# Kurzanleitung für `mtext-fi`
 
-Dieses Repository enthält die M/Text-Briefressourcen der FI. Die FI führt den
-Master-Mandanten und ist für die folgenden Projekte verantwortlich:
+Dieses Repository enthält die M/Text-Briefressourcen der FI. Diese
+Kurzanleitung fasst die häufigsten Abläufe zusammen. Die eigenständige
+[Benutzeranleitung](../docs/confluence/Benutzeranleitung.md) enthält zusätzlich
+Git-Grundlagen, Rücknahmen, Wiederanläufe und Fehlerbilder.
+
+Der aktuelle Referenzstand umfasst folgende Projekte:
 
 - `Configuration`
 - `Fonts`
@@ -9,7 +13,7 @@ Master-Mandanten und ist für die folgenden Projekte verantwortlich:
 - `LOMS_Basis`
 - `LOMS_PKA`
 
-`LOMS_Testdaten` gehört zum Repository, ist aber von der Synchronisierung
+`LOMS_Testdaten` gehört zum Repository, ist aber von der Synchronisation
 mittels `excluded_projects` in `.github/config.json` ausgeschlossen.
 Reguläre Dateien in der Repositorywurzel werden nicht als Projekte verarbeitet.
 Verzeichnisse, deren Namen mit einem Punkt beginnen, werden ebenfalls ignoriert.
@@ -63,18 +67,21 @@ zusätzliches GitHub Release wird nicht angelegt:
 - Jeder weitere gültige Tag derselben Linie erzeugt ein kumulatives DELTA
   gegenüber `.100`.
 
+Ein FULL enthält je Projekt das vollständige F-Paket und zusätzlich ein leeres
+D-Paket mit leerem Projektverzeichnis und leerer Löschliste.
+
 Der Release-Workflow prüft den Tag, baut die Lieferdateien und wartet vor der
 Mainframe-Übergabe auf die Freigabe im GitHub Environment `Bereitstellung`.
-Einen irrtümlich angelegten Tag kann das Release-Team nach Abbruch des
+Einen irrtümlich angelegten Tag kann das Mandanten-Release-Team nach Abbruch des
 zugehörigen Workflow-Laufs löschen und bei Bedarf neu anlegen. Die manuelle
 Freigabe gilt ausschließlich für die Mainframe-Übergabe, nicht für den Tag.
 Das Löschen eines Tags nimmt eine bereits erfolgte Lieferung nicht zurück.
 
 ## Mandantenkonfiguration
 
-[`.github/config.json`](.github/config.json) legt das Mandantenkürzel, das Repository, das
-Mainframe-Subsystem, die ISPW-Instanz `T` oder `P`, die Hostprofile und
-optionale Projektausschlüsse fest.
+[`.github/config.json`](.github/config.json) legt das Mandantenkürzel, das
+Repository, das Mainframe-Subsystem, die ISPW-Instanz `T` oder `P`, die
+Hostprofile und optionale Projektausschlüsse fest.
 Alle anderen sichtbaren Verzeichnisse in der Repositorywurzel werden als
 Projekte verarbeitet. Änderungen werden mit den benannten Mandanten- und
 Betriebsverantwortlichen abgestimmt. Ein Push der Datei startet den

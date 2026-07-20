@@ -1,33 +1,34 @@
 # Migrations- und Cutover-Runbook
 
-**Zweck:** Verbindliche Vorbereitung und Durchführung der SVN-Migration sowie
-des produktiven harten Cutovers
+Dieses Runbook ist die Arbeitsanleitung für zwei getrennte Vorhaben: den
+nichtproduktiven Testabzug und den späteren produktiven Cutover. Beide
+verwenden dasselbe wiederholbare Migrationsverfahren. Der Testabzug ändert das
+führende System nicht. Erst der freigegebene Cutover schaltet von SVN und
+Jenkins auf Git und GitHub Actions um.
 
-**Zielbild:** [GitHub Actions und Git](./Zielbild_GitHub_Actions_Git.md)
+Ergänzende Dokumente:
 
-**Soll-Ablauf:**
-[Architekturdiagramm](../../Architektur_Soll_GitHub_Actions_Git.drawio)
-
-**Operative Vorbereitung:** [Nächste Schritte](./Naechste_Schritte.md)
-
-**Bedienung nach Aktivierung:** [Benutzeranleitung](./Benutzeranleitung.md)
+- [Zielbild für GitHub Actions und Git](./Zielbild_GitHub_Actions_Git.md)
+- [Operative Vorbereitung](./Naechste_Schritte.md)
+- [Benutzeranleitung nach Aktivierung](./Benutzeranleitung.md)
+- [Soll-Architektur als Ablaufdiagramm](../../Architektur_Soll_GitHub_Actions_Git.drawio)
 
 ## 1. Rahmen, Umfang und Verantwortlichkeiten
 
-Voraussichtlich im November/Dezember 2026 wird ein fest benannter Stand der
+Nach aktuellem Planungsstand wird im November oder Dezember 2026 ein fest
+benannter Stand der
 SVN-Repositories nach Git übernommen. Dieser Abzug dient dem nichtproduktiven
 Test-Parallelbetrieb. Jenkins und SVN bleiben währenddessen produktiv. Der
 Teststand wird nicht laufend mit SVN abgeglichen.
 
-Für den ab Januar 2027 geplanten Cutover wird nach einem Änderungsfreeze der
+Für den ab Januar 2027 vorgesehenen Cutover wird nach einem Änderungsfreeze der
 freigegebene SVN-Endstand mit demselben abgenommenen Verfahren nach Git
 übertragen und geprüft. Während der Umschaltung liefert nur eines der beiden
 Systeme produktiv.
 
 Ziel-Repositories sind `mtext-fi`, `mtext-autonom`, `mtext-by`, `mtext-lh`,
-`mtext-nw`, `mtext-os` und `mtext-sa`. Vor dem ersten Abzug wird verbindlich
-dokumentiert, ob das vorhandene Mandantenkürzel `IT` durch eines dieser
-Repositories abgedeckt ist oder ein zusätzliches Ziel-Repository benötigt.
+`mtext-nw`, `mtext-os` und `mtext-sa`. Das Repository `mtext-autonom` führt das
+Mandantenkürzel `IT` und das Projekt `LOMS_Autonom`.
 
 Für Testabzug und Cutover werden mindestens folgende Rollen namentlich
 besetzt:
@@ -70,7 +71,7 @@ müssen zusätzlich alle aktivierungsrelevanten Punkte aus
   gesperrt.
 - Die Environments `Einrichtung`, `Entwicklung`, `Abnahme` und `Bereitstellung`
   sind eingerichtet. Nur der Einrichtungsworkflow erhält die technische
-  Schreibberechtigung; nur der Publish-Job kann `Bereitstellung` verwenden und
+  Schreibberechtigung. Nur der Publish-Job kann `Bereitstellung` verwenden und
   muss dort manuell freigegeben werden.
 - Die Berechtigungen für Release-Tags und die Rücknahme irrtümlicher Tags sind
   eingerichtet und abgenommen. Vor dem Löschen eines Tags wird der dadurch
@@ -107,7 +108,7 @@ Ersatz für eine Korrektur des wiederholbaren Migrationsverfahrens.
 |---|---|---|
 | offen | SVN-Quellen festlegen | Repository-URL, Pfad und exakte Revision sind je Ziel-Repository dokumentiert |
 | offen | Branchmatrix erstellen | Die SVN-Quellen für Entwicklung, Abnahme und Bereitstellung jeder aktiven Releaselinie sind eindeutig den Git-Branches zugeordnet |
-| offen | Projektmatrix freigeben | Projektverzeichnisse, Fragmentnamen, Liefercodes und Ausschlüsse sind je Mandant dokumentiert |
+| offen | Projektmatrix beim Abzug bestätigen | Der tatsächliche Importstand wird mit dem im Zielbild dokumentierten aktuellen Referenzstand aus Projektverzeichnissen, Fragmentnamen und Mandantenkürzeln verglichen. Abgeleitete Projektcodes müssen eindeutig sein. Abweichungen werden fachlich bewertet und aktualisieren bei Bestätigung den Referenzstand. |
 | erforderlich | Release-Basen festlegen | Je aktiver Releaselinie sind der benötigte freigegebene `.100`-Tag und alle weiterhin benötigten freigegebenen Folgetags benannt |
 | offen | Tagnamen normalisieren | Beispielsweise wird `R260.101_MText` zu `R260.101`. Jede Zuordnung nennt Quelltag, Zieltag und Ziel-Commit |
 | offen | Nicht freigegebene Stände ausschließen | Irrtümliche Tags, `Verbunden mit Bereitstellung*.txt`, Backup-/Fusion-Sonderstände und andere nicht freigegebene Marker werden nicht als Releases übernommen |
@@ -155,9 +156,10 @@ Nachweise vorliegen:
 - `validate-config` endet für jeden Mandanten mit `CONFIG_VALIDATED`.
 - Ein vollständiger Sync nach Entwicklung und Abnahme stellt den erwarteten
   Zielstand her. Die fachliche Kontrolle in M/Text ist dokumentiert.
-- Ein FULL und ein DELTA erzeugen die erwarteten Archive, Informationsdateien,
-  Löschlisten und JCL-Werte. Der Vergleich mit dem bisherigen Lieferweg ist
-  dokumentiert.
+- Ein FULL erzeugt je Projekt das vollständige F-Paket sowie das zusätzliche
+  leere D-Paket. Ein DELTA erzeugt das kumulative D-Paket. Archive,
+  Informationsdateien, Löschlisten und JCL-Werte sind mit dem bisherigen
+  Lieferweg verglichen und dokumentiert.
 - Ein nichtproduktiver Publish-Lauf prüft Artefakt, konfigurierte ISPW-Instanz,
   JCL und unmittelbare FTP-/JES-Übergabe. Die nachgelagerte fachliche Kontrolle
   erfolgt separat.
@@ -242,7 +244,7 @@ gesperrt und als fehlgeschlagener Lauf dokumentiert.
 Sind nach der Umschaltung bereits neue Git-Commits, für Lieferungen verwendete
 Tags oder externe Wirkungen entstanden, ist eine automatische Rückkehr
 unzulässig. Die Cutover-Leitung friert weitere Änderungen ein.
-Migrationsteam, Release-Team
+Migrationsteam, Mandanten-Release-Team
 und Zielsystembetrieb gleichen Git- und SVN-Stände sowie bereits erfolgte
 M/Text- und Mainframe-Wirkungen ab und entscheiden dokumentiert über
 Fortsetzung oder kontrollierte Rückmigration. Eine Mainframe-Übergabe wird bei
@@ -265,7 +267,7 @@ und im Cutover-Protokoll bestätigt sind:
 - Sicherungs-, Sonder- und nicht freigegebene Stände wurden nur im
   ausdrücklich freigegebenen Umfang übernommen.
 - Alle Mandanten-Repositories verwenden laut zentraler Einrichtungsprüfung
-  dieselbe unveränderliche, freigegebene Version von `mtext-actions`; weitere
+  dieselbe unveränderliche, freigegebene Version von `mtext-actions`. Weitere
   Actions sind vollständig gepinnt.
 - Rulesets, Environments, Tagberechtigungen, Runner-Zuordnung der FI und
   minimale Berechtigungen sind praktisch wirksam.

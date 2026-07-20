@@ -16,14 +16,25 @@ MANDANTEN_KUERZEL = {"FI", "BY", "LH", "NW", "OS", "SA", "IT"}
 ISPW_INSTANZEN = {"T", "P"}
 # Ausschließlich diese produktiv vorhandenen CodePipeline-Stages sind erlaubt.
 CODEPIPELINE_STAGES = {"FKTE", "FKTF", "JURJ", "JURP", "SVTS", "VPTV"}
-# Historisch festgelegte Liefercodes bilden Projektname auf Archiv und Member ab.
-PROJECT_CODES = {
-    "Configuration": "CONFI",
-    "Fonts": "FONTS",
-    "LOMS_Framework": "FRAME",
-    "LOMS_Basis": "BASIS",
-    "LOMS_PKA": "PKA",
-    "LOMS_Autonom": "AUTON",
+# Dieser aktuelle Referenzstand macht Abweichungen der Mandanten-Repositories
+# sichtbar, ohne die technisch verarbeitbare Projektstruktur festzuschreiben.
+PROJEKTREFERENZ = {
+    "mtext-fi": (
+        "FI",
+        {
+            "Configuration",
+            "Fonts",
+            "LOMS_Framework",
+            "LOMS_Basis",
+            "LOMS_PKA",
+        },
+    ),
+    "mtext-autonom": ("IT", {"LOMS_Autonom"}),
+    "mtext-by": ("BY", {"LOMS_Basis[BY]", "LOMS_Autonom[BY]"}),
+    "mtext-lh": ("LH", {"LOMS_Basis[LH]", "LOMS_Autonom[LH]"}),
+    "mtext-nw": ("NW", {"LOMS_Basis[NW]", "LOMS_Autonom[NW]"}),
+    "mtext-os": ("OS", {"LOMS_Basis[OS]", "LOMS_Autonom[OS]"}),
+    "mtext-sa": ("SA", {"LOMS_Basis[SA]", "LOMS_Autonom[SA]"}),
 }
 # Entwicklungs- und Abnahmestage bestimmen serverSync-Pfad und Adapterhost.
 SYNC_STAGES = {"Entwicklung": ("E", "e"), "Abnahme": ("A", "a")}
@@ -42,6 +53,7 @@ class Configuration:
     projects: dict[str, str]
     hostprofile: dict[str, dict[str, str]]
     releaselinien: dict[str, dict[str, str]]
+    warnungen: tuple[str, ...]
 
 
 def _read_json(path: str | Path) -> Any:
@@ -156,17 +168,40 @@ def load_configuration(
         ) from exc
     projects: dict[str, str] = {}
     for name in names:
-        base = name[:-4] if name.endswith(f"[{kuerzel}]") else name
-        if base not in PROJECT_CODES:
-            raise DeliveryError(
-                Status.VALIDATION_FAILED,
-                f"Projekt besitzt keinen Liefercode: {name}",
-            )
-        projects[name] = PROJECT_CODES[base]
+        # Diese Stelle besitzt die Formatregel für den Projektcode, der in
+        # Paketnamen und Mainframe-Member eingeht.
+        base = name.removesuffix(f"[{kuerzel}]")
+        projects[name] = base.removeprefix("LOMS_")[:5].upper()
     if not projects or len(projects.values()) != len(set(projects.values())):
         raise DeliveryError(
-            Status.VALIDATION_FAILED, "Projektzuordnung ist nicht eindeutig"
+            Status.VALIDATION_FAILED, "abgeleitete Projektcodes sind nicht eindeutig"
         )
+
+    warnungen: list[str] = []
+    referenz = PROJEKTREFERENZ.get(repository)
+    if referenz is None:
+        warnungen.append(
+            f"Repository besitzt keinen aktuellen Projekt-Referenzstand: {repository}"
+        )
+    else:
+        referenz_kuerzel, referenz_projekte = referenz
+        if kuerzel != referenz_kuerzel:
+            warnungen.append(
+                "Mandantenkürzel weicht vom aktuellen Referenzstand ab: "
+                f"{repository} erwartet {referenz_kuerzel}, konfiguriert ist {kuerzel}"
+            )
+        fehlend = sorted(referenz_projekte - projects.keys())
+        zusaetzlich = sorted(projects.keys() - referenz_projekte)
+        if fehlend:
+            warnungen.append(
+                "Projekte fehlen gegenüber dem aktuellen Referenzstand: "
+                + ", ".join(fehlend)
+            )
+        if zusaetzlich:
+            warnungen.append(
+                "Projekte sind gegenüber dem aktuellen Referenzstand zusätzlich: "
+                + ", ".join(zusaetzlich)
+            )
 
     if not isinstance(releaselinien, dict) or not releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinien fehlen")
@@ -188,4 +223,5 @@ def load_configuration(
         projects=projects,
         hostprofile=hostprofile,
         releaselinien=releaselinien,
+        warnungen=tuple(warnungen),
     )

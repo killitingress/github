@@ -26,10 +26,10 @@ from .manifest import Manifest, sha256_file, write_manifest
 LEGACY_PREVIOUS_TAG = "R001.100"
 # Die Endung `.100` kennzeichnet den vollständigen Stand einer Releaselinie.
 FULL_SUFFIX = ".100"
-# Archivnamen bestehen aus Mandanten-, Projekt- und Liefercode.
-ARCHIVE_NAME = "{mandant}{project_code}{delivery_code}.tgz"
+# Archivnamen bestehen aus Mandantenkürzel, Projektcode und Lieferart.
+ARCHIVE_NAME = "{mandant}{projektcode}{delivery_code}.tgz"
 # Jede DELTA-Lieferung enthält eine historisch benannte Löschliste.
-DELETION_NAME = "{mandant}{project_code}D.txt"
+DELETION_NAME = "{mandant}{projektcode}D.txt"
 # Informationsdateien dokumentieren Projekt, Lieferart und verglichene Tags.
 INFORMATION_NAME = (
     "_INFO_{mandant}-{project}-{delivery_type}-{tag}-{previous_tag}.txt"
@@ -226,13 +226,14 @@ def build_release(
 
     artifacts: list[dict[str, object]] = []
     previous_label = previous or LEGACY_PREVIOUS_TAG
-    for project, project_code in configuration.projects.items():
+    for project, projektcode in configuration.projects.items():
         delivery_code = "F" if delivery_type == "FULL" else "D"
         archive_path = output / ARCHIVE_NAME.format(
             mandant=configuration.kuerzel,
-            project_code=project_code,
+            projektcode=projektcode,
             delivery_code=delivery_code,
         )
+        packages = [(archive_path, delivery_code)]
         if delivery_type == "FULL":
             source = root / project
             if not source.is_dir() or source.is_symlink():
@@ -244,10 +245,22 @@ def build_release(
             archive_names = _write_archive(
                 archive_path, [(source, f"./{project}")]
             )
+            deletion_name = DELETION_NAME.format(
+                mandant=configuration.kuerzel, projektcode=projektcode
+            )
+            delta_path = output / ARCHIVE_NAME.format(
+                mandant=configuration.kuerzel,
+                projektcode=projektcode,
+                delivery_code="D",
+            )
+            # Das bei FULL zusätzlich erzeugte leere D-Paket gehört zum
+            # bestehenden Mainframe-Übergabevertrag.
+            _delta_archive(delta_path, root, project, [], [], deletion_name)
+            packages.append((delta_path, "D"))
         else:
             included, deleted = _delta_paths(cumulative, project)
             deletion_name = DELETION_NAME.format(
-                mandant=configuration.kuerzel, project_code=project_code
+                mandant=configuration.kuerzel, projektcode=projektcode
             )
             archive_names = _delta_archive(
                 archive_path,
@@ -275,25 +288,27 @@ def build_release(
             git_changes=direct,
             archive_names=archive_names,
         )
-        member = f"{configuration.kuerzel}{project_code}{delivery_code}"
-        artifacts.extend(
-            [
+        for package_path, package_code in packages:
+            artifacts.append(
                 {
                     "kind": "package",
-                    "path": archive_path.name,
+                    "path": package_path.name,
                     "project": project,
-                    "member": member,
-                    "size": archive_path.stat().st_size,
-                    "sha256": sha256_file(archive_path),
-                },
-                {
-                    "kind": "information",
-                    "path": information_path.name,
-                    "project": project,
-                    "size": information_path.stat().st_size,
-                    "sha256": sha256_file(information_path),
-                },
-            ]
+                    "member": (
+                        f"{configuration.kuerzel}{projektcode}{package_code}"
+                    ),
+                    "size": package_path.stat().st_size,
+                    "sha256": sha256_file(package_path),
+                }
+            )
+        artifacts.append(
+            {
+                "kind": "information",
+                "path": information_path.name,
+                "project": project,
+                "size": information_path.stat().st_size,
+                "sha256": sha256_file(information_path),
+            }
         )
 
     hostprofil_name = configuration.releaselinien[releaselinie]["hostprofil"]

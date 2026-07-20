@@ -1,12 +1,5 @@
 # Arbeitsregeln
 
-## Word-Dokumente
-
-- `.docx`-Dateien nicht erzeugen, aktualisieren, rendern oder visuell prüfen.
-- Bei Änderungen an der Dokumentation nur die Markdown-Quelldateien bearbeiten.
-- Die Erzeugung und Prüfung der Word-Dokumente übernimmt der Benutzer selbst.
-- Von dieser Regel nur abweichen, wenn der Benutzer dies ausdrücklich für eine konkrete Aufgabe verlangt.
-
 ## Formulierungen
 
 - Kommentare oder Dokumentation darf nicht von Dingen sprechen die im Rahmen
@@ -20,6 +13,10 @@
   aber sich herauskristalisiert hat, dass es nur "einzigartig" sein kann, dann
   muss dieses Einzigartigkeit nicht extra hervorgehoben werden, da sie sowieso
   klar ist.
+- keine Semikolons zur Satz-Trennung/Strukturierung verwenden (im Deutschen
+  unüblich, Gedankenstriche sinnvoller, oder eigene Sätz)
+- keine übermäßig komplizierte, technische oder gestraffte Sprache verwenden
+  Leser sind teils technisch unbedarft und sollen nicht verwirrt werden
 
 ## Kommentare
 

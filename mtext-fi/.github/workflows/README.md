@@ -13,10 +13,14 @@ Alle `uses:`-Aufrufe zeigen auf `j520730/mtext-actions`. Bis zur Freigabe der
 ersten zentralen Version steht dort der technische Platzhalter
 `0000000000000000000000000000000000000000`.
 
+Mit diesem Platzhalter sind die fachlichen Workflows noch nicht lauffähig. Der
+Einrichtungsworkflow ersetzt ihn vor dem ersten Integrationslauf durch eine
+freigegebene vollständige Commit-SHA.
+
 Der zentrale Einrichtungsworkflow in `mtext-actions` trägt nach Bestätigung des
 Runner-Kennzeichens durch die FI den vollständigen Commit-SHA in allen
 `uses:`-Aufrufen und `automation_ref`-Werten ein. Text-Entwickler und
-Release-Verantwortliche pflegen diese technische Referenz nicht.
+Mitglieder des Mandanten-Release-Teams pflegen diese technische Referenz nicht.
 
 Bei einer später freigegebenen Version startet das zentrale
 Automatisierungsteam denselben Workflow mit deren vollständiger Commit-SHA für
@@ -29,9 +33,9 @@ Schreibzugriff. Ein Vertragsfehler verhindert jeden Commit. Ist der
 Zielzustand bereits erreicht, endet ein erneuter Lauf ohne weitere Commits.
 
 Ein Branchname wie `main` oder ein beweglicher Tag ist als Referenz nicht
-zulässig. Der zusätzliche Input `automation_ref` bezeichnet den Checkout der
-zentralen Python-Implementierung. Auf GHES 3.20 gehört der Kontext des
-wiederverwendbaren Workflows zum aufrufenden Workflow; die zentrale
+zulässig. Der zusätzliche Eingabewert `automation_ref` bezeichnet den Checkout
+der zentralen Python-Implementierung. Auf GHES 3.20 gehört der Kontext des
+wiederverwendbaren Workflows zum aufrufenden Workflow. Die zentrale
 Codeversion kann daher nicht zuverlässig aus dem Aufruf selbst abgeleitet
 werden.
 
@@ -54,9 +58,14 @@ einen Commit-SHA und den zugehörigen Branch. Die zentrale Umsetzung prüft beid
 und leitet daraus Releaselinie und Zielumgebung ab.
 
 Jede Synchronisation überträgt den vollständigen Stand aller sichtbaren
-Projektverzeichnisse in der Repositorywurzel. Für M/Text gibt es keinen
-DELTA-Modus. Versteckte Verzeichnisse werden ignoriert. Weitere Ausschlüsse
-stehen in `excluded_projects` der `.github/config.json`.
+Projektverzeichnisse in der Repositorywurzel. Der frühere Jenkins-Parameter
+`UMFANG=DELTA` aktualisierte normalerweise vorhandene SVN-Arbeitskopien.
+`UMFANG=FULL` legte sie für eine initiale Vollsynchronisation neu an. Da die
+GitHub-Automatisierung keine langlebigen Arbeitskopien verwendet, veröffentlicht
+sie bei jedem Lauf vollständige Projektstände. Das ist unabhängig von den
+FULL- und DELTA-Releasepaketen für den Mainframe. Versteckte Verzeichnisse
+werden ignoriert. Weitere Ausschlüsse stehen in `excluded_projects` der
+`.github/config.json`.
 
 Zwei Schreibvorgänge auf dasselbe
 Mandanten-/Linien-/Stufen-Ziel werden durch Concurrency serialisiert.
@@ -71,10 +80,13 @@ eine manuelle Wiederholung mit einem bereits vorhandenen Tag. Die zentrale
 Automatisierung leitet aus `Rnnn.nnn` den Branch `Rnnn/Bereitstellung` ab und
 prüft, dass der Tag von dort erreichbar ist. `.100` erzeugt FULL. Andere
 dreistellige Endungen erzeugen DELTA gegen den `.100`-Tag derselben Linie.
+Ein FULL erzeugt je Projekt das vollständige F-Paket und zusätzlich ein leeres
+D-Paket mit leerem Projektverzeichnis und leerer Löschliste.
 
 Ein Push nach `Rnnn/Bereitstellung` startet keine Lieferung. Eine Änderung an
-`.github/config.json` startet den Config-Check; auf Entwicklung oder Abnahme
-läuft wegen des Branch-Triggers zusätzlich der vollständige Ressourcensync.
+`.github/config.json` startet den Config-Check. Auf Entwicklung oder Abnahme
+läuft wegen des Branch-Triggers zusätzlich die vollständige
+Ressourcensynchronisation.
 Erst der Release-Tag prüft Konfiguration und Branchzuordnung und startet den
 Paketbau.
 
@@ -82,7 +94,7 @@ Paketbau und Mainframe-Übergabe sind zwei getrennte Jobs desselben zentralen
 Release-Workflows. Der zweite Job verwendet ausschließlich den Namen des im
 ersten Job einmalig hochgeladenen und durch Manifest-Prüfsummen gesicherten
 GitHub-Artefakts. Das Mandanten-Repository erzeugt oder verändert keine JCL
-und erhält keine FTP-Credentials.
+und erhält keine FTP-Zugangsdaten.
 
 ## Erwarteter Vertrag der zentralen Workflows
 
@@ -98,7 +110,7 @@ mandantenseitigen Angaben:
   der Version des aufgerufenen Workflows identisch. Das Repository
   `j520730/mtext-actions` ist fest vorgegeben.
 
-Secrets werden nicht als frei wählbare Inputs aus diesen schlanken Workflows
+Secrets werden nicht als frei wählbare Eingaben aus diesen schlanken Workflows
 weitergereicht. Die Sync-Jobs binden das zur Stufe gehörende GitHub Environment,
 benötigen daraus aber keine Secrets. Nur der Publish-Job bindet das Environment
 `Bereitstellung` und liest dort die Mainframe-Secrets. Davon getrennt ist die
@@ -122,25 +134,23 @@ praktisch geprüft.
 
 ## Außerhalb der Dateien zu konfigurierende GitHub-Einstellungen
 
-Folgende Schutzmaßnahmen werden als Repository- oder Organisationsregeln in
-GitHub konfiguriert und können nicht durch diese Workflow-Dateien allein
-erzwungen werden:
-
-Die zentrale Einrichtungsautomation wendet diese Regeln über die
-GitHub-Enterprise-API an und prüft ihren Zustand. Die Liste beschreibt den
-Zielzustand und ist keine manuelle Klickanleitung.
+Die folgenden Schutzmaßnahmen werden als Repository- oder Organisationsregeln
+in GitHub konfiguriert. Die Workflowdateien allein können sie nicht erzwingen.
+Der geplante API-Teil der Einrichtungsautomation soll diese Regeln anwenden und
+ihren Zustand prüfen. Die Liste beschreibt den Zielzustand und ist keine
+manuelle Klickanleitung.
 
 - direkte Pushes nach `Rnnn/Entwicklung` und `Rnnn/Abnahme` für die jeweils
   berechtigten Mitarbeiter zulassen
 - direkte Pushes nach `Rnnn/Bereitstellung` auf das je Mandant benannte
-  Release-Team begrenzen. Force-Pushes und Löschen bleiben verboten
+  Mandanten-Release-Team begrenzen. Force-Pushes und Löschen bleiben verboten
 - `.github/workflows/**/*` per Push-Ruleset auf allen Branches gegen Änderungen
   durch Mandantenmitarbeiter schützen. Bypass nur für die zentralen
   Automatisierungsverantwortlichen
 - `.github/config.json` von normalen Ressourcen-Pushes ausschließen und nur
   dem benannten technischen Verantwortlichenkreis zur Änderung erlauben
 - Es werden ausschließlich Git-Tags und keine GitHub Releases verwendet.
-  Erstellen und Löschen von Tags `Rnnn.nnn` auf das Release-Team begrenzen.
+  Erstellen und Löschen von Tags `Rnnn.nnn` auf das Mandanten-Release-Team begrenzen.
   Vor dem Löschen eines irrtümlichen Tags den dadurch gestarteten
   Workflow-Lauf abbrechen
 - die manuelle Freigabe im Environment `Bereitstellung` ausschließlich auf die

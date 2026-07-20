@@ -74,14 +74,14 @@ def run(arguments: argparse.Namespace) -> dict[str, object]:
         repository_root=arguments.repository_root,
     )
     if arguments.command == "validate-config":
-        return {
+        result = {
             "status": Status.CONFIG_VALIDATED.value,
             "mandanten_kuerzel": configuration.kuerzel,
             "repository": configuration.repository,
             "releaselinien": sorted(configuration.releaselinien),
         }
-    if arguments.command == "sync-resources":
-        return sync_resources(
+    elif arguments.command == "sync-resources":
+        result = sync_resources(
             configuration,
             repository_root=arguments.repository_root,
             commit=arguments.commit,
@@ -91,7 +91,7 @@ def run(arguments: argparse.Namespace) -> dict[str, object]:
             timeout=arguments.timeout,
             execute=arguments.execute,
         )
-    if arguments.command == "build-release":
+    elif arguments.command == "build-release":
         manifest = build_release(
             configuration,
             repository_root=arguments.repository_root,
@@ -100,11 +100,15 @@ def run(arguments: argparse.Namespace) -> dict[str, object]:
             tag=arguments.tag,
             trigger_sha=arguments.trigger_sha,
         )
-        return {
+        result = {
             "status": Status.ARTIFACT_READY.value,
             "manifest": str(manifest),
         }
-    raise AssertionError(f"unbekanntes Kommando: {arguments.command}")
+    else:
+        raise AssertionError(f"unbekanntes Kommando: {arguments.command}")
+    if configuration.warnungen:
+        result["warnungen"] = list(configuration.warnungen)
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -121,5 +125,7 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    for warnung in result.get("warnungen", []):
+        print(f"WARNUNG: {warnung}", file=sys.stderr)
     print(json.dumps(result, sort_keys=True))
     return 0

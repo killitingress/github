@@ -1,9 +1,11 @@
 # Benutzeranleitung für die M/Text-Lieferung mit GitHub Actions
 
-**Bezug:** [Zielbild](./Zielbild_GitHub_Actions_Git.md),
-[Soll-Grafik](../../Architektur_Soll_GitHub_Actions_Git.drawio)
-
 ## 1. Zweck
+
+Diese Anleitung begleitet Text-Entwickler, Mitglieder des technischen
+Konfigurationskreises und Mandanten-Release-Teams durch den vollständigen
+Bedienablauf. Alle Angaben, die sie für ihre jeweilige Aufgabe benötigen,
+stehen in diesem Dokument.
 
 Die Lösung führt M/Text-Ressourcen eines Mandanten über die drei Stages
 `Entwicklung`, `Abnahme` und `Bereitstellung`. Pushes nach Entwicklung und
@@ -11,14 +13,25 @@ Abnahme lösen die jeweilige M/Text-Synchronisation aus. Der Push nach
 Bereitstellung liefert noch nichts aus. Erst ein Release-Tag startet eine
 FULL- oder DELTA-Lieferung mit anschließender Mainframe-Übergabe an die IZE9.
 
+### Schnell zum passenden Ablauf
+
+| Aufgabe | Relevante Kapitel |
+|---|---|
+| Briefressourcen bearbeiten und nach Entwicklung übertragen | [Git-Grundlagen](#3-grundlagen-zu-git), [Git-Anwendungen](#4-git-anwendungen-bedienen) und [Änderung nach Entwicklung bringen](#7-änderung-nach-entwicklung-bringen) |
+| Eine freigegebene Änderung nach Abnahme oder Bereitstellung weitergeben | [Cherry-Pick](#cherry-pick-einfach-erklärt), [Abnahme](#8-stand-zur-abnahme-weitergeben) und [Bereitstellung](#9-ausgewählte-änderungen-bereitstellen) |
+| Mandantenkonfiguration oder Releaselinie pflegen | [Mandantenkonfiguration](#5-mandantenkonfiguration-in-githubconfigjson) und [Neue Releaselinie](#6-neue-releaselinie-einrichten) |
+| Eine FULL- oder DELTA-Lieferung auslösen | [FULL- oder DELTA-Lieferung](#10-full--oder-delta-lieferung-auslösen) |
+| Einen fehlgeschlagenen Lauf einordnen oder wiederholen | [Wiederholung](#11-einen-lauf-kontrolliert-wiederholen) und [Status und Fehlerbilder](#12-status-und-fehlerbilder-verstehen) |
+
 ### Abgrenzung
 
-Technische Einrichtung und Cutover beschreibt
-[Nächste Schritte](./Naechste_Schritte.md).
+Die technische Ersteinrichtung und der Cutover gehören nicht zur normalen
+Bedienung. Für die dafür verantwortlichen Teams sind sie zusätzlich in
+[Nächste Schritte](./Naechste_Schritte.md) beschrieben.
 
 Die konkrete Benutzerverwaltung erfolgt je Mandanten-Repository. Für die
-`Bereitstellung` und das Setzen von Release-Tags benennt jeder Mandant einen
-kleinen Kreis von Release-Verantwortlichen.
+`Bereitstellung` und das Setzen von Release-Tags benennt jeder Mandant ein
+Mandanten-Release-Team mit wenigen berechtigten Personen.
 
 ## 2. Begriffe und Namensregeln
 
@@ -33,8 +46,8 @@ eigenen Branch für jede dieser Stages.
 | Optionaler Feature-Branch | `feature/Rnnn/<Issue>-<kurzname>` | `feature/R270/0711-komplizierte-Arbeiten` |
 | Release-Tag | `Rnnn.nnn` | `R261.100`, `R261.108` |
 
-Groß-/Kleinschreibung der Stage-Namen ist verbindlich. Aktive Linien sind zum
-Zeitpunkt der Erstellung der Dokumentation `R260`, `R261` und `R270`.
+Die Groß- und Kleinschreibung der Stage-Namen ist verbindlich. Die zentrale
+Konfiguration enthält derzeit die Releaselinien `R260`, `R261` und `R270`.
 
 ## 3. Grundlagen zu Git
 
@@ -224,7 +237,7 @@ Ein **Merge** verbindet zwei Entwicklungsverläufe, ohne vorhandene Commits
 umzuschreiben, und kann dabei einen zusätzlichen Merge-Commit erzeugen. Er ist
 in diesem Prozess weder zur Behebung einer Push-Ablehnung noch zur Weitergabe
 zwischen den Stage-Branches vorgesehen. Eigene noch nicht gepushte Commits
-werden per Rebase auf den aktuellen Stand gesetzt; freigegebene Änderungen
+werden per Rebase auf den aktuellen Stand gesetzt. Freigegebene Änderungen
 werden per Cherry-Pick in die nächste Stage übernommen.
 
 | Situation | Geeignetes Vorgehen | Ergebnis |
@@ -270,7 +283,7 @@ verwendet:
 | Anwendung | Aufgabe | Benutzerkreis |
 |---|---|---|
 | M/Text Workbench mit integriertem Git-Client | Briefressourcen bearbeiten, Änderungen prüfen, committen und nach Entwicklung pushen | Text-Entwickler |
-| Zusätzlicher Git-Client | Ausgewählte Commits per Cherry-Pick nach Abnahme und Bereitstellung weitergeben sowie Release-Tags anlegen oder löschen | dafür berechtigte Text-Entwickler und Mandanten-Release-Team |
+| Zusätzlicher Git-Client | Ausgewählte Commits per Cherry-Pick nach Abnahme und Bereitstellung weitergeben sowie Release-Tags anlegen oder löschen | dafür berechtigte Text-Entwickler und Mitglieder des Mandanten-Release-Teams |
 | GitHub im Browser | Commits, Release-Tags und Läufe prüfen, manuelle Läufe starten und Freigaben erteilen | Text-Entwickler sowie die jeweils berechtigten Verantwortlichen |
 
 Für die normale Ressourcenarbeit ist keine Git-Kommandozeile erforderlich.
@@ -287,14 +300,14 @@ Git-Funktionen müssen im freigegebenen Bedienweg eindeutig erkennbar sein:
 | Arbeitsstand und ausgewählte Änderungen prüfen | `status` und `diff` | `svn status` und `svn diff` |
 | GitHub-Stand abrufen und lokalen Branch ohne zusätzlichen Merge aktualisieren | `fetch` und anschließend `pull` beziehungsweise die freigegebene Aktualisierungsfunktion des Clients | `svn update` |
 | Stage-Branch auswählen | `switch` beziehungsweise die Branchauswahl des Clients | `svn switch <URL>` |
-| Dateien auswählen, Commit erzeugen und übertragen | `add`, `commit` und `push` | `svn add` und `svn commit`; der Commit überträgt die Änderung zugleich |
+| Dateien auswählen, Commit erzeugen und übertragen | `add`, `commit` und `push` | `svn add` und `svn commit`. Der Commit überträgt die Änderung zugleich |
 | Commit-Historie, vollständige SHA und konkrete Änderungen prüfen | `log` und `show` | `svn log` und `svn diff -c <Revision>` |
-| Letzten lokalen, noch nicht gepushten Commit ergänzen oder seine Nachricht korrigieren | `commit --amend`; nur vor dem Push, da dabei eine neue Commit-SHA entsteht | Keine direkte Entsprechung, weil ein SVN-Commit bereits veröffentlicht ist |
-| Ausgewählten Commit in die nächste Stage übernehmen und Konflikte behandeln | `cherry-pick -x`, nach der geprüften Auflösung `cherry-pick --continue` oder zum vollständigen Abbruch `cherry-pick --abort` | `svn merge -c <Revision> <URL>`; Konflikte werden vor dem anschließenden `svn commit` in der Arbeitskopie aufgelöst |
-| Release-Tag auf einem bestätigten Commit anlegen, einzeln pushen und bei Bedarf wieder löschen | `tag` sowie gezielter Push oder Löschung der betreffenden Tag-Referenz; die konkrete Bedienung wird mit dem zusätzlichen Git-Client abgenommen | `svn copy <Quell-URL> <Tag-URL>` beziehungsweise `svn delete <Tag-URL>`; ein SVN-Tag ist ein Repositorypfad |
-| Inzwischen fortgeschrittenen Remote-Branch mit eigenen, noch nicht gepushten Commits zusammenführen | `fetch`, danach kontrolliertes `rebase` auf den Remote-Branch; Konflikte auflösen und mit `rebase --continue` fortfahren oder mit `rebase --abort` abbrechen | `svn update` integriert lokale, noch nicht committete Änderungen; lokale SVN-Commits gibt es nicht |
-| Noch nicht committete Arbeit vor einem Branchwechsel vorübergehend beiseitelegen | `stash push` und später `stash pop`; danach wiederhergestellte Änderungen vollständig prüfen | Keine direkte, durchgängig verfügbare Standardentsprechung |
-| Lokale Änderung, lokalen Commit oder gepushten Commit zurücknehmen | je nach Zustand `restore`, `reset` oder `revert` wie im Abschnitt [Änderung oder Commit zurücknehmen](#änderung-oder-commit-zurücknehmen) beschrieben | Lokal `svn revert`; veröffentlichte Änderung durch umgekehrten Merge und anschließenden `svn commit` korrigieren |
+| Letzten lokalen, noch nicht gepushten Commit ergänzen oder seine Nachricht korrigieren | `commit --amend`, nur vor dem Push, da dabei eine neue Commit-SHA entsteht | Keine direkte Entsprechung, weil ein SVN-Commit bereits veröffentlicht ist |
+| Ausgewählten Commit in die nächste Stage übernehmen und Konflikte behandeln | `cherry-pick -x`, nach der geprüften Auflösung `cherry-pick --continue` oder zum vollständigen Abbruch `cherry-pick --abort` | `svn merge -c <Revision> <URL>`. Konflikte werden vor dem anschließenden `svn commit` in der Arbeitskopie aufgelöst |
+| Release-Tag auf einem bestätigten Commit anlegen, einzeln pushen und bei Bedarf wieder löschen | `tag` sowie gezielter Push oder Löschung der betreffenden Tag-Referenz. Die konkrete Bedienung wird mit dem zusätzlichen Git-Client abgenommen | `svn copy <Quell-URL> <Tag-URL>` beziehungsweise `svn delete <Tag-URL>`. Ein SVN-Tag ist ein Repositorypfad |
+| Inzwischen fortgeschrittenen Remote-Branch mit eigenen, noch nicht gepushten Commits zusammenführen | `fetch`, danach kontrolliertes `rebase` auf den Remote-Branch. Konflikte auflösen und mit `rebase --continue` fortfahren oder mit `rebase --abort` abbrechen | `svn update` integriert lokale, noch nicht committete Änderungen. Lokale SVN-Commits gibt es nicht |
+| Noch nicht committete Arbeit vor einem Branchwechsel vorübergehend beiseitelegen | `stash push` und später `stash pop`. Danach die wiederhergestellten Änderungen vollständig prüfen | Keine direkte, durchgängig verfügbare Standardentsprechung |
+| Lokale Änderung, lokalen Commit oder gepushten Commit zurücknehmen | je nach Zustand `restore`, `reset` oder `revert` wie im Abschnitt [Änderung oder Commit zurücknehmen](#änderung-oder-commit-zurücknehmen) beschrieben | Lokal `svn revert`. Eine veröffentlichte Änderung wird durch umgekehrten Merge und anschließenden `svn commit` korrigiert |
 
 Die Weitergabe zwischen den Stages erfolgt per Cherry-Pick und nicht durch
 einen Merge ganzer Branches. `stash` ist nur eine vorübergehende lokale Ablage
@@ -353,7 +366,7 @@ Die Git-Begriffe unterscheiden diese Fälle: `restore` verwirft noch nicht
 committete Änderungen an Dateien, `reset` nimmt einen noch nicht gepushten
 lokalen Commit zurück und `revert` erzeugt den Gegen-Commit für einen bereits
 gepushten Commit. Die konkreten Schaltflächen hängen vom freigegebenen
-Git-Client ab; eine Git-Kommandozeile ist dafür nicht vorgeschrieben. Ein
+Git-Client ab. Eine Git-Kommandozeile ist dafür nicht vorgeschrieben. Ein
 `reset`, `rebase` oder `commit --amend` auf einem bereits gepushten
 Stage-Branch würden dessen gemeinsame Historie umschreiben und sind deshalb
 nicht zulässig.
@@ -361,7 +374,7 @@ nicht zulässig.
 | Situation | Vorgehen |
 |---|---|
 | Lokale Änderung ohne Commit | Nur die nicht mehr benötigten Dateien oder Änderungen im Git-Client verwerfen und den verbleibenden Stand prüfen |
-| Lokaler Commit ohne Push | Commit mit der dafür abgenommenen Client-Funktion zurücknehmen; anschließend lokalen Branch und geänderte Dateien prüfen |
+| Lokaler Commit ohne Push | Commit mit der dafür abgenommenen Client-Funktion zurücknehmen. Anschließend lokalen Branch und geänderte Dateien prüfen |
 | Commit auf Entwicklung oder Abnahme gepusht | Gegen-Commit auf demselben Branch erstellen und pushen. Der dadurch gestartete Sync verteilt den vollständigen korrigierten Stand |
 | Commit nach Bereitstellung gepusht, aber noch nicht getaggt | Das Mandanten-Release-Team erstellt und pusht den Gegen-Commit. Ein Push nach Bereitstellung allein erzeugt keine Lieferung |
 | Commit bereits in eine weitere Stage übernommen | Den betroffenen Commit in jeder Stage, in die er übernommen wurde, mit den dort geltenden Berechtigungen durch einen eigenen Gegen-Commit zurücknehmen. Ein Gegen-Commit auf Entwicklung ändert Abnahme oder Bereitstellung nicht automatisch |
@@ -416,9 +429,8 @@ vollständig erforderlich.
 
 Das Anlegen und die kontrollierte Rücknahme eines Release-Tags sind in Kapitel
 10 beschrieben. Änderungen an Repositoryrechten, Rulesets, Environments oder
-Secrets gehören nicht zur normalen Benutzerarbeit. Der verbindliche
-Zielzustand steht im [Zielbild](./Zielbild_GitHub_Actions_Git.md#6-github-konfiguration),
-Einrichtung und Abnahme in [Nächste Schritte](./Naechste_Schritte.md).
+Secrets gehören nicht zur normalen Benutzerarbeit. Einrichtung und Abnahme
+sind in [Nächste Schritte](./Naechste_Schritte.md) beschrieben.
 
 ## 5. Mandantenkonfiguration in `.github/config.json`
 
@@ -435,7 +447,7 @@ Die Datei enthält keine Passwörter oder Ziel-URLs. Technische Übergabewerte
 sind auf die nachfolgend beschriebenen Felder beschränkt. Zugangsdaten werden
 in geschützten GitHub-Einstellungen verwaltet.
 
-#### Mandantenidentität
+### Mandantenidentität
 
 ```json
 "kuerzel": "FI",
@@ -444,10 +456,10 @@ in geschützten GitHub-Einstellungen verwaltet.
 
 `kuerzel` ist das Mandantenkürzel und bildet unter anderem den Anfang
 der historischen Lieferdateinamen. `repository` muss exakt dem Namen des
-auslösenden GitHub-Repositories entsprechen. Dadurch kann eine Konfiguration nicht
-versehentlich in einem anderen Mandanten-Repository verwendet werden.
+auslösenden GitHub-Repositories entsprechen. Dadurch kann eine Konfiguration
+nicht versehentlich in einem anderen Mandanten-Repository verwendet werden.
 
-#### Projektverzeichnisse und Ausschlüsse
+### Projektverzeichnisse und Ausschlüsse
 
 Jedes sichtbare Verzeichnis direkt unter der Repositorywurzel ist ein
 Lieferprojekt. Es wird bei jedem passenden Entwicklung- oder Abnahmelauf
@@ -465,20 +477,38 @@ Das Beispiel der FI schließt die Testdaten aus:
 ]
 ```
 
-Die technischen Namen der daraus erzeugten Lieferdateien sind historisch
-festgelegt und werden zentral aus dem Projektnamen abgeleitet. Sie werden
-nicht von Text-Entwicklern in `.github/config.json` eingetragen oder geändert.
+Die technischen Namen der daraus erzeugten Paketdateien und Mainframe-Member
+werden aus dem Projektnamen abgeleitet. Dafür entfallen das Präfix `LOMS_` und
+ein Mandantensuffix in eckigen Klammern. Von dem verbleibenden Namen werden
+höchstens die ersten fünf Zeichen in Großschreibung verwendet. So entstehen
+beispielsweise `CONFI`, `FRAME`, `BASIS`, `PKA` und `AUTON`. Zwei Projekte eines
+Repositorys dürfen dabei nicht denselben Projektcode ergeben. Projektcodes
+werden nicht in `.github/config.json` eingetragen oder geändert.
 
-Für einzelne Releaselinien oder Stages gibt es keine zusätzlichen Projekte
-und keine Sonderkonfiguration.
+Als aktueller fachlicher Referenzstand gelten folgende Projekte:
 
-#### Mandantenspezifische Werte für die technische Übergabe
+| Repository | Mandantenkürzel | Projekte |
+|---|---|---|
+| `mtext-fi` | `FI` | `Configuration`, `Fonts`, `LOMS_Framework`, `LOMS_Basis`, `LOMS_PKA` |
+| `mtext-autonom` | `IT` | `LOMS_Autonom` |
+| `mtext-by` | `BY` | `LOMS_Basis[BY]`, `LOMS_Autonom[BY]` |
+| `mtext-lh` | `LH` | `LOMS_Basis[LH]`, `LOMS_Autonom[LH]` |
+| `mtext-nw` | `NW` | `LOMS_Basis[NW]`, `LOMS_Autonom[NW]` |
+| `mtext-os` | `OS` | `LOMS_Basis[OS]`, `LOMS_Autonom[OS]` |
+| `mtext-sa` | `SA` | `LOMS_Basis[SA]`, `LOMS_Autonom[SA]` |
 
-Gemeint sind insbesondere ISPW-Instanz, Subsystem, Assignment und der
-JCL-Stage-Code, der das CodePipeline-`LEVEL` bezeichnet. Diese Werte sind für
-den Mandanten relevant, werden in `.github/config.json` verständlich beschrieben und
-können bei einer tatsächlichen Änderung der Zuordnung angepasst werden. Das
-Beispiel der FI lautet:
+Die Matrix schreibt den Lieferumfang technisch nicht fest. Eine fachlich
+abgestimmte Änderung der Projektstruktur bleibt möglich. Der Config-Check gibt
+ein abweichendes Mandantenkürzel sowie gegenüber diesem Referenzstand fehlende
+oder zusätzliche Projekte im Workflow-Protokoll mit dem Präfix `WARNUNG:` aus.
+Einen ansonsten gültigen Stand verarbeitet er weiter.
+
+### Mandantenspezifische Werte für die technische Übergabe
+
+Die technische Übergabe benötigt die ISPW-Instanz, das Subsystem, das
+Assignment und den JCL-Stage-Code für das CodePipeline-`LEVEL`. Diese Werte
+werden in `.github/config.json` versioniert und nur bei einer fachlich
+bestätigten Änderung der Zuordnung angepasst. Das Beispiel der FI lautet:
 
 ```json
 "ispw": "P",
@@ -503,12 +533,15 @@ Beispiel der FI lautet:
 | `stage` | JCL-Stage-Code für das CodePipeline-`LEVEL`, beispielsweise `FKTE` oder `JURP` | wird in den `LEVEL`-Platzhalter eingesetzt und dort unter anderem für `CLVL` und `SLVL` verwendet |
 
 Der CodePipeline-Elementname wird nicht konfiguriert. Er besteht aus
-Mandantenkürzel, zentral festgelegtem Liefercode des Projekts und `F` für FULL
-oder `D` für DELTA. So wird beispielsweise aus `LOMS_Autonom[BY]` das Element
-`BYAUTONF` oder `BYAUTOND`. Die zugehörige Archivdatei erhält zusätzlich die
-Endung `.tgz`. Die vollständige Liefercode-Zuordnung und der Elementinhalt sind
-im [Zielbild](./Zielbild_GitHub_Actions_Git.md#codepipeline-elemente)
-dokumentiert.
+Mandantenkürzel, abgeleitetem Projektcode und `F` für FULL oder `D` für DELTA.
+So wird beispielsweise aus `LOMS_Autonom[BY]` das Element `BYAUTONF` oder
+`BYAUTOND`. Die zugehörige Archivdatei erhält zusätzlich die Endung `.tgz`.
+Ein F-Element enthält den vollständigen Projektbaum. Ein reguläres D-Element
+enthält die kumulativ seit dem `.100`-Release neuen und geänderten Dateien sowie
+die Löschliste. Bei einem `.100`-Release entsteht zusätzlich zum F-Element ein
+leeres D-Element mit leerem Projektverzeichnis und leerer Löschliste. Die
+Informationsdatei `_INFO_...txt` gehört zum Releasebeleg und wird nicht als
+CodePipeline-Element registriert.
 
 Die Namen `FKT` und `JUR` unter `hostprofile` bezeichnen die fachlich
 festgelegten Hostprofile. Sie sind nicht selbst die Stage-Codes. Welche
@@ -537,12 +570,12 @@ Ein Push mit einer Änderung an `.github/config.json` startet automatisch
 **Validate mandant configuration**. Dieser Check prüft die Datei ohne Zugriff
 auf M/Text oder den Mainframe und liefert frühzeitig eine verständliche
 Fehlermeldung. Er erkennt ein unbekanntes Mandantenkürzel, ein unpassendes
-Repository, fehlende oder ungültige Hostprofile, mehrdeutige Liefercodes und
-Projektverzeichnisse ohne Liefercode-Zuordnung. `CONFIG_VALIDATED` bestätigt
-jedoch nicht, dass die technischen Betriebswerte fachlich richtig gewählt
-wurden. Der Status ersetzt deshalb keine fachliche Freigabe und ist kein
-technisches Gate. Synchronisation und Release laden dieselbe Konfiguration auf
-ihrem tatsächlichen Ausführungspfad.
+Repository, fehlende oder ungültige Hostprofile und mehrdeutige abgeleitete
+Projektcodes. `CONFIG_VALIDATED` bestätigt jedoch nur die technische
+Konsistenz. Der Status ersetzt keine fachliche Freigabe. Synchronisation und
+Release prüfen dieselbe Konfiguration vor ihrer jeweiligen Verarbeitung
+erneut. Warnungen zum Projekt-Referenzstand ändern den erfolgreichen Status
+`CONFIG_VALIDATED` nicht.
 
 ## 6. Neue Releaselinie einrichten
 
@@ -555,12 +588,20 @@ Das zentrale Automatisierungsteam ergänzt in
 genau eine Zuordnung aus neuer Releaselinie, technischer ETAPS-Linie und
 vorhandenem Hostprofil. Die Felder heißen `etaps_linie` und `hostprofil`. Der
 Profilname muss unter `hostprofile` in `.github/config.json` vorhanden sein. Ein
-vollständiges Beispiel steht im Zielbild unter
-[Zentrale Releaselinienzuordnung](./Zielbild_GitHub_Actions_Git.md#zentrale-releaselinienzuordnung).
+vollständiges Beispiel für den aktuellen Stand lautet:
+
+```json
+{
+  "R260": {"etaps_linie": "en03", "hostprofil": "JUR"},
+  "R261": {"etaps_linie": "en01", "hostprofil": "FKT"},
+  "R270": {"etaps_linie": "en02", "hostprofil": "JUR"}
+}
+```
+
 Beim Aufnehmen der neuen Releaselinie wird die ausgeschiedene Zuordnung
 entfernt, sodass die Datei weiterhin genau drei aktive Releaselinien enthält.
-Stage-Namen, JCL-Parameter, URL-Aufbau, serverSync-Pfad und Tagformat bleiben
-unverändert.
+Weitere Werte werden nur angepasst, wenn sich ihre fachliche oder technische
+Zuordnung tatsächlich ändert.
 
 Anschließend wird der vollständige Projektstand über den manuellen Workflow
 **Sync M/Text resources** einmal nach Entwicklung und einmal nach Abnahme
@@ -620,20 +661,22 @@ Ziel-Commits. Er baut noch kein Mainframe-Paket.
 5. Den exakten Ziel-Commit in GitHub prüfen und notieren. Der Push startet
    weder Paketbau noch Mainframe-Übergabe.
 
-Pushen darf hier nur das für den jeweiligen Mandanten benannte Release-Team.
+Nur das für den jeweiligen Mandanten benannte Mandanten-Release-Team darf hier
+pushen.
 
 ## 10. FULL- oder DELTA-Lieferung auslösen
 
 Vor dem Taggen müssen Releaselinie, Mandant, gewünschter Lieferungstyp und der
 exakte Commit auf `<Releaselinie>/Bereitstellung` fachlich bestätigt sein.
 
-- `Rnnn.100` erzeugt ein FULL mit dem vollständigen Stand jedes nicht
-  ausgeschlossenen Projektverzeichnisses.
+- `Rnnn.100` erzeugt je nicht ausgeschlossenem Projekt ein F-Paket mit dem
+  vollständigen Stand und zusätzlich ein leeres D-Paket mit leerem
+  Projektverzeichnis und leerer Löschliste.
 - Jede andere gültige dreistellige Endung, zum Beispiel `R261.108`, erzeugt
   ein kumulatives DELTA von `R261.100` bis zum Zieltag.
 - Ein DELTA setzt voraus, dass der `.100`-Tag derselben Linie vorhanden und
   in der Git-Historie ein Vorgänger des Ziel-Tags ist.
-- Nur das benannte Release-Team darf einen Release-Tag setzen oder löschen.
+- Nur das benannte Mandanten-Release-Team darf einen Release-Tag setzen oder löschen.
 
 Der Release-Tag wird vom Mandanten-Release-Team als reiner Git-Tag mit dem
 freigegebenen zusätzlichen Git-Client angelegt. GitHub Releases mit Titel,
@@ -655,12 +698,13 @@ Danach unter **Actions → Build and publish release** prüfen:
 
 1. `Build FULL or DELTA artifact` validiert Konfiguration, Tag und
    Branchzuordnung, baut die Pakete und erzeugt `manifest.json` mit
-   SHA-256-Prüfsummen.
+   SHA-256-Prüfsummen. Bei `.100` müssen je Projekt sowohl das F-Paket als auch
+   das zusätzliche leere D-Paket enthalten sein.
 2. Das Artefakt heißt `<Repository>-<Release-Tag>` und wird standardmäßig
    30 Tage aufbewahrt.
 3. `Verify and hand over artifact to Mainframe` wartet im Environment
    `Bereitstellung` auf die eingerichtete manuelle Freigabe.
-4. Das Release-Team gibt den Publish-Job frei.
+4. Das Mandanten-Release-Team gibt den Publish-Job frei.
 5. Nach der Freigabe werden Pfad, Größe und SHA-256 jeder manifestierten Datei
    geprüft. Danach werden die JCL-Werte validiert, das versionierte Template
    gerendert und Paket plus JCL per FTP/JES übergeben.
@@ -668,7 +712,7 @@ Danach unter **Actions → Build and publish release** prüfen:
 ### Irrtümlichen Tag zurücknehmen
 
 Wurde der Tag auf dem falschen Commit oder mit dem falschen Namen angelegt,
-bricht das Release-Team zuerst den gesamten Workflow-Lauf ab. Anschließend
+bricht das Mandanten-Release-Team zuerst den gesamten Workflow-Lauf ab. Anschließend
 löscht es den irrtümlichen Git-Tag mit dem freigegebenen zusätzlichen
 Git-Client lokal und auf GitHub und legt bei Bedarf den richtigen Tag an. Der
 neu angelegte Tag startet einen neuen Lauf.
@@ -679,7 +723,7 @@ einem neuen Commit und einem neuen Release-Tag.
 
 `MAINFRAME_SUBMITTED` bedeutet ausschließlich, dass die unmittelbare
 FTP-/JES-Übergabe akzeptiert wurde. Der fachliche Abschluss des Mainframe-Jobs
-wird in Ausbaustufe 1 nicht abgefragt. Das Release-Team prüft den weiteren
+wird in Ausbaustufe 1 nicht abgefragt. Das Mandanten-Release-Team prüft den weiteren
 Status selbst auf dem Host nach dem dafür festgelegten Betriebsverfahren.
 
 ## 11. Einen Lauf kontrolliert wiederholen
@@ -724,18 +768,18 @@ fachlichen Endstatus.
 
 | Status oder sichtbares Symptom | Bedeutung | Nächste Prüfung |
 |---|---|---|
-| Workflow kann die `mtext-actions`-Version nicht laden | Technische Einrichtung ist unvollständig oder der Zugriff auf `mtext-actions` fehlt | Zentrale Automatisierungsverantwortliche informieren; Anwender ändern die Workflowdateien nicht selbst |
+| Workflow kann die `mtext-actions`-Version nicht laden | Technische Einrichtung ist unvollständig oder der Zugriff auf `mtext-actions` fehlt | Zentrale Automatisierungsverantwortliche informieren. Anwender ändern die Workflowdateien nicht selbst |
 | `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinienzuordnung sind technisch konsistent | Fachliche Abstimmung fortsetzen. Der Status ist keine automatische Freigabe für die nächste Stage |
-| `VALIDATION_FAILED` | Input, Konfiguration, Branchrichtung oder JCL ungültig | Erste Fehlermeldung lesen. Branch-/Tagformat und Konfiguration prüfen |
+| `VALIDATION_FAILED` | Eingabe, Konfiguration, Branchrichtung oder JCL ungültig | Erste Fehlermeldung lesen. Branch- oder Tagformat und Konfiguration prüfen |
 | `SOURCE_FAILED` | Commit oder Tag/Basisreferenz nicht auflösbar | SHA, Tag, `.100`-Basis und Branch-Erreichbarkeit prüfen |
 | `PACKAGE_FAILED` | Paket, Informationsdatei oder manifestiertes Artefakt konnte nicht erstellt beziehungsweise geprüft werden | Fehlende Projekte, Symlinks, vorhandenes Ausgabeverzeichnis sowie Pfad, Größe und SHA-256 der Artefakte prüfen |
 | `RESOURCE_TRANSFER_FAILED` | Staging oder Veröffentlichung nach `serverSync` fehlgeschlagen | Runner-Dateisystem und Share-/NFS-Ziel einschließlich vorhandener temporärer Verzeichnisse prüfen |
-| `ADAPTER_FAILED` | Transportfehler oder Nicht-2xx vom Adapter | HTTP-Status und bereinigten Response-Body im Log prüfen |
-| `ADAPTER_ACCEPTED` | Unmittelbare Adapterannahme erfolgreich | Kein Beleg für einen nachgelagerten M/Text-Endstatus. Ist die fachliche Wirkung unklar, wird die Anwendungsbetreuung eingeschaltet; Anwender benötigen keinen direkten Zugriff auf technische Anwendungsprotokolle |
+| `ADAPTER_FAILED` | Transportfehler oder Nicht-2xx vom Adapter | HTTP-Status und gekürzten Antworttext im Protokoll prüfen |
+| `ADAPTER_ACCEPTED` | Unmittelbare Adapterannahme erfolgreich | Kein Beleg für einen nachgelagerten M/Text-Endstatus. Ist die fachliche Wirkung unklar, wird die Anwendungsbetreuung eingeschaltet. Anwender benötigen keinen direkten Zugriff auf technische Anwendungsprotokolle |
 | `ARTIFACT_READY` | Releaseartefakt lokal gebaut und geprüft | Publish-Freigabe beziehungsweise nächsten Job prüfen |
-| `MAINFRAME_TRANSFER_FAILED` | FTP-Upload oder JES-Submit unmittelbar fehlgeschlagen | Credentials, Dataset, JES-Ziel, Netzwerk und FTP-Antwort prüfen |
-| `MAINFRAME_SUBMITTED` | Unmittelbare FTP-/JES-Übergabe akzeptiert | Release-Team prüft den weiteren Status selbst auf dem Host nach dem festgelegten Betriebsverfahren |
+| `MAINFRAME_TRANSFER_FAILED` | FTP-Upload oder JES-Übergabe unmittelbar fehlgeschlagen | Zugangsdaten, Dataset, JES-Ziel, Netzwerk und FTP-Antwort prüfen |
+| `MAINFRAME_SUBMITTED` | Unmittelbare FTP-/JES-Übergabe akzeptiert | Das Mandanten-Release-Team prüft den weiteren Status selbst auf dem Host nach dem festgelegten Betriebsverfahren |
 
-Logs dürfen keine Credentials enthalten. Zugangsdaten niemals in
-Konfigurationsdateien, Workflow-Inputs, GitHub-Kommentare oder Support-Tickets
+Protokolle dürfen keine Zugangsdaten enthalten. Zugangsdaten niemals in
+Konfigurationsdateien, Workflow-Eingaben, GitHub-Kommentare oder Support-Tickets
 kopieren.
