@@ -39,7 +39,7 @@ besetzt:
 | Migrationsteam | SVN-Abzug, Git-Import und technische Importnachweise erstellen |
 | Zentrales Automatisierungsteam | Freigegebene Version von `mtext-actions`, Workflows und technische Prüfungen verantworten |
 | Technischer Konfigurationskreis | Mandantenkonfiguration und Releaselinienzuordnung freigeben |
-| Mandanten-Release-Team | Bereitstellungsbranches, Release-Tags und Freigaben je Mandant prüfen |
+| Mandanten-Release-Team | Bereitstellungsbranches, Release-Tags und Release-Läufe je Mandant prüfen |
 | M/Text- und Mainframe-Betrieb | Zielzugriffe, technische Annahme und fachliche Zielkontrolle bestätigen |
 
 Jeder Migrationslauf erhält ein Protokoll mit verantwortlicher Person, Beginn
@@ -69,13 +69,13 @@ müssen zusätzlich alle aktivierungsrelevanten Punkte aus
 - Rulesets schützen Stage-Branches, `.github/workflows/**/*` und
   `.github/config.json`. Force-Pushes und das Löschen der Stage-Branches sind
   gesperrt.
-- Die Environments `Einrichtung`, `Entwicklung`, `Abnahme` und `Bereitstellung`
-  sind eingerichtet. Nur der Einrichtungsworkflow erhält die technische
-  Schreibberechtigung. Nur der Publish-Job kann `Bereitstellung` verwenden und
-  muss dort manuell freigegeben werden.
+- Die Environments `Einrichtung` und `Bereitstellung` sind eingerichtet. Nur
+  der Einrichtungsworkflow erhält die technische Schreibberechtigung. Nur der
+  Publish-Job kann `Bereitstellung` verwenden und dessen Mainframe-Secrets
+  lesen.
 - Die Berechtigungen für Release-Tags und die Rücknahme irrtümlicher Tags sind
-  eingerichtet und abgenommen. Vor dem Löschen eines Tags wird der dadurch
-  gestartete Workflow-Lauf abgebrochen.
+  eingerichtet und abgenommen. Ein bei der Korrektur noch laufender Ablauf
+  wird abgebrochen.
 - Das offizielle `runs-on`-Kennzeichen des ausgewählten Runnerangebots der FI ist
   eingetragen. Python-Laufzeit, Git, Zertifikate und die benötigten
   Netzwerkpfade sind auf diesem Runner geprüft. Bereitstellung, Absicherung,
@@ -210,12 +210,11 @@ Nach dem zweiten Go wird in dieser Reihenfolge umgeschaltet:
    und dort technische sowie fachliche Synchronisation bestätigen.
 7. Den bestätigten Stand nach `Rnnn/Bereitstellung` übernehmen und nachweisen,
    dass dieser Push allein keine Lieferung startet.
-8. Die freigegebenen FULL- und DELTA-Smoke-Tests mit vorab benannten Tags
-   ausführen, das Build-Ergebnis prüfen und die Mainframe-Übergabe manuell
-   freigeben.
-9. Nach der Freigabe die unmittelbare FTP-/JES-Annahme sowie den
-   nachgelagerten fachlichen Mainframe-Status separat bestätigen.
-10. Ergebnisse, verwendete Commits, Tags, Artefakte, Freigaben und fachliche
+8. Die FULL- und DELTA-Smoke-Tests mit vorab benannten Tags ausführen und das
+   Build-Ergebnis sowie die automatische Mainframe-Übergabe prüfen.
+9. Die unmittelbare FTP-/JES-Annahme sowie den nachgelagerten fachlichen
+   Mainframe-Status separat bestätigen.
+10. Ergebnisse, verwendete Commits, Tags, Artefakte und fachliche
     Bestätigungen im Cutover-Protokoll festhalten.
 
 `ADAPTER_ACCEPTED` bestätigt nur die unmittelbare Adapterantwort.
@@ -227,7 +226,7 @@ der beiden Status ersetzt die fachliche Kontrolle im jeweiligen Zielsystem.
 Der Cutover wird mindestens bei einem der folgenden Ereignisse angehalten:
 
 - Quellrevision, Branch-, Tag- oder Dateizuordnung ist nicht eindeutig.
-- Ein Pflichtnachweis oder eine erforderliche Freigabe fehlt.
+- Ein Pflichtnachweis oder eine erforderliche Bestätigung fehlt.
 - Workflowversion, Ruleset, Environment, Runner der FI, Netzwerkpfad oder Secret ist
   nicht wie abgenommen verfügbar.
 - Der Zielstand in M/Text weicht vom freigegebenen Commit ab.

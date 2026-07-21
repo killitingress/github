@@ -30,8 +30,6 @@ jobs:
     # Das Platzhalter-Label wird durch das offizielle runs-on-Kennzeichen des
     # von der FI bereitgestellten Runners ersetzt.
     runs-on: FI_RUNNER_LABEL_TO_BE_SET
-    # Das Environment liefert die stufenspezifische Konfiguration und begrenzt sie auf diesen Job.
-    environment: ${{ inputs.target_environment }}
     timeout-minutes: 30
     steps:
       # Lädt den vollständig aufgelösten Mandanten-Commit einschließlich seiner
@@ -60,8 +58,8 @@ jobs:
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
-      # Validiert Mandantenkonfiguration, Branch und Commit, erzeugt ein temporäres
-      # Ressourcenpaket und ruft den M/Text-Adapter synchron mit diesem Paket auf.
+      # Validiert Mandantenkonfiguration, Zielstufe, Branch und Commit, erzeugt
+      # ein temporäres Ressourcenpaket und ruft den M/Text-Adapter synchron auf.
       - name: Stage, publish and synchronously call the adapter
         env:
           INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}

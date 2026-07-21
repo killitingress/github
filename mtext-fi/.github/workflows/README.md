@@ -1,8 +1,8 @@
 # GitHub-Actions-Vertrag für `mtext-fi`
 
-Die drei YAML-Dateien in diesem Verzeichnis sind bewusst schlanke aufrufende
-Workflows. Fachlogik, Zielauflösung, Paketbau und Integrationen gehören in das
-zentrale Repository `mtext-actions`.
+Die drei YAML-Dateien in diesem Verzeichnis sind Trigger-Workflows. Fachlogik,
+Zielauflösung, Paketbau und Integrationen gehören in das zentrale Repository
+`mtext-actions`.
 
 Die [Benutzeranleitung](../../../docs/confluence/Benutzeranleitung.md)
 beschreibt die Bedienung.
@@ -103,17 +103,17 @@ mandantenseitigen Angaben:
 
 - `repository_name`: Repository-Identität des Auslösers
 - `commit_sha` beziehungsweise `release_tag` und optional `trigger_sha`
-- `target_environment` für Entwicklung oder Abnahme
+- `target_environment` als feste fachliche Zielstufe Entwicklung oder Abnahme
 - `source_branch`, aus dem Releaselinie und Stufe validiert abgeleitet werden
 - `automation_ref` als zentral gepflegte technische Referenz für den Checkout
   der freigegebenen Implementierung. Die Einrichtungsautomation hält sie mit
   der Version des aufgerufenen Workflows identisch. Das Repository
   `j520730/mtext-actions` ist fest vorgegeben.
 
-Secrets werden nicht als frei wählbare Eingaben aus diesen schlanken Workflows
-weitergereicht. Die Sync-Jobs binden das zur Stufe gehörende GitHub Environment,
-benötigen daraus aber keine Secrets. Nur der Publish-Job bindet das Environment
-`Bereitstellung` und liest dort die Mainframe-Secrets. Davon getrennt ist die
+Secrets werden nicht als frei wählbare Eingaben aus diesen Trigger-Workflows
+weitergereicht. Die Sync-Jobs binden kein GitHub Environment. Nur der
+Publish-Job bindet das Environment `Bereitstellung` und liest dort die
+Mainframe-Secrets. Davon getrennt ist die
 fest vorgegebene technische Leseberechtigung für den zentralen Codebezug. Die
 Einrichtung ist unter
 [Nächste Schritte](../../../docs/confluence/Naechste_Schritte.md) beschrieben.
@@ -151,15 +151,11 @@ manuelle Klickanleitung.
   dem benannten technischen Verantwortlichenkreis zur Änderung erlauben
 - Es werden ausschließlich Git-Tags und keine GitHub Releases verwendet.
   Erstellen und Löschen von Tags `Rnnn.nnn` auf das Mandanten-Release-Team begrenzen.
-  Vor dem Löschen eines irrtümlichen Tags den dadurch gestarteten
-  Workflow-Lauf abbrechen
-- die manuelle Freigabe im Environment `Bereitstellung` ausschließlich auf die
-  Mainframe-Übergabe beziehen. Das Löschen eines Tags nimmt eine bereits
-  erfolgte Lieferung nicht zurück
+  Einen bei der Korrektur noch laufenden Ablauf abbrechen
+- das Environment `Bereitstellung` auf zulässige Release-Tags begrenzen und
+  ausschließlich dort die Mainframe-Secrets hinterlegen
 - freigegebene Actions und wiederverwendbare Workflows ausschließlich über
   vollständige Commit-SHAs referenzieren
-- die drei gemeinsamen GitHub Environments `Entwicklung`, `Abnahme` und
-  `Bereitstellung`. Nur `Bereitstellung` verlangt eine manuelle Freigabe
 - minimale Berechtigungen des `GITHUB_TOKEN` auf Repository-Ebene.
 
 `R261/Entwicklung` wird zunächst als Default Branch eingestellt. Workflow- und

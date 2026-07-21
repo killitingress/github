@@ -70,12 +70,12 @@ zusätzliches GitHub Release wird nicht angelegt:
 Ein FULL enthält je Projekt das vollständige F-Paket und zusätzlich ein leeres
 D-Paket mit leerem Projektverzeichnis und leerer Löschliste.
 
-Der Release-Workflow prüft den Tag, baut die Lieferdateien und wartet vor der
-Mainframe-Übergabe auf die Freigabe im GitHub Environment `Bereitstellung`.
-Einen irrtümlich angelegten Tag kann das Mandanten-Release-Team nach Abbruch des
-zugehörigen Workflow-Laufs löschen und bei Bedarf neu anlegen. Die manuelle
-Freigabe gilt ausschließlich für die Mainframe-Übergabe, nicht für den Tag.
-Das Löschen eines Tags nimmt eine bereits erfolgte Lieferung nicht zurück.
+Der Release-Tag ist die fachliche Freigabe. Der Release-Workflow prüft den Tag,
+baut die Lieferdateien und übergibt sie nach erfolgreicher Prüfung automatisch
+an den Mainframe. Einen irrtümlich angelegten Tag kann das
+Mandanten-Release-Team löschen und bei Bedarf neu anlegen. Der korrigierte Lauf
+überschreibt die betreffenden Member in CodePipeline und erzeugt dort einen
+neuen Versionierungsstand.
 
 ## Mandantenkonfiguration
 

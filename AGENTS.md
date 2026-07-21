@@ -17,6 +17,19 @@
   unüblich, Gedankenstriche sinnvoller, oder eigene Sätz)
 - keine übermäßig komplizierte, technische oder gestraffte Sprache verwenden
   Leser sind teils technisch unbedarft und sollen nicht verwirrt werden
+- Aussagen dürfen den bestätigten fachlichen oder technischen Sachverhalt nicht
+  erweitern. Plausibel erscheinende Komponenten, Abläufe, Rollen,
+  Schutzmaßnahmen oder Automatisierungen dürfen nicht ohne Anforderung als
+  Bestandteil des Soll-Konzepts dargestellt werden. Ungeklärte Punkte sind als
+  offene Frage zu benennen.
+- Mengenangaben, Ausschlüsse und Verstärkungen wie `genau`, `nur`,
+  `ausschließlich`, `immer`, `vollständig` oder `zwingend` dürfen verwendet
+  werden, wenn die damit ausgedrückte Einschränkung bestätigt und für die
+  Aussage wichtig ist. Sie dürfen nicht zur bloßen Betonung ergänzt werden.
+- Eine einfache positive Aussage ist einer unbegründeten Ausschlussformulierung
+  vorzuziehen. Beispielsweise heißt es `Repository X darf zugreifen` statt
+  `Nur Repository X darf zugreifen` und `einen Lauf` statt `genau einen Lauf`,
+  sofern keine fachliche Einschränkung beschrieben werden soll.
 
 ## Kommentare
 

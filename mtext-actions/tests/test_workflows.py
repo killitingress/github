@@ -24,7 +24,7 @@ EXPECTED_WORKFLOWS = {
 
 class WorkflowTests(unittest.TestCase):
     def test_workflows_keep_pins_and_external_boundaries(self) -> None:
-        """Prüft Action-Pins, Freigabe, Secrets und explizite Ausführung."""
+        """Prüft Action-Pins, Secrets und explizite Ausführung."""
 
         workflows = ROOT / ".github/workflows"
         self.assertEqual(
@@ -77,6 +77,11 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("environment: Bereitstellung", release)
         self.assertIn("secrets.MAINFRAME_FTP_PASSWORD", release)
         self.assertIn("--execute", release)
+        sync = (workflows / "reusable-sync-resources.yml").read_text(
+            encoding="utf-8"
+        )
+        # Entwicklung und Abnahme sind fachliche Zielstufen ohne eigene Secrets.
+        self.assertNotRegex(sync, r"(?m)^\s+environment:")
         for name in (
             "reusable-validate-config.yml",
             "reusable-sync-resources.yml",

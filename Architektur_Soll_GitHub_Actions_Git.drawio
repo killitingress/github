@@ -40,7 +40,7 @@
         <mxCell id="config-source" value="Änderung an .github/config.json auf jedem Branch&#xa;kuerzel / repository / ispw T|P / subsystem&#xa;hostprofile / excluded_projects" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="310" y="325" width="420" height="85" as="geometry"/>
         </mxCell>
-        <mxCell id="dev-sync" value="reusable-sync-resources.yml&#xa;Environment Entwicklung&#xa;Checkout: Mandant + gepinnte Automation&#xa;Prüfung von Config, Branch, SHA und Historie&#xa;sync-resources --execute" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="dev-sync" value="reusable-sync-resources.yml&#xa;Zielstufe Entwicklung&#xa;Checkout: Mandant + gepinnte Automation&#xa;Prüfung von Config, Branch, SHA und Historie&#xa;sync-resources --execute" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="805" y="190" width="285" height="130" as="geometry"/>
         </mxCell>
         <mxCell id="dev-staging" value="Laufbezogenes Staging&#xa;unter RUNNER_TEMP&#xa;vollständiger Projektstand&#xa;Symlinks gesperrt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656" vertex="1" parent="1">
@@ -65,10 +65,10 @@
         <mxCell id="acc-branch" value="Neuer Commit auf&#xa;Rnnn/Abnahme&#xa;neue SHA&#xa;Quell-SHA dokumentiert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="310" y="510" width="190" height="105" as="geometry"/>
         </mxCell>
-        <mxCell id="acc-caller" value="sync-resources.yml&#xa;Trigger-Workflow&#xa;Ziel: Abnahme&#xa;zentrale Version per Commit-SHA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
+        <mxCell id="acc-caller" value="sync-resources.yml&#xa;Trigger-Workflow&#xa;Ziel: Abnahme" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
           <mxGeometry x="525" y="505" width="205" height="115" as="geometry"/>
         </mxCell>
-        <mxCell id="acc-sync" value="reusable-sync-resources.yml&#xa;Environment Abnahme&#xa;derselbe geprüfte Ablauf&#xa;exakter Commit + gepinnte Automation&#xa;sync-resources --execute" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="acc-sync" value="reusable-sync-resources.yml&#xa;Zielstufe Abnahme&#xa;derselbe geprüfte Ablauf&#xa;exakter Commit + gepinnte Automation&#xa;sync-resources --execute" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="805" y="500" width="285" height="125" as="geometry"/>
         </mxCell>
         <mxCell id="acc-staging" value="Laufbezogenes Staging&#xa;vollständiger Projektstand&#xa;Veröffentlichung erst danach" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656" vertex="1" parent="1">
@@ -112,16 +112,13 @@
         <mxCell id="artifact" value="Geprüftes Release-Artefakt&#xa;Pakete und Informationsdateien&#xa;Manifest und Prüfsummen" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1280" y="975" width="220" height="110" as="geometry"/>
         </mxCell>
-        <mxCell id="approval" value="Manuelle Freigabe&#xa;der Mainframe-Übergabe&#xa;Zugangsdaten erst danach" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
-          <mxGeometry x="900" y="1145" width="220" height="140" as="geometry"/>
-        </mxCell>
         <mxCell id="publish-job" value="Mainframe-Übergabe&#xa;geprüftes Artefakt verwenden&#xa;FTP und JES" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1200" y="1155" width="250" height="120" as="geometry"/>
         </mxCell>
         <mxCell id="mainframe" value="Mainframe IZE9 / CodePipeline&#xa;Lieferung registriert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1605" y="1155" width="330" height="120" as="geometry"/>
         </mxCell>
-        <mxCell id="controls" value="Schutzgrenzen: feste Quellen und zentrale Automation | minimale Berechtigungen | geschützte Freigabe | kontrollierte Wiederanläufe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
+        <mxCell id="controls" value="Schutzgrenzen: feste Quellen und zentrale Automation | minimale Berechtigungen | geschützte Zugangsdaten | kontrollierte Wiederanläufe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="790" y="1340" width="665" height="65" as="geometry"/>
         </mxCell>
 
@@ -151,8 +148,7 @@
 
         <mxCell id="e-release-workflow" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="release-workflow" target="build-job"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-build-artifact" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="build-job" target="artifact"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-artifact-approval" value="Freigabe" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="artifact" target="approval"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-approval-publish" value="freigegeben" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="approval" target="publish-job"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-artifact-publish" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="artifact" target="publish-job"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-publish-mainframe" value="FTP / JES" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="publish-job" target="mainframe"><mxGeometry relative="1" as="geometry"/></mxCell>
       </root>
     </mxGraphModel>

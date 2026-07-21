@@ -284,7 +284,7 @@ verwendet:
 |---|---|---|
 | M/Text Workbench mit integriertem Git-Client | Briefressourcen bearbeiten, Änderungen prüfen, committen und nach Entwicklung pushen | Text-Entwickler |
 | Zusätzlicher Git-Client | Ausgewählte Commits per Cherry-Pick nach Abnahme und Bereitstellung weitergeben sowie Release-Tags anlegen oder löschen | dafür berechtigte Text-Entwickler und Mitglieder des Mandanten-Release-Teams |
-| GitHub im Browser | Commits, Release-Tags und Läufe prüfen, manuelle Läufe starten und Freigaben erteilen | Text-Entwickler sowie die jeweils berechtigten Verantwortlichen |
+| GitHub im Browser | Commits, Release-Tags und Läufe prüfen sowie manuelle Läufe starten | Text-Entwickler sowie die jeweils berechtigten Verantwortlichen |
 
 Für die normale Ressourcenarbeit ist keine Git-Kommandozeile erforderlich.
 Mandantenbenutzer greifen nicht auf `mtext-actions` zu und ändern die zentral
@@ -378,8 +378,8 @@ nicht zulässig.
 | Commit auf Entwicklung oder Abnahme gepusht | Gegen-Commit auf demselben Branch erstellen und pushen. Der dadurch gestartete Sync verteilt den vollständigen korrigierten Stand |
 | Commit nach Bereitstellung gepusht, aber noch nicht getaggt | Das Mandanten-Release-Team erstellt und pusht den Gegen-Commit. Ein Push nach Bereitstellung allein erzeugt keine Lieferung |
 | Commit bereits in eine weitere Stage übernommen | Den betroffenen Commit in jeder Stage, in die er übernommen wurde, mit den dort geltenden Berechtigungen durch einen eigenen Gegen-Commit zurücknehmen. Ein Gegen-Commit auf Entwicklung ändert Abnahme oder Bereitstellung nicht automatisch |
-| Release-Tag falsch angelegt | Den dadurch gestarteten Lauf abbrechen und den Tag nach dem in Kapitel 10 beschriebenen Verfahren zurücknehmen. Den Bereitstellungsbranch bei Bedarf mit einem Gegen-Commit korrigieren und anschließend den richtigen Tag anlegen |
-| Mainframe-Übergabe bereits erfolgt | Das Löschen des Tags nimmt die Lieferung nicht zurück. Eine fachliche Korrektur erfolgt mit einem neuen Commit und einem neuen Release-Tag nach dem regulären Verfahren |
+| Release-Tag falsch angelegt | Einen noch laufenden Ablauf abbrechen und den Tag nach dem in Kapitel 10 beschriebenen Verfahren zurücknehmen. Den Bereitstellungsbranch bei Bedarf mit einem Gegen-Commit korrigieren und anschließend den richtigen Tag anlegen |
+| Mainframe-Übergabe bereits erfolgt | Das Löschen des Tags nimmt die Lieferung nicht zurück. Der korrigierte Lauf überschreibt die betreffenden Member und CodePipeline versioniert den neuen Stand |
 
 Ist der Commit fachlich richtig und nur der Workflow technisch fehlgeschlagen,
 wird kein Gegen-Commit erzeugt. In diesem Fall wird derselbe Commit nach der
@@ -412,20 +412,13 @@ den lokalen Git-Clients stattfinden.
 - Vor jeder Wiederholung wird geprüft, ob das Zielsystem den vorherigen Lauf
   bereits angenommen hat.
 
-#### Mainframe-Übergabe freigeben
+#### Mainframe-Übergabe kontrollieren
 
-1. Im Release-Lauf prüfen, dass der Build-Job erfolgreich war und Tag,
-   Ziel-Commit sowie Artefakt zum freizugebenden Stand gehören.
-2. Die ausstehende Freigabe für das Environment `Bereitstellung` öffnen.
-3. Bei einer Abweichung nicht freigeben, sondern den Lauf abbrechen und den
-   Fehler klären.
-4. Nur den vollständig geprüften Stand freigeben und anschließend den
-   Publish-Job bis zum Abschluss kontrollieren.
-
-Für diese Freigabe ist kein verpflichtendes Vier-Augen-Prinzip vorgesehen.
-Eine dafür berechtigte Person darf sowohl den Tag anlegen als auch den
-Publish-Job freigeben. Die inhaltlichen Prüfungen vor der Freigabe bleiben
-vollständig erforderlich.
+1. Im Release-Lauf prüfen, dass Tag, Ziel-Commit und Paketbau zum vorgesehenen
+   Stand gehören.
+2. Den automatisch gestarteten Publish-Job bis zum Abschluss kontrollieren.
+3. Anschließend den technischen Status auf dem Host nach dem festgelegten
+   Betriebsverfahren prüfen.
 
 Das Anlegen und die kontrollierte Rücknahme eines Release-Tags sind in Kapitel
 10 beschrieben. Änderungen an Repositoryrechten, Rulesets, Environments oder
@@ -690,9 +683,8 @@ Release Notes oder zusätzlichen Dateien werden nicht verwendet:
 5. In GitHub prüfen, dass der Tag auf die bestätigte Commit-SHA zeigt und genau
    einen Lauf von **Build and publish release** gestartet hat.
 
-Das Pushen des Git-Tags startet den Paketbau. Die spätere manuelle Freigabe des
-Publish-Jobs im Environment `Bereitstellung` gilt ausschließlich für die
-Mainframe-Übergabe, nicht für den Tag.
+Das Pushen des Git-Tags ist die fachliche Freigabe. Es startet den Paketbau und
+nach erfolgreicher Prüfung automatisch die Mainframe-Übergabe.
 
 Danach unter **Actions → Build and publish release** prüfen:
 
@@ -702,24 +694,23 @@ Danach unter **Actions → Build and publish release** prüfen:
    das zusätzliche leere D-Paket enthalten sein.
 2. Das Artefakt heißt `<Repository>-<Release-Tag>` und wird standardmäßig
    30 Tage aufbewahrt.
-3. `Verify and hand over artifact to Mainframe` wartet im Environment
-   `Bereitstellung` auf die eingerichtete manuelle Freigabe.
-4. Das Mandanten-Release-Team gibt den Publish-Job frei.
-5. Nach der Freigabe werden Pfad, Größe und SHA-256 jeder manifestierten Datei
+3. `Verify and hand over artifact to Mainframe` startet nach erfolgreichem
+   Build automatisch und bindet das Environment `Bereitstellung`.
+4. Vor der Übergabe werden Pfad, Größe und SHA-256 jeder manifestierten Datei
    geprüft. Danach werden die JCL-Werte validiert, das versionierte Template
    gerendert und Paket plus JCL per FTP/JES übergeben.
 
 ### Irrtümlichen Tag zurücknehmen
 
 Wurde der Tag auf dem falschen Commit oder mit dem falschen Namen angelegt,
-bricht das Mandanten-Release-Team zuerst den gesamten Workflow-Lauf ab. Anschließend
+bricht das Mandanten-Release-Team einen noch laufenden Ablauf ab. Anschließend
 löscht es den irrtümlichen Git-Tag mit dem freigegebenen zusätzlichen
 Git-Client lokal und auf GitHub und legt bei Bedarf den richtigen Tag an. Der
 neu angelegte Tag startet einen neuen Lauf.
 
 Eine bereits erfolgte Mainframe-Übergabe wird durch das Löschen eines Tags
-nicht rückgängig gemacht. Eine fachliche Korrektur der Lieferung erfolgt mit
-einem neuen Commit und einem neuen Release-Tag.
+nicht rückgängig gemacht. Der korrigierte Lauf überschreibt die betreffenden
+Member und CodePipeline versioniert den neuen Stand.
 
 `MAINFRAME_SUBMITTED` bedeutet ausschließlich, dass die unmittelbare
 FTP-/JES-Übergabe akzeptiert wurde. Der fachliche Abschluss des Mainframe-Jobs
@@ -776,7 +767,7 @@ fachlichen Endstatus.
 | `RESOURCE_TRANSFER_FAILED` | Staging oder Veröffentlichung nach `serverSync` fehlgeschlagen | Runner-Dateisystem und Share-/NFS-Ziel einschließlich vorhandener temporärer Verzeichnisse prüfen |
 | `ADAPTER_FAILED` | Transportfehler oder Nicht-2xx vom Adapter | HTTP-Status und gekürzten Antworttext im Protokoll prüfen |
 | `ADAPTER_ACCEPTED` | Unmittelbare Adapterannahme erfolgreich | Kein Beleg für einen nachgelagerten M/Text-Endstatus. Ist die fachliche Wirkung unklar, wird die Anwendungsbetreuung eingeschaltet. Anwender benötigen keinen direkten Zugriff auf technische Anwendungsprotokolle |
-| `ARTIFACT_READY` | Releaseartefakt lokal gebaut und geprüft | Publish-Freigabe beziehungsweise nächsten Job prüfen |
+| `ARTIFACT_READY` | Releaseartefakt lokal gebaut und geprüft | Automatisch gestarteten Publish-Job prüfen |
 | `MAINFRAME_TRANSFER_FAILED` | FTP-Upload oder JES-Übergabe unmittelbar fehlgeschlagen | Zugangsdaten, Dataset, JES-Ziel, Netzwerk und FTP-Antwort prüfen |
 | `MAINFRAME_SUBMITTED` | Unmittelbare FTP-/JES-Übergabe akzeptiert | Das Mandanten-Release-Team prüft den weiteren Status selbst auf dem Host nach dem festgelegten Betriebsverfahren |
 

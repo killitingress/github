@@ -52,11 +52,11 @@ für weiterhin benötigte Kompatibilitätsregeln.
   Git-Historie.
 - Der Tag muss vom Bereitstellungsbranch erreichbar sein und dem Checkout
   entsprechen.
-- Das Mandanten-Release-Team kann einen irrtümlichen Tag nach Abbruch des zugehörigen
-  Workflow-Laufs löschen und neu anlegen.
-- Die manuelle Freigabe im Environment `Bereitstellung` gilt für die
-  Mainframe-Übergabe, nicht für den Tag. Das Löschen eines Tags nimmt eine
-  bereits erfolgte Lieferung nicht zurück.
+- Der Release-Tag ist die fachliche Freigabe. Nach erfolgreichem Paketbau
+  erfolgt die Mainframe-Übergabe automatisch.
+- Das Mandanten-Release-Team kann einen irrtümlichen Tag löschen und neu
+  anlegen. Ein korrigierter Lauf überschreibt die betreffenden Member in
+  CodePipeline und erzeugt dort einen neuen Versionierungsstand.
 - Archivnamen, Mainframe-Member, Löschlisten und Informationsdateien folgen dem
   bestehenden Jenkins-Vertrag.
 - Erkannte Dateikopien werden wie Hinzufügungen behandelt. Umbenennungen gelten

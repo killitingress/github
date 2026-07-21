@@ -1,10 +1,10 @@
 name: Build and publish release
 
 # Dieser Workflow lässt aus einem vorhandenen Release-Tag ein unveränderliches
-# Release-Artefakt bauen und nach Freigabe an den Mainframe übergeben.
+# Release-Artefakt bauen, prüfen und an den Mainframe übergeben.
 'on':
-  # Das Mandanten-Release-Team setzt den Tag; erst dessen Push startet Build und
-  # nachgelagerte Freigabe.
+  # Das Mandanten-Release-Team setzt den Tag. Erst dessen Push startet Build und
+  # nachgelagerte Übergabe.
   push:
     tags:
       - R[0-9][0-9][0-9].[0-9][0-9][0-9]

@@ -40,8 +40,8 @@ Der generelle Ablauf ist:
    an das M/Text-Abnahmesystem verteilt, zum Beispiel `en01a.ltoms.intern`.
 3. Abgenommene Änderungen werden nach `Rnnn/Bereitstellung` übernommen. Der
    Push allein erzeugt noch keine Mainframe-Lieferung.
-4. Erst ein Release-Tag wie `R261.108` baut die Lieferung. Vor der technischen
-   Übergabe an den Mainframe ist eine manuelle Freigabe erforderlich.
+4. Ein Release-Tag wie `R261.108` ist die fachliche Freigabe. Er startet den
+   Paketbau und nach erfolgreicher Prüfung die Mainframe-Übergabe.
 
 Der M/Text-Adapter (LTOMA) bleibt die zentrale Schnittstelle. Für die
 Bereitstellung unter `serverSync` auf dem M/Text-Server muss noch ein
@@ -122,8 +122,7 @@ Bewertung bleibt die nachweisbare Übergabe beider Pakete erhalten.
 | M/Text-Arbeitsstand | Langlebige SVN-Arbeitskopien werden normalerweise mit `svn update` fortgeschrieben und bei `UMFANG=FULL` neu angelegt. | Jeder Lauf verwendet einen frischen Git-Checkout und veröffentlicht den vollständigen Stand jedes verarbeiteten Projekts. | SVN-Locks, lokale Abweichungen und Reparaturpfade entfallen. Der ausgelieferte Commit ist eindeutig. |
 | Projektstruktur | Der Jenkins-Ablauf ruft eine fest eingebaute Projektmatrix auf. | Alle sichtbaren und nicht ausgeschlossenen Projektverzeichnisse werden verarbeitet. Die aktuelle Matrix dient als Warnungsreferenz. | Fachlich abgestimmte Änderungen der Projektstruktur sollen keinen vorherigen Umbau einer technischen Allowlist erfordern. |
 | Projektcode | Die bekannten Projektcodes stehen in den einzelnen Jenkins-Aufrufen. | Der Projektcode wird einheitlich aus dem Projektnamen abgeleitet und auf Eindeutigkeit geprüft. | Zusätzliche Projekte bleiben paketierbar. Mehrdeutige Mainframe-Member werden weiterhin verhindert. |
-| Releasebau und Übergabe | Paketbau und Mainframe-Übergabe erfolgen im selben Jenkins-Ablauf über den gemeinsamen Arbeitsbereich und `/nfs/mtext/trans`. | Der Build erzeugt ein geprüftes GitHub-Artefakt mit Manifest und Prüfsummen. Ein getrennter Publish-Job übergibt genau dieses Artefakt. | Der freigegebene Inhalt bleibt zwischen Build und externer Wirkung unverändert und nachweisbar. |
-| Freigabe | Der Jenkins-Ablauf übergibt die gebauten Pakete unmittelbar. | Vor FTP und JES ist eine manuelle Freigabe im Environment `Bereitstellung` erforderlich. | Die externe Mainframe-Wirkung erhält eine sichtbare und geschützte Freigabegrenze. |
+| Releasebau und Übergabe | Paketbau und Mainframe-Übergabe erfolgen im selben Jenkins-Ablauf über den gemeinsamen Arbeitsbereich und `/nfs/mtext/trans`. | Der Build erzeugt ein geprüftes GitHub-Artefakt mit Manifest und Prüfsummen. Ein getrennter Publish-Job übergibt genau dieses Artefakt. | Der geprüfte Inhalt bleibt zwischen Build und externer Wirkung unverändert und nachweisbar. |
 | Wiederholung | Ein Wiederanlauf kann den Arbeitsbereich und die Pakete erneut erzeugen. | Der Publish-Job kann innerhalb desselben Laufs mit dem bereits geprüften Artefakt wiederholt werden. | Ein Übergabefehler soll keinen unbemerkten Neubau mit anderem Inhalt verursachen. |
 | Zugangsdaten | Das Jenkins-Skript erzeugt zur Laufzeit ein Uploadskript mit eingesetzten Zugangsdaten. | Secrets stehen nur dem berechtigten Publish-Job über das GitHub Environment zur Verfügung und werden nicht in erzeugte Skripte geschrieben. | Zugangsdaten sollen weder in Arbeitsdateien noch in Protokolle gelangen. |
 | Dateimetadaten | TAR-Metadaten stammen aus dem jeweiligen Jenkins-Arbeitsbereich. | Releasearchive erhalten reproduzierbare Besitzer-, Modus- und Zeitangaben. | Gleiche Quellen und Konfigurationen sollen bytegleiche und überprüfbare Archive ergeben. |
@@ -173,7 +172,7 @@ Die Lösung besteht aus vier Bereichen:
 |---|---|
 | Mandanten-Repository | M/Text-Ressourcen, Mandantenkonfiguration und Workflow-Trigger |
 | Automatisierungs-Repository `mtext-actions` | Prüfungen, Synchronisation, Paketbau und Mainframe-Übergabe |
-| GitHub Actions | Ausführung der Abläufe, Freigaben und Protokollierung |
+| GitHub Actions | Ausführung der Abläufe und Protokollierung |
 | GitHub-Actions-Runner (FI) | Ausführung der Workflows auf dem offiziell verfügbaren Runnerangebot der FI. Bereitstellung, Absicherung, Wartung und Bereinigung des Runnerangebots liegen außerhalb des Projekts |
 
 Ein Mandanten-Repository enthält ausschließlich die Ressourcen und die für
@@ -198,7 +197,7 @@ Kapitel 6.
 Die Text-Entwickler bearbeiten Briefressourcen in der M/Text Workbench und
 nutzen darüber hinaus ihren Git-Client für weitere Aktionen wie Cherry-Picking
 oder das Erstellen von Release-Tags. GitHub im Browser dient für Laufkontrolle,
-Wiederholungen, Freigaben und die Prüfung von Release-Tags. Für die tägliche
+Wiederholungen und die Prüfung von Release-Tags. Für die tägliche
 Arbeit ist keine Git-Kommandozeile nötig.
 
 Jeder Mandant benennt ein Mandanten-Release-Team für den
@@ -317,8 +316,8 @@ Releasepakete aufgenommen. `LOMS_Testdaten` soll ebenfalls in das Repository
 von der Synchronisation und den Releasepaketen ausgeschlossen.
 
 Im Mandanten-Repository stehen nur kleine Trigger-Workflows. Sie legen fest,
-wann eine Automatisierung startet und welches GitHub Environment sie verwendet. Die
-eigentlichen Arbeitsschritte liegen im Repository `mtext-actions`. Bei der
+wann eine Automatisierung startet und welche fachliche Zielstufe sie verwendet.
+Die eigentlichen Arbeitsschritte liegen im Repository `mtext-actions`. Bei der
 Einrichtung (und bei späteren Updates) informiert ein besonderer Workflow die
 Trigger-Workflows darüber, welche Version von `mtext-actions` zu verwenden
 ist.
@@ -359,26 +358,24 @@ Zielzustand.
 | `.github/config.json` | Eine Pfadregel trennt Änderungen der Mandantenkonfiguration von der normalen Ressourcenpflege. |
 | Tags `Rnnn.nnn` | Nur das Mandanten-Release-Team darf passende Tags erstellen oder löschen. |
 
-Das Pushen eines Release-Tags startet den Release-Workflow. Wurde der Tag
-irrtümlich angelegt, bricht das Mandanten-Release-Team deshalb zuerst den
-zugehörigen Workflow-Lauf ab, löscht den Tag und legt bei Bedarf den richtigen
-Tag neu an.
-Für die Übergabe an CodePipeline ist eine manuelle Freigabe im Environment
-`Bereitstellung` notwendig.
+Das Pushen eines Release-Tags ist die fachliche Freigabe und startet den
+Release-Workflow. Wird ein Fehler während des Laufs erkannt, kann das
+Mandanten-Release-Team den Lauf abbrechen. Einen irrtümlichen Tag löscht es und
+legt bei Bedarf den richtigen Tag neu an. Ein korrigierter Lauf überschreibt
+die betreffenden Member in CodePipeline und erzeugt dort einen neuen
+Versionierungsstand.
 
 ### Environments und Secrets
 
-Ein GitHub Environment bildet eine Zielstufe ab und enthält alle dafür geltenden
-Schutzregeln, etwa zulässige Branches oder Tags und erforderliche Freigaben.
+Ein GitHub Environment begrenzt Secrets und kann festlegen, aus welchen
+Branches oder Tags ein Job darauf zugreifen darf.
 Seine Secrets stehen ausschließlich Jobs zur Verfügung, die an dieses Environment
 gebunden sind und dessen Schutzregeln erfüllen.
 
 | Environment | Verwendung und Schutz |
 |---|---|
-| `Einrichtung` | Wird ausschließlich vom manuell gestarteten Einrichtungsworkflow in `mtext-actions` gebunden. Es stellt nach Freigabe das auf die vorgesehenen Repositories begrenzte technische Token für die Workflowänderungen bereit. |
-| `Entwicklung` | Wird ausschließlich vom Sync-Job für den Entwicklungsbranch gebunden. Eine manuelle Freigabe und stufenspezifische Environment-Secrets sind dafür nicht vorgesehen. |
-| `Abnahme` | Wird ausschließlich vom Sync-Job für den Abnahmebranch gebunden. Eine manuelle Freigabe und stufenspezifische Environment-Secrets sind dafür nicht vorgesehen. |
-| `Bereitstellung` | Wird ausschließlich vom Publish-Job gebunden. Eine berechtigte Person muss die Mainframe-Übergabe manuell freigeben. Ein verpflichtendes Vier-Augen-Prinzip oder eine Sperre der Selbstfreigabe ist nicht vorgesehen. Nur zulässige Release-Tags dürfen dieses Environment verwenden. |
+| `Einrichtung` | Wird ausschließlich vom manuell gestarteten Einrichtungsworkflow in `mtext-actions` gebunden. Es stellt das auf die vorgesehenen Repositories begrenzte technische Token für die Workflowänderungen bereit. |
+| `Bereitstellung` | Wird ausschließlich vom Publish-Job gebunden. Nur zulässige Release-Tags dürfen dieses Environment verwenden. Es stellt ausschließlich diesem Job die Mainframe-Secrets bereit. |
 
 Die Mainframe-Zugangsdaten `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER` und
 `MAINFRAME_FTP_PASSWORD` liegen ausschließlich als Secrets im Environment
@@ -468,9 +465,9 @@ im Format `Rnnn.nnn` startet den Paketbau. Dabei wird geprüft, ob der Tag zur
 angegebenen Releaselinie gehört und vom Bereitstellungsbranch erreichbar ist.
 Der Tag wird als Git-Tag mit dem freigegebenen zusätzlichen Git-Client angelegt
 und einzeln gepusht. Ein GitHub Release wird nicht erzeugt. Wurde ein Tag
-irrtümlich angelegt, wird der dadurch gestartete Workflow-Lauf vor dem Löschen
-oder Korrigieren des Tags abgebrochen. Die spätere manuelle Freigabe betrifft
-ausschließlich die Mainframe-Übergabe.
+irrtümlich angelegt, wird er gelöscht und bei Bedarf richtig neu angelegt. Wird
+der Fehler während des Laufs erkannt, kann der Lauf abgebrochen werden. Der
+korrigierte Ablauf baut und übergibt die Lieferung erneut.
 
 Der zusätzliche Git-Client für die Auswahl und Übernahme einzelner Änderungen
 in Abnahme und Bereitstellung wird vor dem Pilotbetrieb ausgewählt,
@@ -519,7 +516,7 @@ eigentliche Fachlogik liegt in Python.
 | Entwicklung synchronisieren | Push nach `Rnnn/Entwicklung` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync-resources` | Vollständiger Projektstand des Ziel-Commits nach M/Text-Entwicklung synchronisiert |
 | Abnahme synchronisieren | Push eines per Cherry-Pick übernommenen Commits nach `Rnnn/Abnahme` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync-resources` | Vollständiger Projektstand des Ziel-Commits nach M/Text-Abnahme synchronisiert |
 | Bereitstellungsstand fortschreiben | Cherry-Pick und Push nach `Rnnn/Bereitstellung` | keiner | keiner | keines | Nur Git-Branch fortgeschrieben. Noch keine Lieferung |
-| Release bauen und übergeben | Push eines Tags `Rnnn.nnn` oder manueller Start mit vorhandenem Tag | `release.yml` | `reusable-release.yml` | `build-release`, danach `publish-mainframe` | FULL/DELTA gebaut, geprüft und nach Freigabe per FTP/JES übergeben |
+| Release bauen und übergeben | Push eines Tags `Rnnn.nnn` oder manueller Start mit vorhandenem Tag | `release.yml` | `reusable-release.yml` | `build-release`, danach `publish-mainframe` | FULL/DELTA gebaut, geprüft und automatisch per FTP/JES übergeben |
 | `mtext-actions` testen | Pull Request in `mtext-actions` oder Push auf dessen `main` | entfällt | `ci.yml` | `unittest discover` | Zentrale Testfälle und Workflowverträge geprüft |
 
 Die fachlichen Workflows verarbeiten den Stand, den die Benutzer auf dem
@@ -555,7 +552,7 @@ dem Zugriff auf externe Systeme erneut.
 | Datei | Automatischer Trigger | Manueller Trigger | Abhängigkeit und Zweck |
 |---|---|---|---|
 | [`validate-config.yml`](../../mtext-fi/.github/workflows/validate-config.yml) | Push mit Änderung an `.github/config.json` auf einen Branch | keiner | Ruft `reusable-validate-config.yml` zur Prüfung der Mandantenkonfiguration auf |
-| [`sync-resources.yml`](../../mtext-fi/.github/workflows/sync-resources.yml) | Push nach `Rnnn/Entwicklung` oder `Rnnn/Abnahme` | `workflow_dispatch` mit vollständiger `commit_sha` und zugehörigem `source_branch` | Ruft abhängig von der Branchendung `reusable-sync-resources.yml` mit festem GitHub Environment `Entwicklung` oder `Abnahme` auf |
+| [`sync-resources.yml`](../../mtext-fi/.github/workflows/sync-resources.yml) | Push nach `Rnnn/Entwicklung` oder `Rnnn/Abnahme` | `workflow_dispatch` mit vollständiger `commit_sha` und zugehörigem `source_branch` | Ruft abhängig von der Branchendung `reusable-sync-resources.yml` mit der festen Zielstufe `Entwicklung` oder `Abnahme` auf |
 | [`release.yml`](../../mtext-fi/.github/workflows/release.yml) | Push eines Tags `Rnnn.nnn` | `workflow_dispatch` mit vorhandenem `release_tag` | Ruft `reusable-release.yml` auf. Ein Push nach Bereitstellung allein ist kein Auslöser |
 
 ### Zentrale YAML-Workflows
@@ -565,7 +562,7 @@ dem Zugriff auf externe Systeme erneut.
 | [`configure-workflows.yml`](../../mtext-actions/.github/workflows/configure-workflows.yml) | Manueller Start über `workflow_dispatch` in `mtext-actions` mit vollständiger freigegebener SHA | Exakten `mtext-actions`-Stand und gewählten Mandantenbranch auschecken → erforderliche Commits vorbereiten → leeren Zielzustand erzwingen → Diffs anzeigen → gegebenenfalls einmaligen zentralen Runner-Commit und anschließend den Mandanten-Commit pushen | Python-Implementierung in `mtext-actions`. Bindet das Environment `Einrichtung`, führt keinen Mandantencode aus und verwendet dessen begrenztes technisches Token ausschließlich für die Workflowdateien. |
 | [`reusable-validate-config.yml`](../../mtext-actions/.github/workflows/reusable-validate-config.yml) | `workflow_call` | Mandanten-Commit auschecken → `mtext-actions` auschecken → Laufzeit vorbereiten → prüfen | `validate-config` |
 | [`reusable-sync-resources.yml`](../../mtext-actions/.github/workflows/reusable-sync-resources.yml) | `workflow_call` | Exakten Mandanten-Commit mit vollständiger Historie auschecken → `mtext-actions` auschecken → Laufzeit vorbereiten → synchronisieren | `sync-resources --execute`. Stellt den vollständigen Zielstand nach dem festgelegten Transportvertrag unter `serverSync` bereit und startet die interne Synchronisation über den M/Text-Adapter |
-| [`reusable-release.yml`](../../mtext-actions/.github/workflows/reusable-release.yml) | `workflow_call` | Job `build` erzeugt das Artefakt. Job `publish` hat `needs: build`, lädt genau dieses Artefakt und bindet das Environment `Bereitstellung` | `build-release`, danach `publish-mainframe --execute`. Übergabe per FTP/JES nach Freigabe |
+| [`reusable-release.yml`](../../mtext-actions/.github/workflows/reusable-release.yml) | `workflow_call` | Job `build` erzeugt das Artefakt. Job `publish` hat `needs: build`, lädt genau dieses Artefakt und bindet das Environment `Bereitstellung` | `build-release`, danach `publish-mainframe --execute`. Automatische Übergabe per FTP/JES nach erfolgreichem Build |
 | [`ci.yml`](../../mtext-actions/.github/workflows/ci.yml) | Pull Request oder Push auf `main` in `mtext-actions` | Repository auschecken → Laufzeit vorbereiten → Akzeptanztests ausführen | `python -m unittest discover -s tests -v` |
 
 Die wiederverwendbaren Fachworkflows sind nur über `workflow_call` erreichbar.
@@ -581,7 +578,7 @@ erst in die übrigen zentralen Workflowdateien einträgt.
 |---|---|---|---|
 | `python -m workflow_configuration` | `configure-workflows.yml` | Zentraler Checkout entspricht der freigegebenen `mtext-actions`-SHA. Bestätigtes Runner-Kennzeichen. Vollständige Workflow- und Codebezüge. Diffs sind fehlerfrei und die abschließende Einrichtungsprüfung ist leer | Geprüfte lokale Workflow-Commits für `mtext-actions` und den Mandantenbranch. Der Workflow pusht sie anschließend in der erforderlichen Reihenfolge |
 | `validate-config` | `reusable-validate-config.yml` | Bekanntes Mandantenkürzel, Repositoryidentität, gültige CodePipeline-Stage-Codes, eindeutige Projektcodes und vorhandene Hostprofile der Releaselinien | Status `CONFIG_VALIDATED` |
-| `sync-resources` | `reusable-sync-resources.yml` | Branch und Environment stimmen überein. Vollständige SHA. Checkout entspricht SHA. Commit ist aus dem Remote-Branch erreichbar. Projektbäume enthalten keine Symlinks | Vollständiger Projektstand nach `serverSync`, Adapteraufruf gemäß Transportvertrag, Status `ADAPTER_ACCEPTED` |
+| `sync-resources` | `reusable-sync-resources.yml` | Branch und Zielstufe stimmen überein. Vollständige SHA. Checkout entspricht SHA. Commit ist aus dem Remote-Branch erreichbar. Projektbäume enthalten keine Symlinks | Vollständiger Projektstand nach `serverSync`, Adapteraufruf gemäß Transportvertrag, Status `ADAPTER_ACCEPTED` |
 | `build-release` | Job `build` in `reusable-release.yml` | Tagformat und konfigurierte Releaselinie. Tag aus Bereitstellungsbranch erreichbar. Checkout entspricht Tag-SHA. DELTA-Basis `.100`. Projektbäume enthalten keine Symlinks | Reproduzierbare FULL-/DELTA-Archive, Informationsdateien und `manifest.json` mit SHA-256. Status `ARTIFACT_READY` |
 | `publish-mainframe` | Job `publish` in `reusable-release.yml` | Artefaktpfade, Dateigrößen und SHA-256 aus dem Manifest. JCL-Werte beim Rendern. FTP-Secrets vor der Übergabe | JCL je Paket, FTP-Übertragung und Übergabe an JES. Status `MAINFRAME_SUBMITTED` |
 
@@ -599,8 +596,8 @@ direkt mit `python -m workflow_configuration`.
 
 | Bereich | Umsetzung |
 |---|---|
-| Entwicklung und Abnahme | Der Sync-Job bindet das fest gewählte Environment. Derzeit werden dort keine Secrets gelesen. |
-| Bereitstellung | Nur der Publish-Job bindet dieses Environment. Die manuelle Freigabe wird in GitHub konfiguriert. |
+| Einrichtung | Nur der Einrichtungsworkflow bindet dieses Environment und erhält dessen technisches Schreib-Token. |
+| Bereitstellung | Nur der Publish-Job bindet dieses Environment und erhält dessen Mainframe-Secrets. |
 | Mainframe-Secrets | Ausschließlich `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER` und `MAINFRAME_FTP_PASSWORD` im Publish-Job |
 | Sync-Serialisierung | Concurrency-Gruppe je Repository und Branch. Ein laufender Sync wird nicht aktiv abgebrochen. |
 | Release-Serialisierung | Je Repository und Tag. Die Mainframe-Übergabe wird zusätzlich je Mandanten-Repository serialisiert. |
@@ -835,7 +832,7 @@ Repository, Mandant, Release-Tag, Lieferart, Basis- und Vorgänger-Tag,
 Ziel-SHA, JCL-Werte sowie alle Paket- und Informationsdateien mit Pfad, Größe
 und SHA-256. Paketartefakte nennen zusätzlich ihren Mainframe-Member. Vor der
 Mainframe-Übergabe werden genau diese Dateien mit den manifestierten Angaben
-verglichen. So wird sichergestellt, dass das zuvor gebaute und freigegebene
+verglichen. So wird sichergestellt, dass das zuvor gebaute und geprüfte
 Paket übergeben wird.
 
 Der folgende gekürzte Ausschnitt zeigt die Verbindung zwischen Release,
@@ -904,8 +901,7 @@ CodePipeline. Dabei gelten `STRMNAME=BOAS`, `MTYPE=TONICZ` und
 
 Der Release-Workflow trennt den Paketbau von der Mainframe-Übergabe. Der
 Paketbau benötigt keinen Zugriff auf das Zielsystem. Erst der Übergabeschritt
-erhält Zugriff auf die geschützte Umgebung `Bereitstellung` und wartet dort
-auf eine manuelle Freigabe.
+bindet das Environment `Bereitstellung` und erhält dessen Mainframe-Secrets.
 
 Übergaben desselben Mandanten werden nacheinander ausgeführt. Verschiedene
 Mandanten können gleichzeitig liefern.
@@ -950,7 +946,7 @@ noch offenen Grenzen wichtig.
 
 | Qualitätsmerkmal | Umsetzung und Nutzen |
 |---|---|
-| Durchgängiger Gesamtablauf | Die fachliche Kette führt von Entwicklung über Abnahme und Bereitstellung zum Release-Tag. Erst das geprüfte Artefakt und die manuelle Freigabe führen zur externen Übergabe. Jeder Übergang hat einen eindeutigen Auslöser und ein prüfbares Ergebnis. |
+| Durchgängiger Gesamtablauf | Die fachliche Kette führt von Entwicklung über Abnahme und Bereitstellung zum Release-Tag. Der Tag ist die fachliche Freigabe. Nach erfolgreichem Paketbau führt das geprüfte Artefakt zur externen Übergabe. Jeder Übergang hat einen eindeutigen Auslöser und ein prüfbares Ergebnis. |
 | Zentral gepflegte Automatisierung | Die Trigger-Workflows enthalten nur Auslöser und feste Zielzuordnungen. Die gemeinsame Fachlogik liegt in wiederverwendbaren Workflows und einer Python-Implementierung in `mtext-actions`. Änderungen müssen dadurch nicht je Mandant kopiert werden. |
 | Eindeutige und reproduzierbare Lieferung | Jeder Lauf verarbeitet einen vollständigen Commit-SHA. Das Manifest verbindet Release-Tag, Ziel-Commit und erzeugte Dateien. Gleiche Eingaben erzeugen bytegleiche Archive. Historische Namen, Verzeichnisstrukturen, Löschlisten und JCL-Verträge bleiben erhalten. |
 | Getrennte Verantwortlichkeiten | Mandantenressourcen und -konfiguration, gemeinsame Automatisierung, GitHub-Schutzregeln und Runnerbetrieb haben jeweils einen klaren Eigentümer. |
@@ -966,7 +962,6 @@ noch offenen Grenzen wichtig.
 | M/Text-Transport noch nicht entschieden | Der direkte Sharezugriff ist implementiert, aber der spätere Transportweg ist noch auszuwählen und nichtproduktiv abzunehmen. Ohne diese Entscheidung ist die M/Text-Integration nicht betriebsbereit. |
 | GitHub-Einrichtung noch nicht vollständig | Runner-Kennzeichen, repositoryübergreifende Zugriffe, Rulesets, Environments und technische Rollen müssen auf GitHub Enterprise Server 3.20.4 eingerichtet und praktisch geprüft werden. |
 | Kein nachgelagerter fachlicher Endstatus | `ADAPTER_ACCEPTED` und `MAINFRAME_SUBMITTED` bestätigen nur die unmittelbare technische Annahme. Die fachliche Endkontrolle bleibt bis zu einer späteren Erweiterung eine Betriebsaufgabe. |
-| Kein technisch erzwungenes Vier-Augen-Prinzip | Eine berechtigte Person darf den Release-Tag anlegen und die Mainframe-Übergabe freigeben. Falls Governance-Vorgaben eine Trennung verlangen, muss das Environment entsprechend angepasst werden. |
 | Bestehender FTP-/JES-Transport | Die Mainframe-Übergabe übernimmt zunächst den vorhandenen FTP-Vertrag. Eine verschlüsselte Alternative kann erst umgesetzt werden, wenn das Zielsystem einen bestätigten Vertrag dafür bereitstellt. |
 | Selbst gehosteter Runner als Vertrauensgrenze | Absicherung, Wartung und Bereinigung des FI-Runners liegen außerhalb der Anwendung. Diese Betriebsleistungen sind Voraussetzung für den sicheren Einsatz. |
 

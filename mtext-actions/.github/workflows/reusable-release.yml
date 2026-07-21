@@ -1,7 +1,7 @@
 name: Reusable release
 
 # Dieser wiederverwendbare Workflow erzeugt aus einem Release-Tag ein FULL- oder
-# DELTA-Artefakt und übergibt es erst in einem getrennt freizugebenden Job an den Mainframe.
+# DELTA-Artefakt und übergibt es nach erfolgreicher Prüfung an den Mainframe.
 'on':
   workflow_call:
     inputs:
@@ -105,11 +105,12 @@ jobs:
           retention-days: ${{ inputs.retention_days }}
           compression-level: 0
 
-  # Erst dieser Job bindet das geschützte Environment und darf externe Systeme ansprechen.
+  # Erst dieser Job bindet das Environment mit den Mainframe-Secrets und darf
+  # externe Systeme ansprechen.
   publish:
     name: Verify and hand over artifact to Mainframe
     needs: build
-    # Auch der freizugebende Publish-Job verwendet ausschließlich den zentral
+    # Auch der Publish-Job verwendet ausschließlich den zentral
     # festgelegten Runner der FI und keine Auswahl des Mandanten-Workflows.
     runs-on: FI_RUNNER_LABEL_TO_BE_SET
     environment: Bereitstellung

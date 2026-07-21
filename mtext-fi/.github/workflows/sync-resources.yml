@@ -29,8 +29,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Dieser Aufruf übergibt Commits der Entwicklungs-Branches ausschließlich an
-  # den zentralen Workflow mit dem fest vorgegebenen Environment Entwicklung.
+  # Dieser Aufruf übergibt Commits der Entwicklungs-Branches ausschließlich mit
+  # der fest vorgegebenen Zielstufe Entwicklung an den zentralen Workflow.
   sync-entwicklung:
     name: Sync to Entwicklung
     if: >-
@@ -46,8 +46,8 @@ jobs:
       target_environment: Entwicklung
       automation_ref: 0000000000000000000000000000000000000000
 
-  # Dieser Aufruf übergibt Commits der Abnahme-Branches ausschließlich an den
-  # zentralen Workflow mit dem fest vorgegebenen Environment Abnahme.
+  # Dieser Aufruf übergibt Commits der Abnahme-Branches ausschließlich mit der
+  # fest vorgegebenen Zielstufe Abnahme an den zentralen Workflow.
   sync-abnahme:
     name: Sync to Abnahme
     if: >-
