@@ -22,7 +22,7 @@ Die Anwendung benötigt nur die Python-Standardbibliothek.
 - `git.py`: Commit-, Branch-, Tag- und Diff-Abfragen
 - `sync.py`: Staging, `serverSync` und M/Text-Adapter
 - `release.py`: FULL, DELTA, Archive und Informationsdateien
-- `manifest.py`: Manifest und Artefaktprüfung vor der Übergabe
+- `manifest.py`: Manifestvertrag und Artefaktprüfung vor der Übergabe
 - `mainframe.py`: JCL-Rendering und FTP-/JES-Übergabe
 - `errors.py`: Status- und Fehlervertrag
 - `src/workflow_configuration.py`: interne Vorbereitung der zentralen und

@@ -6,11 +6,11 @@ import ftplib
 import os
 import re
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from .config import CODEPIPELINE_STAGES
 from .errors import DeliveryError, Status
-from .manifest import Package, load_and_verify
+from .manifest import load_and_verify
 
 
 # Reguläre Ausdrücke für Werte im bestehenden JCL-Vertrag.
@@ -108,7 +108,7 @@ def publish_mainframe(
             Status.VALIDATION_FAILED, "JCL kann nicht vorbereitet werden"
         ) from exc
 
-    rendered: list[tuple[Package, Path]] = []
+    rendered: list[tuple[dict[str, Any], Path]] = []
     for package in packages:
         member = package["member"]
         jcl_path = temporary / f"{member}.jcl"

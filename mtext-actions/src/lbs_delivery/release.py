@@ -19,17 +19,13 @@ from .git import (
     require_release_tag,
     resolve,
 )
-from .manifest import Manifest, sha256_file, write_manifest
+from .manifest import sha256_file, write_manifest
 
 
 # Ohne echten Vorgänger verwendet der bestehende Informationsvertrag diesen Wert.
 LEGACY_PREVIOUS_TAG = "R001.100"
 # Die Endung `.100` kennzeichnet den vollständigen Stand einer Releaselinie.
 FULL_SUFFIX = ".100"
-# Archivnamen bestehen aus Mandantenkürzel, Projektcode und Lieferart.
-ARCHIVE_NAME = "{mandant}{projektcode}{delivery_code}.tgz"
-# Jede DELTA-Lieferung enthält eine historisch benannte Löschliste.
-DELETION_NAME = "{mandant}{projektcode}D.txt"
 # Informationsdateien dokumentieren Projekt, Lieferart und verglichene Tags.
 INFORMATION_NAME = (
     "_INFO_{mandant}-{project}-{delivery_type}-{tag}-{previous_tag}.txt"
@@ -91,21 +87,6 @@ def _project_changes(
                 yield status, path
 
 
-def _delta_paths(
-    git_changes: Iterable[GitChange], project: str
-) -> tuple[list[str], list[str]]:
-    """Teilt den kumulativen Git-Diff in Paketinhalt und Löschliste."""
-
-    included: set[str] = set()
-    deleted: set[str] = set()
-    for status, path in _project_changes(git_changes, project):
-        if status in {"A", "M", "T"}:
-            included.add(path)
-        elif status == "D":
-            deleted.add(path)
-    return sorted(included), sorted(deleted)
-
-
 def _delta_archive(
     archive_path: Path,
     repository_root: Path,
@@ -121,9 +102,9 @@ def _delta_archive(
         (staging / project).mkdir(parents=True)
         for relative in included:
             source = repository_root / relative
-            if not source.is_file() or source.is_symlink():
+            if not source.is_file():
                 raise DeliveryError(
-                    Status.PACKAGE_FAILED, "DELTA-Datei fehlt oder ist ein Symlink"
+                    Status.PACKAGE_FAILED, "DELTA-Datei fehlt"
                 )
             destination = staging / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -135,13 +116,51 @@ def _delta_archive(
         return _write_archive(archive_path, entries)
 
 
-def _info_lines(git_changes: Iterable[GitChange], project: str) -> list[str]:
-    """Formatiert den direkten Vorgängervergleich für die Informationsdatei."""
+def _build_project_packages(
+    configuration: Configuration,
+    *,
+    repository_root: Path,
+    output: Path,
+    project: str,
+    projektcode: str,
+    delivery_type: str,
+    cumulative_changes: Iterable[GitChange],
+) -> tuple[list[tuple[Path, str]], list[str]]:
+    """Trennt den fachlich unterschiedlichen Paketbau vom gemeinsamen Releaseablauf."""
 
-    return [
-        f"{status}       VORRELEASE/{path}"
-        for status, path in _project_changes(git_changes, project)
-    ]
+    package_prefix = f"{configuration.kuerzel}{projektcode}"
+    delivery_code = "F" if delivery_type == "FULL" else "D"
+    archive_path = output / f"{package_prefix}{delivery_code}.tgz"
+    deletion_name = f"{package_prefix}D.txt"
+    if delivery_type == "FULL":
+        source = repository_root / project
+        archive_names = _write_archive(
+            archive_path, [(source, f"./{project}")]
+        )
+        delta_path = output / f"{package_prefix}D.tgz"
+        # Das bei FULL zusätzlich erzeugte leere D-Paket gehört zum
+        # bestehenden Mainframe-Übergabevertrag.
+        _delta_archive(
+            delta_path, repository_root, project, [], [], deletion_name
+        )
+        return [(archive_path, "F"), (delta_path, "D")], archive_names
+
+    included: set[str] = set()
+    deleted: set[str] = set()
+    for status, path in _project_changes(cumulative_changes, project):
+        if status in {"A", "M", "T"}:
+            included.add(path)
+        elif status == "D":
+            deleted.add(path)
+    archive_names = _delta_archive(
+        archive_path,
+        repository_root,
+        project,
+        sorted(included),
+        sorted(deleted),
+        deletion_name,
+    )
+    return [(archive_path, "D")], archive_names
 
 
 def _write_information(
@@ -169,7 +188,10 @@ def _write_information(
             f"vom Typ {delivery_type} erkannt:"
         ),
         "",
-        *_info_lines(git_changes, project),
+        *[
+            f"{status}       VORRELEASE/{changed_path}"
+            for status, changed_path in _project_changes(git_changes, project)
+        ],
         "",
         "",
         (
@@ -227,49 +249,15 @@ def build_release(
     artifacts: list[dict[str, object]] = []
     previous_label = previous or LEGACY_PREVIOUS_TAG
     for project, projektcode in configuration.projects.items():
-        delivery_code = "F" if delivery_type == "FULL" else "D"
-        archive_path = output / ARCHIVE_NAME.format(
-            mandant=configuration.kuerzel,
+        packages, archive_names = _build_project_packages(
+            configuration,
+            repository_root=root,
+            output=output,
+            project=project,
             projektcode=projektcode,
-            delivery_code=delivery_code,
+            delivery_type=delivery_type,
+            cumulative_changes=cumulative,
         )
-        packages = [(archive_path, delivery_code)]
-        if delivery_type == "FULL":
-            source = root / project
-            if not source.is_dir() or source.is_symlink():
-                raise DeliveryError(Status.PACKAGE_FAILED, "Releaseprojekt fehlt")
-            if any(item.is_symlink() for item in source.rglob("*")):
-                raise DeliveryError(
-                    Status.PACKAGE_FAILED, "Releaseprojekt enthält einen Symlink"
-                )
-            archive_names = _write_archive(
-                archive_path, [(source, f"./{project}")]
-            )
-            deletion_name = DELETION_NAME.format(
-                mandant=configuration.kuerzel, projektcode=projektcode
-            )
-            delta_path = output / ARCHIVE_NAME.format(
-                mandant=configuration.kuerzel,
-                projektcode=projektcode,
-                delivery_code="D",
-            )
-            # Das bei FULL zusätzlich erzeugte leere D-Paket gehört zum
-            # bestehenden Mainframe-Übergabevertrag.
-            _delta_archive(delta_path, root, project, [], [], deletion_name)
-            packages.append((delta_path, "D"))
-        else:
-            included, deleted = _delta_paths(cumulative, project)
-            deletion_name = DELETION_NAME.format(
-                mandant=configuration.kuerzel, projektcode=projektcode
-            )
-            archive_names = _delta_archive(
-                archive_path,
-                root,
-                project,
-                included,
-                deleted,
-                deletion_name,
-            )
 
         information_path = output / INFORMATION_NAME.format(
             mandant=configuration.kuerzel,
@@ -294,9 +282,7 @@ def build_release(
                     "kind": "package",
                     "path": package_path.name,
                     "project": project,
-                    "member": (
-                        f"{configuration.kuerzel}{projektcode}{package_code}"
-                    ),
+                    "member": f"{configuration.kuerzel}{projektcode}{package_code}",
                     "size": package_path.stat().st_size,
                     "sha256": sha256_file(package_path),
                 }
@@ -313,7 +299,7 @@ def build_release(
 
     hostprofil_name = configuration.releaselinien[releaselinie]["hostprofil"]
     hostprofil = configuration.hostprofile[hostprofil_name]
-    manifest: Manifest = {
+    manifest = {
         "repository": repository_name,
         "mandant": configuration.kuerzel,
         "release_tag": tag,

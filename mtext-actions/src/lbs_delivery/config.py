@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from .errors import DeliveryError, Status
 
@@ -56,6 +56,17 @@ class Configuration:
     warnungen: tuple[str, ...]
 
 
+class _MandantFields(NamedTuple):
+    """Transportiert geprüfte Mandantenfelder zur vollständigen Konfiguration."""
+
+    kuerzel: str
+    repository: str
+    ispw: str
+    subsystem: str
+    hostprofile: dict[str, dict[str, str]]
+    excluded_projects: tuple[str, ...]
+
+
 def _read_json(path: str | Path) -> Any:
     """Liest eine JSON-Datei und übersetzt nur tatsächliche I/O-Fehler."""
 
@@ -68,23 +79,12 @@ def _read_json(path: str | Path) -> Any:
         ) from exc
 
 
-def load_configuration(
-    mandant_path: str | Path,
-    releaselinien_path: str | Path,
-    *,
-    repository_name: str,
-    repository_root: str | Path,
-) -> Configuration:
-    """Lädt den Mandanten aus dem Repository und verknüpft ihn mit den Releaselinien."""
+def _read_mandant_configuration(
+    path: str | Path, repository_name: str
+) -> _MandantFields:
+    """Validiert die Mandantendatei als eigenständige fachliche Eingabegrenze."""
 
-    root = Path(repository_root)
-    mandant_file = Path(mandant_path)
-    # Ein relativer Mandantenpfad bezeichnet immer eine Datei im ausgecheckten
-    # Mandanten-Repository und ist unabhängig vom Arbeitsverzeichnis des Aufrufers.
-    if not mandant_file.is_absolute():
-        mandant_file = root / mandant_file
-    mandant_configuration = _read_json(mandant_file)
-    releaselinien = _read_json(releaselinien_path)
+    mandant_configuration = _read_json(path)
     if (
         not isinstance(mandant_configuration, dict)
         or "mandant" not in mandant_configuration
@@ -92,25 +92,10 @@ def load_configuration(
         raise DeliveryError(
             Status.VALIDATION_FAILED, "Konfiguration ist unvollständig"
         )
-    if set(mandant_configuration) != {"mandant"}:
-        raise DeliveryError(
-            Status.VALIDATION_FAILED, "Konfiguration enthält unbekannte Felder"
-        )
     mandant = mandant_configuration["mandant"]
     if not isinstance(mandant, dict):
         raise DeliveryError(
             Status.VALIDATION_FAILED, "Konfiguration ist unvollständig"
-        )
-    if set(mandant) - {
-        "kuerzel",
-        "repository",
-        "ispw",
-        "subsystem",
-        "hostprofile",
-        "excluded_projects",
-    }:
-        raise DeliveryError(
-            Status.VALIDATION_FAILED, "Konfiguration enthält unbekannte Felder"
         )
 
     try:
@@ -148,34 +133,66 @@ def load_configuration(
     for profile in hostprofile.values():
         if (
             not isinstance(profile, dict)
-            or set(profile) != {"assignment", "stage"}
             or profile.get("stage") not in CODEPIPELINE_STAGES
             or not isinstance(profile.get("assignment"), str)
         ):
             raise DeliveryError(Status.VALIDATION_FAILED, "Hostprofil ist ungültig")
 
+    return _MandantFields(
+        kuerzel=kuerzel,
+        repository=repository,
+        ispw=ispw,
+        subsystem=subsystem,
+        hostprofile=hostprofile,
+        excluded_projects=tuple(excluded),
+    )
+
+
+def _scan_projects(
+    root: Path, kuerzel: str, excluded_projects: tuple[str, ...]
+) -> dict[str, str]:
+    """Liest Projektverzeichnisse und besitzt die Ableitung ihrer Projektcodes."""
+
     try:
-        names = sorted(
-            item.name
+        project_paths = [
+            item
             for item in root.iterdir()
             if item.is_dir()
             and not item.name.startswith(".")
-            and item.name not in excluded
-        )
+            and item.name not in excluded_projects
+        ]
+        # Synchronisation und Archivbau dürfen keine Pfade außerhalb des
+        # ausgecheckten Projektstands übernehmen.
+        for project in project_paths:
+            if project.is_symlink() or any(
+                item.is_symlink() for item in project.rglob("*")
+            ):
+                raise DeliveryError(
+                    Status.VALIDATION_FAILED,
+                    "Projektstruktur enthält einen Symlink",
+                )
     except OSError as exc:
         raise DeliveryError(
             Status.VALIDATION_FAILED, "Repository kann nicht gelesen werden"
         ) from exc
     projects: dict[str, str] = {}
-    for name in names:
+    for project in sorted(project_paths, key=lambda item: item.name):
         # Diese Stelle besitzt die Formatregel für den Projektcode, der in
         # Paketnamen und Mainframe-Member eingeht.
+        name = project.name
         base = name.removesuffix(f"[{kuerzel}]")
         projects[name] = base.removeprefix("LOMS_")[:5].upper()
     if not projects or len(projects.values()) != len(set(projects.values())):
         raise DeliveryError(
             Status.VALIDATION_FAILED, "abgeleitete Projektcodes sind nicht eindeutig"
         )
+    return projects
+
+
+def _reference_warnings(
+    repository: str, kuerzel: str, projects: dict[str, str]
+) -> tuple[str, ...]:
+    """Hält den unverbindlichen Projekt-Referenzabgleich aus der Validierung heraus."""
 
     warnungen: list[str] = []
     referenz = PROJEKTREFERENZ.get(repository)
@@ -202,26 +219,61 @@ def load_configuration(
                 "Projekte sind gegenüber dem aktuellen Referenzstand zusätzlich: "
                 + ", ".join(zusaetzlich)
             )
+    return tuple(warnungen)
 
+
+def _read_releaselinien(
+    path: str | Path, hostprofile: dict[str, dict[str, str]]
+) -> dict[str, dict[str, str]]:
+    """Validiert die zentrale Releaselinien-Zuordnung gegen die Hostprofile."""
+
+    releaselinien = _read_json(path)
     if not isinstance(releaselinien, dict) or not releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinien fehlen")
     for values in releaselinien.values():
         if (
             not isinstance(values, dict)
-            or set(values) != {"etaps_linie", "hostprofil"}
             or not isinstance(values.get("etaps_linie"), str)
             or values.get("hostprofil") not in hostprofile
         ):
             raise DeliveryError(
                 Status.VALIDATION_FAILED, "Releaselinie ist ungültig"
             )
+    return releaselinien
+
+
+def load_configuration(
+    mandant_path: str | Path,
+    releaselinien_path: str | Path,
+    *,
+    repository_name: str,
+    repository_root: str | Path,
+) -> Configuration:
+    """Lädt den Mandanten aus dem Repository und verknüpft ihn mit den Releaselinien."""
+
+    root = Path(repository_root)
+    mandant_file = Path(mandant_path)
+    # Ein relativer Mandantenpfad bezeichnet immer eine Datei im ausgecheckten
+    # Mandanten-Repository und ist unabhängig vom Arbeitsverzeichnis des Aufrufers.
+    if not mandant_file.is_absolute():
+        mandant_file = root / mandant_file
+
+    mandant = _read_mandant_configuration(mandant_file, repository_name)
+    projects = _scan_projects(
+        root, mandant.kuerzel, mandant.excluded_projects
+    )
+    releaselinien = _read_releaselinien(
+        releaselinien_path, mandant.hostprofile
+    )
     return Configuration(
-        kuerzel=kuerzel,
-        repository=repository,
-        ispw=ispw,
-        subsystem=subsystem,
+        kuerzel=mandant.kuerzel,
+        repository=mandant.repository,
+        ispw=mandant.ispw,
+        subsystem=mandant.subsystem,
         projects=projects,
-        hostprofile=hostprofile,
+        hostprofile=mandant.hostprofile,
         releaselinien=releaselinien,
-        warnungen=tuple(warnungen),
+        warnungen=_reference_warnings(
+            mandant.repository, mandant.kuerzel, projects
+        ),
     )

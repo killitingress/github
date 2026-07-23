@@ -25,7 +25,7 @@ def stage_projects(
     staging_root: str | Path,
     projects: list[str],
 ) -> list[str]:
-    """Kapselt die Symlink-Prüfung und Kopie an der Staging-Systemgrenze."""
+    """Kopiert die zentral geprüften Projektbäume in das Staging."""
 
     source_root = Path(repository_root)
     staging = Path(staging_root)
@@ -33,15 +33,6 @@ def stage_projects(
         staging.mkdir(parents=True, exist_ok=False)
         for project in projects:
             source = source_root / project
-            if not source.is_dir() or source.is_symlink():
-                raise DeliveryError(
-                    Status.RESOURCE_TRANSFER_FAILED,
-                    f"Ressourcenprojekt fehlt: {project}",
-                )
-            if any(item.is_symlink() for item in source.rglob("*")):
-                raise DeliveryError(
-                    Status.VALIDATION_FAILED, "Ressourcen enthalten einen Symlink"
-                )
             shutil.copytree(source, staging / project, copy_function=shutil.copy2)
     except (OSError, shutil.Error) as exc:
         raise DeliveryError(
@@ -129,16 +120,18 @@ def sync_resources(
 ) -> dict[str, object]:
     """Führt Prüfung, Staging und optional die externe Synchronisation aus."""
 
-    releaselinie = source_branch.partition("/")[0]
-    if (
-        environment not in SYNC_STAGES
-        or source_branch != f"{releaselinie}/{environment}"
-        or releaselinie not in configuration.releaselinien
-    ):
+    if environment not in SYNC_STAGES:
         raise DeliveryError(
             Status.VALIDATION_FAILED,
-            "Branch und Zielumgebung passen nicht zusammen",
+            "Zielumgebung ist ungültig",
         )
+    releaselinie = source_branch.partition("/")[0]
+    if source_branch != f"{releaselinie}/{environment}":
+        raise DeliveryError(
+            Status.VALIDATION_FAILED, "Branch passt nicht zur Zielumgebung"
+        )
+    if releaselinie not in configuration.releaselinien:
+        raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
     require_checkout(repository_root, commit, source_branch)
     projects = stage_projects(
         repository_root, staging_root, list(configuration.projects)

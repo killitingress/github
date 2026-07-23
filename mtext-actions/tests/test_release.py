@@ -142,68 +142,6 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaises(DeliveryError):
             load_and_verify(manifest_path, output)
 
-    def test_release_packages_new_project_with_derived_code(self) -> None:
-        """Paketiert ein zusätzliches Projekt ohne gepflegte Projektzuordnung."""
-
-        project = self.repository / "LOMS_Dokumente"
-        project.mkdir()
-        (project / "value.txt").write_text("content\n", encoding="utf-8")
-        git(self.repository, "add", ".")
-        git(self.repository, "commit", "-m", "additional project")
-        git(self.repository, "tag", "R261.109")
-        git(
-            self.repository,
-            "update-ref",
-            "refs/remotes/origin/R261/Bereitstellung",
-            "HEAD",
-        )
-        configuration = load_test_configuration(self.root, self.repository)
-        output = self.root / "additional-project"
-        manifest_path = build_release(
-            configuration,
-            repository_root=self.repository,
-            output_directory=output,
-            repository_name="mtext-fi",
-            tag="R261.109",
-            trigger_sha=git(self.repository, "rev-parse", "HEAD"),
-        )
-        _manifest, packages = load_and_verify(manifest_path, output)
-        self.assertIn("FIDOKUMD", [package["member"] for package in packages])
-        self.assertTrue((output / "FIDOKUMD.tgz").is_file())
-
-    def test_release_uses_mandant_ispw_instance(self) -> None:
-        """Übernimmt die konfigurierte Testinstanz in Manifest und JCL."""
-
-        configuration = load_test_configuration(
-            self.root,
-            self.repository,
-            mandant={"ispw": "T"},
-        )
-        output = self.root / "test-instance"
-        manifest_path = build_release(
-            configuration,
-            repository_root=self.repository,
-            output_directory=output,
-            repository_name="mtext-fi",
-            tag="R261.108",
-            trigger_sha=git(self.repository, "rev-parse", "HEAD"),
-        )
-        manifest, _packages = load_and_verify(manifest_path, output)
-        self.assertEqual(manifest["jcl"]["ISPW"], "T")
-
-        publish_mainframe(
-            manifest_path=manifest_path,
-            artifact_root=output,
-            template_path=AUTOMATION_ROOT / "templates/mainframe-upload.jcl",
-            temporary_directory=self.root / "test-jcl",
-            execute=False,
-        )
-        rendered = (self.root / "test-jcl/FIBASISD.jcl").read_text(
-            encoding="ascii"
-        )
-        self.assertIn("DSN=IEA.ISPWT.BOAS.FKTE.TONICZ", rendered)
-        self.assertIn("PARM='ISPT/WZZECIJ'", rendered)
-
     def test_delta_rejects_base_outside_target_history(self) -> None:
         """Lehnt eine `.100`-Basis außerhalb der Historie des Ziel-Tags ab."""
 

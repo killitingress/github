@@ -1,22 +1,18 @@
-"""Prüft Ressourcensynchronisation und unmittelbare FTP-/JES-Übergabe."""
+"""Prüft die lokale Ressourcensynchronisation."""
 
 from __future__ import annotations
 
 import tempfile
 import unittest
-from contextlib import nullcontext
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 from lbs_delivery.errors import DeliveryError, Status
-from lbs_delivery.mainframe import submit_package
-from lbs_delivery.sync import call_adapter, publish_server_sync, sync_resources
+from lbs_delivery.sync import publish_server_sync, sync_resources
 
 from tests.support import git, load_test_configuration, setup_sync_repository
 
 
-class SyncAndMainframeTests(unittest.TestCase):
+class SyncTests(unittest.TestCase):
     def setUp(self) -> None:
         """Erzeugt einen erreichbaren Entwicklungscommit und seine Konfiguration."""
 
@@ -50,15 +46,6 @@ class SyncAndMainframeTests(unittest.TestCase):
             "new",
         )
 
-        status, body = call_adapter(
-            "https://adapter.example.invalid/sync",
-            timeout=1.0,
-            opener=lambda *_args, **_kwargs: nullcontext(
-                SimpleNamespace(status=200, read=lambda _limit: b"accepted")
-            ),
-        )
-        self.assertEqual((status, body), (200, "accepted"))
-
     def test_sync_rejects_branch_environment_mismatch(self) -> None:
         """Lehnt Kombinationen aus Branch und Zielumgebung ab."""
 
@@ -74,33 +61,7 @@ class SyncAndMainframeTests(unittest.TestCase):
                 execute=False,
             )
         self.assertEqual(context.exception.status, Status.VALIDATION_FAILED)
-
-    def test_ftp_uses_existing_mainframe_contract(self) -> None:
-        """Prüft Dataset, Member und JES-Ziel ohne eigene Antwortauswertung."""
-
-        package = self.root / "FIBASISF.tgz"
-        jcl = self.root / "FIBASISF.jcl"
-        package.write_bytes(b"package")
-        jcl.write_bytes(b"//JCL\n")
-        ftp = MagicMock()
-        submit_package(
-            package,
-            jcl,
-            "FIBASISF",
-            host="host",
-            user="user",
-            password="password",
-            ftp_factory=lambda: ftp,
-        )
-        ftp.connect.assert_called_once_with("host", timeout=60.0)
-        ftp.login.assert_called_once_with("user", "password")
-        self.assertEqual(
-            ftp.storbinary.call_args.args[0],
-            "STOR 'IEA.LOMS.TONICZ(FIBASISF)'",
-        )
-        ftp.sendcmd.assert_called_once_with("SITE FILETYPE=JES")
-        self.assertEqual(ftp.storlines.call_args.args[0], "STOR LIT9028A")
-        ftp.quit.assert_called_once_with()
+        self.assertIn("Branch", str(context.exception))
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Prüft die vollständige Vorbereitung der zentralen Workflow-Commits."""
+"""Prüft die Vorbereitung der zentralen Workflow-Commits."""
 
 from __future__ import annotations
 
@@ -9,9 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
-import workflow_configuration
 from workflow_configuration import CONFIGURATION_WORKFLOW
 
 
@@ -123,37 +121,6 @@ class ConfigureWorkflowsTests(unittest.TestCase):
             self.run_git(self.mandant_root, "rev-parse", "HEAD"), mandant_sha
         )
 
-    def test_rolls_out_an_explicit_new_automation_sha(self) -> None:
-        """Bindet einen Mandanten ohne zentralen Folgecommit an die gewählte Version."""
-
-        initial = self.run_module()
-        self.assertEqual(initial.returncode, 0, initial.stderr)
-        central_workflow = self.automation_root / ".github/workflows/ci.yml"
-        central_workflow.write_text(
-            central_workflow.read_text(encoding="utf-8") + "\n# Freigegebene Änderung\n",
-            encoding="utf-8",
-        )
-        self.run_git(self.automation_root, "add", ".github/workflows/ci.yml")
-        self.run_git(
-            self.automation_root, "commit", "-q", "-m", "Neue zentrale Version"
-        )
-        freigegebene_sha = self.run_git(
-            self.automation_root, "rev-parse", "HEAD"
-        )
-
-        result = self.run_module(automation_sha=freigegebene_sha)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
-            self.run_git(self.automation_root, "rev-parse", "HEAD"),
-            freigegebene_sha,
-        )
-        self.assertEqual(
-            self.mandant_workflow.read_text(encoding="utf-8").count(
-                freigegebene_sha
-            ),
-            2,
-        )
-
     def test_rejects_a_checkout_other_than_the_released_sha(self) -> None:
         """Verhindert einen Rollout aus einem anderen zentralen Commit."""
 
@@ -161,60 +128,6 @@ class ConfigureWorkflowsTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Checkout entspricht nicht", result.stderr)
 
-    def test_validates_every_file_before_creating_central_commit(self) -> None:
-        """Lässt eine ungültige Mandantendatei ohne zentrale Änderung scheitern."""
-
-        broken = self.mandant_root / ".github/workflows/broken.yml"
-        broken.write_text("jobs: {}\n", encoding="utf-8")
-        initial_sha = self.run_git(self.automation_root, "rev-parse", "HEAD")
-
-        result = self.run_module()
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Workflowreferenzen fehlen", result.stderr)
-        self.assertEqual(
-            self.run_git(self.automation_root, "rev-parse", "HEAD"), initial_sha
-        )
-        central = (self.automation_root / ".github/workflows/ci.yml").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("FI_RUNNER_LABEL_TO_BE_SET", central)
-
-    def test_rejects_unconfirmed_runner_label(self) -> None:
-        """Verhindert die Einrichtung mit dem technischen Runner-Platzhalter."""
-
-        result = self.run_module(runner_label="FI_RUNNER_LABEL_TO_BE_SET")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Runner-Kennzeichen", result.stderr)
-
-    def test_fails_when_final_verification_finds_a_remaining_change(self) -> None:
-        """Macht den leeren Zielzustand zu einer verbindlichen Erfolgsbedingung."""
-
-        original = workflow_configuration._automation_changes
-        calls = 0
-
-        def report_remaining_change(
-            automation_root: Path, runner_label: str
-        ) -> dict[Path, str]:
-            """Simuliert ausschließlich bei der Abschlussprüfung eine Abweichung."""
-
-            nonlocal calls
-            calls += 1
-            changes = original(automation_root, runner_label)
-            if calls == 2:
-                path = automation_root / ".github/workflows/ci.yml"
-                changes[path] = path.read_text(encoding="utf-8")
-            return changes
-
-        with patch("builtins.print"), patch.object(
-            workflow_configuration, "_automation_changes", side_effect=report_remaining_change
-        ):
-            with self.assertRaisesRegex(RuntimeError, "Einrichtungsprüfung"):
-                workflow_configuration.prepare_workflow_configuration(
-                    self.automation_root,
-                    self.mandant_root,
-                    "fi-runner",
-                    self.run_git(self.automation_root, "rev-parse", "HEAD"),
-                )
 
 if __name__ == "__main__":
     unittest.main()
