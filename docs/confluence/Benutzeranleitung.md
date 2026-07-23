@@ -108,10 +108,10 @@ Pfad direkt mit dem Projektverzeichnis.
 ### Lokales Repository vor der Arbeit aktualisieren
 
 Vor einer Bearbeitung, einem Cherry-Pick oder dem Anlegen eines Release-Tags
-muss der verwendete lokale Branch auf dem aktuellen GitHub-Stand sein. Für die
-Arbeit auf Entwicklung geschieht das normalerweise im integrierten Git-Client
-der M/Text Workbench. Für die Weitergabe nach Abnahme und Bereitstellung sowie
-für Release-Tags wird der zusätzliche Git-Client verwendet.
+muss der verwendete lokale Branch auf dem aktuellen GitHub-Stand sein. Für
+sämtliche Git-Arbeiten wird die M/Text Workbench verwendet. Sie bindet Git über
+das Eclipse-Plugin EGit ein, das im Folgenden als interner Git-Client der
+Workbench bezeichnet wird.
 
 Git unterscheidet das Abrufen neuer GitHub-Stände vom Aktualisieren des
 ausgecheckten Branches:
@@ -121,12 +121,12 @@ ausgecheckten Branches:
 | `fetch` | Lädt neue Commits und Branchstände von GitHub, verändert aber weder den ausgecheckten lokalen Branch noch dessen Dateien |
 | `pull` | Ruft den GitHub-Stand ab und aktualisiert den ausgecheckten Branch |
 
-Welche Bedienfunktion diese Vorgänge in der M/Text Workbench und im
-zusätzlichen Git-Client ausführt und wie sie dort heißt, wird erst bei der
-praktischen Abnahme festgelegt. Die freigegebene Funktion muss den lokalen
-Branch ohne automatischen Merge auf den aktuellen GitHub-Stand bringen.
+Welche Bedienfunktion diese Vorgänge in der eingesetzten Workbench-Version
+ausführt und wie sie dort heißt, wird bei der praktischen Abnahme festgelegt.
+Die freigegebene Funktion muss den lokalen Branch ohne automatischen Merge auf
+den aktuellen GitHub-Stand bringen.
 
-Der sichere Standardablauf ist in beiden Git-Clients gleich:
+Der sichere Standardablauf ist:
 
 1. Das richtige Mandanten-Repository und den vorgesehenen Branch auswählen.
 2. Prüfen, dass keine noch nicht abgeschlossene Git-Operation und keine
@@ -144,12 +144,11 @@ noch ein Force-Push erzwungen. Dann gilt der Abschnitt
 ### Feature-Branch einfach erklärt
 
 Ein **Feature-Branch** ist ein eigener Arbeitsbereich für eine einzelne
-Änderung. Sofern der integrierte Git-Client der M/Text Workbench diesen Ablauf
-unterstützt und er für den Mandanten freigegeben ist, kann dort ein noch
-unfertiger Stand gespeichert und nach GitHub gepusht werden, ohne bereits das
-M/Text-Entwicklungssystem zu aktualisieren. Das ist besonders nützlich, wenn
-eine Änderung mehrere Tage dauert, mehrere Personen daran arbeiten oder der
-Zwischenstand zunächst geprüft werden soll.
+Änderung. Sofern dieser Bedienweg für den Mandanten freigegeben ist, kann dort
+ein noch unfertiger Stand gespeichert und nach GitHub gepusht werden, ohne
+bereits das M/Text-Entwicklungssystem zu aktualisieren. Das ist besonders
+nützlich, wenn eine Änderung mehrere Tage dauert, mehrere Personen daran
+arbeiten oder der Zwischenstand zunächst geprüft werden soll.
 
 Für eine kleine, fertig vorbereitete Änderung ist kein Feature-Branch nötig.
 Sie kann direkt auf dem passenden Entwicklungsbranch bearbeitet und gepusht
@@ -171,15 +170,12 @@ wichtig: Nach Abnahme und Bereitstellung sollen nur fachlich ausgewählte
 
 Der Cherry-Pick erzeugt auf dem Zielbranch einen **neuen Commit mit einer
 neuen SHA**. Es wird also dieselbe Änderung weitergegeben, nicht derselbe
-Commit. Damit die Verbindung trotzdem eindeutig nachvollziehbar bleibt, muss
-die vollständige SHA des Quell-Commits nach der für den zusätzlichen
-Git-Client festgelegten Konvention in der Nachricht des neuen Ziel-Commits
-dokumentiert werden.
+Commit.
 
 Mehrere freigegebene Commits können in ihrer ursprünglichen Reihenfolge
 nacheinander per Cherry-Pick übernommen und anschließend gemeinsam mit einem
-einzigen Push übertragen werden. Jeder dabei neu erzeugte Commit dokumentiert
-die vollständige SHA seines jeweiligen Quell-Commits.
+einzigen Push übertragen werden. Dabei wird jeweils ein ausgewählter Commit auf
+den aktuell ausgecheckten Zielbranch übernommen.
 
 Das folgende Beispiel zeigt die selektive Weitergabe. Auf Entwicklung liegen
 die unabhängigen Änderungen A, B und C. Nach Abnahme soll zunächst nur B:
@@ -199,18 +195,6 @@ Entwicklung:     Basis ─ A ─ B ─ C
 Abnahme:         Basis ─ B'
 Bereitstellung:  Basis ─ B''
 ```
-
-Die vollständige Quell-SHA wird direkt in der Nachricht des neuen Commits
-gespeichert. Der Git-Befehl `cherry-pick -x` ergänzt sie automatisch:
-
-```text
-(cherry picked from commit 8f3a1c2d4e5f67890123456789abcdef01234567)
-```
-
-Der zusätzliche Git-Client muss diese Option unterstützen oder eine
-gleichwertige feste Zeile in der Commit-Nachricht ermöglichen. Die vorhandenen
-GitHub Actions erzeugen den Cherry-Pick nicht und tragen die Quell-SHA nicht
-nachträglich ein.
 
 ### Push-Ablehnung mit Rebase statt Merge beheben
 
@@ -249,7 +233,7 @@ werden per Cherry-Pick in die nächste Stage übernommen.
 ### Konflikt bei Rebase oder Cherry-Pick auflösen
 
 Ein Konflikt bedeutet, dass Git den gewünschten Dateiinhalt nicht eindeutig
-bestimmen kann. Er wird im freigegebenen Git-Client wie folgt bearbeitet:
+bestimmen kann. Er wird wie folgt bearbeitet:
 
 1. Nicht pushen und zunächst prüfen, ob gerade ein Rebase oder ein Cherry-Pick
    läuft und welche Dateien betroffen sind.
@@ -277,13 +261,12 @@ setzen, bricht sie ohne automatischen Merge ab.
 
 ## 4. Git-Anwendungen bedienen
 
-Für den Gesamtprozess werden drei Anwendungen mit klar getrennten Aufgaben
+Für den Gesamtprozess werden zwei Anwendungen mit klar getrennten Aufgaben
 verwendet:
 
 | Anwendung | Aufgabe | Benutzerkreis |
 |---|---|---|
-| M/Text Workbench mit integriertem Git-Client | Briefressourcen bearbeiten, Änderungen prüfen, committen und nach Entwicklung pushen | Text-Entwickler |
-| Zusätzlicher Git-Client | Ausgewählte Commits per Cherry-Pick nach Abnahme und Bereitstellung weitergeben sowie Release-Tags anlegen oder löschen | dafür berechtigte Text-Entwickler und Mitglieder des Mandanten-Release-Teams |
+| M/Text Workbench mit internem Git-Client | Briefressourcen bearbeiten, Änderungen prüfen, committen und pushen, ausgewählte Commits per Cherry-Pick nach Abnahme und Bereitstellung weitergeben sowie Release-Tags anlegen oder löschen | Text-Entwickler sowie die dafür berechtigten Mitglieder des Mandanten-Release-Teams |
 | GitHub im Browser | Commits, Release-Tags und Läufe prüfen sowie manuelle Läufe starten | Text-Entwickler sowie die jeweils berechtigten Verantwortlichen |
 
 Für die normale Ressourcenarbeit ist keine Git-Kommandozeile erforderlich.
@@ -292,19 +275,20 @@ ausgerollten Workflowdateien nicht selbst.
 
 ### Benötigte Git-Funktionen
 
-Die Bezeichnungen der Schaltflächen unterscheiden sich je Git-Client. Folgende
-Git-Funktionen müssen im freigegebenen Bedienweg eindeutig erkennbar sein:
+Die Bezeichnungen der Schaltflächen können sich zwischen Versionen der
+Workbench unterscheiden. Folgende Git-Funktionen müssen im freigegebenen
+Bedienweg eindeutig erkennbar sein:
 
 | Anwendungsfall | Git-Funktion beziehungsweise Befehlsentsprechung | Nächstliegende SVN-Funktion |
 |---|---|---|
 | Arbeitsstand und ausgewählte Änderungen prüfen | `status` und `diff` | `svn status` und `svn diff` |
-| GitHub-Stand abrufen und lokalen Branch ohne zusätzlichen Merge aktualisieren | `fetch` und anschließend `pull` beziehungsweise die freigegebene Aktualisierungsfunktion des Clients | `svn update` |
-| Stage-Branch auswählen | `switch` beziehungsweise die Branchauswahl des Clients | `svn switch <URL>` |
+| GitHub-Stand abrufen und lokalen Branch ohne zusätzlichen Merge aktualisieren | `fetch` und anschließend `pull` beziehungsweise die freigegebene Aktualisierungsfunktion | `svn update` |
+| Stage-Branch auswählen | `switch` beziehungsweise die Branchauswahl | `svn switch <URL>` |
 | Dateien auswählen, Commit erzeugen und übertragen | `add`, `commit` und `push` | `svn add` und `svn commit`. Der Commit überträgt die Änderung zugleich |
 | Commit-Historie, vollständige SHA und konkrete Änderungen prüfen | `log` und `show` | `svn log` und `svn diff -c <Revision>` |
 | Letzten lokalen, noch nicht gepushten Commit ergänzen oder seine Nachricht korrigieren | `commit --amend`, nur vor dem Push, da dabei eine neue Commit-SHA entsteht | Keine direkte Entsprechung, weil ein SVN-Commit bereits veröffentlicht ist |
-| Ausgewählten Commit in die nächste Stage übernehmen und Konflikte behandeln | `cherry-pick -x`, nach der geprüften Auflösung `cherry-pick --continue` oder zum vollständigen Abbruch `cherry-pick --abort` | `svn merge -c <Revision> <URL>`. Konflikte werden vor dem anschließenden `svn commit` in der Arbeitskopie aufgelöst |
-| Release-Tag auf einem bestätigten Commit anlegen, einzeln pushen und bei Bedarf wieder löschen | `tag` sowie gezielter Push oder Löschung der betreffenden Tag-Referenz. Die konkrete Bedienung wird mit dem zusätzlichen Git-Client abgenommen | `svn copy <Quell-URL> <Tag-URL>` beziehungsweise `svn delete <Tag-URL>`. Ein SVN-Tag ist ein Repositorypfad |
+| Ausgewählten Commit in die nächste Stage übernehmen und Konflikte behandeln | `cherry-pick`, nach der geprüften Auflösung fortsetzen oder den Vorgang vollständig abbrechen | `svn merge -c <Revision> <URL>`. Konflikte werden vor dem anschließenden `svn commit` in der Arbeitskopie aufgelöst |
+| Release-Tag auf einem bestätigten Commit anlegen, einzeln pushen und bei Bedarf wieder löschen | `tag` sowie gezielter Push oder Löschung der betreffenden Tag-Referenz. Die konkrete Bedienung wird praktisch abgenommen | `svn copy <Quell-URL> <Tag-URL>` beziehungsweise `svn delete <Tag-URL>`. Ein SVN-Tag ist ein Repositorypfad |
 | Inzwischen fortgeschrittenen Remote-Branch mit eigenen, noch nicht gepushten Commits zusammenführen | `fetch`, danach kontrolliertes `rebase` auf den Remote-Branch. Konflikte auflösen und mit `rebase --continue` fortfahren oder mit `rebase --abort` abbrechen | `svn update` integriert lokale, noch nicht committete Änderungen. Lokale SVN-Commits gibt es nicht |
 | Noch nicht committete Arbeit vor einem Branchwechsel vorübergehend beiseitelegen | `stash push` und später `stash pop`. Danach die wiederhergestellten Änderungen vollständig prüfen | Keine direkte, durchgängig verfügbare Standardentsprechung |
 | Lokale Änderung, lokalen Commit oder gepushten Commit zurücknehmen | je nach Zustand `restore`, `reset` oder `revert` wie im Abschnitt [Änderung oder Commit zurücknehmen](#änderung-oder-commit-zurücknehmen) beschrieben | Lokal `svn revert`. Eine veröffentlichte Änderung wird durch umgekehrten Merge und anschließenden `svn commit` korrigiert |
@@ -320,15 +304,16 @@ Verfahren in GitHub verwaltet.
 Als herstellerseitige Vertiefung dienen die offiziellen Git-Anleitungen
 [Git-Grundlagen: Änderungen nachverfolgen und speichern](https://git-scm.com/book/de/v2/Git-Grundlagen-%C3%84nderungen-nachverfolgen-und-im-Repository-speichern)
 und
-[Ungewollte Änderungen rückgängig machen](https://git-scm.com/book/de/v2/Git-Grundlagen-Ungewollte-%C3%84nderungen-r%C3%BCckg%C3%A4ngig-machen.html).
+[Ungewollte Änderungen rückgängig machen](https://git-scm.com/book/de/v2/Git-Grundlagen-Ungewollte-%C3%84nderungen-r%C3%BCckg%C3%A4ngig-machen.html)
+sowie das
+[Benutzerhandbuch des internen Git-Clients](https://help.eclipse.org/latest/topic/org.eclipse.egit.doc/help/EGit/User_Guide/User-Guide.html)
+für die Bedienung in der Eclipse-basierten M/Text Workbench.
 Verbindlich für diesen Prozess bleiben die hier beschriebenen Schutz- und
 Bedienregeln.
 
-### Zusätzlicher Git-Client
+### Stage-Weitergabe in der M/Text Workbench
 
-Der zusätzliche Git-Client wird für die gezielte Weitergabe zwischen den
-Branches verwendet. Das konkrete Produkt wird noch ausgewählt.
-Der Standardablauf ist:
+Der Standardablauf für die Weitergabe zwischen den Branches ist:
 
 1. Das Mandanten-Repository öffnen und die neuesten GitHub-Stände abrufen.
 2. Den Zielbranch auschecken und nach dem Abschnitt
@@ -336,45 +321,44 @@ Der Standardablauf ist:
    auf den aktuellen GitHub-Stand bringen.
 3. Die fachlich freigegebenen Quell-Commits auswählen und, falls Abhängigkeiten
    bestehen, ihre Reihenfolge festlegen.
-4. Alle ausgewählten Commits per Cherry-Pick übernehmen. Für jeden
-   Quell-Commit muss dessen vollständige SHA dokumentiert werden, was mit `cherry-pick -x`
-   automatisch passiert.
+4. Alle ausgewählten Commits einzeln und in der festgelegten Reihenfolge per
+   Cherry-Pick übernehmen.
 5. Bei einem Konflikt nicht pushen. Den Cherry-Pick entweder vollständig
    abbrechen oder nach dem Abschnitt
    [Konflikt bei Rebase oder Cherry-Pick auflösen](#konflikt-bei-rebase-oder-cherry-pick-auflösen)
    kontrolliert abschließen.
-6. Geänderte Dateien, Ziel-Commits und dokumentierte Quell-SHAs kontrollieren.
+6. Geänderte Dateien und neu entstandene Ziel-Commits kontrollieren.
 7. Die übernommenen Commits gemeinsam mit einem einzigen Push ohne Force-Push
    nach GitHub übertragen und dort den erreichten Ziel-Commit prüfen.
 
 ### Änderung oder Commit zurücknehmen
 
-Solange eine Änderung noch nicht gepusht wurde, kann sie im freigegebenen
-Git-Client lokal verworfen beziehungsweise ein lokaler Commit kontrolliert
-zurückgenommen werden. Vorher ist zu prüfen, dass dabei keine weiteren noch
-benötigten lokalen Änderungen verloren gehen.
+Solange eine Änderung noch nicht gepusht wurde, kann sie lokal verworfen
+beziehungsweise ein lokaler Commit kontrolliert zurückgenommen werden. Vorher
+ist zu prüfen, dass dabei keine weiteren noch benötigten lokalen Änderungen
+verloren gehen.
 
 Nach einem Push wird der Commit nicht aus dem Stage-Branch entfernt. Ein
 Force-Push oder das Zurücksetzen des gemeinsamen Branches ist verboten, weil
 die Commit-SHA bereits in GitHub-Läufen und gegebenenfalls in einer
-M/Text-Verteilung verwendet wurde. Stattdessen wird mit der Revert-Funktion
-des freigegebenen Git-Clients ein neuer Commit erzeugt, der genau die Änderungen
-des fehlerhaften Commits umkehrt. Dieser Gegen-Commit wird wie jede andere
-Änderung geprüft und ohne Force-Push gepusht.
+M/Text-Verteilung verwendet wurde. Stattdessen wird mit der Revert-Funktion ein
+neuer Commit erzeugt, der genau die Änderungen des fehlerhaften Commits
+umkehrt. Dieser Gegen-Commit wird wie jede andere Änderung geprüft und ohne
+Force-Push gepusht.
 
 Die Git-Begriffe unterscheiden diese Fälle: `restore` verwirft noch nicht
 committete Änderungen an Dateien, `reset` nimmt einen noch nicht gepushten
 lokalen Commit zurück und `revert` erzeugt den Gegen-Commit für einen bereits
-gepushten Commit. Die konkreten Schaltflächen hängen vom freigegebenen
-Git-Client ab. Eine Git-Kommandozeile ist dafür nicht vorgeschrieben. Ein
-`reset`, `rebase` oder `commit --amend` auf einem bereits gepushten
+gepushten Commit. Die konkreten Schaltflächen hängen von der eingesetzten
+Workbench-Version ab. Eine Git-Kommandozeile ist dafür nicht vorgeschrieben.
+Ein `reset`, `rebase` oder `commit --amend` auf einem bereits gepushten
 Stage-Branch würden dessen gemeinsame Historie umschreiben und sind deshalb
 nicht zulässig.
 
 | Situation | Vorgehen |
 |---|---|
-| Lokale Änderung ohne Commit | Nur die nicht mehr benötigten Dateien oder Änderungen im Git-Client verwerfen und den verbleibenden Stand prüfen |
-| Lokaler Commit ohne Push | Commit mit der dafür abgenommenen Client-Funktion zurücknehmen. Anschließend lokalen Branch und geänderte Dateien prüfen |
+| Lokale Änderung ohne Commit | Nur die nicht mehr benötigten Dateien oder Änderungen verwerfen und den verbleibenden Stand prüfen |
+| Lokaler Commit ohne Push | Commit mit der dafür abgenommenen Funktion zurücknehmen. Anschließend lokalen Branch und geänderte Dateien prüfen |
 | Commit auf Entwicklung oder Abnahme gepusht | Gegen-Commit auf demselben Branch erstellen und pushen. Der dadurch gestartete Sync verteilt den vollständigen korrigierten Stand |
 | Commit nach Bereitstellung gepusht, aber noch nicht getaggt | Das Mandanten-Release-Team erstellt und pusht den Gegen-Commit. Ein Push nach Bereitstellung allein erzeugt keine Lieferung |
 | Commit bereits in eine weitere Stage übernommen | Den betroffenen Commit in jeder Stage, in die er übernommen wurde, mit den dort geltenden Berechtigungen durch einen eigenen Gegen-Commit zurücknehmen. Ein Gegen-Commit auf Entwicklung ändert Abnahme oder Bereitstellung nicht automatisch |
@@ -388,7 +372,7 @@ Fehlerbehebung kontrolliert wiederholt.
 ### GitHub im Browser
 
 GitHub im Browser dient der Kontrolle und den Prozessschritten, die nicht in
-den lokalen Git-Clients stattfinden.
+der lokalen Workbench stattfinden.
 
 #### Commit und Workflow-Lauf prüfen
 
@@ -608,8 +592,8 @@ passende neue Branch der Stage.
    gemeinsam bearbeitete Änderungen kann – nach Freigabe dieses Bedienwegs –
    ein Feature-Branch verwendet werden.
 2. Die fachlich vorgesehenen Änderungen an den Briefressourcen durchführen.
-3. Im integrierten Git-Client nur die vorgesehenen Änderungen für den Commit
-   auswählen und eine aussagekräftige Commit-Nachricht eintragen.
+3. Nur die vorgesehenen Änderungen für den Commit auswählen und eine
+   aussagekräftige Commit-Nachricht eintragen.
 4. Commit und Push auf den vorgesehenen Entwicklungsbranch ausführen.
 5. In GitHub unter **Actions → Sync M/Text resources** den durch den Push
    ausgelösten Lauf kontrollieren.
@@ -627,12 +611,12 @@ die erfolgreiche Verarbeitung jedes zwischenzeitlichen Commits.
 ## 8. Stand zur Abnahme weitergeben
 
 1. Die in Entwicklung erfolgreich geprüften Commits ermitteln.
-2. Im zusätzlichen Git-Client den aktuellen Zielbranch
-   `<Releaselinie>/Abnahme` auschecken und aktualisieren.
+2. Den aktuellen Zielbranch `<Releaselinie>/Abnahme` auschecken und
+   aktualisieren.
 3. Die freigegebenen Commits per Cherry-Pick aus
    `<Releaselinie>/Entwicklung` übernehmen.
-4. Die neu entstandenen Commits, ihre Änderungen und die dokumentierten
-   Quell-SHAs kontrollieren und den Abnahmebranch einmal ohne Force-Push pushen.
+4. Die neu entstandenen Commits und ihre Änderungen kontrollieren und den
+   Abnahmebranch einmal ohne Force-Push pushen.
 5. Unter **Actions → Sync M/Text resources** den Abnahmelauf kontrollieren.
 6. Die fachliche Abnahme außerhalb des Workflows nach dem vereinbarten
    Verfahren dokumentieren.
@@ -644,13 +628,12 @@ Ziel-Commits. Er baut noch kein Mainframe-Paket.
 
 1. In GitHub die fachlich freigegebenen Commits aus Abnahme bestimmen und,
    falls Abhängigkeiten bestehen, ihre Reihenfolge festhalten.
-2. Im zusätzlichen Git-Client den aktuellen Zielbranch
-   `<Releaselinie>/Bereitstellung` auschecken und aktualisieren.
+2. Den aktuellen Zielbranch `<Releaselinie>/Bereitstellung` auschecken und
+   aktualisieren.
 3. Das Mandanten-Release-Team übernimmt diese Commits per Cherry-Pick aus
    `<Releaselinie>/Abnahme`.
 4. Den resultierenden Stand und die neu entstandenen Commits kontrollieren und
-   den Bereitstellungsbranch ohne Force-Push pushen. Jeder neue Commit muss
-   die vollständige SHA seines Quell-Commits aus Abnahme enthalten.
+   den Bereitstellungsbranch ohne Force-Push pushen.
 5. Den exakten Ziel-Commit in GitHub prüfen und notieren. Der Push startet
    weder Paketbau noch Mainframe-Übergabe.
 
@@ -671,12 +654,12 @@ exakte Commit auf `<Releaselinie>/Bereitstellung` fachlich bestätigt sein.
   in der Git-Historie ein Vorgänger des Ziel-Tags ist.
 - Nur das benannte Mandanten-Release-Team darf einen Release-Tag setzen oder löschen.
 
-Der Release-Tag wird vom Mandanten-Release-Team als reiner Git-Tag mit dem
-freigegebenen zusätzlichen Git-Client angelegt. GitHub Releases mit Titel,
-Release Notes oder zusätzlichen Dateien werden nicht verwendet:
+Der Release-Tag wird vom Mandanten-Release-Team als reiner Git-Tag angelegt.
+GitHub Releases mit Titel, Release Notes oder zusätzlichen Dateien werden
+nicht verwendet:
 
-1. Den aktuellen Branch `<Releaselinie>/Bereitstellung` im zusätzlichen
-   Git-Client auschecken und den neuesten GitHub-Stand abrufen.
+1. Den aktuellen Branch `<Releaselinie>/Bereitstellung` auschecken und den
+   neuesten GitHub-Stand abrufen.
 2. Die vollständige SHA des bestätigten Ziel-Commits erneut vergleichen.
 3. Den neuen Tag, beispielsweise `R261.108`, genau auf diesem Commit anlegen.
 4. Ausschließlich diesen Tag nach GitHub pushen.
@@ -704,9 +687,8 @@ Danach unter **Actions → Build and publish release** prüfen:
 
 Wurde der Tag auf dem falschen Commit oder mit dem falschen Namen angelegt,
 bricht das Mandanten-Release-Team einen noch laufenden Ablauf ab. Anschließend
-löscht es den irrtümlichen Git-Tag mit dem freigegebenen zusätzlichen
-Git-Client lokal und auf GitHub und legt bei Bedarf den richtigen Tag an. Der
-neu angelegte Tag startet einen neuen Lauf.
+löscht es den irrtümlichen Git-Tag lokal und auf GitHub und legt bei Bedarf den
+richtigen Tag an. Der neu angelegte Tag startet einen neuen Lauf.
 
 Eine bereits erfolgte Mainframe-Übergabe wird durch das Löschen eines Tags
 nicht rückgängig gemacht. Der korrigierte Lauf überschreibt die betreffenden

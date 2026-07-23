@@ -118,7 +118,7 @@ Bewertung bleibt die nachweisbare Übergabe beider Pakete erhalten.
 |---|---|---|---|
 | Versionsverwaltung und Automation | SVN und Jenkins sind die führenden Systeme. | Git und GitHub Actions sind nach dem Cutover führend. | Quellen, Prüfungen und ausgeführte Automation sollen gemeinsam versioniert und einem Commit eindeutig zugeordnet sein. |
 | Repository- und Branchstruktur | Releaselinien und Stages liegen in der SVN-Verzeichnisstruktur. | Jeder Mandant besitzt ein Repository mit je drei Branches pro aktiver Releaselinie. | Releaselinie und Stage sind im Branchnamen eindeutig. Trigger und Zugriffsregeln lassen sich daran ausrichten. |
-| Übernahme zwischen Stages | Änderungen werden mit dem bisherigen SVN-Verfahren weitergegeben. | Fachlich ausgewählte Änderungen werden per Cherry-Pick übernommen. Die Quell-SHA wird im neuen Commit dokumentiert. | Git erzeugt bei der Übernahme einen neuen Commit. Die dokumentierte Quell-SHA erhält die Nachvollziehbarkeit. |
+| Übernahme zwischen Stages | Änderungen werden mit dem bisherigen SVN-Verfahren weitergegeben. | Fachlich ausgewählte Änderungen werden per Cherry-Pick übernommen. | Git erzeugt bei der Übernahme auf dem Zielbranch einen neuen Commit. |
 | M/Text-Arbeitsstand | Langlebige SVN-Arbeitskopien werden normalerweise mit `svn update` fortgeschrieben und bei `UMFANG=FULL` neu angelegt. | Jeder Lauf verwendet einen frischen Git-Checkout und veröffentlicht den vollständigen Stand jedes verarbeiteten Projekts. | SVN-Locks, lokale Abweichungen und Reparaturpfade entfallen. Der ausgelieferte Commit ist eindeutig. |
 | Projektstruktur | Der Jenkins-Ablauf ruft eine fest eingebaute Projektmatrix auf. | Alle sichtbaren und nicht ausgeschlossenen Projektverzeichnisse werden verarbeitet. Die aktuelle Matrix dient als Warnungsreferenz. | Fachlich abgestimmte Änderungen der Projektstruktur sollen keinen vorherigen Umbau einer technischen Allowlist erfordern. |
 | Projektcode | Die bekannten Projektcodes stehen in den einzelnen Jenkins-Aufrufen. | Der Projektcode wird einheitlich aus dem Projektnamen abgeleitet und auf Eindeutigkeit geprüft. | Zusätzliche Projekte bleiben paketierbar. Mehrdeutige Mainframe-Member werden weiterhin verhindert. |
@@ -195,10 +195,10 @@ normalen Ressourcenpflege getrennt. Die konkreten Rollen und Bypässe beschreibt
 Kapitel 6.
 
 Die Text-Entwickler bearbeiten Briefressourcen in der M/Text Workbench und
-nutzen darüber hinaus ihren Git-Client für weitere Aktionen wie Cherry-Picking
-oder das Erstellen von Release-Tags. GitHub im Browser dient für Laufkontrolle,
-Wiederholungen und die Prüfung von Release-Tags. Für die tägliche
-Arbeit ist keine Git-Kommandozeile nötig.
+verwenden deren internen Git-Client für Git-Aktionen wie Commit, Push und
+Cherry-Pick. Das Mandanten-Release-Team verwaltet damit auch die Release-Tags.
+GitHub im Browser dient für Laufkontrolle, Wiederholungen und die Prüfung von
+Release-Tags. Für die tägliche Arbeit ist keine Git-Kommandozeile nötig.
 
 Jeder Mandant benennt ein Mandanten-Release-Team für den
 Bereitstellungsbranch und die Release-Tags. Die Verantwortlichen können sich
@@ -455,24 +455,23 @@ Ein Push nach `Rnnn/Entwicklung` oder `Rnnn/Abnahme` startet automatisch die
 M/Text-Verteilung für die entsprechende Stage. Beim Übergang zur nächsten
 Stage wird eine fachlich ausgewählte Änderung per Cherry-Pick übernommen. Der
 Cherry-Pick erzeugt auf dem Zielbranch einen neuen Commit mit einer neuen SHA.
-Weitergegeben wird dieselbe Änderung, nicht derselbe Commit. Die
-vollständige Quell-SHA wird nach einer verbindlichen Konvention im neuen
-Ziel-Commit dokumentiert. Ob die Releaselinie fachlich eingerichtet ist,
-entscheidet die zentrale Releaselinienzuordnung.
+Weitergegeben wird dieselbe Änderung, nicht derselbe Commit. Ob die
+Releaselinie fachlich eingerichtet ist, entscheidet die zentrale
+Releaselinienzuordnung.
 
 Ein Push nach `Rnnn/Bereitstellung` erzeugt noch keine Lieferung. Erst ein Tag
 im Format `Rnnn.nnn` startet den Paketbau. Dabei wird geprüft, ob der Tag zur
 angegebenen Releaselinie gehört und vom Bereitstellungsbranch erreichbar ist.
-Der Tag wird als Git-Tag mit dem freigegebenen zusätzlichen Git-Client angelegt
-und einzeln gepusht. Ein GitHub Release wird nicht erzeugt. Wurde ein Tag
-irrtümlich angelegt, wird er gelöscht und bei Bedarf richtig neu angelegt. Wird
-der Fehler während des Laufs erkannt, kann der Lauf abgebrochen werden. Der
-korrigierte Ablauf baut und übergibt die Lieferung erneut.
+Der Tag wird als Git-Tag angelegt und einzeln gepusht. Ein GitHub Release wird
+nicht erzeugt. Wurde ein Tag irrtümlich angelegt, wird er gelöscht und bei
+Bedarf richtig neu angelegt. Wird der Fehler während des Laufs erkannt, kann
+der Lauf abgebrochen werden. Der korrigierte Ablauf baut und übergibt die
+Lieferung erneut.
 
-Der zusätzliche Git-Client für die Auswahl und Übernahme einzelner Änderungen
-in Abnahme und Bereitstellung wird vor dem Pilotbetrieb ausgewählt,
-bereitgestellt und praktisch abgenommen. Ein direkter Cherry-Pick ist über die
-GitHub-Weboberfläche allein nicht verfügbar.
+Der interne Git-Client der M/Text Workbench wird vor dem Pilotbetrieb für die
+Auswahl und Übernahme einzelner Änderungen sowie die Tagverwaltung praktisch
+abgenommen. Ein direkter Cherry-Pick ist über die GitHub-Weboberfläche allein
+nicht verfügbar.
 
 Die Mandanten-Repositories erhalten keinen zusätzlichen `main`-Branch. Als
 Default Branch dient der Entwicklungsbranch der aktuell führenden Linie,

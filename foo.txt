@@ -1,0 +1,39 @@
+Rnnn/Entwicklung
+        │ ausgewählte Commits einzeln per Cherry-Pick
+        ▼
+lokaler Rnnn/Abnahme
+        │ Push
+        ▼
+GitHub Rnnn/Abnahme ──→ M/Text-Abnahme synchronisieren
+
+Rnnn/Abnahme
+        │ abgenommene Commits einzeln per Cherry-Pick
+        ▼
+lokaler Rnnn/Bereitstellung
+        │ Push
+        ▼
+GitHub Rnnn/Bereitstellung ──→ noch keine Lieferung
+        │
+        │ Release-Tag erstellen und gezielt pushen
+        ▼
+Paketbau und Mainframe-Übergabe
+
+
+Warum Cherry-Pick immer nur einen Commit auswählt
+Ein Commit speichert zwar einen vollständigen Repositoryzustand. Beim Cherry-Pick übernimmt Git aber die Änderung, die dieser Commit gegenüber seinem Eltern-Commit eingeführt hat.
+EGit unterstützt dabei tatsächlich die Auswahl eines einzelnen Commits. Das ist für euren Prozess passend:
+Zielbranch auschecken, beispielsweise R261/Abnahme.
+In der History den ersten freigegebenen Commit aus R261/Entwicklung auswählen.
+Cherry-Pick ausführen.
+Den nächsten Commit auswählen und erneut Cherry-Pick ausführen.
+Bei Abhängigkeiten vom ältesten zum neuesten Commit vorgehen.
+Nach der Kontrolle alle entstandenen Commits gemeinsam mit einem Push übertragen.
+Damit werden beispielsweise B und D übernommen, ohne dass A, C und E automatisch mitkommen. Die offizielle EGit-Dokumentation beschreibt dieses Verhalten ausdrücklich als Übernahme der durch einen Commit eingeführten Änderung auf den aktuell ausgecheckten Branch. EGit Cherry-Picking
+
+
+| Funktion | Bedeutung für euren Ablauf |
+|---|---|
+| Cherry-Pick | Übernimmt eine fachlich ausgewählte Änderung in die nächste Stage |
+| Merge | Würde die zusammenhängende Historie eines Branches in den aktuellen Branch integrieren |
+| Push | Veröffentlicht die lokal entstandenen Commits oder Tags auf GitHub |
+| Tag-Push | Gibt den bestätigten Bereitstellungsstand zur Lieferung frei |

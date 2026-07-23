@@ -59,10 +59,10 @@
         <mxCell id="stage-acc" value="2. Abnahme" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#2f6b2f" vertex="1" parent="1">
           <mxGeometry x="45" y="450" width="200" height="30" as="geometry"/>
         </mxCell>
-        <mxCell id="acc-user" value="Fachlich geprüfte Änderung&#xa;zusätzlicher Git-Client&#xa;Cherry-Pick in Reihenfolge&#xa;Konflikte fachlich klären" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366" vertex="1" parent="1">
+        <mxCell id="acc-user" value="Fachlich geprüfte Änderung&#xa;Cherry-Pick in Reihenfolge&#xa;Konflikte fachlich klären" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366" vertex="1" parent="1">
           <mxGeometry x="50" y="505" width="195" height="120" as="geometry"/>
         </mxCell>
-        <mxCell id="acc-branch" value="Neuer Commit auf&#xa;Rnnn/Abnahme&#xa;neue SHA&#xa;Quell-SHA dokumentiert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="acc-branch" value="Neuer Commit auf&#xa;Rnnn/Abnahme&#xa;neue SHA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="310" y="510" width="190" height="105" as="geometry"/>
         </mxCell>
         <mxCell id="acc-caller" value="sync-resources.yml&#xa;Trigger-Workflow&#xa;Ziel: Abnahme" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
@@ -90,7 +90,7 @@
         <mxCell id="rel-branch" value="Rnnn/Bereitstellung&#xa;neuer Commit / neue SHA&#xa;Push erzeugt keine Lieferung" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="295" y="750" width="180" height="105" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-tag" value="Release-Tag Rnnn.nnn&#xa;im Git-Client auf den&#xa;bestätigten Commit setzen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="rel-tag" value="Release-Tag Rnnn.nnn&#xa;auf den bestätigten&#xa;Commit setzen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="510" y="735" width="235" height="90" as="geometry"/>
         </mxCell>
         <mxCell id="rel-caller" value="release.yml · Trigger-Workflow&#xa;Tag-Push oder manueller Start mit Tag&#xa;ruft reusable-release.yml auf" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
