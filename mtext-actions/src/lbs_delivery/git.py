@@ -11,7 +11,7 @@ from .errors import DeliveryError, Status
 
 
 # Reguläre Ausdrücke für Eingaben an Git.
-# Prüft einen Release-Tag wie `R261.108` und stellt seine Zahlen bereit.
+# Prüft einen Release-Tag wie `R261.108`
 RELEASE_TAG_RE = re.compile(r"R([0-9]{3})\.([0-9]{3})")
 # Prüft die vom Workflow verlangte vollständige Commit-SHA.
 FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
@@ -48,7 +48,7 @@ def _git(
 
 
 def resolve(repository: str | Path, reference: str) -> str:
-    """Löst eine bekannte Referenz auf genau einen Commit auf."""
+    """Löst eine bekannte Referenz auf einen Commit auf."""
 
     value = _git(
         repository,

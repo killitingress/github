@@ -95,7 +95,7 @@ def _delta_archive(
     deleted: list[str],
     deletion_name: str,
 ) -> list[str]:
-    """Baut den DELTA-Verzeichnisstand und archiviert ihn wie der Jenkins-Hook."""
+    """Baut den DELTA-Verzeichnisstand und archiviert ihn (wie bisher der Jenkins-Hook)"""
 
     with tempfile.TemporaryDirectory() as temporary:
         staging = Path(temporary)

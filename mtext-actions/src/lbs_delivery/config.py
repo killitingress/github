@@ -12,12 +12,14 @@ from .errors import DeliveryError, Status
 
 # Vorhandene Mandantenkürzel bestimmen Dateinamen und Mainframe-Member.
 MANDANTEN_KUERZEL = {"FI", "BY", "LH", "NW", "OS", "SA", "IT"}
+
 # ISPW-Instanz des Mandanten: T für Test, P für Produktion; steuert JCL und Mainframe-Ziel.
 ISPW_INSTANZEN = {"T", "P"}
+
 # Ausschließlich diese produktiv vorhandenen CodePipeline-Stages sind erlaubt.
 CODEPIPELINE_STAGES = {"FKTE", "FKTF", "JURJ", "JURP", "SVTS", "VPTV"}
-# Dieser aktuelle Referenzstand macht Abweichungen der Mandanten-Repositories
-# sichtbar, ohne die technisch verarbeitbare Projektstruktur festzuschreiben.
+
+# aktueller Referenzstand - macht Abweichungen in der Bestückung als Warning sichtbar
 PROJEKTREFERENZ = {
     "mtext-fi": (
         "FI",
@@ -36,9 +38,11 @@ PROJEKTREFERENZ = {
     "mtext-os": ("OS", {"LOMS_Basis[OS]", "LOMS_Autonom[OS]"}),
     "mtext-sa": ("SA", {"LOMS_Basis[SA]", "LOMS_Autonom[SA]"}),
 }
-# Entwicklungs- und Abnahmestage bestimmen serverSync-Pfad und Adapterhost.
+
+# Entwicklungs- und Abnahmestage bestimmen serverSync-Pfad und Adapterhost
 SYNC_STAGES = {"Entwicklung": ("E", "e"), "Abnahme": ("A", "a")}
-# Dieser Payload ist Bestandteil des bestehenden M/Text-Adaptervertrags.
+
+# Diese Payload wird LTOMA Request genutzt
 ADAPTER_PAYLOAD = {"mandant": "MAN", "institut": "INR"}
 
 
@@ -68,7 +72,7 @@ class _MandantFields(NamedTuple):
 
 
 def _read_json(path: str | Path) -> Any:
-    """Liest eine JSON-Datei und übersetzt nur tatsächliche I/O-Fehler."""
+    """Liest eine JSON-Datei und übersetzt I/O-Fehler."""
 
     try:
         return json.loads(Path(path).read_text(encoding="utf-8"))
@@ -82,7 +86,7 @@ def _read_json(path: str | Path) -> Any:
 def _read_mandant_configuration(
     path: str | Path, repository_name: str
 ) -> _MandantFields:
-    """Validiert die Mandantendatei als eigenständige fachliche Eingabegrenze."""
+    """Validiert die Mandantendatei"""
 
     mandant_configuration = _read_json(path)
     if (
@@ -151,7 +155,7 @@ def _read_mandant_configuration(
 def _scan_projects(
     root: Path, kuerzel: str, excluded_projects: tuple[str, ...]
 ) -> dict[str, str]:
-    """Liest Projektverzeichnisse und besitzt die Ableitung ihrer Projektcodes."""
+    """Liest Projektverzeichnisse"""
 
     try:
         project_paths = [

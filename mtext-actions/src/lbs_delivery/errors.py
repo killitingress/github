@@ -6,8 +6,6 @@ from enum import Enum
 
 
 class Status(str, Enum):
-    """Benennt die nach außen sichtbaren Ergebnisse eines Lieferlaufs."""
-
     # Mandanten- und Releaselinienkonfiguration sind gemeinsam verwendbar.
     CONFIG_VALIDATED = "CONFIG_VALIDATED"
     # Eine Eingabe verletzt einen fachlichen oder technischen Vertrag.
@@ -46,17 +44,12 @@ class DeliveryError(RuntimeError):
 
     def __init__(self, status: Status, message: str) -> None:
         """Speichert den fehlgeschlagenen fachlichen Schritt."""
-
         super().__init__(message)
         self.status = status
 
     @property
     def exit_code(self) -> int:
-        """Liefert den dokumentierten Exitcode des Fehlers."""
-
         return _EXIT_CODES.get(self.status, 1)
 
     def __str__(self) -> str:
-        """Formatiert die Meldung für Workflowprotokolle."""
-
         return f"{self.status.value}: {super().__str__()}"

@@ -56,7 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run(arguments: argparse.Namespace) -> dict[str, object]:
-    """Führt genau den vom Parser ausgewählten fachlichen Ablauf aus."""
+    """Führt den vom Parser ausgewählten fachlichen Ablauf aus."""
 
     if arguments.command == "publish-mainframe":
         return publish_mainframe(
@@ -112,7 +112,7 @@ def run(arguments: argparse.Namespace) -> dict[str, object]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Gibt genau ein JSON-Ergebnis aus und übersetzt fachliche Fehler."""
+    """Gibt ein JSON-Ergebnis aus und übersetzt fachliche Fehler."""
 
     try:
         result = run(build_parser().parse_args(argv))

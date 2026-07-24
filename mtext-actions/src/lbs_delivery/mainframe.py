@@ -29,7 +29,7 @@ MAINFRAME_TIMEOUT = 60.0
 
 
 def render_jcl(template: str, jcl: dict[str, str], member: str) -> str:
-    """Kapselt Prüfung und Ersetzung an der JCL-Vertragsgrenze."""
+    """Prüfung und Ersetzung der JCL"""
 
     try:
         valid = (
@@ -65,7 +65,7 @@ def submit_package(
     password: str,
     ftp_factory: Callable[[], ftplib.FTP] = ftplib.FTP,
 ) -> None:
-    """Kapselt Paketupload und JCL-Übergabe an der FTP-Systemgrenze."""
+    """Paketupload und JCL-Übergabe"""
 
     session = ftp_factory()
     try:

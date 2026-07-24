@@ -18,7 +18,7 @@ def sha256_file(path: str | Path) -> str:
 
 
 def write_manifest(path: str | Path, manifest: dict[str, Any]) -> Path:
-    """Schreibt das intern erzeugte Manifest an seiner Dateisystemgrenze."""
+    """Schreibt das intern erzeugte Manifest"""
 
     target = Path(path)
     target.write_text(
@@ -31,7 +31,7 @@ def write_manifest(path: str | Path, manifest: dict[str, Any]) -> Path:
 def load_and_verify(
     manifest_path: str | Path, artifact_root: str | Path
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Lädt ein Manifest und prüft alle Dateien vor externen Wirkungen."""
+    """Lädt ein Manifest und prüft alle Dateien"""
 
     try:
         manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))

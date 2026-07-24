@@ -506,6 +506,13 @@ Die Mandanten-Repositories enthalten nur die fachlichen Auslöser. Sie rufen
 fest gepinnte wiederverwendbare Workflows aus `mtext-actions` auf. Die
 eigentliche Fachlogik liegt in Python.
 
+Ein Ereignis im Mandanten-Repository startet dessen Trigger-Workflow, über den
+GitHub die fest gepinnte Workflowdatei aus `mtext-actions` lädt und ihre Jobs auf
+dem Runner des Mandanten-Workflows ausführt. Der Runner checkt den festgelegten
+Commit des Mandanten-Repositories nach `source/` und
+`mtext-actions@automation_ref` nach `automation/` aus und führt anschließend den
+Python-Code aus `automation/` für die Dateien aus `source/` aus.
+
 ### Gesamtzusammenhang
 
 | Prozessschritt | Auslöser | Trigger-Workflow | Zentraler Workflow | Python-Kommando | Ergebnis |
@@ -527,24 +534,25 @@ vollständig geprüften technischen Workflowänderungen fest.
 
 | Ereignis | Konfigurationsprüfung | Sync Entwicklung | Sync Abnahme | Release |
 |---|---:|---:|---:|---:|
-| Push auf einen Branch ohne Änderung an `.github/config.json` | nein | nur nach `Rnnn/Entwicklung` | nur nach `Rnnn/Abnahme` | nein |
-| Push auf einen Branch mit Änderung an `.github/config.json` | ja | nur nach `Rnnn/Entwicklung` | nur nach `Rnnn/Abnahme` | nein |
+| Push ohne Änderung an `.github/config.json` | nein | nur nach `Rnnn/Entwicklung` | nur nach `Rnnn/Abnahme` | nein |
+| Push ausschließlich mit Änderung an `.github/config.json` | ja | nein | nein | nein |
+| Push mit Änderung an `.github/config.json` und weiteren Pfaden | ja | nur nach `Rnnn/Entwicklung` | nur nach `Rnnn/Abnahme` | nein |
 | Push eines Tags `Rnnn.nnn` | nein | nein | nein | ja |
 | Manueller Sync eines Ziel-Commits aus `Rnnn/Entwicklung` | nein | ja | nein | nein |
 | Manueller Sync eines Ziel-Commits aus `Rnnn/Abnahme` | nein | nein | ja | nein |
 | Manueller Release-Start mit vorhandenem Tag `Rnnn.nnn` | nein | nein | nein | ja |
 | Pull Request im Mandanten-Repository | nein | nein | nein | nein |
 
-Der Sync-Workflow besitzt keinen Pfadfilter. Jeder Push nach Entwicklung oder
-Abnahme startet daher die vollständige Ressourcensynchronisation. Dabei werden
-die sichtbaren, nicht unter `excluded_projects` genannten Projektverzeichnisse
-übertragen.
+Der Pfadfilter des Sync-Workflows nimmt Pushes aus, die ausschließlich
+`.github/config.json` ändern. Sie starten die Konfigurationsprüfung, aber keine
+Ressourcensynchronisation. Enthält derselbe Push weitere Änderungen, werden in
+Entwicklung oder Abnahme die sichtbaren, nicht unter `excluded_projects`
+genannten Projektverzeichnisse übertragen.
 
-Die Synchronisation wartet nicht auf den Abschluss der separaten
-Konfigurationsprüfung. Wenn ein Push nach Entwicklung oder Abnahme zugleich
-`.github/config.json` ändert, können beide Abläufe unabhängig voneinander laufen.
-Synchronisation und Release-Erstellung prüfen die verwendete Konfiguration vor
-dem Zugriff auf externe Systeme erneut.
+Bei einem solchen gemeinsamen Push wartet die Synchronisation nicht auf den
+Abschluss der separaten Konfigurationsprüfung. Beide Abläufe können unabhängig
+voneinander laufen. Synchronisation und Release-Erstellung prüfen die verwendete
+Konfiguration vor dem Zugriff auf externe Systeme erneut.
 
 ### Mandantenseitige Trigger-Workflows
 

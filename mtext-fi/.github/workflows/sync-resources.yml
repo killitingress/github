@@ -1,14 +1,18 @@
 name: Sync M/Text resources
 
-# Dieser Workflow verteilt den exakten Stand eines Entwicklungs- oder
-# Abnahme-Branches über die zentrale Automatisierung an die zugehörige M/Text-Stufe.
+# Dieser Workflow verteilt Entwicklungs- oder Abnahme-Branches über die
+# zentralen Workflows an den entsprechenden M/Text-Server.
 'on':
   # Nur Änderungen auf den Branches für Entwicklung und Abnahme lösen automatisch eine Verteilung aus.
   push:
     branches:
       - R[0-9][0-9][0-9]/Entwicklung
       - R[0-9][0-9][0-9]/Abnahme
-  # Initiale Vollsynchronisationen und Wiederholungen verlangen einen exakten
+    # Eine reine Änderung der Mandantenkonfiguration wird separat validiert
+    # und verteilt keine unveränderten Ressourcen.
+    paths-ignore:
+      - .github/config.json
+  # Initiale Vollsynchronisationen und Wiederholungen verlangen einen
   # Commit und den dazugehörigen Branch.
   workflow_dispatch:
     inputs:
@@ -29,8 +33,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Dieser Aufruf übergibt Commits der Entwicklungs-Branches ausschließlich mit
-  # der fest vorgegebenen Zielstufe Entwicklung an den zentralen Workflow.
+  # Dieser Aufruf übergibt Commits der Entwicklungs-Branches an den zentralen Workflow.
   sync-entwicklung:
     name: Sync to Entwicklung
     if: >-
@@ -38,16 +41,15 @@ jobs:
       (github.event_name == 'workflow_dispatch' && endsWith(inputs.source_branch, '/Entwicklung'))
     uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
     with:
-      # Die Einrichtungsautomation ersetzt beide technischen Platzhalter gemeinsam
-      # durch die freigegebene zentrale Workflowversion.
+      # Workflow und Implementierung verwenden dieselbe freigegebene zentrale Version.
       repository_name: ${{ github.event.repository.name }}
       commit_sha: ${{ inputs.commit_sha || github.sha }}
       source_branch: ${{ github.event_name == 'push' && github.ref_name || inputs.source_branch }}
       target_environment: Entwicklung
+      # Der Runner checkt diese Version nach automation/ aus
       automation_ref: 0000000000000000000000000000000000000000
 
-  # Dieser Aufruf übergibt Commits der Abnahme-Branches ausschließlich mit der
-  # fest vorgegebenen Zielstufe Abnahme an den zentralen Workflow.
+  # Dieser Aufruf übergibt Commits der Abnahme-Branches an den zentralen Workflow.
   sync-abnahme:
     name: Sync to Abnahme
     if: >-

@@ -1,11 +1,11 @@
-# Kurzanleitung für `mtext-fi`
+# Kurzanleitung
 
-Dieses Repository enthält die M/Text-Briefressourcen der FI. Diese
-Kurzanleitung fasst die häufigsten Abläufe zusammen. Die eigenständige
-[Benutzeranleitung](../docs/confluence/Benutzeranleitung.md) enthält zusätzlich
-Git-Grundlagen, Rücknahmen, Wiederanläufe und Fehlerbilder.
+Dieses Repository enthält die M/Text-Briefressourcen der FI.
+Diese Kurzanleitung fasst die häufigsten Abläufe zusammen. Die separate
+Benutzeranleitung enthält zusätzlich Git-Grundlagen, Rücknahmen, Wiederanläufe
+und Fehlerbilder.
 
-Der aktuelle Referenzstand umfasst folgende Projekte:
+Der aktuelle Projektstand dieses Mandanten umfasst folgende Projekte:
 
 - `Configuration`
 - `Fonts`
@@ -14,23 +14,24 @@ Der aktuelle Referenzstand umfasst folgende Projekte:
 - `LOMS_PKA`
 
 `LOMS_Testdaten` gehört zum Repository, ist aber von der Synchronisation
-mittels `excluded_projects` in `.github/config.json` ausgeschlossen.
+(mittels `excluded_projects` in `.github/config.json`) ausgeschlossen.
 Reguläre Dateien in der Repositorywurzel werden nicht als Projekte verarbeitet.
 Verzeichnisse, deren Namen mit einem Punkt beginnen, werden ebenfalls ignoriert.
 
 ## Branches
 
-Jede aktive Releaselinie besitzt drei Branches:
+Es gibt normaler Weise immer drei aktive Releaselinien und jede Releaselinie
+besitzt drei Branches:
 
 | Branch | Verwendung |
 |---|---|
-| `<Releaselinie>/Entwicklung` | Änderungen entwickeln und nach M/Text-Entwicklung synchronisieren |
-| `<Releaselinie>/Abnahme` | freigegebene Änderungen nach M/Text-Abnahme synchronisieren |
+| `<Releaselinie>/Entwicklung` | Branch für initiale Entwicklungen fachlicher Anforderungen |
+| `<Releaselinie>/Abnahme` | Branch für Funktionstests und Abnahmen entwickelter Änderungen |
 | `<Releaselinie>/Bereitstellung` | abgenommene Änderungen für eine Lieferung zusammenstellen |
 
 Zusätzlich können Feature-Branches verwendet werden.
-Der Default Branch ist der Entwicklungsbranch der führenden Releaselinie,
-beispielsweise `R261/Entwicklung`.
+Der Default Branch ist üblicher Weise der Entwicklungsbranch der führenden
+Releaselinie.
 
 ## Änderung nach Entwicklung bringen
 
@@ -53,12 +54,12 @@ M/Text-Entwicklung.
 Die Weitergabe erfolgt zuerst nach `<Releaselinie>/Abnahme` und danach nach
 `<Releaselinie>/Bereitstellung`. Bei einer Push-Ablehnung oder einem Konflikt
 wird der Zielstand zuerst aktualisiert und das fachlich richtige Ergebnis vor
-dem nächsten Push geprüft. Force-Pushes sind nicht zulässig.
+dem nächsten Push geprüft.
 
 ## FULL- oder DELTA-Lieferung auslösen
 
 Das Mandanten-Release-Team setzt einen Git-Tag auf den gewünschten Commit des
-Bereitstellungsbranches. Ein zusätzliches GitHub Release wird nicht angelegt:
+Bereitstellungsbranches:
 
 - `<Releaselinie>.100`, beispielsweise `R261.100`, erzeugt ein FULL.
 - Jeder weitere gültige Tag derselben Linie erzeugt ein kumulatives DELTA
@@ -69,20 +70,12 @@ D-Paket mit leerem Projektverzeichnis und leerer Löschliste.
 
 Der Release-Tag ist die fachliche Freigabe. Der Release-Workflow prüft den Tag,
 baut die Lieferdateien und übergibt sie nach erfolgreicher Prüfung automatisch
-an den Mainframe. Einen irrtümlich angelegten Tag kann das
-Mandanten-Release-Team löschen und bei Bedarf neu anlegen. Der korrigierte Lauf
-überschreibt die betreffenden Member in CodePipeline und erzeugt dort einen
-neuen Versionierungsstand.
+an den Mainframe.
 
 ## Mandantenkonfiguration
 
-[`.github/config.json`](.github/config.json) legt das Mandantenkürzel, das
-Repository, das Mainframe-Subsystem, die ISPW-Instanz `T` oder `P`, die
-Hostprofile und optionale Projektausschlüsse fest.
-Alle anderen sichtbaren Verzeichnisse in der Repositorywurzel werden als
-Projekte verarbeitet. Änderungen werden mit den benannten Mandanten- und
-Betriebsverantwortlichen abgestimmt. Ein Push der Datei startet den
-Config-Check.
+.github/config.json legt für den Mandante relevante Parameter fest. Ein Push
+der Datei startet den Config-Check.
 
 ## Weitere Informationen
 
