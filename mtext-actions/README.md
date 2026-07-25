@@ -37,7 +37,7 @@ PYTHONPATH=src python3 -m lbs_delivery --help
 ## Mandanten-Workflows im Batch aktualisieren
 
 Der manuell gestartete Workflow **Update mandant workflows** setzt das von der
-FI bestätigte Runner-Kennzeichen in den zentralen Fach- und Testjobs und bindet
+FI festgelegte Runner-Kennzeichen in den zentralen Fach- und Testjobs und bindet
 Workflowaufruf sowie Python-Checkout aller vorgesehenen Mandantenbranches an
 dieselbe vollständige Commit-SHA von `mtext-actions`.
 
@@ -53,10 +53,10 @@ Mandanten-Repositories begrenzt. Es benötigt dort die Berechtigung, geschützte
 Workflowdateien auf den ausgewählten Branches festzuschreiben.
 
 Unter **Actions** wird **Update mandant workflows** mit der vollständigen
-Commit-SHA der freigegebenen `mtext-actions`-Version gestartet.
+SHA des `mtext-actions`-Commits gestartet.
 
-Der Vorbereitungsjob checkt exakt die angegebene SHA aus und lehnt einen
-abweichenden Stand ab. Bei der erstmaligen Aktualisierung kann die
+Der Vorbereitungsjob checkt den angegebenen Commit aus und vergleicht seine
+SHA mit der Eingabe. Bei der erstmaligen Aktualisierung kann die
 Finalisierung des Runner-Kennzeichens noch einen zentralen Commit erzeugen.
 Dessen SHA ist anschließend die gemeinsame Rollout-Version. Spätere Versionen
 enthalten bereits das feste Runner-Kennzeichen und verändern das zentrale

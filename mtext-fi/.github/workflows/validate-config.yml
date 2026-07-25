@@ -25,7 +25,7 @@ jobs:
     uses: j520730/mtext-actions/.github/workflows/reusable-validate-config.yml@0000000000000000000000000000000000000000
     with:
       # Die Einrichtungsautomation ersetzt beide technischen Platzhalter gemeinsam
-      # durch die freigegebene zentrale Workflowversion.
+      # durch den mtext-actions-Commit.
       repository_name: ${{ github.repository }}
       commit_sha: ${{ github.sha }}
       automation_ref: 0000000000000000000000000000000000000000

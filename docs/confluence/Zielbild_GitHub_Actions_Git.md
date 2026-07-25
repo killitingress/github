@@ -20,7 +20,7 @@ SVN wird durch Git und Jenkins durch GitHub Actions ersetzt. Dafür wird
 voraussichtlich ab November oder Dezember 2026 ein SVN-Abzug nach Git
 übernommen und in einer nichtproduktiven GitHub-Umgebung erprobt. Während
 dieser Testphase bleibt der bisherige Prozess produktiv. Unmittelbar vor der
-für Januar 2027 geplanten Produktivsetzung wird der dann freigegebene
+für Januar 2027 geplanten Produktivsetzung wird der dafür vorgesehene
 SVN-Endstand nach Git übertragen. Danach sind Git und GitHub Actions für diesen
 Prozess führend. Eine dauerhafte Synchronisation mit SVN gibt es nicht.
 
@@ -36,7 +36,7 @@ Der generelle Ablauf ist:
 
 1. Ein Push nach `Rnnn/Entwicklung` verteilt den Stand an das
    M/Text-Entwicklungssystem, zum Beispiel `en01e.ltoms.intern`.
-2. Fachlich freigegebene Änderungen werden nach `Rnnn/Abnahme` übernommen und
+2. Für die Abnahme vorgesehene Änderungen werden nach `Rnnn/Abnahme` übernommen und
    an das M/Text-Abnahmesystem verteilt, zum Beispiel `en01a.ltoms.intern`.
 3. Abgenommene Änderungen werden nach `Rnnn/Bereitstellung` übernommen. Der
    Push allein erzeugt noch keine Mainframe-Lieferung.
@@ -78,7 +78,7 @@ benannt, die der Code weder festlegen noch prüfen kann.
 |---|---|
 | Stagefolge | Änderungen durchlaufen weiterhin `Entwicklung`, `Abnahme` und `Bereitstellung`. Nur fachlich ausgewählte Änderungen werden in die nächste Stage übernommen. |
 | M/Text-Synchronisation | Entwicklung und Abnahme stellen die vorgesehenen vollständigen Projektstände unter `serverSync` bereit und rufen danach denselben M/Text-Adapter LTOMA auf. |
-| Bereitstellung | Das Übernehmen eines Stands nach Bereitstellung erzeugt noch keine Mainframe-Lieferung. Erst ein bestätigter Release-Tag startet den Paketbau. |
+| Bereitstellung | Das Übernehmen eines Stands nach Bereitstellung erzeugt noch keine Mainframe-Lieferung. Erst ein Release-Tag startet den Paketbau. |
 | Release-Lieferart | Ein Release mit der Endung `.100` ist FULL. Andere gültige Release-Tags derselben Releaselinie sind kumulative DELTA-Lieferungen gegen `.100`. |
 | FULL-Inhalt | Für jedes Projekt entstehen das vollständige F-Paket und ein zusätzliches leeres D-Paket mit leerem Projektverzeichnis und leerer Löschliste. |
 | DELTA-Inhalt | Das D-Paket enthält alle seit `.100` neuen und geänderten Dateien sowie die seitdem gelöschten Pfade in der Löschliste. Es hängt nicht davon ab, ob frühere DELTA-Lieferungen lückenlos eingespielt wurden. |
@@ -109,7 +109,7 @@ sie keine langlebigen Arbeitskopien führt.
 Der bisherige FULL-Ablauf überschreibt neben dem F-Member auch den zugehörigen
 D-Member mit dem leeren D-Paket. Dies spricht dafür, dass der DELTA-Stand einer
 neuen Releaselinie damit zurückgesetzt oder initialisiert werden soll. Diese
-fachliche Wirkung in CodePipeline ist nicht bestätigt. Unabhängig von ihrer
+fachliche Wirkung in CodePipeline ist offen. Unabhängig von ihrer
 Bewertung bleibt die nachweisbare Übergabe beider Pakete erhalten.
 
 ### Technisch und betrieblich anders
@@ -155,7 +155,7 @@ Bewertung bleibt die nachweisbare Übergabe beider Pakete erhalten.
   vollständige Git-Projektstand ohne weitere Anpassung dieselbe fachliche
   Verarbeitung auslöst wie der bisherige SVN-Arbeitsstand.
 - Die genaue fachliche Wirkung des bei FULL mit einem leeren Paket
-  überschriebenen D-Members in CodePipeline ist nicht bestätigt.
+  überschriebenen D-Members in CodePipeline ist offen.
 - Für vollständig entfernte oder neu ausgeschlossene Projekte ist eine sichere
   Bereinigungsregel festzulegen, die keine Projektverzeichnisse anderer
   Mandanten-Repositories verändert.
@@ -336,8 +336,7 @@ Abnahmepunkte stehen in [Nächste Schritte](./Naechste_Schritte.md).
 ## 6. GitHub-Konfiguration
 
 Für Planung und Abnahme ist GitHub Enterprise Server 3.20.4 als Zielplattform
-festgelegt. Die folgenden Einstellungen definieren den gewünschten
-Zielzustand.
+festgelegt. Die folgenden Einstellungen definieren den Zielzustand.
 
 ### Repositories und Zugriffe
 
@@ -407,8 +406,8 @@ Mandantenbranch eindeutig festgelegt, welche Version der Automatisierung er
 verwendet.
 
 Da Workflowdateien mit jedem Branch versioniert werden, wirkt ein neuer Commit
-in `mtext-actions` nicht unmittelbar auf bestehende Mandantenbranches. Die
-freigegebene Version wird deshalb über einen Batchlauf auf alle betroffenen
+in `mtext-actions` nicht unmittelbar auf bestehende Mandantenbranches. Der
+Commit wird deshalb über einen Batchlauf auf alle betroffenen
 Mandantenbranches verteilt. Die verbindliche Mandantenzuordnung liefert der
 Matrix die vollständigen GitHub-Namen. Die aktiven Releaselinien werden aus
 `config/releaselinien.json` gelesen und jeweils mit `Entwicklung`, `Abnahme`
@@ -417,12 +416,12 @@ und `Bereitstellung` kombiniert.
 Vor dem ersten Lauf werden der Runner der FI, dessen Repositoryvariable
 `FI_RUNNER_LABEL` sowie das Environment `Einrichtung` mit dem Secret
 `WORKFLOW_CONFIGURATION_TOKEN` bereitgestellt. Der Workflow wird in GitHub mit
-der vollständigen Commit-SHA der freigegebenen `mtext-actions`-Version
+der vollständigen SHA des `mtext-actions`-Commits
 gestartet.
 
-Der Vorbereitungsjob prüft den zentralen Checkout und finalisiert bei Bedarf
-das feste Runner-Kennzeichen. Anschließend erzeugt er die Matrix und stellt
-allen Einträgen dieselbe Rollout-SHA bereit. Jeder Matrixjob:
+Der Vorbereitungsjob prüft den zentralen Checkout und bestimmt die
+Rollout-SHA. Anschließend erzeugt er die Matrix und stellt allen Einträgen
+dieselbe Rollout-SHA bereit. Jeder Matrixjob:
 
 1. checkt genau diese Rollout-SHA und den vorgesehenen Mandantenbranch aus,
 2. bindet Workflowaufruf und Python-Checkout gemeinsam an die Rollout-SHA,
@@ -436,12 +435,9 @@ Fehler eines Matrixeintrags brechen die übrigen Aktualisierungen nicht ab.
 Ein erneuter Lauf ist idempotent und erzeugt auf bereits aktuellen Branches
 keinen zusätzlichen Commit.
 
-Bei der erstmaligen Einrichtung kann das feste Runner-Kennzeichen in
-`mtext-actions` noch fehlen. Dann erzeugt der Lauf einmalig den dafür nötigen
-Commit und verwendet dessen ausgewiesene SHA unmittelbar für den
-Mandanten-Commit und alle weiteren Rollout-Ziele. Spätere Versionen enthalten
-das Runner-Kennzeichen bereits und benötigen keinen zusätzlichen Commit in
-`mtext-actions`.
+Falls das Runner-Kennzeichen bei der erstmaligen Einrichtung noch
+nicht im zentralen Workflowstand enthalten ist, übernimmt der Vorbereitungsjob
+es mit einem Commit und verwendet dessen SHA als Rollout-SHA.
 
 ## 7. Branches, Weitergabe und Auslöser
 
@@ -528,7 +524,7 @@ Python-Code aus `automation/` für die Dateien aus `source/` aus.
 
 | Prozessschritt | Auslöser | Trigger-Workflow | Zentraler Workflow | Python-Kommando | Ergebnis |
 |---|---|---|---|---|---|
-| Mandanten-Workflows einrichten oder `mtext-actions`-Version ausrollen | Manueller Batchstart in `mtext-actions` mit freigegebener vollständiger SHA | keiner | `update-mandant-workflows.yml` | `python -m workflow_configuration` | Zentrale Runnerwerte und alle Mandanten-Pins auf dieselbe Rollout-SHA geprüft und festgeschrieben |
+| Mandanten-Workflows einrichten oder `mtext-actions`-Version ausrollen | Manueller Batchstart in `mtext-actions` mit der vollständigen SHA des Commits | keiner | `update-mandant-workflows.yml` | `python -m workflow_configuration` | Zentrale Runnerwerte und alle Mandanten-Pins auf dieselbe Rollout-SHA geprüft und festgeschrieben |
 | Mandantenkonfiguration prüfen | Push mit Änderung an `.github/config.json` auf einen Branch | `validate-config.yml` | `reusable-validate-config.yml` | `validate-config` | Konfiguration geprüft |
 | Entwicklung synchronisieren | Push nach `Rnnn/Entwicklung` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync-resources` | Vollständiger Projektstand des Ziel-Commits nach M/Text-Entwicklung synchronisiert |
 | Abnahme synchronisieren | Push eines per Cherry-Pick übernommenen Commits nach `Rnnn/Abnahme` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync-resources` | Vollständiger Projektstand des Ziel-Commits nach M/Text-Abnahme synchronisiert |
@@ -567,21 +563,21 @@ Konfiguration vor dem Zugriff auf externe Systeme erneut.
 
 ### Mandantenseitige Trigger-Workflows
 
-| Datei | Automatischer Trigger | Manueller Trigger | Abhängigkeit und Zweck |
-|---|---|---|---|
-| [`validate-config.yml`](../../mtext-fi/.github/workflows/validate-config.yml) | Push mit Änderung an `.github/config.json` auf einen Branch | keiner | Ruft `reusable-validate-config.yml` zur Prüfung der Mandantenkonfiguration auf |
-| [`sync-resources.yml`](../../mtext-fi/.github/workflows/sync-resources.yml) | Push nach `Rnnn/Entwicklung` oder `Rnnn/Abnahme` | `workflow_dispatch` mit vollständiger `commit_sha` und zugehörigem `source_branch` | Ruft abhängig von der Branchendung `reusable-sync-resources.yml` mit der festen Zielstufe `Entwicklung` oder `Abnahme` auf |
-| [`release.yml`](../../mtext-fi/.github/workflows/release.yml) | Push eines Tags `Rnnn.nnn` | `workflow_dispatch` mit vorhandenem `release_tag` | Ruft `reusable-release.yml` auf. Ein Push nach Bereitstellung allein ist kein Auslöser |
+| Datei | Trigger | Aufgabe |
+|---|---|---|
+| [`validate-config.yml`](../../mtext-fi/.github/workflows/validate-config.yml) | Änderung an `.github/config.json` | Prüfung der Mandantenkonfiguration starten |
+| [`sync-resources.yml`](../../mtext-fi/.github/workflows/sync-resources.yml) | Push nach Entwicklung oder Abnahme sowie manueller Start | Ressourcensynchronisation für die Zielstufe starten |
+| [`release.yml`](../../mtext-fi/.github/workflows/release.yml) | Release-Tag sowie manueller Start | Releaseverarbeitung starten |
 
-### Zentrale YAML-Workflows
+### Zentrale Workflows
 
-| Datei | Trigger | Jobs und Abhängigkeiten | Implementierung und Wirkung |
-|---|---|---|---|
-| [`update-mandant-workflows.yml`](../../mtext-actions/.github/workflows/update-mandant-workflows.yml) | Manueller Start über `workflow_dispatch` in `mtext-actions` mit vollständiger freigegebener SHA | Exakten `mtext-actions`-Stand prüfen → gegebenenfalls einmaligen zentralen Runner-Commit pushen → Matrix aus Mandantenzuordnung, aktiven Releaselinien und Branchstufen bilden → jeden Mandantenbranch prüfen und aktualisieren | Python-Implementierung in `mtext-actions`. Bindet das Environment `Einrichtung`, führt keinen Mandantencode aus, verarbeitet Fehler mit `fail-fast: false` weiter und verwendet das begrenzte technische Token für die Workflowdateien. |
-| [`reusable-validate-config.yml`](../../mtext-actions/.github/workflows/reusable-validate-config.yml) | `workflow_call` | Mandanten-Commit auschecken → `mtext-actions` auschecken → Laufzeit vorbereiten → prüfen | `validate-config` |
-| [`reusable-sync-resources.yml`](../../mtext-actions/.github/workflows/reusable-sync-resources.yml) | `workflow_call` | Exakten Mandanten-Commit mit vollständiger Historie auschecken → `mtext-actions` auschecken → Laufzeit vorbereiten → synchronisieren | `sync-resources --execute`. Stellt den vollständigen Zielstand nach dem festgelegten Transportvertrag unter `serverSync` bereit und startet die interne Synchronisation über den M/Text-Adapter |
-| [`reusable-release.yml`](../../mtext-actions/.github/workflows/reusable-release.yml) | `workflow_call` | Job `build` erzeugt das Artefakt. Job `publish` hat `needs: build`, lädt genau dieses Artefakt und bindet das Environment `Bereitstellung` | `build-release`, danach `publish-mainframe --execute`. Automatische Übergabe per FTP/JES nach erfolgreichem Build |
-| [`ci.yml`](../../mtext-actions/.github/workflows/ci.yml) | Pull Request oder Push auf `main` in `mtext-actions` | Repository auschecken → Laufzeit vorbereiten → Akzeptanztests ausführen | `python -m unittest discover -s tests -v` |
+| Datei | Trigger | Aufgabe |
+|---|---|---|
+| [`update-mandant-workflows.yml`](../../mtext-actions/.github/workflows/update-mandant-workflows.yml) | Manueller Start | Alle vorgesehenen Mandantenbranches auf den `mtext-actions`-Commit aktualisieren |
+| [`reusable-validate-config.yml`](../../mtext-actions/.github/workflows/reusable-validate-config.yml) | Aufruf durch `validate-config.yml` | Mandantenkonfiguration prüfen |
+| [`reusable-sync-resources.yml`](../../mtext-actions/.github/workflows/reusable-sync-resources.yml) | Aufruf durch `sync-resources.yml` | Ressourcen nach Entwicklung oder Abnahme synchronisieren |
+| [`reusable-release.yml`](../../mtext-actions/.github/workflows/reusable-release.yml) | Aufruf durch `release.yml` | Releasepakete erstellen, prüfen und an den Mainframe übergeben |
+| [`ci.yml`](../../mtext-actions/.github/workflows/ci.yml) | Pull Request oder Push auf `main` in `mtext-actions` | `mtext-actions` mit den automatisierten Akzeptanztests prüfen |
 
 Die wiederverwendbaren Fachworkflows sind nur über `workflow_call` erreichbar.
 Ihre Jobs und der zentrale Testjob verwenden das fest eingetragene
@@ -594,7 +590,7 @@ Werte erst in die übrigen zentralen Workflowdateien einträgt.
 
 | Kommando | Aufgerufen durch | Wesentliche Prüfungen und Abhängigkeiten | Ergebnis |
 |---|---|---|---|
-| `python -m workflow_configuration` | `update-mandant-workflows.yml` | Zentraler Checkout entspricht der freigegebenen `mtext-actions`-SHA oder der vorbereiteten Rollout-SHA. Bestätigtes Runner-Kennzeichen. Eindeutige Mandantenzuordnung. Aktive Releaselinien. Vollständige Workflow- und Codebezüge. Diffs sind fehlerfrei und die Abschlussprüfung ist leer | Rollout-Matrix sowie geprüfte lokale Workflow-Commits für `mtext-actions` und jeden Mandantenbranch. Der Workflow pusht sie in der erforderlichen Reihenfolge |
+| `python -m workflow_configuration` | `update-mandant-workflows.yml` | Zentraler Checkout entspricht dem `mtext-actions`-Commit oder der vorbereiteten Rollout-SHA. Runner-Kennzeichen der FI. Eindeutige Mandantenzuordnung. Aktive Releaselinien. Vollständige Workflow- und Codebezüge. Diffs sind fehlerfrei und die Abschlussprüfung ist leer | Rollout-Matrix sowie geprüfte lokale Workflow-Commits für die betroffenen Repositories. Der Workflow pusht sie in der erforderlichen Reihenfolge |
 | `validate-config` | `reusable-validate-config.yml` | Bekanntes Mandantenkürzel, Repositoryidentität, gültige CodePipeline-Stage-Codes, eindeutige Projektcodes und vorhandene Hostprofile der Releaselinien | Status `CONFIG_VALIDATED` |
 | `sync-resources` | `reusable-sync-resources.yml` | Branch und Zielstufe stimmen überein. Vollständige SHA. Checkout entspricht SHA. Commit ist aus dem Remote-Branch erreichbar. Projektbäume enthalten keine Symlinks | Vollständiger Projektstand nach `serverSync`, Adapteraufruf gemäß Transportvertrag, Status `ADAPTER_ACCEPTED` |
 | `build-release` | Job `build` in `reusable-release.yml` | Tagformat und konfigurierte Releaselinie. Tag aus Bereitstellungsbranch erreichbar. Checkout entspricht Tag-SHA. DELTA-Basis `.100`. Projektbäume enthalten keine Symlinks | Reproduzierbare FULL-/DELTA-Archive, Informationsdateien und `manifest.json` mit SHA-256. Status `ARTIFACT_READY` |
@@ -642,7 +638,7 @@ rückwirkend.
 Alle anderen sichtbaren Verzeichnisse direkt unter der Repositorywurzel werden
 als Projekte synchronisiert und paketiert. Versteckte Verzeichnisse werden
 ignoriert. Die bestehende JCL verwendet `stage` als CodePipeline-`LEVEL`. Ein
-zusätzlicher Levelwert wird nicht eingeführt. Fachlich bestätigte Änderungen
+zusätzlicher Levelwert wird nicht eingeführt. Fachlich spezifizierte Änderungen
 werden in der jeweils zuständigen Konfiguration versioniert. Zugangsdaten
 gehören nicht in `.github/config.json`.
 
@@ -1004,7 +1000,7 @@ noch offenen Grenzen wichtig.
 | M/Text-Transport noch nicht entschieden | Der direkte Sharezugriff ist implementiert, aber der spätere Transportweg ist noch auszuwählen und nichtproduktiv abzunehmen. Ohne diese Entscheidung ist die M/Text-Integration nicht betriebsbereit. |
 | GitHub-Einrichtung noch nicht vollständig | Runner-Kennzeichen, repositoryübergreifende Zugriffe, Rulesets, Environments und technische Rollen müssen auf GitHub Enterprise Server 3.20.4 eingerichtet und praktisch geprüft werden. |
 | Kein nachgelagerter fachlicher Endstatus | `ADAPTER_ACCEPTED` und `MAINFRAME_SUBMITTED` bestätigen nur die unmittelbare technische Annahme. Die fachliche Endkontrolle bleibt bis zu einer späteren Erweiterung eine Betriebsaufgabe. |
-| Bestehender FTP-/JES-Transport | Die Mainframe-Übergabe übernimmt zunächst den vorhandenen FTP-Vertrag. Eine verschlüsselte Alternative kann erst umgesetzt werden, wenn das Zielsystem einen bestätigten Vertrag dafür bereitstellt. |
+| Bestehender FTP-/JES-Transport | Die Mainframe-Übergabe übernimmt zunächst den vorhandenen FTP-Vertrag. Eine verschlüsselte Alternative kann erst umgesetzt werden, wenn das Zielsystem einen spezifizierten Vertrag dafür bereitstellt. |
 | Selbst gehosteter Runner als Vertrauensgrenze | Absicherung, Wartung und Bereinigung des FI-Runners liegen außerhalb der Anwendung. Diese Betriebsleistungen sind Voraussetzung für den sicheren Einsatz. |
 
 ### Mögliche Phase 2

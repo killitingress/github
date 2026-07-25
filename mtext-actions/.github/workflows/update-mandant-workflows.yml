@@ -1,13 +1,13 @@
 name: Update mandant workflows
 
 # Dieser manuell gestartete Batch aktualisiert die Workflowdateien aller
-# vorgesehenen Mandantenbranches auf dieselbe freigegebene zentrale Version.
+# vorgesehenen Mandantenbranches auf denselben zentralen Commit.
 # Er führt keinen Code aus den Mandanten-Repositories aus.
 'on':
   workflow_dispatch:
     inputs:
       automation_sha:
-        description: Vollständige Commit-SHA der freigegebenen mtext-actions-Version
+        description: Vollständige SHA des mtext-actions-Commits
         required: true
         type: string
 

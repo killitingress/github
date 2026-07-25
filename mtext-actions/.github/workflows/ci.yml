@@ -31,7 +31,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # Prüft den von der FI bereitgestellten Runner und stellt den Pfad zur freigegebenen
+      # Prüft den von der FI bereitgestellten Runner und stellt den Pfad zur vorgegebenen
       # Python-Laufzeit als Ausgabe für die nachfolgenden Schritte bereit.
       - name: Prepare approved Python runtime
         id: runtime

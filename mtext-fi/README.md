@@ -35,7 +35,7 @@ Releaselinie.
 
 ## Änderung nach Entwicklung bringen
 
-1. Entwicklungsbranch der gewünschten Releaselinie auschecken / aktualisieren.
+1. Entwicklungsbranch der Releaselinie auschecken / aktualisieren.
 2. M/Text-Ressourcen bearbeiten und lokal prüfen.
 3. Die Änderung committen und dann nach GitHub pushen.
 4. Den Workflow **Sync M/Text resources** kontrollieren.
@@ -45,7 +45,7 @@ M/Text-Entwicklung.
 
 ## Änderung zur Abnahme und Bereitstellung weitergeben
 
-1. Den fachlich freigegebenen Commit per Cherry-Pick auf den Zielbranch
+1. Den für die nächste Stage vorgesehenen Commit per Cherry-Pick auf den Zielbranch
    übernehmen.
 2. Den übernommenen Gesamtstand prüfen.
 3. Den Zielbranch pushen. Bei der Abnahme anschließend den Workflow
@@ -58,7 +58,7 @@ dem nächsten Push geprüft.
 
 ## FULL- oder DELTA-Lieferung auslösen
 
-Das Mandanten-Release-Team setzt einen Git-Tag auf den gewünschten Commit des
+Das Mandanten-Release-Team setzt einen Git-Tag auf den Commit des
 Bereitstellungsbranches:
 
 - `<Releaselinie>.100`, beispielsweise `R261.100`, erzeugt ein FULL.

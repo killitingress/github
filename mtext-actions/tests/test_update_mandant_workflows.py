@@ -72,7 +72,7 @@ class UpdateWorkflowsTests(unittest.TestCase):
         """Prüft Rollout, Mandanten-Pins, SHA-Ablehnung und Wiederholbarkeit."""
 
         initial_sha = self.run_git(self.automation_root, "rev-parse", "HEAD")
-        with self.assertRaisesRegex(ValueError, "freigegebenen SHA"):
+        with self.assertRaisesRegex(ValueError, "angegebenen Commit"):
             prepare_automation_update(self.automation_root, "fi-runner", "1" * 40)
 
         with redirect_stderr(io.StringIO()):

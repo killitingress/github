@@ -18,7 +18,7 @@ FULL- oder DELTA-Lieferung mit anschließender Mainframe-Übergabe an die IZE9.
 | Aufgabe | Relevante Kapitel |
 |---|---|
 | Briefressourcen bearbeiten und nach Entwicklung übertragen | [Git-Grundlagen](#3-grundlagen-zu-git), [Git-Anwendungen](#4-git-anwendungen-bedienen) und [Änderung nach Entwicklung bringen](#7-änderung-nach-entwicklung-bringen) |
-| Eine freigegebene Änderung nach Abnahme oder Bereitstellung weitergeben | [Cherry-Pick](#cherry-pick-einfach-erklärt), [Abnahme](#8-stand-zur-abnahme-weitergeben) und [Bereitstellung](#9-ausgewählte-änderungen-bereitstellen) |
+| Eine ausgewählte Änderung nach Abnahme oder Bereitstellung weitergeben | [Cherry-Pick](#cherry-pick-einfach-erklärt), [Abnahme](#8-stand-zur-abnahme-weitergeben) und [Bereitstellung](#9-ausgewählte-änderungen-bereitstellen) |
 | Mandantenkonfiguration oder Releaselinie pflegen | [Mandantenkonfiguration](#5-mandantenkonfiguration-in-githubconfigjson) und [Neue Releaselinie](#6-neue-releaselinie-einrichten) |
 | Eine FULL- oder DELTA-Lieferung auslösen | [FULL- oder DELTA-Lieferung](#10-full--oder-delta-lieferung-auslösen) |
 | Einen fehlgeschlagenen Lauf einordnen oder wiederholen | [Wiederholung](#11-einen-lauf-kontrolliert-wiederholen) und [Status und Fehlerbilder](#12-status-und-fehlerbilder-verstehen) |
@@ -123,7 +123,7 @@ ausgecheckten Branches:
 
 Welche Bedienfunktion diese Vorgänge in der eingesetzten Workbench-Version
 ausführt und wie sie dort heißt, wird bei der praktischen Abnahme festgelegt.
-Die freigegebene Funktion muss den lokalen Branch ohne automatischen Merge auf
+Die festgelegte Funktion muss den lokalen Branch ohne automatischen Merge auf
 den aktuellen GitHub-Stand bringen.
 
 Der sichere Standardablauf ist:
@@ -144,7 +144,7 @@ noch ein Force-Push erzwungen. Dann gilt der Abschnitt
 ### Feature-Branch einfach erklärt
 
 Ein **Feature-Branch** ist ein eigener Arbeitsbereich für eine einzelne
-Änderung. Sofern dieser Bedienweg für den Mandanten freigegeben ist, kann dort
+Änderung. Sofern dieser Bedienweg für den Mandanten vorgesehen ist, kann dort
 ein noch unfertiger Stand gespeichert und nach GitHub gepusht werden, ohne
 bereits das M/Text-Entwicklungssystem zu aktualisieren. Das ist besonders
 nützlich, wenn eine Änderung mehrere Tage dauert, mehrere Personen daran
@@ -153,7 +153,7 @@ arbeiten oder der Zwischenstand zunächst geprüft werden soll.
 Für eine kleine, fertig vorbereitete Änderung ist kein Feature-Branch nötig.
 Sie kann direkt auf dem passenden Entwicklungsbranch bearbeitet und gepusht
 werden. Ist die Arbeit auf einem Feature-Branch abgeschlossen, wird der
-gewünschte Commit nach `<Releaselinie>/Entwicklung` übernommen. Erst der Push
+Commit nach `<Releaselinie>/Entwicklung` übernommen. Erst der Push
 dieses Entwicklungsbranches startet die M/Text-Synchronisation. Der
 Feature-Branch selbst bezeichnet keine Stage des Lieferprozesses und löst
 weder eine M/Text-Synchronisation noch einen Release aus. Nur wenn
@@ -172,7 +172,7 @@ Der Cherry-Pick erzeugt auf dem Zielbranch einen **neuen Commit mit einer
 neuen SHA**. Es wird also dieselbe Änderung weitergegeben, nicht derselbe
 Commit.
 
-Mehrere freigegebene Commits können in ihrer ursprünglichen Reihenfolge
+Mehrere ausgewählte Commits können in ihrer ursprünglichen Reihenfolge
 nacheinander per Cherry-Pick übernommen und anschließend gemeinsam mit einem
 einzigen Push übertragen werden. Dabei wird jeweils ein ausgewählter Commit auf
 den aktuell ausgecheckten Zielbranch übernommen.
@@ -221,7 +221,7 @@ Ein **Merge** verbindet zwei Entwicklungsverläufe, ohne vorhandene Commits
 umzuschreiben, und kann dabei einen zusätzlichen Merge-Commit erzeugen. Er ist
 in diesem Prozess weder zur Behebung einer Push-Ablehnung noch zur Weitergabe
 zwischen den Stage-Branches vorgesehen. Eigene noch nicht gepushte Commits
-werden per Rebase auf den aktuellen Stand gesetzt. Freigegebene Änderungen
+werden per Rebase auf den aktuellen Stand gesetzt. Für die Weitergabe ausgewählte Änderungen
 werden per Cherry-Pick in die nächste Stage übernommen.
 
 | Situation | Geeignetes Vorgehen | Ergebnis |
@@ -232,7 +232,7 @@ werden per Cherry-Pick in die nächste Stage übernommen.
 
 ### Konflikt bei Rebase oder Cherry-Pick auflösen
 
-Ein Konflikt bedeutet, dass Git den gewünschten Dateiinhalt nicht eindeutig
+Ein Konflikt bedeutet, dass Git den vorgesehenen Dateiinhalt nicht eindeutig
 bestimmen kann. Er wird wie folgt bearbeitet:
 
 1. Nicht pushen und zunächst prüfen, ob gerade ein Rebase oder ein Cherry-Pick
@@ -276,19 +276,19 @@ ausgerollten Workflowdateien nicht selbst.
 ### Benötigte Git-Funktionen
 
 Die Bezeichnungen der Schaltflächen können sich zwischen Versionen der
-Workbench unterscheiden. Folgende Git-Funktionen müssen im freigegebenen
+Workbench unterscheiden. Folgende Git-Funktionen müssen im festgelegten
 Bedienweg eindeutig erkennbar sein:
 
 | Anwendungsfall | Git-Funktion beziehungsweise Befehlsentsprechung | Nächstliegende SVN-Funktion |
 |---|---|---|
 | Arbeitsstand und ausgewählte Änderungen prüfen | `status` und `diff` | `svn status` und `svn diff` |
-| GitHub-Stand abrufen und lokalen Branch ohne zusätzlichen Merge aktualisieren | `fetch` und anschließend `pull` beziehungsweise die freigegebene Aktualisierungsfunktion | `svn update` |
+| GitHub-Stand abrufen und lokalen Branch ohne zusätzlichen Merge aktualisieren | `fetch` und anschließend `pull` beziehungsweise die festgelegte Aktualisierungsfunktion | `svn update` |
 | Stage-Branch auswählen | `switch` beziehungsweise die Branchauswahl | `svn switch <URL>` |
 | Dateien auswählen, Commit erzeugen und übertragen | `add`, `commit` und `push` | `svn add` und `svn commit`. Der Commit überträgt die Änderung zugleich |
 | Commit-Historie, vollständige SHA und konkrete Änderungen prüfen | `log` und `show` | `svn log` und `svn diff -c <Revision>` |
 | Letzten lokalen, noch nicht gepushten Commit ergänzen oder seine Nachricht korrigieren | `commit --amend`, nur vor dem Push, da dabei eine neue Commit-SHA entsteht | Keine direkte Entsprechung, weil ein SVN-Commit bereits veröffentlicht ist |
 | Ausgewählten Commit in die nächste Stage übernehmen und Konflikte behandeln | `cherry-pick`, nach der geprüften Auflösung fortsetzen oder den Vorgang vollständig abbrechen | `svn merge -c <Revision> <URL>`. Konflikte werden vor dem anschließenden `svn commit` in der Arbeitskopie aufgelöst |
-| Release-Tag auf einem bestätigten Commit anlegen, einzeln pushen und bei Bedarf wieder löschen | `tag` sowie gezielter Push oder Löschung der betreffenden Tag-Referenz. Die konkrete Bedienung wird praktisch abgenommen | `svn copy <Quell-URL> <Tag-URL>` beziehungsweise `svn delete <Tag-URL>`. Ein SVN-Tag ist ein Repositorypfad |
+| Release-Tag auf einem Commit anlegen, einzeln pushen und bei Bedarf wieder löschen | `tag` sowie gezielter Push oder Löschung der betreffenden Tag-Referenz. Die konkrete Bedienung wird praktisch abgenommen | `svn copy <Quell-URL> <Tag-URL>` beziehungsweise `svn delete <Tag-URL>`. Ein SVN-Tag ist ein Repositorypfad |
 | Inzwischen fortgeschrittenen Remote-Branch mit eigenen, noch nicht gepushten Commits zusammenführen | `fetch`, danach kontrolliertes `rebase` auf den Remote-Branch. Konflikte auflösen und mit `rebase --continue` fortfahren oder mit `rebase --abort` abbrechen | `svn update` integriert lokale, noch nicht committete Änderungen. Lokale SVN-Commits gibt es nicht |
 | Noch nicht committete Arbeit vor einem Branchwechsel vorübergehend beiseitelegen | `stash push` und später `stash pop`. Danach die wiederhergestellten Änderungen vollständig prüfen | Keine direkte, durchgängig verfügbare Standardentsprechung |
 | Lokale Änderung, lokalen Commit oder gepushten Commit zurücknehmen | je nach Zustand `restore`, `reset` oder `revert` wie im Abschnitt [Änderung oder Commit zurücknehmen](#änderung-oder-commit-zurücknehmen) beschrieben | Lokal `svn revert`. Eine veröffentlichte Änderung wird durch umgekehrten Merge und anschließenden `svn commit` korrigiert |
@@ -319,7 +319,7 @@ Der Standardablauf für die Weitergabe zwischen den Branches ist:
 2. Den Zielbranch auschecken und nach dem Abschnitt
    [Lokales Repository vor der Arbeit aktualisieren](#lokales-repository-vor-der-arbeit-aktualisieren)
    auf den aktuellen GitHub-Stand bringen.
-3. Die fachlich freigegebenen Quell-Commits auswählen und, falls Abhängigkeiten
+3. Die fachlich vorgesehenen Quell-Commits auswählen und, falls Abhängigkeiten
    bestehen, ihre Reihenfolge festlegen.
 4. Alle ausgewählten Commits einzeln und in der festgelegten Reihenfolge per
    Cherry-Pick übernehmen.
@@ -486,7 +486,7 @@ Mandantenkürzel wird dagegen abgelehnt.
 Die technische Übergabe benötigt die ISPW-Instanz, das Subsystem, das
 Assignment und den JCL-Stage-Code für das CodePipeline-`LEVEL`. ISPW-Instanz,
 Assignment und Stage-Code werden in `.github/config.json` versioniert und nur
-bei einer fachlich bestätigten Änderung der Zuordnung angepasst. Das Beispiel
+bei einer fachlich spezifizierten Änderung der Zuordnung angepasst. Das Beispiel
 der FI lautet:
 
 ```json
@@ -553,7 +553,7 @@ Test oder `P` für Produktion. Zugangsdaten gehören weiterhin nicht in
 Eine Änderung an `ispw`, `assignment` oder `stage` verändert die
 spätere technische Übergabe. Sie ist deshalb keine gewöhnliche Änderung an
 einer Briefressource, aber ausdrücklich zulässig, wenn sich die fachlich
-bestätigte Mandantenzuordnung ändert. Die Änderung erfolgt versioniert durch
+spezifizierte Mandantenzuordnung ändert. Die Änderung erfolgt versioniert durch
 den dafür berechtigten Verantwortlichenkreis und wird mit den Mandanten- und
 Betriebsverantwortlichen abgestimmt. Normale Workbench-Pushes dürfen
 `.github/config.json` nicht verändern. GitHub schützt die Datei mit einer eigenen
@@ -574,7 +574,7 @@ erneut. Warnungen zum Projekt-Referenzstand ändern den erfolgreichen Status
 
 Für jede neue Linie werden drei Branches im Format `Rnnn/Entwicklung`,
 `Rnnn/Abnahme` und `Rnnn/Bereitstellung` angelegt. Ausgangspunkt ist der
-fachlich bestätigte letzte Release-Tag der bisherigen Linie.
+letzte Release-Tag der bisherigen Linie.
 
 Das zentrale Automatisierungsteam ergänzt in
 [`config/releaselinien.json`](../../mtext-actions/config/releaselinien.json)
@@ -605,7 +605,7 @@ passende neue Branch der Stage.
 
 1. In der M/Text Workbench prüfen, dass der aktuelle
    `<Releaselinie>/Entwicklung` geöffnet ist. Für länger laufende oder
-   gemeinsam bearbeitete Änderungen kann – nach Freigabe dieses Bedienwegs –
+   gemeinsam bearbeitete Änderungen kann – wenn dieser Bedienweg vorgesehen ist –
    ein Feature-Branch verwendet werden.
 2. Die fachlich vorgesehenen Änderungen an den Briefressourcen durchführen.
 3. Nur die vorgesehenen Änderungen für den Commit auswählen und eine
@@ -614,14 +614,14 @@ passende neue Branch der Stage.
 5. In GitHub unter **Actions → Sync M/Text resources** den durch den Push
    ausgelösten Lauf kontrollieren.
 
-Der Push startet die Synchronisation des exakten Commits mit dem aus
+Der Push startet die Synchronisation des Commits mit dem aus
 Releaselinie und Stage zentral ermittelten M/Text-Ziel. Für `R261` sind dies
 beispielsweise `en01e` in Entwicklung und `en01a` in Abnahme. Ein erfolgreicher
 Lauf endet mit `ADAPTER_ACCEPTED`.
 
 Nach mehreren kurz aufeinanderfolgenden Pushes ist in GitHub zu prüfen, dass
 der letzte erfolgreiche Sync-Lauf den aktuellen Commit des Stage-Branches
-verarbeitet hat. Maßgeblich ist der gewünschte vollständige Zielstand, nicht
+verarbeitet hat. Maßgeblich ist der vollständige Zielstand, nicht
 die erfolgreiche Verarbeitung jedes zwischenzeitlichen Commits.
 
 ## 8. Stand zur Abnahme weitergeben
@@ -629,7 +629,7 @@ die erfolgreiche Verarbeitung jedes zwischenzeitlichen Commits.
 1. Die in Entwicklung erfolgreich geprüften Commits ermitteln.
 2. Den aktuellen Zielbranch `<Releaselinie>/Abnahme` auschecken und
    aktualisieren.
-3. Die freigegebenen Commits per Cherry-Pick aus
+3. Die ausgewählten Commits per Cherry-Pick aus
    `<Releaselinie>/Entwicklung` übernehmen.
 4. Die neu entstandenen Commits und ihre Änderungen kontrollieren und den
    Abnahmebranch einmal ohne Force-Push pushen.
@@ -642,7 +642,7 @@ Ziel-Commits. Er baut noch kein Mainframe-Paket.
 
 ## 9. Ausgewählte Änderungen bereitstellen
 
-1. In GitHub die fachlich freigegebenen Commits aus Abnahme bestimmen und,
+1. In GitHub die für die Bereitstellung vorgesehenen Commits aus Abnahme bestimmen und,
    falls Abhängigkeiten bestehen, ihre Reihenfolge festhalten.
 2. Den aktuellen Zielbranch `<Releaselinie>/Bereitstellung` auschecken und
    aktualisieren.
@@ -658,8 +658,8 @@ pushen.
 
 ## 10. FULL- oder DELTA-Lieferung auslösen
 
-Vor dem Taggen müssen Releaselinie, Mandant, gewünschter Lieferungstyp und der
-exakte Commit auf `<Releaselinie>/Bereitstellung` fachlich bestätigt sein.
+Vor dem Taggen müssen Releaselinie, Mandant, Lieferungstyp und der Commit auf
+`<Releaselinie>/Bereitstellung` feststehen.
 
 - `Rnnn.100` erzeugt je nicht ausgeschlossenem Projekt ein F-Paket mit dem
   vollständigen Stand und zusätzlich ein leeres D-Paket mit leerem
@@ -676,10 +676,10 @@ nicht verwendet:
 
 1. Den aktuellen Branch `<Releaselinie>/Bereitstellung` auschecken und den
    neuesten GitHub-Stand abrufen.
-2. Die vollständige SHA des bestätigten Ziel-Commits erneut vergleichen.
+2. Die vollständige SHA des Ziel-Commits erneut vergleichen.
 3. Den neuen Tag, beispielsweise `R261.108`, genau auf diesem Commit anlegen.
 4. Ausschließlich diesen Tag nach GitHub pushen.
-5. In GitHub prüfen, dass der Tag auf die bestätigte Commit-SHA zeigt und genau
+5. In GitHub prüfen, dass der Tag auf die Commit-SHA zeigt und genau
    einen Lauf von **Build and publish release** gestartet hat.
 
 Das Pushen des Git-Tags ist die fachliche Freigabe. Es startet den Paketbau und
@@ -737,9 +737,9 @@ Branch erreichbar ist. Das Zielsystem wird aus dem Branch abgeleitet.
 Ein Wiederanlauf eines älteren Sync-Laufs kann einen inzwischen neueren
 M/Text-Zielstand wieder durch den vollständigen Stand des älteren Commits
 ersetzen. Vor **Re-run jobs** oder **Run workflow** müssen deshalb der
-angegebene Commit, der aktuelle Branch-Commit und der gewünschte Zielstand
+angegebene Commit, der aktuelle Branch-Commit und der Zielstand
 verglichen werden. Ist der Branch inzwischen weitergelaufen, wird nicht der
-alte Lauf wiederholt, sondern ausschließlich der aktuell gewünschte Commit
+alte Lauf wiederholt. Der Commit für den neuen Lauf wird erneut festgelegt und
 kontrolliert synchronisiert.
 
 ### Release-Lauf wiederholen

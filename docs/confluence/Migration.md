@@ -3,7 +3,7 @@
 Dieses Runbook ist die Arbeitsanleitung für zwei getrennte Vorhaben: den
 nichtproduktiven Testabzug und den späteren produktiven Cutover. Beide
 verwenden dasselbe wiederholbare Migrationsverfahren. Der Testabzug ändert das
-führende System nicht. Erst der freigegebene Cutover schaltet von SVN und
+führende System nicht. Erst der beschlossene Cutover schaltet von SVN und
 Jenkins auf Git und GitHub Actions um.
 
 Ergänzende Dokumente:
@@ -22,7 +22,7 @@ Test-Parallelbetrieb. Jenkins und SVN bleiben währenddessen produktiv. Der
 Teststand wird nicht laufend mit SVN abgeglichen.
 
 Für den ab Januar 2027 vorgesehenen Cutover wird nach einem Änderungsfreeze der
-freigegebene SVN-Endstand mit demselben abgenommenen Verfahren nach Git
+für die Produktivsetzung vorgesehene SVN-Endstand mit demselben abgenommenen Verfahren nach Git
 übertragen und geprüft. Während der Umschaltung liefert nur eines der beiden
 Systeme produktiv.
 
@@ -39,14 +39,14 @@ besetzt:
 |---|---|
 | Cutover-Leitung | Ablauf koordinieren, Go-/No-Go und Abschluss protokollieren |
 | Migrationsteam | SVN-Abzug, Git-Import und technische Importnachweise erstellen |
-| Zentrales Automatisierungsteam | Freigegebene Version von `mtext-actions`, Workflows und technische Prüfungen verantworten |
+| Zentrales Automatisierungsteam | Version von `mtext-actions`, Workflows und technische Prüfungen verantworten |
 | Technischer Konfigurationskreis | Mandantenkonfiguration und Releaselinienzuordnung freigeben |
 | Mandanten-Release-Team | Bereitstellungsbranches, Release-Tags und Release-Läufe je Mandant prüfen |
 | M/Text- und Mainframe-Betrieb | Zielzugriffe, technische Annahme und fachliche Zielkontrolle bestätigen |
 
 Jeder Migrationslauf erhält ein Protokoll mit verantwortlicher Person, Beginn
 und Ende, SVN-Quelle und -Revision, Version des Migrationsverfahrens,
-Ziel-Repository, freigegebener Version von `mtext-actions`, Ergebnis der
+Ziel-Repository, verwendetem `mtext-actions`-Commit, Ergebnis der
 Prüfungen und getroffener Fortsetzungsentscheidung.
 
 ## 2. Voraussetzungen und Go-/No-Go
@@ -61,7 +61,7 @@ müssen zusätzlich alle aktivierungsrelevanten Punkte aus
 - Die Ziel-Repositories, die Branches `Rnnn/Entwicklung`, `Rnnn/Abnahme` und
   `Rnnn/Bereitstellung` sowie der vorgesehene Default Branch sind eingerichtet.
 - Die zentrale Aktualisierungsprüfung bestätigt für alle Trigger-Workflows
-  dieselbe unveränderliche, freigegebene Version von `mtext-actions`.
+  denselben unveränderlichen Commit von `mtext-actions`.
   Technische Platzhalter oder bewegliche Referenzen sind nicht vorhanden. Der
   abschließende Lauf des Mandanten-Aktualisierungsworkflows erzeugt keine
   neuen Commits und endet mit einer erfolgreichen Abschlussprüfung.
@@ -111,9 +111,9 @@ Ersatz für eine Korrektur des wiederholbaren Migrationsverfahrens.
 | offen | SVN-Quellen festlegen | Repository-URL, Pfad und exakte Revision sind je Ziel-Repository dokumentiert |
 | offen | Branchmatrix erstellen | Die SVN-Quellen für Entwicklung, Abnahme und Bereitstellung jeder aktiven Releaselinie sind eindeutig den Git-Branches zugeordnet |
 | offen | Projektmatrix beim Abzug bestätigen | Der tatsächliche Importstand wird mit dem im Zielbild dokumentierten aktuellen Referenzstand aus Projektverzeichnissen, Fragmentnamen und Mandantenkürzeln verglichen. Abgeleitete Projektcodes müssen eindeutig sein. Abweichungen werden fachlich bewertet und aktualisieren bei Bestätigung den Referenzstand. |
-| erforderlich | Release-Basen festlegen | Je aktiver Releaselinie sind der benötigte freigegebene `.100`-Tag und alle weiterhin benötigten freigegebenen Folgetags benannt |
+| erforderlich | Release-Basen festlegen | Je aktiver Releaselinie sind der benötigte `.100`-Tag und alle weiterhin benötigten Folgetags benannt |
 | offen | Tagnamen normalisieren | Beispielsweise wird `R260.101_MText` zu `R260.101`. Jede Zuordnung nennt Quelltag, Zieltag und Ziel-Commit |
-| offen | Nicht freigegebene Stände ausschließen | Irrtümliche Tags, `Verbunden mit Bereitstellung*.txt`, Backup-/Fusion-Sonderstände und andere nicht freigegebene Marker werden nicht als Releases übernommen |
+| offen | Nicht zu übernehmende Stände ausschließen | Irrtümliche Tags, `Verbunden mit Bereitstellung*.txt`, Backup-/Fusion-Sonderstände und andere nicht als Releases vorgesehene Marker werden nicht übernommen |
 | offen | Projektausschlüsse festlegen | Testdatenprojekte dürfen in Git liegen, werden aber über `excluded_projects` von Synchronisation und Lieferung ausgeschlossen |
 | separate Aufgabe | SVN-Autoren zuordnen | Bestehende SVN-Namen sind eindeutig Git-Identitäten zugeordnet |
 | offen | SVN-Eigenschaften behandeln | `svn:externals`, EOL, Keywords, executable, leere Verzeichnisse, Mergeinfo und große Dateien sind inventarisiert und ihre Behandlung dokumentiert |
@@ -126,7 +126,7 @@ stoppt den Import.
 ### Mandantenkonfiguration erzeugen
 
 Für jedes Ziel-Repository wird eine `.github/config.json` mit mindestens folgenden
-fachlich bestätigten Werten erzeugt und durch `validate-config` geprüft:
+fachlich spezifizierten Werten erzeugt und durch `validate-config` geprüft:
 
 - `kuerzel`,
 - `ispw` mit `T` oder `P`,
@@ -148,11 +148,11 @@ Der Testabzug ist je Ziel-Repository erst abgenommen, wenn mindestens folgende
 Nachweise vorliegen:
 
 - SVN-Quelle und -Revision sowie Git-Ziel-Commit sind eindeutig verbunden.
-- Alle vorgesehenen Stage-Branches existieren und zeigen auf die bestätigten
+- Alle vorgesehenen Stage-Branches existieren und zeigen auf die festgelegten
   Stände.
 - Projekt- und Dateibestand stimmen nach den dokumentierten EOL-, Keyword- und
   Eigenschaftsbehandlungen mit der Quelle überein. Abweichungen sind erklärt
-  und freigegeben.
+  und dokumentiert.
 - Jeder importierte Release-Tag besitzt das Format `Rnnn.nnn`, zeigt auf den
   dokumentierten Commit und ist vom Bereitstellungsbranch seiner Releaselinie
   erreichbar.
@@ -174,11 +174,11 @@ Nachweise vorliegen:
 ## 4. Finalen Import durchführen
 
 1. Das vereinbarte Änderungsfreeze für den Jenkins-/SVN-Prozess aktivieren.
-2. Zeitpunkt, letzte freigegebene SVN-Revision und ausstehende Lieferungen
+2. Zeitpunkt, letzte SVN-Revision und ausstehende Lieferungen
    protokollieren. Laufende Jenkins-Jobs kontrolliert beenden.
 3. Den wiederherstellbaren SVN-Ausgangsstand und die vorhandene
    GitHub-Konfiguration sichern.
-4. Den freigegebenen SVN-Endstand mit derselben versionierten und im
+4. Den SVN-Endstand mit derselben versionierten und im
    Testabzug abgenommenen Migrationslogik importieren.
 5. `.github/config.json`, Stage-Branches, Default Branch, Projekte, Dateien und
    Release-Tags anhand der Nachweise aus Kapitel 3 prüfen.
@@ -187,7 +187,7 @@ Nachweise vorliegen:
 7. Einen für den Import benötigten zeitlich begrenzten Bypass protokollieren
    und nach dem Import entfernen. Importierte Release-Tags anschließend mit
    ihren vollständigen Ziel-SHAs im Cutover-Protokoll festhalten.
-8. Die vollständige SHA der freigegebenen `mtext-actions`-Version festhalten
+8. Die vollständige SHA des `mtext-actions`-Commits festhalten
    und den Mandanten-Aktualisierungsworkflow damit starten. Er bildet die
    Rollout-Matrix aus der Mandantenzuordnung, den aktiven Releaselinien und den
    drei Branchstufen. Ein erneuter Kontrolllauf muss für alle Einträge ohne
@@ -195,7 +195,7 @@ Nachweise vorliegen:
    bestätigen, dass alle Trigger-Workflows dieselbe unveränderliche
    `mtext-actions`-Version verwenden.
 9. Die zweite Go-/No-Go-Entscheidung protokollieren. Bei No-Go bleiben Jenkins
-   und SVN führend und der GitHub-Stand wird nicht produktiv freigegeben.
+   und SVN führend und der GitHub-Stand wird nicht produktiv gesetzt.
 
 ## 5. Führendes System umschalten und prüfen
 
@@ -212,9 +212,10 @@ Nach dem zweiten Go wird in dieser Reihenfolge umgeschaltet:
 5. Einen festgelegten Commit nach `Rnnn/Entwicklung` pushen und sowohl
    `ADAPTER_ACCEPTED` als auch den fachlich richtigen Stand in
    M/Text-Entwicklung bestätigen.
-6. Die freigegebene Änderung per Cherry-Pick nach `Rnnn/Abnahme` übernehmen
-   und dort technische sowie fachliche Synchronisation bestätigen.
-7. Den bestätigten Stand nach `Rnnn/Bereitstellung` übernehmen und nachweisen,
+6. Die für die Abnahme vorgesehene Änderung per Cherry-Pick nach
+   `Rnnn/Abnahme` übernehmen und dort technische sowie fachliche
+   Synchronisation bestätigen.
+7. Den vorgesehenen Stand nach `Rnnn/Bereitstellung` übernehmen und nachweisen,
    dass dieser Push allein keine Lieferung startet.
 8. Die FULL- und DELTA-Smoke-Tests mit vorab benannten Tags ausführen und das
    Build-Ergebnis sowie die automatische Mainframe-Übergabe prüfen.
@@ -235,15 +236,15 @@ Der Cutover wird mindestens bei einem der folgenden Ereignisse angehalten:
 - Ein Pflichtnachweis oder eine erforderliche Bestätigung fehlt.
 - Workflowversion, Ruleset, Environment, Runner der FI, Netzwerkpfad oder Secret ist
   nicht wie abgenommen verfügbar.
-- Der Zielstand in M/Text weicht vom freigegebenen Commit ab.
+- Der Zielstand in M/Text weicht vom verarbeiteten Commit ab.
 - FULL, DELTA, Manifest, JCL oder konfigurierte ISPW-Instanz weichen vom
-  bestätigten Vertrag ab.
+  spezifizierten Vertrag ab.
 - Die Wirkung einer Mainframe-Übergabe ist unklar oder nur teilweise erfolgt.
-- Ein freigegebener Release-Tag wurde verändert oder gelöscht.
+- Ein Release-Tag wurde verändert oder gelöscht.
 
 Vor dem ersten produktiven Git-Commit oder einer externen Wirkung kann nach
 dokumentierter Entscheidung auf Jenkins und das weiterhin unveränderte SVN
-zurückgeschaltet werden. Der nicht freigegebene GitHub-Import wird dabei
+zurückgeschaltet werden. Der nicht produktiv gesetzte GitHub-Import wird dabei
 gesperrt und als fehlgeschlagener Lauf dokumentiert.
 
 Sind nach der Umschaltung bereits neue Git-Commits, für Lieferungen verwendete
@@ -263,20 +264,20 @@ ausgeführt werden.
 ## 7. Cutover abnehmen und abschließen
 
 Der Cutover ist erst abgeschlossen, wenn mindestens folgende Kriterien erfüllt
-und im Cutover-Protokoll bestätigt sind:
+und im Cutover-Protokoll dokumentiert sind:
 
 - Kein GitHub-Workflow benötigt Jenkins oder SVN. Jenkins löst für diesen
   Prozess keine Jobs mehr aus und SVN ist schreibgeschützt.
 - Für jeden Mandanten sind SVN-Endrevision, Git-Ziel-Commit, Branchmatrix,
   Projektbestand, Konfiguration und alle importierten Release-Tags geprüft.
-- Sicherungs-, Sonder- und nicht freigegebene Stände wurden nur im
-  ausdrücklich freigegebenen Umfang übernommen.
+- Sicherungs-, Sonder- und nicht zu übernehmende Stände wurden nur im
+  festgelegten Umfang übernommen.
 - Alle Mandanten-Repositories verwenden laut zentraler Aktualisierungsprüfung
-  dieselbe unveränderliche, freigegebene Version von `mtext-actions`. Weitere
+  denselben unveränderlichen Commit von `mtext-actions`. Weitere
   Actions sind vollständig gepinnt.
 - Rulesets, Environments, Tagberechtigungen, Runner-Zuordnung der FI und
   minimale Berechtigungen sind praktisch wirksam.
-- Pushes nach Entwicklung und Abnahme synchronisieren genau den bestätigten
+- Pushes nach Entwicklung und Abnahme synchronisieren den jeweiligen
   Commit. Ein Push nach Bereitstellung erzeugt ohne Tag keine Lieferung.
 - `.100` erzeugt FULL. Jeder importierte oder neu angelegte DELTA-Tag besitzt
   `.100` als Vorgänger und erzeugt das kumulative DELTA gegen diese Basis.
@@ -286,7 +287,7 @@ und im Cutover-Protokoll bestätigt sind:
   JCL, konfigurierte ISPW-Instanz und unmittelbare Mainframe-Übergabe sind
   erfolgreich geprüft.
 - Fachliche Verantwortliche haben den Zielstand in M/Text und den
-  Mainframe-Endstatus bestätigt.
+  Mainframe-Endstatus nachgewiesen.
 - Gleichzeitige Schreibvorgänge auf dasselbe Ziel werden verhindert. Läufe für
   unterschiedliche Mandanten können wie vorgesehen parallel arbeiten.
 - Protokolle enthalten keine Secrets und alle erforderlichen Nachweise sind

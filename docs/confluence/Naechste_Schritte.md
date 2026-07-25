@@ -33,13 +33,13 @@ Entscheidungen, Rollenbesetzung, Zugangsdatenübergabe und praktische Abnahmen.
 | 1.2 | offen | Repositories anlegen oder übernehmen | <ul><li>`j520730/mtext-actions` und `<oms_team>/mtext-fi` bestehen auf der Zielplattform.</li><li>Nur das Automatisierungsteam hat direkten Zugriff auf `mtext-actions`.</li><li>`mtext-fi` enthält Ressourcen, Mandantenkonfiguration und Trigger-Workflows der FI.</li></ul> |
 | 1.3 | bestätigt | `mtext-actions` gegen den fachlichen Vertrag prüfen | <ul><li>Die Akzeptanztests für `workflow_configuration` und die vier fachlichen CLI-Kommandos sind erfolgreich.</li><li>FULL und DELTA, Artefaktprüfung, JCL, FTP-/JES-Übergabe, Ressourcensynchronisation und Workflowgrenzen sind abgedeckt.</li></ul> |
 | 1.4 | offen | Mandantenspezifische Verantwortliche benennen | <ul><li>Für jeden Mandanten sind die Personen für Ressourcenarbeit, technische Konfiguration und Releases namentlich zugeordnet.</li></ul> |
-| 1.5 | offen | Pflichtangaben für den API-Teil bestätigen | <ul><li>GitHub-Host und Repositoryeigentümer sind festgelegt.</li><li>Team- und Bypass-IDs sind den benannten Verantwortlichen zugeordnet.</li><li>Ausgangs-Commits der Stage-Branches, Actions-Zugriffsebene und technische Leseberechtigung sind dokumentiert und freigegeben.</li></ul> |
+| 1.5 | offen | Pflichtangaben für den API-Teil festlegen | <ul><li>GitHub-Host und Repositoryeigentümer sind festgelegt.</li><li>Team- und Bypass-IDs sind den benannten Verantwortlichen zugeordnet.</li><li>Ausgangs-Commits der Stage-Branches, Actions-Zugriffsebene und technische Leseberechtigung sind dokumentiert.</li></ul> |
 
 ## 2. Runnerangebot der FI bereitstellen und prüfen
 
 | Nr. | Status | Tätigkeit | Ergebnis |
 |---|---|---|---|
-| 2.1 | offen | Runner der FI bereitstellen | <ul><li>Der Runner ist in GitHub verfügbar.</li><li>Sein bestätigtes `runs-on`-Kennzeichen ist in `mtext-actions` als Repositoryvariable `FI_RUNNER_LABEL` hinterlegt.</li></ul> |
+| 2.1 | offen | Runner der FI bereitstellen | <ul><li>Der Runner ist in GitHub verfügbar.</li><li>Sein `runs-on`-Kennzeichen ist in `mtext-actions` als Repositoryvariable `FI_RUNNER_LABEL` hinterlegt.</li></ul> |
 | 2.2 | offen | Einheitliche Laufzeitvorbereitung bestätigen | <ul><li>Alle Workflows verwenden `scripts/runner-preflight.sh` als gemeinsame Laufzeitvorbereitung.</li><li>Die nachfolgenden Workflow-Schritte verwenden den vom Skript bereitgestellten Python-Pfad und müssen die Laufzeit nicht selbst bestimmen.</li></ul> |
 | 2.3 | offen | GHES-Artefakt-Actions prüfen | <ul><li>`upload-artifact` v3.2.2 läuft auf GHES 3.20.4 erfolgreich.</li><li>`download-artifact` v3.1.0 läuft auf GHES 3.20.4 erfolgreich.</li></ul> |
 
@@ -47,8 +47,8 @@ Entscheidungen, Rollenbesetzung, Zugangsdatenübergabe und praktische Abnahmen.
 
 | Nr. | Status | Tätigkeit | Ergebnis |
 |---|---|---|---|
-| 3.1 | offen | Technische Einrichtungsberechtigung hinterlegen | <ul><li>Das Environment `Einrichtung` enthält `WORKFLOW_CONFIGURATION_TOKEN`.</li><li>Die technische Identität kann nur auf `mtext-actions` und die vorgesehenen Mandanten-Repositories zugreifen.</li><li>Der Zugriff auf Mandanten-Repositories ist auf die freigegebenen Branches begrenzt.</li></ul> |
-| 3.2 | offen | API-Teil implementieren und im Testbereich abnehmen | <ul><li>Der API-Teil stellt den freigegebenen Zielzustand eines Test-Repositories her.</li><li>Die anschließende Rückleseprüfung bestätigt den vollständigen Zielzustand.</li><li>Eine Wiederholung erzeugt keine Änderung.</li><li>Secret-Werte werden weder gelesen noch geschrieben.</li></ul> |
+| 3.1 | offen | Technische Einrichtungsberechtigung hinterlegen | <ul><li>Das Environment `Einrichtung` enthält `WORKFLOW_CONFIGURATION_TOKEN`.</li><li>Die technische Identität kann nur auf `mtext-actions` und die vorgesehenen Mandanten-Repositories zugreifen.</li><li>Der Zugriff auf Mandanten-Repositories ist auf die vorgesehenen Branches begrenzt.</li></ul> |
+| 3.2 | offen | API-Teil implementieren und im Testbereich abnehmen | <ul><li>Der API-Teil stellt den festgelegten Zielzustand eines Test-Repositories her.</li><li>Die anschließende Rückleseprüfung bestätigt den vollständigen Zielzustand.</li><li>Eine Wiederholung erzeugt keine Änderung.</li><li>Secret-Werte werden weder gelesen noch geschrieben.</li></ul> |
 | 3.3 | offen | Stage-Branches und Default Branch einrichten | <ul><li>Für `R260`, `R261` und `R270` bestehen jeweils `Entwicklung`, `Abnahme` und `Bereitstellung`.</li><li>`R261/Entwicklung` ist als erster Default Branch eingestellt.</li></ul> |
 | 3.4 | offen | Repositoryübergreifenden Zugriff auf `mtext-actions` einrichten | <ul><li>Nur die vorgesehenen Mandanten-Repositories können die wiederverwendbaren Workflows aus `mtext-actions` aufrufen.</li><li>Der technische Checkout der Python-Implementierung aus `mtext-actions` ist ausschließlich lesend.</li><li>Workflowaufruf und Checkout wurden praktisch geprüft.</li></ul> |
 | 3.5 | offen | Branchschutz für die drei Stages einrichten | <ul><li>Berechtigte Text-Entwickler können nach Entwicklung und Abnahme pushen.</li><li>Nur das Mandanten-Release-Team kann nach Bereitstellung pushen.</li><li>Nicht berechtigte Pushes werden abgewiesen.</li><li>Löschen und Force-Pushes werden auf allen Stage-Branches abgewiesen.</li></ul> |
@@ -68,15 +68,16 @@ erfolgreicher Abschlussprüfung.
 
 | Nr. | Status | Tätigkeit | Ergebnis |
 |---|---|---|---|
-| 4.1 | in Vorbereitung | `Update mandant workflows` im Testbereich abnehmen | <ul><li>Der Lauf verlangt eine vollständige freigegebene `mtext-actions`-SHA.</li><li>Der Vorbereitungsjob prüft den zentralen Stand und erzeugt die gemeinsame Rollout-SHA.</li><li>Jeder Mandanten-Commit enthält ausschließlich Änderungen unter `.github/workflows`.</li><li>Workflowaufruf und Python-Checkout verwenden dieselbe Rollout-SHA.</li><li>Die Diffs werden vor dem Push im Workflow-Log angezeigt.</li><li>Die Abschlussprüfung ist leer, bevor ein Commit gepusht wird.</li><li>Eine Wiederholung für den erreichten Zielzustand erzeugt keinen Commit.</li></ul> |
+| 4.1 | in Vorbereitung | `Update mandant workflows` im Testbereich abnehmen | <ul><li>Der Lauf verlangt die vollständige SHA des `mtext-actions`-Commits.</li><li>Der Vorbereitungsjob prüft die Commit-SHA und erzeugt die gemeinsame Rollout-SHA.</li><li>Jeder Mandanten-Commit enthält ausschließlich Änderungen unter `.github/workflows`.</li><li>Workflowaufruf und Python-Checkout verwenden dieselbe Rollout-SHA.</li><li>Die Diffs werden vor dem Push im Workflow-Log angezeigt.</li><li>Die Abschlussprüfung ist leer, bevor ein Commit gepusht wird.</li><li>Eine Wiederholung für den erreichten Zielzustand erzeugt keinen Commit.</li></ul> |
 | 4.2 | bestätigt | Rollout-Matrix und Batchablauf festlegen | <ul><li>Die Matrix übernimmt die vollständigen GitHub-Namen aus der verbindlichen Mandantenzuordnung.</li><li>Sie kombiniert diese mit den aktiven Releaselinien und den Branchstufen Entwicklung, Abnahme und Bereitstellung.</li><li>Ein manueller Batchstart verarbeitet alle Einträge ausgehend von derselben Rollout-SHA.</li><li>Der Workflow-Lauf weist Ergebnis und Mandanten-Commit je Matrixeintrag nach.</li></ul> |
-| 4.3 | offen | Ersten Batchlauf ausführen | <ul><li>Der Lauf verwendet die freigegebene Ausgangs-SHA.</li><li>Fehlt das feste Runner-Kennzeichen noch, erzeugt der Vorbereitungsjob einmalig einen Commit in `mtext-actions`.</li><li>Die SHA dieses Commits wird als Rollout-SHA an alle Matrixjobs übergeben.</li><li>Alle erreichbaren Mandantenbranches werden auf diese Rollout-SHA aktualisiert.</li></ul> |
+| 4.3 | offen | Ersten Batchlauf ausführen | <ul><li>Der Lauf verwendet die SHA des `mtext-actions`-Commits.</li><li>Der Vorbereitungsjob bestimmt die gemeinsame Rollout-SHA und übergibt sie an alle Matrixjobs.</li><li>Alle erreichbaren Mandantenbranches werden auf diese Rollout-SHA aktualisiert.</li></ul> |
 | 4.4 | offen | Teilweise fehlgeschlagenen Batch wiederholen | <ul><li>Fehler eines Matrixeintrags verhindern nicht die Verarbeitung der übrigen Einträge.</li><li>Die Ursache jedes fehlgeschlagenen Eintrags ist behoben.</li><li>Die Wiederholung verwendet dieselbe Rollout-SHA und erzeugt auf bereits aktuellen Branches keine zusätzlichen Commits.</li></ul> |
 | 4.5 | offen | Rollout abschließend prüfen | <ul><li>Ein erneuter Lauf mit der Rollout-SHA endet für alle Matrixeinträge erfolgreich.</li><li>Der Kontrolllauf erzeugt keinen neuen Mandanten-Commit.</li><li>Alle vorgesehenen Mandantenbranches verwenden dieselbe `mtext-actions`-Version.</li></ul> |
 
-Bei späteren `mtext-actions`-Versionen werden die Schritte 4.3 bis 4.5
-wiederholt. Das Runner-Kennzeichen ist dann bereits fest eingetragen, sodass
-kein zusätzlicher Commit in `mtext-actions` entsteht.
+Die Schritte 4.3 bis 4.5 werden auch bei späteren `mtext-actions`-Versionen
+wiederholt. Falls das Runner-Kennzeichen bei der erstmaligen
+Einrichtung noch nicht im zentralen Workflowstand enthalten ist, übernimmt der
+Vorbereitungsjob es zuvor mit einem Commit in `mtext-actions`.
 
 ## 5. M/Text-Transport entscheiden und abnehmen
 

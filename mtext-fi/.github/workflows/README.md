@@ -78,7 +78,7 @@ Der zentrale Workflow verwendet die folgenden mandantenseitigen Angaben:
 - `target_environment` als feste fachliche Zielstufe Entwicklung oder Abnahme
 - `source_branch`, aus dem Releaselinie und Stufe validiert abgeleitet werden
 - `automation_ref` als zentral gepflegte technische Referenz für den Checkout
-  der freigegebenen Implementierung. Die Einrichtungsautomation hält sie mit
+  des `mtext-actions`-Commits. Die Einrichtungsautomation hält sie mit
   der Version des aufgerufenen Workflows identisch.
 
 Die Sync-Jobs binden kein GitHub Environment. Nur der Publish-Job bindet das

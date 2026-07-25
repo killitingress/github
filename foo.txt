@@ -23,7 +23,7 @@ Warum Cherry-Pick immer nur einen Commit auswählt
 Ein Commit speichert zwar einen vollständigen Repositoryzustand. Beim Cherry-Pick übernimmt Git aber die Änderung, die dieser Commit gegenüber seinem Eltern-Commit eingeführt hat.
 EGit unterstützt dabei tatsächlich die Auswahl eines einzelnen Commits. Das ist für euren Prozess passend:
 Zielbranch auschecken, beispielsweise R261/Abnahme.
-In der History den ersten freigegebenen Commit aus R261/Entwicklung auswählen.
+In der History den ersten ausgewählten Commit aus R261/Entwicklung auswählen.
 Cherry-Pick ausführen.
 Den nächsten Commit auswählen und erneut Cherry-Pick ausführen.
 Bei Abhängigkeiten vom ältesten zum neuesten Commit vorgehen.
@@ -36,7 +36,7 @@ Damit werden beispielsweise B und D übernommen, ohne dass A, C und E automatisc
 | Cherry-Pick | Übernimmt eine fachlich ausgewählte Änderung in die nächste Stage |
 | Merge | Würde die zusammenhängende Historie eines Branches in den aktuellen Branch integrieren |
 | Push | Veröffentlicht die lokal entstandenen Commits oder Tags auf GitHub |
-| Tag-Push | Gibt den bestätigten Bereitstellungsstand zur Lieferung frei |
+| Tag-Push | Startet die Lieferung des getaggten Bereitstellungsstands |
 
 
 7 Mandanten × 3 aktive Releaselinien × 3 Stages

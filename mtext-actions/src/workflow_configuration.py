@@ -16,7 +16,7 @@ from lbs_delivery.config import (
 from lbs_delivery.errors import DeliveryError
 
 
-# Dieses Repository ist die freigegebene Quelle der wiederverwendbaren Workflows.
+# Dieses Repository ist die zentrale Quelle der wiederverwendbaren Workflows.
 AUTOMATION_REPOSITORY = "j520730/mtext-actions"
 # Dieses Kennzeichen markiert die noch ausstehende Festlegung des Runners der FI.
 RUNNER_PLACEHOLDER = "FI_RUNNER_LABEL_TO_BE_SET"
@@ -135,7 +135,7 @@ def _commit(repository: Path, message: str) -> str:
 def prepare_automation_update(
     automation_root: Path,
     runner_label: str,
-    freigegebene_automation_sha: str,
+    automation_sha: str,
 ) -> str:
     """Finalisiert die zentrale Automation und gibt ihre Rollout-SHA zurück."""
 
@@ -145,13 +145,13 @@ def prepare_automation_update(
         or runner_label == RUNNER_PLACEHOLDER
     ):
         raise ValueError(
-            "Runner-Kennzeichen muss ein bestätigter einzeiliger Wert der FI sein"
+            "Runner-Kennzeichen muss ein einzeiliger Wert der FI sein"
         )
     checkout_sha = _git(
         automation_root, "rev-parse", "--verify", "HEAD^{commit}"
     ).stdout.strip()
-    if checkout_sha != freigegebene_automation_sha:
-        raise ValueError("zentraler Checkout entspricht nicht der freigegebenen SHA")
+    if checkout_sha != automation_sha:
+        raise ValueError("zentraler Checkout entspricht nicht dem angegebenen Commit")
 
     automation_changes = _automation_changes(automation_root, runner_label)
     for path, text in automation_changes.items():
