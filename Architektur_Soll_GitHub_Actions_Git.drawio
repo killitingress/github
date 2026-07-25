@@ -37,7 +37,7 @@
         <mxCell id="dev-caller" value="sync-resources.yml&#xa;Trigger-Workflow&#xa;Ziel: Entwicklung" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
           <mxGeometry x="525" y="205" width="205" height="95" as="geometry"/>
         </mxCell>
-        <mxCell id="config-source" value="Änderung an .github/config.json auf jedem Branch&#xa;kuerzel / repository / ispw T|P / subsystem&#xa;hostprofile / excluded_projects" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
+        <mxCell id="config-source" value="Änderung an .github/config.json auf jedem Branch&#xa;kuerzel / ispw T|P&#xa;hostprofile / excluded_projects" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="310" y="325" width="420" height="85" as="geometry"/>
         </mxCell>
         <mxCell id="dev-sync" value="reusable-sync-resources.yml&#xa;Zielstufe Entwicklung&#xa;Checkout: Mandant + gepinnte Automation&#xa;Prüfung von Config, Branch, SHA und Historie&#xa;sync-resources --execute" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
@@ -46,7 +46,7 @@
         <mxCell id="dev-staging" value="Laufbezogenes Staging&#xa;unter RUNNER_TEMP&#xa;vollständiger Projektstand&#xa;Symlinks gesperrt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656" vertex="1" parent="1">
           <mxGeometry x="1120" y="200" width="195" height="110" as="geometry"/>
         </mxCell>
-        <mxCell id="config-validate" value="reusable-validate-config.yml&#xa;.github/config.json + config/releaselinien.json&#xa;frühes Feedback, kein Zielzugriff&#xa;kein Gate; Sync und Release prüfen erneut" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
+        <mxCell id="config-validate" value="reusable-validate-config.yml&#xa;.github/config.json + zentrale Zuordnungen&#xa;frühes Feedback, kein Zielzugriff&#xa;kein Gate; Sync und Release prüfen erneut" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="805" y="340" width="310" height="70" as="geometry"/>
         </mxCell>
         <mxCell id="dev-target" value="M/Text-Entwicklung / serverSync&#xa;Transport vor Integration festlegen:&#xa;PUT an Adapter | Runner-Share |&#xa;Actions-Artefakt herunterladen&#xa;vollständig veröffentlichen, dann synchronisieren&#xa;ADAPTER_ACCEPTED" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">

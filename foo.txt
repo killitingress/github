@@ -37,3 +37,30 @@ Damit werden beispielsweise B und D übernommen, ohne dass A, C und E automatisc
 | Merge | Würde die zusammenhängende Historie eines Branches in den aktuellen Branch integrieren |
 | Push | Veröffentlicht die lokal entstandenen Commits oder Tags auf GitHub |
 | Tag-Push | Gibt den bestätigten Bereitstellungsstand zur Lieferung frei |
+
+
+7 Mandanten × 3 aktive Releaselinien × 3 Stages
+= bis zu 63 Mandantenbranches
+
+Tag R261.108
+  → Releaselinie R261
+  → releaselinien.json: hostprofil FKT
+  → FI-config.json: FKT
+       assignment = LOMS000066
+       stage      = FKTE
+  → JCL:
+       ASSIGNMENT = LOMS000066
+       LEVEL      = FKTE
+
+
+Ein alter Tag bleibt vollständig nachvollziehbar:
+ R261.108 + config.json aus R261.108 + gepinnte mtext-actions-Version
+Damit kann später festgestellt werden, mit welchem Assignment und welchem
+Stage-Code die Lieferung erzeugt wurde (sehr gut).
+Wäre eine zwischen gleichzeitig aktiven Branches problematisch?:
+R261/Bereitstellung: FKT → LOMS000066
+R270/Bereitstellung: FKT → LOMS009999
+Technisch ist das derzeit zulässig. Und es könnte sogar sinnvoll / hilfreich
+oder sogar notwendig sein.
+
+Also zwei Argumente für die aktuelle Umsetzung...

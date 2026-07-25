@@ -277,14 +277,16 @@ mtext-<mandant>/
 ```
 
 Das zentrale Repository enthält die wiederverwendbaren Workflows, die
-gemeinsame Python-Anwendung, die zentrale Releaselinienzuordnung, das
-JCL-Template und die automatisierten Akzeptanztests:
+gemeinsame Python-Anwendung, die zentralen Mandanten- und
+Releaselinienzuordnungen, das JCL-Template und die automatisierten
+Akzeptanztests:
 
 ```text
 mtext-actions/
   .github/
     workflows/
   config/
+    mandanten.json
     releaselinien.json
   scripts/
     runner-preflight.sh
@@ -325,8 +327,7 @@ ist.
 Im Zielbetrieb werden die Mandanten-Repositories und `mtext-actions` als
 eigenständige GitHub-Repositories geführt. Die Mandanten-Repositories
 `mtext-autonom`, `mtext-by`, `mtext-lh`, `mtext-nw`, `mtext-os` und `mtext-sa`
-folgen demselben Muster wie `mtext-fi`. Repository-Owner und ergänzende
-Repositories werden erst dokumentiert, wenn sie fachlich bestätigt sind.
+folgen demselben Muster wie `mtext-fi`.
 
 Vor dem ersten Integrationslauf werden Runner-Kennzeichen und zentrale
 Workflowversion finalisiert. Die noch ausstehenden Einrichtungs- und
@@ -403,6 +404,14 @@ Der manuelle Workflow **Configure workflow files** wird genutzt um die
 Workflow-Trigger eines Mandanten initial zu verdrahten und bei Updates von
 `mtext-actions` aktuell zu halten. Dadurch wird für jeden Mandantenbranch
 eindeutig festgelegt, welche Version der Automatisierung er verwendet.
+
+Da Workflowdateien mit jedem Branch versioniert werden, wirkt ein neuer Commit
+in `mtext-actions` nicht unmittelbar auf bestehende Mandantenbranches. Die
+freigegebene Version muss deshalb über einen Batchlauf auf alle betroffenen
+Mandantenbranches verteilt werden. Der bisherige Einzellauf wird dafür um
+diesen Batchablauf ergänzt. Die Verteilung ist unabhängig davon, wo die
+Mandantenkonfiguration abgelegt ist. Die verbindliche Mandantenzuordnung
+liefert dem Batch die vollständigen GitHub-Namen.
 
 Vor dem ersten Lauf werden der Runner der FI, dessen Repositoryvariable
 `FI_RUNNER_LABEL` sowie das Environment `Einrichtung` mit dem Secret
@@ -616,12 +625,15 @@ Die Datei `.github/config.json` ist ein versionierter Bestandteil des
 Lieferstands und enthält genau einen `mandant`-Block. Dessen Felder haben einen
 klar abgegrenzten Zweck:
 
+Die Datei liegt damit auf jedem Branch und gehört auch zum Stand eines
+Release-Tags. Eine spätere Änderung der Mandantenkonfiguration verändert die
+für einen bestehenden Tag dokumentierte technische Zuordnung nicht
+rückwirkend.
+
 | Feld | Bedeutung und Regel |
 |---|---|
 | `kuerzel` | Bekanntes Mandantenkürzel für Paketnamen und Fragmentprojekte |
-| `repository` | Exakter Name des zugehörigen Mandanten-Repositories |
 | `ispw` | Mandantenspezifische ISPW-Instanz `T` oder `P` |
-| `subsystem` | Mainframe-Subsystem für JCL und CodePipeline |
 | `excluded_projects` | Optionale Liste sichtbarer Projektverzeichnisse, die weder synchronisiert noch paketiert werden |
 | `hostprofile` | Ein oder mehrere frei benannte Hostprofile mit `assignment` und `stage`. `stage` ist einer der CodePipeline-Stage-Codes `FKTE`, `FKTF`, `JURJ`, `JURP`, `SVTS` oder `VPTV` |
 
@@ -629,27 +641,39 @@ Alle anderen sichtbaren Verzeichnisse direkt unter der Repositorywurzel werden
 als Projekte synchronisiert und paketiert. Versteckte Verzeichnisse werden
 ignoriert. Die bestehende JCL verwendet `stage` als CodePipeline-`LEVEL`. Ein
 zusätzlicher Levelwert wird nicht eingeführt. Fachlich bestätigte Änderungen
-der Mandantenzuordnung werden mit der Konfiguration versioniert. Zugangsdaten
-gehören nicht in diese Datei.
+werden in der jeweils zuständigen Konfiguration versioniert. Zugangsdaten
+gehören nicht in `.github/config.json`.
+
+Branchweise unterschiedliche Hostprofile sind technisch möglich. Ob
+`ispw` und `hostprofile` an den Köpfen aller gleichzeitig aktiven Branches
+eines Mandanten übereinstimmen müssen, ist noch fachlich festzulegen.
+`excluded_projects` bleibt davon getrennt, da dieser Wert zum jeweiligen
+Ressourcenstand gehört.
+
+Die zentrale Datei `config/mandanten.json` verbindet jedes vorgesehene
+Mandanten-Repository mit seinem Mandantenkürzel und festen
+Mainframe-Subsystem. Sie verwendet dafür den vollständigen GitHub-Namen mit
+Owner. Der Releaseablauf setzt das Subsystem als `APPLID` und `SUBAPPL` ein.
+Es wird nicht in der branchbezogenen Mandantenkonfiguration gepflegt.
 
 Der aktuelle Referenzstand der verarbeiteten Projekte lautet:
 
 | Repository | Mandantenkürzel | Projekte |
 |---|---|---|
-| `mtext-fi` | `FI` | `Configuration`, `Fonts`, `LOMS_Framework`, `LOMS_Basis`, `LOMS_PKA` |
-| `mtext-autonom` | `IT` | `LOMS_Autonom` |
-| `mtext-by` | `BY` | `LOMS_Basis[BY]`, `LOMS_Autonom[BY]` |
-| `mtext-lh` | `LH` | `LOMS_Basis[LH]`, `LOMS_Autonom[LH]` |
-| `mtext-nw` | `NW` | `LOMS_Basis[NW]`, `LOMS_Autonom[NW]` |
-| `mtext-os` | `OS` | `LOMS_Basis[OS]`, `LOMS_Autonom[OS]` |
-| `mtext-sa` | `SA` | `LOMS_Basis[SA]`, `LOMS_Autonom[SA]` |
+| `<oms_team>/mtext-fi` | `FI` | `Configuration`, `Fonts`, `LOMS_Framework`, `LOMS_Basis`, `LOMS_PKA` |
+| `<oms_team>/mtext-autonom` | `IT` | `LOMS_Autonom` |
+| `<oms_team>/mtext-by` | `BY` | `LOMS_Basis[BY]`, `LOMS_Autonom[BY]` |
+| `<oms_team>/mtext-lh` | `LH` | `LOMS_Basis[LH]`, `LOMS_Autonom[LH]` |
+| `<oms_team>/mtext-nw` | `NW` | `LOMS_Basis[NW]`, `LOMS_Autonom[NW]` |
+| `<oms_team>/mtext-os` | `OS` | `LOMS_Basis[OS]`, `LOMS_Autonom[OS]` |
+| `<oms_team>/mtext-sa` | `SA` | `LOMS_Basis[SA]`, `LOMS_Autonom[SA]` |
 
-Diese Matrix dokumentiert den aktuellen fachlichen Stand, schreibt den
+Diese Matrix dokumentiert den aktuellen fachlichen Projektstand, schreibt den
 Lieferumfang aber technisch nicht fest. Zusätzliche Projekte und ein
 abweichender Repositoryinhalt bleiben verarbeitbar. Die Konfigurationsprüfung
-weist mit einer Warnung auf ein abweichendes Mandantenkürzel sowie fehlende
-oder zusätzliche Projekte hin und beendet den Lauf deswegen nicht mit einem
-Fehler.
+weist mit einer Warnung auf fehlende oder zusätzliche Projekte hin und beendet
+den Lauf deswegen nicht mit einem Fehler. Eine unpassende Kombination aus
+Repository und Mandantenkürzel wird abgelehnt.
 Testdatenprojekte werden nach Git übernommen, aber üblicherweise über
 `excluded_projects` von Synchronisation und Lieferung ausgeschlossen.
 
@@ -667,10 +691,18 @@ ETAPS-Linie und dem zugehörigen Hostprofil. Ihr aktueller Inhalt ist:
 }
 ```
 
+Bei der Synchronisation bestimmt die Releaselinie über `etaps_linie` das
+M/Text-Ziel. Bei einer Release-Lieferung bestimmt sie zunächst den Namen des
+Hostprofils. `assignment` und CodePipeline-`stage` dieses Profils werden
+anschließend aus der Mandantenkonfiguration des getaggten Commits gelesen. So
+ergibt beispielsweise `R261` für die FI über `FKT` die Werte
+`LOMS000066` und `FKTE`.
+
 Vor einer Verteilung oder Lieferung wird die gesamte benötigte Konfiguration
-geprüft. Unbekannte Mandanten, Releaselinien, Zielumgebungen oder zusätzliche
-Konfigurationsfelder führen zu einem Fehler. Abweichungen vom aktuellen
-Projekt-Referenzstand erzeugen ausschließlich Warnungen.
+geprüft. Unbekannte Mandanten, Releaselinien und Zielumgebungen sowie fehlende
+oder ungültige benötigte Konfigurationsfelder führen zu einem Fehler.
+Abweichungen vom aktuellen Projekt-Referenzstand erzeugen ausschließlich
+Warnungen.
 
 ## 10. Release-Lieferarten FULL und DELTA
 
@@ -876,7 +908,7 @@ stellvertretend für die im jeweiligen Lauf berechneten Werte:
   "mandant": "FI",
   "previous_tag": "R261.107",
   "release_tag": "R261.108",
-  "repository": "mtext-fi",
+  "repository": "<oms_team>/mtext-fi",
   "target_sha": "<vollständige Commit-SHA>"
 }
 ```
@@ -892,12 +924,13 @@ an der Mainframe-Ansteuerung sind dadurch sichtbar und unabhängig vom
 Programmcode prüfbar.
 
 Für jede Übergabe werden ausschließlich die fachlich festgelegten Werte in das
-Template eingesetzt. Historisch feste Werte bleiben fest. Nur tatsächlich
-mandantenspezifische Zuordnungen werden aus der Mandantenkonfiguration
-übernommen. Die Werte für ISPW, CodePipeline-Stage, Subsystem, Assignment und
-Mainframe-Member werden beim Rendern geprüft. Unbekannte Template-Marker führen
-vor der Übergabe zu einem Fehler. Zugangsdaten werden weder in die JCL noch in
-die Protokolle geschrieben.
+Template eingesetzt. Historisch feste Werte bleiben fest. Die ISPW-Instanz,
+das Assignment und der CodePipeline-Stage-Code werden aus der
+Mandantenkonfiguration übernommen. Das Subsystem wird aus der zentralen
+Mandantenzuordnung gelesen. Alle eingesetzten Werte und der Mainframe-Member
+werden beim Rendern geprüft. Unbekannte Template-Marker führen vor der
+Übergabe zu einem Fehler. Zugangsdaten werden weder in die JCL noch in die
+Protokolle geschrieben.
 
 Das Paket wird zunächst unter seinem Membernamen in
 `IEA.LOMS.TONICZ` übertragen. Die JCL kopiert diesen Member nach

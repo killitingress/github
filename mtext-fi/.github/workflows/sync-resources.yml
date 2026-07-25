@@ -42,7 +42,7 @@ jobs:
     uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
     with:
       # Workflow und Implementierung verwenden dieselbe freigegebene zentrale Version.
-      repository_name: ${{ github.event.repository.name }}
+      repository_name: ${{ github.repository }}
       commit_sha: ${{ inputs.commit_sha || github.sha }}
       source_branch: ${{ github.event_name == 'push' && github.ref_name || inputs.source_branch }}
       target_environment: Entwicklung
@@ -57,7 +57,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && endsWith(inputs.source_branch, '/Abnahme'))
     uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
     with:
-      repository_name: ${{ github.event.repository.name }}
+      repository_name: ${{ github.repository }}
       commit_sha: ${{ inputs.commit_sha || github.sha }}
       source_branch: ${{ github.event_name == 'push' && github.ref_name || inputs.source_branch }}
       target_environment: Abnahme

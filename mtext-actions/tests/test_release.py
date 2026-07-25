@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from lbs_delivery.errors import DeliveryError, Status
-from lbs_delivery.mainframe import publish_mainframe
+from lbs_delivery.mainframe import publish_mainframe, render_jcl
 from lbs_delivery.manifest import load_and_verify, sha256_file
 from lbs_delivery.release import build_release
 
@@ -30,6 +30,25 @@ class ReleaseTests(unittest.TestCase):
         self.repository = setup_release_repository(self.root)
         self.configuration = load_test_configuration(self.root, self.repository)
 
+    def test_render_jcl_selects_configured_ispw_instance(self) -> None:
+        """Setzt die gewählte ISPW-Instanz in Dataset und Programmaufruf ein."""
+
+        template = (
+            AUTOMATION_ROOT / "templates/mainframe-upload.jcl"
+        ).read_text(encoding="ascii")
+        rendered = render_jcl(
+            template,
+            {
+                "ISPW": "T",
+                "LEVEL": "FKTE",
+                "SUBSYS": "LOMS",
+                "ASSIGNMENT": "LOMS000066",
+            },
+            "FIBASISF",
+        )
+        self.assertIn("DSN=IEA.ISPWT.BOAS.FKTE.TONICZ", rendered)
+        self.assertIn("PARM='ISPT/WZZECIJ'", rendered)
+
     def test_full_delta_and_publish_dry_run(self) -> None:
         """Prüft Archivvertrag, Reproduzierbarkeit, Manifest und gerenderte JCL."""
 
@@ -40,7 +59,7 @@ class ReleaseTests(unittest.TestCase):
             self.configuration,
             repository_root=self.repository,
             output_directory=first,
-            repository_name="mtext-fi",
+            repository_name="<oms_team>/mtext-fi",
             tag="R261.108",
             trigger_sha=target_sha,
         )
@@ -48,13 +67,23 @@ class ReleaseTests(unittest.TestCase):
             self.configuration,
             repository_root=self.repository,
             output_directory=second,
-            repository_name="mtext-fi",
+            repository_name="<oms_team>/mtext-fi",
             tag="R261.108",
             trigger_sha=target_sha,
         )
         first_manifest, packages = load_and_verify(first_manifest_path, first)
         second_manifest, _ = load_and_verify(second_manifest_path, second)
         self.assertEqual(first_manifest, second_manifest)
+        self.assertEqual(first_manifest["repository"], "<oms_team>/mtext-fi")
+        self.assertEqual(
+            first_manifest["jcl"],
+            {
+                "ISPW": "P",
+                "LEVEL": "FKTE",
+                "SUBSYS": "LOMS",
+                "ASSIGNMENT": "LOMS000066",
+            },
+        )
         self.assertEqual(
             sha256_file(first / "FIBASISD.tgz"),
             sha256_file(second / "FIBASISD.tgz"),
@@ -96,7 +125,7 @@ class ReleaseTests(unittest.TestCase):
             self.configuration,
             repository_root=self.repository,
             output_directory=full,
-            repository_name="mtext-fi",
+            repository_name="<oms_team>/mtext-fi",
             tag="R261.100",
             trigger_sha=git(self.repository, "rev-parse", "HEAD"),
         )
@@ -134,7 +163,7 @@ class ReleaseTests(unittest.TestCase):
             self.configuration,
             repository_root=self.repository,
             output_directory=output,
-            repository_name="mtext-fi",
+            repository_name="<oms_team>/mtext-fi",
             tag="R261.108",
             trigger_sha=git(self.repository, "rev-parse", "HEAD"),
         )
@@ -155,7 +184,7 @@ class ReleaseTests(unittest.TestCase):
                 self.configuration,
                 repository_root=self.repository,
                 output_directory=self.root / "invalid-base",
-                repository_name="mtext-fi",
+                repository_name="<oms_team>/mtext-fi",
                 tag="R261.108",
                 trigger_sha=git(self.repository, "rev-parse", "HEAD"),
             )

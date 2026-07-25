@@ -79,6 +79,7 @@ jobs:
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery build-release
           --repository-root source
+          --mandanten automation/config/mandanten.json
           --releaselinien automation/config/releaselinien.json
           --repository-name "$INPUT_REPOSITORY_NAME"
           --tag "$INPUT_RELEASE_TAG"
@@ -92,7 +93,9 @@ jobs:
         env:
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
           INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}
-        run: printf 'artifact_name=%s-%s\n' "$INPUT_REPOSITORY_NAME" "$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+        run: |
+          repository_short="${INPUT_REPOSITORY_NAME##*/}"
+          printf 'artifact_name=%s-%s\n' "$repository_short" "$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
       # Speichert den vollständigen dist-Inhalt ohne zusätzliche Komprimierung
       # als Laufartefakt; fehlende Build-Ausgaben lassen den Job fehlschlagen.

@@ -60,5 +60,6 @@ jobs:
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery validate-config
           --repository-root source
+          --mandanten automation/config/mandanten.json
           --releaselinien automation/config/releaselinien.json
           --repository-name "$INPUT_REPOSITORY_NAME"

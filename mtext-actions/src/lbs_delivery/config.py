@@ -10,9 +10,6 @@ from typing import Any, NamedTuple
 from .errors import DeliveryError, Status
 
 
-# Vorhandene Mandantenkürzel bestimmen Dateinamen und Mainframe-Member.
-MANDANTEN_KUERZEL = {"FI", "BY", "LH", "NW", "OS", "SA", "IT"}
-
 # ISPW-Instanz des Mandanten: T für Test, P für Produktion; steuert JCL und Mainframe-Ziel.
 ISPW_INSTANZEN = {"T", "P"}
 
@@ -21,22 +18,19 @@ CODEPIPELINE_STAGES = {"FKTE", "FKTF", "JURJ", "JURP", "SVTS", "VPTV"}
 
 # aktueller Referenzstand - macht Abweichungen in der Bestückung als Warning sichtbar
 PROJEKTREFERENZ = {
-    "mtext-fi": (
-        "FI",
-        {
-            "Configuration",
-            "Fonts",
-            "LOMS_Framework",
-            "LOMS_Basis",
-            "LOMS_PKA",
-        },
-    ),
-    "mtext-autonom": ("IT", {"LOMS_Autonom"}),
-    "mtext-by": ("BY", {"LOMS_Basis[BY]", "LOMS_Autonom[BY]"}),
-    "mtext-lh": ("LH", {"LOMS_Basis[LH]", "LOMS_Autonom[LH]"}),
-    "mtext-nw": ("NW", {"LOMS_Basis[NW]", "LOMS_Autonom[NW]"}),
-    "mtext-os": ("OS", {"LOMS_Basis[OS]", "LOMS_Autonom[OS]"}),
-    "mtext-sa": ("SA", {"LOMS_Basis[SA]", "LOMS_Autonom[SA]"}),
+    "FI": {
+        "Configuration",
+        "Fonts",
+        "LOMS_Framework",
+        "LOMS_Basis",
+        "LOMS_PKA",
+    },
+    "IT": {"LOMS_Autonom"},
+    "BY": {"LOMS_Basis[BY]", "LOMS_Autonom[BY]"},
+    "LH": {"LOMS_Basis[LH]", "LOMS_Autonom[LH]"},
+    "NW": {"LOMS_Basis[NW]", "LOMS_Autonom[NW]"},
+    "OS": {"LOMS_Basis[OS]", "LOMS_Autonom[OS]"},
+    "SA": {"LOMS_Basis[SA]", "LOMS_Autonom[SA]"},
 }
 
 # Entwicklungs- und Abnahmestage bestimmen serverSync-Pfad und Adapterhost
@@ -51,7 +45,6 @@ class Configuration:
     """Enthält die einmalig gelesenen Werte aller internen Abläufe."""
 
     kuerzel: str
-    repository: str
     ispw: str
     subsystem: str
     projects: dict[str, str]
@@ -60,11 +53,18 @@ class Configuration:
     warnungen: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class MandantStamm:
+    """Verbindet ein Mandanten-Repository mit Kürzel und Mainframe-Subsystem."""
+
+    kuerzel: str
+    subsystem: str
+
+
 class _MandantFields(NamedTuple):
     """Transportiert geprüfte Mandantenfelder zur vollständigen Konfiguration."""
 
     kuerzel: str
-    repository: str
     ispw: str
     subsystem: str
     hostprofile: dict[str, dict[str, str]]
@@ -83,10 +83,47 @@ def _read_json(path: str | Path) -> Any:
         ) from exc
 
 
+def _load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
+    """Lädt die eindeutige Zuordnung mit dem Repository als Zugriffsschlüssel."""
+
+    mandanten = _read_json(path)
+    if not isinstance(mandanten, dict) or not mandanten:
+        raise DeliveryError(
+            Status.VALIDATION_FAILED, "Mandantenzuordnung ist ungültig"
+        )
+
+    zuordnung: dict[str, MandantStamm] = {}
+    for kuerzel, values in mandanten.items():
+        if (
+            not isinstance(kuerzel, str)
+            or not kuerzel
+            or not isinstance(values, dict)
+            or not isinstance(values.get("repository"), str)
+            or not values["repository"]
+            or not isinstance(values.get("subsystem"), str)
+            or not values["subsystem"]
+        ):
+            raise DeliveryError(
+                Status.VALIDATION_FAILED, "Mandantenzuordnung ist ungültig"
+            )
+        repository = values["repository"]
+        if repository in zuordnung:
+            raise DeliveryError(
+                Status.VALIDATION_FAILED, "Mandantenzuordnung ist nicht eindeutig"
+            )
+        zuordnung[repository] = MandantStamm(
+            kuerzel=kuerzel,
+            subsystem=values["subsystem"],
+        )
+    return zuordnung
+
+
 def _read_mandant_configuration(
-    path: str | Path, repository_name: str
+    path: str | Path,
+    mandanten_zuordnung: dict[str, MandantStamm],
+    repository_name: str,
 ) -> _MandantFields:
-    """Validiert die Mandantendatei"""
+    """Validiert die Mandantendatei gegen die zentrale Mandantenzuordnung."""
 
     mandant_configuration = _read_json(path)
     if (
@@ -104,9 +141,7 @@ def _read_mandant_configuration(
 
     try:
         kuerzel = mandant["kuerzel"]
-        repository = mandant["repository"]
         ispw = mandant["ispw"]
-        subsystem = mandant["subsystem"]
         hostprofile = mandant["hostprofile"]
         excluded = mandant.get("excluded_projects", [])
     except (KeyError, TypeError) as exc:
@@ -114,16 +149,15 @@ def _read_mandant_configuration(
             Status.VALIDATION_FAILED, "Konfiguration ist unvollständig"
         ) from exc
 
+    mandant_stammdaten = mandanten_zuordnung.get(repository_name)
     if (
         not isinstance(kuerzel, str)
-        or kuerzel not in MANDANTEN_KUERZEL
-        or repository != repository_name
+        or mandant_stammdaten is None
+        or kuerzel != mandant_stammdaten.kuerzel
     ):
         raise DeliveryError(
             Status.VALIDATION_FAILED, "Mandant passt nicht zum Repository"
         )
-    if not isinstance(subsystem, str) or not subsystem:
-        raise DeliveryError(Status.VALIDATION_FAILED, "Subsystem fehlt")
     if not isinstance(ispw, str) or ispw not in ISPW_INSTANZEN:
         raise DeliveryError(Status.VALIDATION_FAILED, "ISPW-Instanz ist ungültig")
     if not isinstance(excluded, list) or not all(
@@ -144,9 +178,8 @@ def _read_mandant_configuration(
 
     return _MandantFields(
         kuerzel=kuerzel,
-        repository=repository,
         ispw=ispw,
-        subsystem=subsystem,
+        subsystem=mandant_stammdaten.subsystem,
         hostprofile=hostprofile,
         excluded_projects=tuple(excluded),
     )
@@ -193,24 +226,17 @@ def _scan_projects(
     return projects
 
 
-def _reference_warnings(
-    repository: str, kuerzel: str, projects: dict[str, str]
-) -> tuple[str, ...]:
+def _reference_warnings(kuerzel: str, projects: dict[str, str]) -> tuple[str, ...]:
     """Hält den unverbindlichen Projekt-Referenzabgleich aus der Validierung heraus."""
 
     warnungen: list[str] = []
-    referenz = PROJEKTREFERENZ.get(repository)
+    referenz = PROJEKTREFERENZ.get(kuerzel)
     if referenz is None:
         warnungen.append(
-            f"Repository besitzt keinen aktuellen Projekt-Referenzstand: {repository}"
+            f"Mandant besitzt keinen aktuellen Projekt-Referenzstand: {kuerzel}"
         )
     else:
-        referenz_kuerzel, referenz_projekte = referenz
-        if kuerzel != referenz_kuerzel:
-            warnungen.append(
-                "Mandantenkürzel weicht vom aktuellen Referenzstand ab: "
-                f"{repository} erwartet {referenz_kuerzel}, konfiguriert ist {kuerzel}"
-            )
+        referenz_projekte = referenz
         fehlend = sorted(referenz_projekte - projects.keys())
         zusaetzlich = sorted(projects.keys() - referenz_projekte)
         if fehlend:
@@ -248,6 +274,7 @@ def _read_releaselinien(
 
 def load_configuration(
     mandant_path: str | Path,
+    mandanten_path: str | Path,
     releaselinien_path: str | Path,
     *,
     repository_name: str,
@@ -262,22 +289,18 @@ def load_configuration(
     if not mandant_file.is_absolute():
         mandant_file = root / mandant_file
 
-    mandant = _read_mandant_configuration(mandant_file, repository_name)
-    projects = _scan_projects(
-        root, mandant.kuerzel, mandant.excluded_projects
+    mandanten_zuordnung = _load_mandanten_zuordnung(mandanten_path)
+    mandant = _read_mandant_configuration(
+        mandant_file, mandanten_zuordnung, repository_name
     )
-    releaselinien = _read_releaselinien(
-        releaselinien_path, mandant.hostprofile
-    )
+    projects = _scan_projects(root, mandant.kuerzel, mandant.excluded_projects)
+    releaselinien = _read_releaselinien(releaselinien_path, mandant.hostprofile)
     return Configuration(
         kuerzel=mandant.kuerzel,
-        repository=mandant.repository,
         ispw=mandant.ispw,
         subsystem=mandant.subsystem,
         projects=projects,
         hostprofile=mandant.hostprofile,
         releaselinien=releaselinien,
-        warnungen=_reference_warnings(
-            mandant.repository, mandant.kuerzel, projects
-        ),
+        warnungen=_reference_warnings(mandant.kuerzel, projects),
     )

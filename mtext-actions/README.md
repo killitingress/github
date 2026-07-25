@@ -19,6 +19,10 @@ Die Anwendung benötigt nur die Python-Standardbibliothek.
 
 - `cli.py`: Kommandozeile, Ausgabe und Exitcodes
 - `config.py`: Mandanten- und Releaselinienkonfiguration
+- `config/mandanten.json`: vollständige GitHub-Namen, Mandantenkürzel und
+  Mainframe-Subsysteme
+- `config/releaselinien.json`: aktive Releaselinien, ETAPS-Linien und
+  Hostprofile
 - `git.py`: Commit-, Branch-, Tag- und Diff-Abfragen
 - `sync.py`: Staging, `serverSync` und M/Text-Adapter
 - `release.py`: FULL, DELTA, Archive und Informationsdateien

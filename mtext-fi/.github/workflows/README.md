@@ -73,7 +73,7 @@ GitHub-Artefakts.
 
 Der zentrale Workflow verwendet die folgenden mandantenseitigen Angaben:
 
-- `repository_name`: Repository-Identität des Auslösers
+- `repository_name`: vollständiger GitHub-Name des Auslösers mit Owner
 - `commit_sha` beziehungsweise `release_tag` und optional `trigger_sha`
 - `target_environment` als feste fachliche Zielstufe Entwicklung oder Abnahme
 - `source_branch`, aus dem Releaselinie und Stufe validiert abgeleitet werden
@@ -83,4 +83,3 @@ Der zentrale Workflow verwendet die folgenden mandantenseitigen Angaben:
 
 Die Sync-Jobs binden kein GitHub Environment. Nur der Publish-Job bindet das
 Environment `Bereitstellung` und liest dort die Mainframe-Secrets.
-

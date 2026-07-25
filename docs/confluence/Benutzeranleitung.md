@@ -415,7 +415,7 @@ Die Datei `.github/config.json` liegt im Verzeichnis `.github` des
 Mandanten-Repositorys und gehört wie die M/Text-Ressourcen zum versionierten
 Lieferstand. Sie beantwortet drei Fragen:
 
-1. Zu welchem Mandanten und Repository gehört der Stand?
+1. Zu welchem Mandanten gehört der Stand?
 2. Welche Projektverzeichnisse werden ausdrücklich ausgeschlossen?
 3. Welche mandantenspezifischen technischen Zuordnungen gelten für die
    nachgelagerte Übergabe?
@@ -427,14 +427,14 @@ in geschützten GitHub-Einstellungen verwaltet.
 ### Mandantenidentität
 
 ```json
-"kuerzel": "FI",
-"repository": "mtext-fi"
+"kuerzel": "FI"
 ```
 
 `kuerzel` ist das Mandantenkürzel und bildet unter anderem den Anfang
-der historischen Lieferdateinamen. `repository` muss exakt dem Namen des
-auslösenden GitHub-Repositories entsprechen. Dadurch kann eine Konfiguration
-nicht versehentlich in einem anderen Mandanten-Repository verwendet werden.
+der historischen Lieferdateinamen. Der vollständige Name des auslösenden
+GitHub-Repositories einschließlich Owner wird gegen die zentrale
+Mandantenzuordnung geprüft. Dadurch kann eine Konfiguration nicht versehentlich
+in einem anderen Mandanten-Repository verwendet werden.
 
 ### Projektverzeichnisse und Ausschlüsse
 
@@ -466,30 +466,31 @@ Als aktueller fachlicher Referenzstand gelten folgende Projekte:
 
 | Repository | Mandantenkürzel | Projekte |
 |---|---|---|
-| `mtext-fi` | `FI` | `Configuration`, `Fonts`, `LOMS_Framework`, `LOMS_Basis`, `LOMS_PKA` |
-| `mtext-autonom` | `IT` | `LOMS_Autonom` |
-| `mtext-by` | `BY` | `LOMS_Basis[BY]`, `LOMS_Autonom[BY]` |
-| `mtext-lh` | `LH` | `LOMS_Basis[LH]`, `LOMS_Autonom[LH]` |
-| `mtext-nw` | `NW` | `LOMS_Basis[NW]`, `LOMS_Autonom[NW]` |
-| `mtext-os` | `OS` | `LOMS_Basis[OS]`, `LOMS_Autonom[OS]` |
-| `mtext-sa` | `SA` | `LOMS_Basis[SA]`, `LOMS_Autonom[SA]` |
+| `<oms_team>/mtext-fi` | `FI` | `Configuration`, `Fonts`, `LOMS_Framework`, `LOMS_Basis`, `LOMS_PKA` |
+| `<oms_team>/mtext-autonom` | `IT` | `LOMS_Autonom` |
+| `<oms_team>/mtext-by` | `BY` | `LOMS_Basis[BY]`, `LOMS_Autonom[BY]` |
+| `<oms_team>/mtext-lh` | `LH` | `LOMS_Basis[LH]`, `LOMS_Autonom[LH]` |
+| `<oms_team>/mtext-nw` | `NW` | `LOMS_Basis[NW]`, `LOMS_Autonom[NW]` |
+| `<oms_team>/mtext-os` | `OS` | `LOMS_Basis[OS]`, `LOMS_Autonom[OS]` |
+| `<oms_team>/mtext-sa` | `SA` | `LOMS_Basis[SA]`, `LOMS_Autonom[SA]` |
 
 Die Matrix schreibt den Lieferumfang technisch nicht fest. Eine fachlich
 abgestimmte Änderung der Projektstruktur bleibt möglich. Der Config-Check gibt
-ein abweichendes Mandantenkürzel sowie gegenüber diesem Referenzstand fehlende
-oder zusätzliche Projekte im Workflow-Protokoll mit dem Präfix `WARNUNG:` aus.
-Einen ansonsten gültigen Stand verarbeitet er weiter.
+gegenüber diesem Referenzstand fehlende oder zusätzliche Projekte im
+Workflow-Protokoll mit dem Präfix `WARNUNG:` aus. Einen ansonsten gültigen Stand
+verarbeitet er weiter. Eine unpassende Kombination aus Repository und
+Mandantenkürzel wird dagegen abgelehnt.
 
 ### Mandantenspezifische Werte für die technische Übergabe
 
 Die technische Übergabe benötigt die ISPW-Instanz, das Subsystem, das
-Assignment und den JCL-Stage-Code für das CodePipeline-`LEVEL`. Diese Werte
-werden in `.github/config.json` versioniert und nur bei einer fachlich
-bestätigten Änderung der Zuordnung angepasst. Das Beispiel der FI lautet:
+Assignment und den JCL-Stage-Code für das CodePipeline-`LEVEL`. ISPW-Instanz,
+Assignment und Stage-Code werden in `.github/config.json` versioniert und nur
+bei einer fachlich bestätigten Änderung der Zuordnung angepasst. Das Beispiel
+der FI lautet:
 
 ```json
 "ispw": "P",
-"subsystem": "LOMS",
 "hostprofile": {
   "FKT": {
     "assignment": "LOMS000066",
@@ -505,9 +506,24 @@ bestätigten Änderung der Zuordnung angepasst. Das Beispiel der FI lautet:
 | Feld | Bedeutung | Verwendung in der versionierten JCL |
 |---|---|---|
 | `ispw` | ISPW-Instanz des Mandanten: `T` für Test oder `P` für Produktion | wird als `ISPW` unter anderem in Datasetnamen und im Aufruf von `WZZRCJOB` eingesetzt |
-| `subsystem` | Subsystem des Mandanten, für die FI beispielsweise `LOMS` | wird als `SUBSYS` eingesetzt und dort für `APPLID` und `SUBAPPL` verwendet |
 | `assignment` | Assignment des Mandanten für das jeweilige Hostprofil | wird als `ASSIGNMENT` eingesetzt und dort für `PROJNO` verwendet |
 | `stage` | JCL-Stage-Code für das CodePipeline-`LEVEL`, beispielsweise `FKTE` oder `JURP` | wird in den `LEVEL`-Platzhalter eingesetzt und dort unter anderem für `CLVL` und `SLVL` verwendet |
+
+Das Mainframe-Subsystem wird nicht in `.github/config.json` gepflegt. Die
+zentrale Datei
+[`config/mandanten.json`](../../mtext-actions/config/mandanten.json) ordnet es
+dem vollständigen GitHub-Namen und Mandantenkürzel fest zu. Es wird für
+`APPLID` und `SUBAPPL` eingesetzt:
+
+| Repository | Mandantenkürzel | Subsystem |
+|---|---|---|
+| `<oms_team>/mtext-fi` | `FI` | `LOMS` |
+| `<oms_team>/mtext-by` | `BY` | `BYMT` |
+| `<oms_team>/mtext-lh` | `LH` | `LHMT` |
+| `<oms_team>/mtext-nw` | `NW` | `NWMT` |
+| `<oms_team>/mtext-os` | `OS` | `OSMT` |
+| `<oms_team>/mtext-sa` | `SA` | `SAMT` |
+| `<oms_team>/mtext-autonom` | `IT` | `ITMT` |
 
 Der CodePipeline-Elementname wird nicht konfiguriert. Er besteht aus
 Mandantenkürzel, abgeleitetem Projektcode und `F` für FULL oder `D` für DELTA.
@@ -534,7 +550,7 @@ ist für jeden Mandanten verpflichtend und akzeptiert ausschließlich `T` für
 Test oder `P` für Produktion. Zugangsdaten gehören weiterhin nicht in
 `.github/config.json`.
 
-Eine Änderung an `ispw`, `subsystem`, `assignment` oder `stage` verändert die
+Eine Änderung an `ispw`, `assignment` oder `stage` verändert die
 spätere technische Übergabe. Sie ist deshalb keine gewöhnliche Änderung an
 einer Briefressource, aber ausdrücklich zulässig, wenn sich die fachlich
 bestätigte Mandantenzuordnung ändert. Die Änderung erfolgt versioniert durch

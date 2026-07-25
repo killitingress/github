@@ -11,7 +11,13 @@ from pathlib import Path
 from lbs_delivery.cli import main
 from lbs_delivery.errors import Status
 
-from tests.support import RELEASELINIEN, git, setup_repository, write_mandant
+from tests.support import (
+    MANDANTEN,
+    RELEASELINIEN,
+    git,
+    setup_repository,
+    write_mandant,
+)
 
 
 class CliTests(unittest.TestCase):
@@ -32,14 +38,16 @@ class CliTests(unittest.TestCase):
             str(self.repository),
             "--releaselinien",
             str(RELEASELINIEN),
+            "--mandanten",
+            str(MANDANTEN),
             "--repository-name",
-            "mtext-fi",
+            "<oms_team>/mtext-fi",
         ]
 
     def test_validate_config_returns_validation_exit_code(self) -> None:
         """Übersetzt Konfigurationsfehler in Exitcode 2."""
 
-        write_mandant(self.mandant_path, repository="mtext-by")
+        write_mandant(self.mandant_path, kuerzel="BY")
         stderr = io.StringIO()
         with redirect_stdout(io.StringIO()), redirect_stderr(stderr):
             exit_code = main(["validate-config", *self.common])

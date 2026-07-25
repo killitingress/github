@@ -17,6 +17,7 @@ def _add_configuration_arguments(parser: argparse.ArgumentParser) -> None:
     """Ergänzt die drei Kommandos mit gemeinsamer Lieferkonfiguration."""
 
     parser.add_argument("--mandant-config", default=".github/config.json")
+    parser.add_argument("--mandanten", required=True)
     parser.add_argument("--repository-root", default=".")
     parser.add_argument("--releaselinien", required=True)
     parser.add_argument("--repository-name", required=True)
@@ -69,6 +70,7 @@ def run(arguments: argparse.Namespace) -> dict[str, object]:
 
     configuration = load_configuration(
         arguments.mandant_config,
+        arguments.mandanten,
         arguments.releaselinien,
         repository_name=arguments.repository_name,
         repository_root=arguments.repository_root,
@@ -77,7 +79,7 @@ def run(arguments: argparse.Namespace) -> dict[str, object]:
         result = {
             "status": Status.CONFIG_VALIDATED.value,
             "mandanten_kuerzel": configuration.kuerzel,
-            "repository": configuration.repository,
+            "repository": arguments.repository_name,
             "releaselinien": sorted(configuration.releaselinien),
         }
     elif arguments.command == "sync-resources":

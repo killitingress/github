@@ -9,10 +9,7 @@ from pathlib import Path
 
 from lbs_delivery.errors import DeliveryError, Status
 
-from tests.support import (
-    load_test_configuration,
-    setup_repository,
-)
+from tests.support import load_test_configuration, setup_repository
 
 
 class ConfigTests(unittest.TestCase):
@@ -57,26 +54,90 @@ class ConfigTests(unittest.TestCase):
             self.root,
             self.repository,
             mandant_path=self.mandant_path,
-            mandant={"kuerzel": "BY", "repository": "mtext-by"},
-            repository_name="mtext-by",
+            mandant={"kuerzel": "BY"},
+            repository_name="<oms_team>/mtext-by",
         )
         self.assertEqual(
             configuration.projects,
             {"LOMS_Autonom[BY]": "AUTON", "LOMS_Basis[BY]": "BASIS"},
         )
+        self.assertEqual(configuration.subsystem, "BYMT")
         self.assertEqual(configuration.warnungen, ())
 
-    def test_rejects_repository_name_mismatch(self) -> None:
-        """Lehnt ab, wenn der Workflow ein anderes Repository nennt."""
+    def test_rejects_kuerzel_for_other_repository(self) -> None:
+        """Lehnt ein Mandantenkürzel ab, das nicht zum Repository gehört."""
 
         with self.assertRaises(DeliveryError) as context:
             load_test_configuration(
                 self.root,
                 self.repository,
                 mandant_path=self.mandant_path,
-                mandant={"repository": "mtext-by"},
+                mandant={"kuerzel": "BY"},
             )
         self.assertEqual(context.exception.status, Status.VALIDATION_FAILED)
+
+    def test_rejects_unknown_repository(self) -> None:
+        """Lehnt ein Repository ohne zentrale Mandantenzuordnung ab."""
+
+        with self.assertRaises(DeliveryError) as context:
+            load_test_configuration(
+                self.root,
+                self.repository,
+                mandant_path=self.mandant_path,
+                repository_name="<oms_team>/unbekannt",
+            )
+        self.assertEqual(context.exception.status, Status.VALIDATION_FAILED)
+
+    def test_rejects_duplicate_repository_in_mandantenzuordnung(self) -> None:
+        """Lehnt eine mehrdeutige zentrale Repository-Zuordnung ab."""
+
+        mandanten_path = self.root / "mandanten.json"
+        mandanten_path.write_text(
+            json.dumps(
+                {
+                    "FI": {
+                        "repository": "<oms_team>/mtext-fi",
+                        "subsystem": "LOMS",
+                    },
+                    "BY": {
+                        "repository": "<oms_team>/mtext-fi",
+                        "subsystem": "BYMT",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaises(DeliveryError) as context:
+            load_test_configuration(
+                self.root,
+                self.repository,
+                mandant_path=self.mandant_path,
+                mandanten_path=mandanten_path,
+            )
+        self.assertIn("nicht eindeutig", str(context.exception))
+
+    def test_rejects_incomplete_mandantenzuordnung_eintrag(self) -> None:
+        """Lehnt einen zentralen Eintrag ohne Subsystem ab."""
+
+        mandanten_path = self.root / "mandanten.json"
+        mandanten_path.write_text(
+            json.dumps(
+                {
+                    "FI": {
+                        "repository": "<oms_team>/mtext-fi",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaises(DeliveryError) as context:
+            load_test_configuration(
+                self.root,
+                self.repository,
+                mandant_path=self.mandant_path,
+                mandanten_path=mandanten_path,
+            )
+        self.assertIn("ungültig", str(context.exception))
 
     def test_rejects_duplicate_derived_project_code(self) -> None:
         """Lehnt zwei Projekte mit demselben Paket- und Membercode ab."""

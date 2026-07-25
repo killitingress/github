@@ -13,6 +13,8 @@ from lbs_delivery.config import Configuration, load_configuration
 AUTOMATION_ROOT = Path(__file__).resolve().parents[1]
 # Die produktionsnahe Releaselinienzuordnung gehört zum Testvertrag.
 RELEASELINIEN = AUTOMATION_ROOT / "config/releaselinien.json"
+# Die zentrale Mandantenzuordnung liefert Repositoryidentität und Subsystem.
+MANDANTEN = AUTOMATION_ROOT / "config/mandanten.json"
 
 
 def git(repository: Path, *arguments: str) -> str:
@@ -32,9 +34,7 @@ def write_mandant(path: Path, **overrides: object) -> None:
 
     mandant: dict[str, object] = {
         "kuerzel": "FI",
-        "repository": "mtext-fi",
         "ispw": "P",
-        "subsystem": "LOMS",
         "hostprofile": {
             "FKT": {"assignment": "LOMS000066", "stage": "FKTE"},
             "JUR": {"assignment": "LOMS000067", "stage": "JURP"},
@@ -129,9 +129,10 @@ def load_test_configuration(
     repository: Path,
     *,
     mandant_path: Path | None = None,
+    mandanten_path: Path | None = None,
     releaselinien_path: Path | None = None,
     mandant: dict[str, object] | None = None,
-    repository_name: str = "mtext-fi",
+    repository_name: str = "<oms_team>/mtext-fi",
 ) -> Configuration:
     """Schreibt die Mandantenkonfiguration und lädt den Testvertrag."""
 
@@ -139,6 +140,7 @@ def load_test_configuration(
     write_mandant(path, **(mandant or {}))
     return load_configuration(
         path,
+        mandanten_path or MANDANTEN,
         releaselinien_path or RELEASELINIEN,
         repository_name=repository_name,
         repository_root=repository,

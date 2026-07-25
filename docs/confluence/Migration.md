@@ -26,9 +26,11 @@ freigegebene SVN-Endstand mit demselben abgenommenen Verfahren nach Git
 übertragen und geprüft. Während der Umschaltung liefert nur eines der beiden
 Systeme produktiv.
 
-Ziel-Repositories sind `mtext-fi`, `mtext-autonom`, `mtext-by`, `mtext-lh`,
-`mtext-nw`, `mtext-os` und `mtext-sa`. Das Repository `mtext-autonom` führt das
-Mandantenkürzel `IT` und das Projekt `LOMS_Autonom`.
+Ziel-Repositories sind `<oms_team>/mtext-fi`, `<oms_team>/mtext-autonom`,
+`<oms_team>/mtext-by`, `<oms_team>/mtext-lh`, `<oms_team>/mtext-nw`,
+`<oms_team>/mtext-os` und `<oms_team>/mtext-sa`. Das Repository
+`<oms_team>/mtext-autonom` führt das Mandantenkürzel `IT` und das Projekt
+`LOMS_Autonom`.
 
 Für Testabzug und Cutover werden mindestens folgende Rollen namentlich
 besetzt:
@@ -126,11 +128,14 @@ stoppt den Import.
 Für jedes Ziel-Repository wird eine `.github/config.json` mit mindestens folgenden
 fachlich bestätigten Werten erzeugt und durch `validate-config` geprüft:
 
-- `kuerzel` und exakter Repositoryname,
+- `kuerzel`,
 - `ispw` mit `T` oder `P`,
-- Mainframe-`subsystem`,
 - `hostprofile` mit Assignment und gültigem CodePipeline-Stage-Code,
 - ausdrücklich ausgeschlossene Projekte.
+
+Das Mainframe-Subsystem wird nicht in der Mandantenkonfiguration gepflegt. Die
+verbindliche Zuordnung aus vollständigem GitHub-Namen, Mandantenkürzel und
+Subsystem steht in `config/mandanten.json`.
 
 Die zentrale Datei `config/releaselinien.json` ordnet jeder der drei aktiven
 Releaselinien ihre `etaps_linie` und ein im Mandanten vorhandenes `hostprofil`

@@ -11,7 +11,7 @@ name: Configure workflow files
         required: true
         type: string
       mandant_repository:
-        description: Vollständiger Name des Mandanten-Repositories, zum Beispiel j517120/mtext-fi
+        description: Vollständiger Name des Mandanten-Repositories, zum Beispiel <oms_team>/mtext-fi
         required: true
         type: string
       mandant_ref:
