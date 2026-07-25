@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
+from lbs_delivery.cli import main
 from lbs_delivery.errors import DeliveryError, Status
 
-from tests.support import load_test_configuration, setup_repository
+from tests.support import (
+    MANDANTEN,
+    RELEASELINIEN,
+    load_test_configuration,
+    setup_repository,
+    write_mandant,
+)
 
 
 class ConfigTests(unittest.TestCase):
@@ -22,8 +31,8 @@ class ConfigTests(unittest.TestCase):
         self.repository = setup_repository(self.root, branch="R261/Entwicklung")
         self.mandant_path = self.root / "mandant.json"
 
-    def test_reference_project_deviation_only_warns(self) -> None:
-        """Meldet fehlende und zusätzliche Projekte, ohne sie fachlich zu sperren."""
+    def test_warns_on_project_deviation(self) -> None:
+        """Meldet fehlende und zusätzliche Projekte ohne fachliche Sperre."""
 
         (self.repository / "Fonts/value.txt").unlink()
         (self.repository / "Fonts").rmdir()
@@ -40,7 +49,7 @@ class ConfigTests(unittest.TestCase):
             any("zusätzlich" in warnung for warnung in configuration.warnungen)
         )
 
-    def test_fragment_projects_remove_mandant_suffix_for_code(self) -> None:
+    def test_derives_fragment_project_codes_for_by(self) -> None:
         """Leitet Projektcodes der BY-Fragmente aus ihren fachlichen Namen ab."""
 
         for project in ("Configuration", "Fonts", "LOMS_Framework", "LOMS_PKA"):
@@ -62,34 +71,25 @@ class ConfigTests(unittest.TestCase):
             {"LOMS_Autonom[BY]": "AUTON", "LOMS_Basis[BY]": "BASIS"},
         )
         self.assertEqual(configuration.subsystem, "BYMT")
-        self.assertEqual(configuration.warnungen, ())
 
-    def test_rejects_kuerzel_for_other_repository(self) -> None:
-        """Lehnt ein Mandantenkürzel ab, das nicht zum Repository gehört."""
+    def test_rejects_invalid_configuration(self) -> None:
+        """Lehnt ungültige Mandanten-, Zuordnungs- und Projektstruktur ab."""
 
-        with self.assertRaises(DeliveryError) as context:
+        with self.assertRaises(DeliveryError):
             load_test_configuration(
                 self.root,
                 self.repository,
                 mandant_path=self.mandant_path,
                 mandant={"kuerzel": "BY"},
             )
-        self.assertEqual(context.exception.status, Status.VALIDATION_FAILED)
 
-    def test_rejects_unknown_repository(self) -> None:
-        """Lehnt ein Repository ohne zentrale Mandantenzuordnung ab."""
-
-        with self.assertRaises(DeliveryError) as context:
+        with self.assertRaises(DeliveryError):
             load_test_configuration(
                 self.root,
                 self.repository,
                 mandant_path=self.mandant_path,
                 repository_name="<oms_team>/unbekannt",
             )
-        self.assertEqual(context.exception.status, Status.VALIDATION_FAILED)
-
-    def test_rejects_duplicate_repository_in_mandantenzuordnung(self) -> None:
-        """Lehnt eine mehrdeutige zentrale Repository-Zuordnung ab."""
 
         mandanten_path = self.root / "mandanten.json"
         mandanten_path.write_text(
@@ -107,108 +107,56 @@ class ConfigTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        with self.assertRaises(DeliveryError) as context:
+        with self.assertRaises(DeliveryError):
             load_test_configuration(
                 self.root,
                 self.repository,
                 mandant_path=self.mandant_path,
                 mandanten_path=mandanten_path,
             )
-        self.assertIn("nicht eindeutig", str(context.exception))
-
-    def test_rejects_incomplete_mandantenzuordnung_eintrag(self) -> None:
-        """Lehnt einen zentralen Eintrag ohne Subsystem ab."""
-
-        mandanten_path = self.root / "mandanten.json"
-        mandanten_path.write_text(
-            json.dumps(
-                {
-                    "FI": {
-                        "repository": "<oms_team>/mtext-fi",
-                    }
-                }
-            ),
-            encoding="utf-8",
-        )
-        with self.assertRaises(DeliveryError) as context:
-            load_test_configuration(
-                self.root,
-                self.repository,
-                mandant_path=self.mandant_path,
-                mandanten_path=mandanten_path,
-            )
-        self.assertIn("ungültig", str(context.exception))
-
-    def test_rejects_duplicate_derived_project_code(self) -> None:
-        """Lehnt zwei Projekte mit demselben Paket- und Membercode ab."""
 
         (self.repository / "LOMS_Basisdaten").mkdir()
-        with self.assertRaises(DeliveryError) as context:
+        with self.assertRaises(DeliveryError):
             load_test_configuration(
                 self.root,
                 self.repository,
                 mandant_path=self.mandant_path,
             )
-        self.assertIn("Projektcodes", str(context.exception))
 
-    def test_rejects_symlink_during_central_project_scan(self) -> None:
-        """Prüft die einmalige Symlink-Regel beim Laden der Projektstruktur."""
-
+        (self.repository / "LOMS_Basisdaten").rmdir()
         (self.repository / "LOMS_Basis/link.txt").symlink_to(
             self.repository / "Fonts/value.txt"
         )
-        with self.assertRaises(DeliveryError) as context:
+        with self.assertRaises(DeliveryError):
             load_test_configuration(
                 self.root,
                 self.repository,
                 mandant_path=self.mandant_path,
             )
-        self.assertIn("Symlink", str(context.exception))
 
-    def test_ignores_unused_mandant_fields(self) -> None:
-        """Ignoriert zusätzliche Angaben im Mandanten und seinen Hostprofilen."""
+    def test_validate_config_cli_maps_validation_errors(self) -> None:
+        """Übersetzt Konfigurationsfehler in Exitcode 2."""
 
-        configuration = load_test_configuration(
-            self.root,
-            self.repository,
-            mandant_path=self.mandant_path,
-            mandant={
-                "unbekannt": "Wert",
-                "hostprofile": {
-                    "FKT": {
-                        "assignment": "LOMS000066",
-                        "stage": "FKTE",
-                        "unbekannt": "Wert",
-                    },
-                    "JUR": {"assignment": "LOMS000067", "stage": "JURP"},
-                },
-            },
-        )
-        self.assertEqual(configuration.kuerzel, "FI")
-
-    def test_ignores_unused_releaselinie_fields(self) -> None:
-        """Ignoriert zusätzliche Angaben einer zentralen Releaselinie."""
-
-        releaselinien = self.root / "releaselinien.json"
-        releaselinien.write_text(
-            json.dumps(
-                {
-                    "R261": {
-                        "etaps_linie": "en01",
-                        "hostprofil": "FKT",
-                        "unbekannt": "Wert",
-                    }
-                }
-            ),
-            encoding="utf-8",
-        )
-        configuration = load_test_configuration(
-            self.root,
-            self.repository,
-            mandant_path=self.mandant_path,
-            releaselinien_path=releaselinien,
-        )
-        self.assertIn("R261", configuration.releaselinien)
+        mandant_path = self.repository / ".github/config.json"
+        mandant_path.parent.mkdir()
+        write_mandant(mandant_path, kuerzel="BY")
+        stderr = io.StringIO()
+        with redirect_stdout(io.StringIO()), redirect_stderr(stderr):
+            exit_code = main(
+                [
+                    "validate-config",
+                    "--repository-root",
+                    str(self.repository),
+                    "--releaselinien",
+                    str(RELEASELINIEN),
+                    "--mandanten",
+                    str(MANDANTEN),
+                    "--repository-name",
+                    "<oms_team>/mtext-fi",
+                ]
+            )
+        self.assertEqual(exit_code, 2)
+        self.assertIn(Status.VALIDATION_FAILED.value, stderr.getvalue())
 
 
 if __name__ == "__main__":

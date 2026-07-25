@@ -320,9 +320,9 @@ von der Synchronisation und den Releasepaketen ausgeschlossen.
 Im Mandanten-Repository stehen nur kleine Trigger-Workflows. Sie legen fest,
 wann eine Automatisierung startet und welche fachliche Zielstufe sie verwendet.
 Die eigentlichen Arbeitsschritte liegen im Repository `mtext-actions`. Bei der
-Einrichtung (und bei späteren Updates) informiert ein besonderer Workflow die
-Trigger-Workflows darüber, welche Version von `mtext-actions` zu verwenden
-ist.
+Einrichtung und bei späteren Updates trägt der
+Mandanten-Aktualisierungsworkflow die zu verwendende Version von
+`mtext-actions` in alle Trigger-Workflows ein.
 
 Im Zielbetrieb werden die Mandanten-Repositories und `mtext-actions` als
 eigenständige GitHub-Repositories geführt. Die Mandanten-Repositories
@@ -375,7 +375,7 @@ gebunden sind und dessen Schutzregeln erfüllen.
 
 | Environment | Verwendung und Schutz |
 |---|---|
-| `Einrichtung` | Wird ausschließlich vom manuell gestarteten Einrichtungsworkflow in `mtext-actions` gebunden. Es stellt das auf die vorgesehenen Repositories begrenzte technische Token für die Workflowänderungen bereit. |
+| `Einrichtung` | Wird ausschließlich vom manuell gestarteten Mandanten-Aktualisierungsworkflow in `mtext-actions` gebunden. Es stellt das auf die vorgesehenen Repositories begrenzte technische Token für die Workflowänderungen bereit. |
 | `Bereitstellung` | Wird ausschließlich vom Publish-Job gebunden. Nur zulässige Release-Tags dürfen dieses Environment verwenden. Es stellt ausschließlich diesem Job die Mainframe-Secrets bereit. |
 
 Die Mainframe-Zugangsdaten `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER` und
@@ -392,7 +392,7 @@ folgenden technischen Festlegungen:
 |---|---|
 | Zentrale Workflowversion | Jeder Aufruf verwendet die für seinen Rollout festgelegte Version von `mtext-actions`. |
 | Actions-Zugriff | Die Mandanten-Repositories dürfen die wiederverwendbaren Workflows aus `mtext-actions` aufrufen. |
-| Einrichtungsberechtigung | Der Einrichtungsworkflow erhält über das Environment `Einrichtung` das Secret `WORKFLOW_CONFIGURATION_TOKEN`. |
+| Aktualisierungsberechtigung | Der Mandanten-Aktualisierungsworkflow erhält über das Environment `Einrichtung` das Secret `WORKFLOW_CONFIGURATION_TOKEN`. |
 | Runnerangebot der FI | Die Jobs verwenden einen offiziell von der FI bereitgestellten GitHub-Actions-Runner. Das zugehörige `runs-on`-Kennzeichen wird aus dem Runnerangebot der FI übernommen und in den zentralen Workflows fest eingetragen. |
 | Laufzeitvorbereitung | `runner-preflight.sh` ist der gemeinsame Einstieg in die Python-Automatisierung. Es setzt die versionierte Laufzeitvorgabe aus `.python-version` durch und stellt den verwendeten Python-Pfad den folgenden Schritten bereit. Dadurch laufen alle Workflows mit derselben technischen Voraussetzung. |
 | Logs | Ausgaben wiederverwendbarer Workflows sind im Mandanten-Repository sichtbar. |
@@ -400,39 +400,41 @@ folgenden technischen Festlegungen:
 
 ### Reproduzierbare Einrichtung und Aktualisierung
 
-Der manuelle Workflow **Configure workflow files** wird genutzt um die
-Workflow-Trigger eines Mandanten initial zu verdrahten und bei Updates von
-`mtext-actions` aktuell zu halten. Dadurch wird für jeden Mandantenbranch
-eindeutig festgelegt, welche Version der Automatisierung er verwendet.
+Der manuelle Workflow **Update mandant workflows** richtet die
+Workflow-Trigger aller vorgesehenen Mandantenbranches initial ein und hält sie
+bei Updates von `mtext-actions` aktuell. Dadurch wird für jeden
+Mandantenbranch eindeutig festgelegt, welche Version der Automatisierung er
+verwendet.
 
 Da Workflowdateien mit jedem Branch versioniert werden, wirkt ein neuer Commit
 in `mtext-actions` nicht unmittelbar auf bestehende Mandantenbranches. Die
-freigegebene Version muss deshalb über einen Batchlauf auf alle betroffenen
-Mandantenbranches verteilt werden. Der bisherige Einzellauf wird dafür um
-diesen Batchablauf ergänzt. Die Verteilung ist unabhängig davon, wo die
-Mandantenkonfiguration abgelegt ist. Die verbindliche Mandantenzuordnung
-liefert dem Batch die vollständigen GitHub-Namen.
+freigegebene Version wird deshalb über einen Batchlauf auf alle betroffenen
+Mandantenbranches verteilt. Die verbindliche Mandantenzuordnung liefert der
+Matrix die vollständigen GitHub-Namen. Die aktiven Releaselinien werden aus
+`config/releaselinien.json` gelesen und jeweils mit `Entwicklung`, `Abnahme`
+und `Bereitstellung` kombiniert.
 
 Vor dem ersten Lauf werden der Runner der FI, dessen Repositoryvariable
 `FI_RUNNER_LABEL` sowie das Environment `Einrichtung` mit dem Secret
 `WORKFLOW_CONFIGURATION_TOKEN` bereitgestellt. Der Workflow wird in GitHub mit
-drei Angaben gestartet:
+der vollständigen Commit-SHA der freigegebenen `mtext-actions`-Version
+gestartet.
 
-- Commit-SHA der freigegebenen `mtext-actions`-Version,
-- Name des zu pflegenden Mandanten-Repositories,
-- zu aktualisierender Mandantenbranch.
+Der Vorbereitungsjob prüft den zentralen Checkout und finalisiert bei Bedarf
+das feste Runner-Kennzeichen. Anschließend erzeugt er die Matrix und stellt
+allen Einträgen dieselbe Rollout-SHA bereit. Jeder Matrixjob:
 
-Ein Lauf bearbeitet genau diesen einen Mandantenbranch:
+1. checkt genau diese Rollout-SHA und den vorgesehenen Mandantenbranch aus,
+2. bindet Workflowaufruf und Python-Checkout gemeinsam an die Rollout-SHA,
+3. zeigt die Änderungen im Workflow-Log und prüft den vollständigen
+   Zielzustand,
+4. pusht erst danach den geprüften Commit.
 
-1. Er checkt die angegebene `mtext-actions`-SHA und den Mandantenbranch aus und
-   validiert beide Workflowdateisätze vor der ersten Änderung.
-2. Er bindet Workflowaufruf und Python-Checkout des Mandanten gemeinsam an
-   dieselbe `mtext-actions`-SHA.
-3. Er zeigt die Änderungen im Workflow-Log und prüft, dass der Zielzustand
-   vollständig erreicht ist.
-4. Erst danach pusht er die geprüften Commits. Der Mandanten-Commit ändert nur
-   `.github/workflows` und löst wegen seiner Skip-Anweisung keine
-   M/Text-Synchronisation oder Releaseverarbeitung aus.
+Der Mandanten-Commit ändert nur `.github/workflows` und löst wegen seiner
+Skip-Anweisung keine M/Text-Synchronisation oder Releaseverarbeitung aus.
+Fehler eines Matrixeintrags brechen die übrigen Aktualisierungen nicht ab.
+Ein erneuter Lauf ist idempotent und erzeugt auf bereits aktuellen Branches
+keinen zusätzlichen Commit.
 
 Bei der erstmaligen Einrichtung kann das feste Runner-Kennzeichen in
 `mtext-actions` noch fehlen. Dann erzeugt der Lauf einmalig den dafür nötigen
@@ -526,7 +528,7 @@ Python-Code aus `automation/` für die Dateien aus `source/` aus.
 
 | Prozessschritt | Auslöser | Trigger-Workflow | Zentraler Workflow | Python-Kommando | Ergebnis |
 |---|---|---|---|---|---|
-| Workflowdateien einrichten oder `mtext-actions`-Version ausrollen | Manueller Start in `mtext-actions` mit freigegebener vollständiger SHA | keiner | `configure-workflows.yml` | `python -m workflow_configuration` | Zentrale Runnerwerte und Mandanten-Pins auf die gewählte Version geprüft und festgeschrieben |
+| Mandanten-Workflows einrichten oder `mtext-actions`-Version ausrollen | Manueller Batchstart in `mtext-actions` mit freigegebener vollständiger SHA | keiner | `update-mandant-workflows.yml` | `python -m workflow_configuration` | Zentrale Runnerwerte und alle Mandanten-Pins auf dieselbe Rollout-SHA geprüft und festgeschrieben |
 | Mandantenkonfiguration prüfen | Push mit Änderung an `.github/config.json` auf einen Branch | `validate-config.yml` | `reusable-validate-config.yml` | `validate-config` | Konfiguration geprüft |
 | Entwicklung synchronisieren | Push nach `Rnnn/Entwicklung` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync-resources` | Vollständiger Projektstand des Ziel-Commits nach M/Text-Entwicklung synchronisiert |
 | Abnahme synchronisieren | Push eines per Cherry-Pick übernommenen Commits nach `Rnnn/Abnahme` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync-resources` | Vollständiger Projektstand des Ziel-Commits nach M/Text-Abnahme synchronisiert |
@@ -536,8 +538,8 @@ Python-Code aus `automation/` für die Dateien aus `source/` aus.
 
 Die fachlichen Workflows verarbeiten den Stand, den die Benutzer auf dem
 jeweiligen Branch hergestellt haben. Sie schreiben keine Commits, Branches oder
-Tags. Ausschließlich der getrennte Einrichtungsworkflow schreibt die von ihm
-vollständig geprüften technischen Workflowänderungen fest.
+Tags. Ausschließlich der getrennte Mandanten-Aktualisierungsworkflow schreibt
+die von ihm vollständig geprüften technischen Workflowänderungen fest.
 
 ### Trigger in den Mandanten-Repositories
 
@@ -575,7 +577,7 @@ Konfiguration vor dem Zugriff auf externe Systeme erneut.
 
 | Datei | Trigger | Jobs und Abhängigkeiten | Implementierung und Wirkung |
 |---|---|---|---|
-| [`configure-workflows.yml`](../../mtext-actions/.github/workflows/configure-workflows.yml) | Manueller Start über `workflow_dispatch` in `mtext-actions` mit vollständiger freigegebener SHA | Exakten `mtext-actions`-Stand und gewählten Mandantenbranch auschecken → erforderliche Commits vorbereiten → leeren Zielzustand erzwingen → Diffs anzeigen → gegebenenfalls einmaligen zentralen Runner-Commit und anschließend den Mandanten-Commit pushen | Python-Implementierung in `mtext-actions`. Bindet das Environment `Einrichtung`, führt keinen Mandantencode aus und verwendet dessen begrenztes technisches Token ausschließlich für die Workflowdateien. |
+| [`update-mandant-workflows.yml`](../../mtext-actions/.github/workflows/update-mandant-workflows.yml) | Manueller Start über `workflow_dispatch` in `mtext-actions` mit vollständiger freigegebener SHA | Exakten `mtext-actions`-Stand prüfen → gegebenenfalls einmaligen zentralen Runner-Commit pushen → Matrix aus Mandantenzuordnung, aktiven Releaselinien und Branchstufen bilden → jeden Mandantenbranch prüfen und aktualisieren | Python-Implementierung in `mtext-actions`. Bindet das Environment `Einrichtung`, führt keinen Mandantencode aus, verarbeitet Fehler mit `fail-fast: false` weiter und verwendet das begrenzte technische Token für die Workflowdateien. |
 | [`reusable-validate-config.yml`](../../mtext-actions/.github/workflows/reusable-validate-config.yml) | `workflow_call` | Mandanten-Commit auschecken → `mtext-actions` auschecken → Laufzeit vorbereiten → prüfen | `validate-config` |
 | [`reusable-sync-resources.yml`](../../mtext-actions/.github/workflows/reusable-sync-resources.yml) | `workflow_call` | Exakten Mandanten-Commit mit vollständiger Historie auschecken → `mtext-actions` auschecken → Laufzeit vorbereiten → synchronisieren | `sync-resources --execute`. Stellt den vollständigen Zielstand nach dem festgelegten Transportvertrag unter `serverSync` bereit und startet die interne Synchronisation über den M/Text-Adapter |
 | [`reusable-release.yml`](../../mtext-actions/.github/workflows/reusable-release.yml) | `workflow_call` | Job `build` erzeugt das Artefakt. Job `publish` hat `needs: build`, lädt genau dieses Artefakt und bindet das Environment `Bereitstellung` | `build-release`, danach `publish-mainframe --execute`. Automatische Übergabe per FTP/JES nach erfolgreichem Build |
@@ -584,15 +586,15 @@ Konfiguration vor dem Zugriff auf externe Systeme erneut.
 Die wiederverwendbaren Fachworkflows sind nur über `workflow_call` erreichbar.
 Ihre Jobs und der zentrale Testjob verwenden das fest eingetragene
 `runs-on`-Kennzeichen des ausgewählten Runnerangebots der FI. Nur der manuell
-gestartete Einrichtungsworkflow liest dieses Kennzeichen aus der zuvor
-eingerichteten Repositoryvariable `FI_RUNNER_LABEL`, weil er die festen Werte
-erst in die übrigen zentralen Workflowdateien einträgt.
+gestartete Mandanten-Aktualisierungsworkflow liest dieses Kennzeichen aus der
+zuvor eingerichteten Repositoryvariable `FI_RUNNER_LABEL`, weil er die festen
+Werte erst in die übrigen zentralen Workflowdateien einträgt.
 
 ### Python-Programme und -Kommandos
 
 | Kommando | Aufgerufen durch | Wesentliche Prüfungen und Abhängigkeiten | Ergebnis |
 |---|---|---|---|
-| `python -m workflow_configuration` | `configure-workflows.yml` | Zentraler Checkout entspricht der freigegebenen `mtext-actions`-SHA. Bestätigtes Runner-Kennzeichen. Vollständige Workflow- und Codebezüge. Diffs sind fehlerfrei und die abschließende Einrichtungsprüfung ist leer | Geprüfte lokale Workflow-Commits für `mtext-actions` und den Mandantenbranch. Der Workflow pusht sie anschließend in der erforderlichen Reihenfolge |
+| `python -m workflow_configuration` | `update-mandant-workflows.yml` | Zentraler Checkout entspricht der freigegebenen `mtext-actions`-SHA oder der vorbereiteten Rollout-SHA. Bestätigtes Runner-Kennzeichen. Eindeutige Mandantenzuordnung. Aktive Releaselinien. Vollständige Workflow- und Codebezüge. Diffs sind fehlerfrei und die Abschlussprüfung ist leer | Rollout-Matrix sowie geprüfte lokale Workflow-Commits für `mtext-actions` und jeden Mandantenbranch. Der Workflow pusht sie in der erforderlichen Reihenfolge |
 | `validate-config` | `reusable-validate-config.yml` | Bekanntes Mandantenkürzel, Repositoryidentität, gültige CodePipeline-Stage-Codes, eindeutige Projektcodes und vorhandene Hostprofile der Releaselinien | Status `CONFIG_VALIDATED` |
 | `sync-resources` | `reusable-sync-resources.yml` | Branch und Zielstufe stimmen überein. Vollständige SHA. Checkout entspricht SHA. Commit ist aus dem Remote-Branch erreichbar. Projektbäume enthalten keine Symlinks | Vollständiger Projektstand nach `serverSync`, Adapteraufruf gemäß Transportvertrag, Status `ADAPTER_ACCEPTED` |
 | `build-release` | Job `build` in `reusable-release.yml` | Tagformat und konfigurierte Releaselinie. Tag aus Bereitstellungsbranch erreichbar. Checkout entspricht Tag-SHA. DELTA-Basis `.100`. Projektbäume enthalten keine Symlinks | Reproduzierbare FULL-/DELTA-Archive, Informationsdateien und `manifest.json` mit SHA-256. Status `ARTIFACT_READY` |
@@ -604,7 +606,7 @@ und
 [`cli.py`](../../mtext-actions/src/lbs_delivery/cli.py) gestartet. Die CLI übersetzt
 fachliche Fehler in stabile Statuswerte und Prozess-Exitcodes. Ein von null
 verschiedener Exitcode lässt den jeweiligen GitHub-Job fehlschlagen. Der
-Einrichtungsworkflow startet dagegen das getrennte Modul
+Mandanten-Aktualisierungsworkflow startet dagegen das getrennte Modul
 [`workflow_configuration.py`](../../mtext-actions/src/workflow_configuration.py)
 direkt mit `python -m workflow_configuration`.
 
@@ -612,7 +614,7 @@ direkt mit `python -m workflow_configuration`.
 
 | Bereich | Umsetzung |
 |---|---|
-| Einrichtung | Nur der Einrichtungsworkflow bindet dieses Environment und erhält dessen technisches Schreib-Token. |
+| Einrichtung | Nur der Mandanten-Aktualisierungsworkflow bindet dieses Environment und erhält dessen technisches Schreib-Token. |
 | Bereitstellung | Nur der Publish-Job bindet dieses Environment und erhält dessen Mainframe-Secrets. |
 | Mainframe-Secrets | Ausschließlich `MAINFRAME_FTP_HOST`, `MAINFRAME_FTP_USER` und `MAINFRAME_FTP_PASSWORD` im Publish-Job |
 | Sync-Serialisierung | Concurrency-Gruppe je Repository und Branch. Ein laufender Sync wird nicht aktiv abgebrochen. |
@@ -990,7 +992,7 @@ noch offenen Grenzen wichtig.
 | Zentral gepflegte Automatisierung | Die Trigger-Workflows enthalten nur Auslöser und feste Zielzuordnungen. Die gemeinsame Fachlogik liegt in wiederverwendbaren Workflows und einer Python-Implementierung in `mtext-actions`. Änderungen müssen dadurch nicht je Mandant kopiert werden. |
 | Eindeutige und reproduzierbare Lieferung | Jeder Lauf verarbeitet einen vollständigen Commit-SHA. Das Manifest verbindet Release-Tag, Ziel-Commit und erzeugte Dateien. Gleiche Eingaben erzeugen bytegleiche Archive. Historische Namen, Verzeichnisstrukturen, Löschlisten und JCL-Verträge bleiben erhalten. |
 | Getrennte Verantwortlichkeiten | Mandantenressourcen und -konfiguration, gemeinsame Automatisierung, GitHub-Schutzregeln und Runnerbetrieb haben jeweils einen klaren Eigentümer. |
-| Minimale Berechtigungen und kontrollierte Wirkung | Die fachlichen Workflows erhalten nur Leserechte auf Repositoryinhalte. Die technische Schreibberechtigung ist auf den Einrichtungsworkflow und die vorgesehenen Workflowdateien begrenzt. Zugangsdaten liegen in Environments und stehen erst im berechtigten Job zur Verfügung. |
+| Minimale Berechtigungen und kontrollierte Wirkung | Die fachlichen Workflows erhalten nur Leserechte auf Repositoryinhalte. Die technische Schreibberechtigung ist auf den Mandanten-Aktualisierungsworkflow und die vorgesehenen Workflowdateien begrenzt. Zugangsdaten liegen in Environments und stehen erst im berechtigten Job zur Verfügung. |
 | Geprüfte Build-Publish-Grenze | Der Paketbau ist von der Mainframe-Übergabe getrennt. Das einmal erzeugte Artefakt wird unmittelbar vor der externen Wirkung anhand von Pfad, Größe und SHA-256 geprüft. |
 | Begrenzte technische Angriffsfläche | Die Anwendung verwendet nur die Python-Standardbibliothek, führt Git ohne Shell aus und prüft Symlinks sowie externe Werte an ihren Systemgrenzen. Actions und wiederverwendbare Workflows werden mit vollständigen Commit-SHAs gebunden. |
 | Automatisiert prüfbarer Vertrag | Tests decken Konfiguration, Git-Bezüge, FULL und DELTA, Manifest, JCL, Ressourcensynchronisation, FTP/JES und Workflowgrenzen ab. Stabile Statuswerte unterscheiden die Fehlerklassen. |

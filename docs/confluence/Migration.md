@@ -60,11 +60,11 @@ müssen zusätzlich alle aktivierungsrelevanten Punkte aus
 
 - Die Ziel-Repositories, die Branches `Rnnn/Entwicklung`, `Rnnn/Abnahme` und
   `Rnnn/Bereitstellung` sowie der vorgesehene Default Branch sind eingerichtet.
-- Die zentrale Einrichtungsprüfung bestätigt für alle Trigger-Workflows
+- Die zentrale Aktualisierungsprüfung bestätigt für alle Trigger-Workflows
   dieselbe unveränderliche, freigegebene Version von `mtext-actions`.
   Technische Platzhalter oder bewegliche Referenzen sind nicht vorhanden. Der
-  abschließende Lauf des zentralen Einrichtungsworkflows erzeugt keine neuen
-  Commits und endet mit einer erfolgreichen Abschlussprüfung.
+  abschließende Lauf des Mandanten-Aktualisierungsworkflows erzeugt keine
+  neuen Commits und endet mit einer erfolgreichen Abschlussprüfung.
 - Der repositoryübergreifende Workflowaufruf, der technisch nur lesende
   Checkout der zentralen Implementierung und alle vollständig gepinnten Actions
   funktionieren auf GitHub Enterprise Server 3.20.4.
@@ -72,9 +72,9 @@ müssen zusätzlich alle aktivierungsrelevanten Punkte aus
   `.github/config.json`. Force-Pushes und das Löschen der Stage-Branches sind
   gesperrt.
 - Die Environments `Einrichtung` und `Bereitstellung` sind eingerichtet. Nur
-  der Einrichtungsworkflow erhält die technische Schreibberechtigung. Nur der
-  Publish-Job kann `Bereitstellung` verwenden und dessen Mainframe-Secrets
-  lesen.
+  der Mandanten-Aktualisierungsworkflow erhält die technische
+  Schreibberechtigung. Nur der Publish-Job kann `Bereitstellung` verwenden und
+  dessen Mainframe-Secrets lesen.
 - Die Berechtigungen für Release-Tags und die Rücknahme irrtümlicher Tags sind
   eingerichtet und abgenommen. Ein bei der Korrektur noch laufender Ablauf
   wird abgebrochen.
@@ -188,11 +188,12 @@ Nachweise vorliegen:
    und nach dem Import entfernen. Importierte Release-Tags anschließend mit
    ihren vollständigen Ziel-SHAs im Cutover-Protokoll festhalten.
 8. Die vollständige SHA der freigegebenen `mtext-actions`-Version festhalten
-   und den Einrichtungsworkflow damit für alle Einträge der Rollout-Matrix aus
-   Mandanten-Repository und Branch ausführen. Jeder abschließende Kontrolllauf
-   muss ohne neuen Commit und mit erfolgreicher Abschlussprüfung enden.
-   Zusätzlich bestätigen, dass alle Trigger-Workflows dieselbe
-   unveränderliche `mtext-actions`-Version verwenden.
+   und den Mandanten-Aktualisierungsworkflow damit starten. Er bildet die
+   Rollout-Matrix aus der Mandantenzuordnung, den aktiven Releaselinien und den
+   drei Branchstufen. Ein erneuter Kontrolllauf muss für alle Einträge ohne
+   neuen Commit und mit erfolgreicher Abschlussprüfung enden. Zusätzlich
+   bestätigen, dass alle Trigger-Workflows dieselbe unveränderliche
+   `mtext-actions`-Version verwenden.
 9. Die zweite Go-/No-Go-Entscheidung protokollieren. Bei No-Go bleiben Jenkins
    und SVN führend und der GitHub-Stand wird nicht produktiv freigegeben.
 
@@ -270,7 +271,7 @@ und im Cutover-Protokoll bestätigt sind:
   Projektbestand, Konfiguration und alle importierten Release-Tags geprüft.
 - Sicherungs-, Sonder- und nicht freigegebene Stände wurden nur im
   ausdrücklich freigegebenen Umfang übernommen.
-- Alle Mandanten-Repositories verwenden laut zentraler Einrichtungsprüfung
+- Alle Mandanten-Repositories verwenden laut zentraler Aktualisierungsprüfung
   dieselbe unveränderliche, freigegebene Version von `mtext-actions`. Weitere
   Actions sind vollständig gepinnt.
 - Rulesets, Environments, Tagberechtigungen, Runner-Zuordnung der FI und

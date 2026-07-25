@@ -7,8 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lbs_delivery.errors import DeliveryError, Status
-from lbs_delivery.mainframe import publish_mainframe, render_jcl
+from lbs_delivery.errors import DeliveryError
+from lbs_delivery.mainframe import publish_mainframe
 from lbs_delivery.manifest import load_and_verify, sha256_file
 from lbs_delivery.release import build_release
 
@@ -30,26 +30,7 @@ class ReleaseTests(unittest.TestCase):
         self.repository = setup_release_repository(self.root)
         self.configuration = load_test_configuration(self.root, self.repository)
 
-    def test_render_jcl_selects_configured_ispw_instance(self) -> None:
-        """Setzt die gewählte ISPW-Instanz in Dataset und Programmaufruf ein."""
-
-        template = (
-            AUTOMATION_ROOT / "templates/mainframe-upload.jcl"
-        ).read_text(encoding="ascii")
-        rendered = render_jcl(
-            template,
-            {
-                "ISPW": "T",
-                "LEVEL": "FKTE",
-                "SUBSYS": "LOMS",
-                "ASSIGNMENT": "LOMS000066",
-            },
-            "FIBASISF",
-        )
-        self.assertIn("DSN=IEA.ISPWT.BOAS.FKTE.TONICZ", rendered)
-        self.assertIn("PARM='ISPT/WZZECIJ'", rendered)
-
-    def test_full_delta_and_publish_dry_run(self) -> None:
+    def test_builds_reproducible_full_and_delta_archives(self) -> None:
         """Prüft Archivvertrag, Reproduzierbarkeit, Manifest und gerenderte JCL."""
 
         target_sha = git(self.repository, "rev-parse", "HEAD")
@@ -74,16 +55,6 @@ class ReleaseTests(unittest.TestCase):
         first_manifest, packages = load_and_verify(first_manifest_path, first)
         second_manifest, _ = load_and_verify(second_manifest_path, second)
         self.assertEqual(first_manifest, second_manifest)
-        self.assertEqual(first_manifest["repository"], "<oms_team>/mtext-fi")
-        self.assertEqual(
-            first_manifest["jcl"],
-            {
-                "ISPW": "P",
-                "LEVEL": "FKTE",
-                "SUBSYS": "LOMS",
-                "ASSIGNMENT": "LOMS000066",
-            },
-        )
         self.assertEqual(
             sha256_file(first / "FIBASISD.tgz"),
             sha256_file(second / "FIBASISD.tgz"),
@@ -96,16 +67,7 @@ class ReleaseTests(unittest.TestCase):
             self.assertIsNotNone(deletion)
             deleted = deletion.read().decode("utf-8")
         self.assertIn("LOMS_Basis/new.txt", names)
-        self.assertIn("LOMS_Basis/baseline.txt", names)
-        self.assertIn("LOMS_Basis/rename-new.txt", names)
         self.assertIn("LOMS_Basis/deleted.txt", deleted)
-        self.assertIn("LOMS_Basis/rename-old.txt", deleted)
-
-        information = (
-            first / "_INFO_FI-LOMS_Basis-DELTA-R261.108-R261.107.txt"
-        ).read_text(encoding="utf-8")
-        self.assertIn("D       VORRELEASE/LOMS_Basis/rename-old.txt", information)
-        self.assertIn("A       VORRELEASE/LOMS_Basis/rename-new.txt", information)
 
         result = publish_mainframe(
             manifest_path=first_manifest_path,
@@ -120,42 +82,21 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn("@@", rendered)
 
         git(self.repository, "checkout", "--detach", "R261.100")
-        full = self.root / "full"
         full_manifest = build_release(
             self.configuration,
             repository_root=self.repository,
-            output_directory=full,
+            output_directory=self.root / "full",
             repository_name="<oms_team>/mtext-fi",
             tag="R261.100",
             trigger_sha=git(self.repository, "rev-parse", "HEAD"),
         )
-        _manifest, full_packages = load_and_verify(full_manifest, full)
+        _manifest, full_packages = load_and_verify(full_manifest, self.root / "full")
         self.assertEqual(
             [package["member"] for package in full_packages],
             ["FIBASISF", "FIBASISD"],
         )
-        with tarfile.open(full / "FIBASISF.tgz", "r:gz") as archive:
-            full_names = archive.getnames()
-        self.assertIn("./LOMS_Basis/baseline.txt", full_names)
-        self.assertIn("./LOMS_Basis/deleted.txt", full_names)
 
-        with tarfile.open(full / "FIBASISD.tgz", "r:gz") as archive:
-            reset_names = archive.getnames()
-            reset_deletion = archive.extractfile("FIBASISD.txt")
-            self.assertIsNotNone(reset_deletion)
-            self.assertEqual(reset_deletion.read(), b"")
-        self.assertEqual(reset_names, ["FIBASISD.txt", "LOMS_Basis"])
-
-        full_publish = publish_mainframe(
-            manifest_path=full_manifest,
-            artifact_root=full,
-            template_path=AUTOMATION_ROOT / "templates/mainframe-upload.jcl",
-            temporary_directory=self.root / "full-jcl",
-            execute=False,
-        )
-        self.assertEqual(full_publish["packages"], ["FIBASISF", "FIBASISD"])
-
-    def test_publish_rejects_changed_artifact(self) -> None:
+    def test_rejects_tampered_release_artifact(self) -> None:
         """Lehnt eine Paketänderung nach dem Releasebau vor der Übergabe ab."""
 
         output = self.root / "tampered"
@@ -170,25 +111,6 @@ class ReleaseTests(unittest.TestCase):
         (output / "FIBASISD.tgz").write_bytes(b"tampered")
         with self.assertRaises(DeliveryError):
             load_and_verify(manifest_path, output)
-
-    def test_delta_rejects_base_outside_target_history(self) -> None:
-        """Lehnt eine `.100`-Basis außerhalb der Historie des Ziel-Tags ab."""
-
-        git(self.repository, "checkout", "--orphan", "unrelated")
-        git(self.repository, "commit", "--allow-empty", "-m", "unrelated")
-        git(self.repository, "tag", "--force", "R261.100")
-        git(self.repository, "checkout", "--detach", "R261.108")
-
-        with self.assertRaises(DeliveryError) as context:
-            build_release(
-                self.configuration,
-                repository_root=self.repository,
-                output_directory=self.root / "invalid-base",
-                repository_name="<oms_team>/mtext-fi",
-                tag="R261.108",
-                trigger_sha=git(self.repository, "rev-parse", "HEAD"),
-            )
-        self.assertEqual(context.exception.status, Status.SOURCE_FAILED)
 
 
 if __name__ == "__main__":

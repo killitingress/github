@@ -20,9 +20,9 @@ Ergänzende Dokumente:
 - [Soll-Architektur als Ablaufdiagramm](../../Architektur_Soll_GitHub_Actions_Git.drawio)
 
 Wiederholbare technische Einstellungen werden nicht als Klickanleitung
-abgearbeitet. Der Workflow **Configure workflow files** richtet die
-Workflowdateien ein und aktualisiert sie bei späteren Rollouts. Der noch offene
-API-Teil übernimmt die übrigen GitHub-Einstellungen. Manuell bleiben fachliche
+abgearbeitet. Der Workflow **Update mandant workflows** aktualisiert die
+Workflowdateien aller vorgesehenen Mandantenbranches. Der noch offene API-Teil
+übernimmt die übrigen GitHub-Einstellungen. Manuell bleiben fachliche
 Entscheidungen, Rollenbesetzung, Zugangsdatenübergabe und praktische Abnahmen.
 
 ## 1. Technische Grundlagen festlegen
@@ -59,21 +59,22 @@ Entscheidungen, Rollenbesetzung, Zugangsdatenübergabe und praktische Abnahmen.
 
 ## 4. Workflowdateien einrichten und aktualisieren
 
-Der Workflow **Configure workflow files** aus
-[`configure-workflows.yml`](../../mtext-actions/.github/workflows/configure-workflows.yml)
-bearbeitet pro Lauf genau einen Mandantenbranch. Das Python-Modul
-`workflow_configuration` bereitet die geprüften Commits vor. Der Workflow
-pusht sie erst nach erfolgreicher Abschlussprüfung.
+Der Workflow **Update mandant workflows** aus
+[`update-mandant-workflows.yml`](../../mtext-actions/.github/workflows/update-mandant-workflows.yml)
+bildet aus der Mandantenzuordnung und den aktiven Releaselinien alle
+vorgesehenen Mandantenbranches. Das Python-Modul `workflow_configuration`
+bereitet die geprüften Commits vor. Der Workflow pusht sie erst nach
+erfolgreicher Abschlussprüfung.
 
 | Nr. | Status | Tätigkeit | Ergebnis |
 |---|---|---|---|
-| 4.1 | in Vorbereitung | `Configure workflow files` im Testbereich abnehmen | <ul><li>Der Lauf verlangt eine vollständige freigegebene `mtext-actions`-SHA, ein Mandanten-Repository und einen Zielbranch.</li><li>Beide Workflowdateisätze werden vor der ersten Änderung validiert.</li><li>Der Mandanten-Commit enthält ausschließlich Änderungen unter `.github/workflows`.</li><li>Workflowaufruf und Python-Checkout verwenden dieselbe `mtext-actions`-SHA.</li><li>Die Diffs werden vor dem Push im Workflow-Log angezeigt.</li><li>Die Abschlussprüfung ist leer, bevor ein Commit gepusht wird.</li><li>Eine Wiederholung für den erreichten Zielzustand erzeugt keinen Commit.</li></ul> |
-| 4.2 | offen | Rollout-Matrix und Batchablauf festlegen | <ul><li>Die Matrix übernimmt die vollständigen GitHub-Namen aus der verbindlichen Mandantenzuordnung und ergänzt jeden betroffenen Branch.</li><li>Ein manueller Batchstart verarbeitet alle Einträge ausgehend von derselben freigegebenen SHA.</li><li>Workflow-Lauf, Mandanten-Commit und Ergebnis werden je Eintrag nachgewiesen.</li></ul> |
-| 4.3 | offen | Ersten Rollout-Lauf ausführen | <ul><li>Der Lauf verwendet die freigegebene Ausgangs-SHA.</li><li>Fehlt das feste Runner-Kennzeichen noch, erzeugt der Lauf einmalig einen Commit in `mtext-actions`.</li><li>Die im Log ausgewiesene SHA dieses Commits wird als Rollout-SHA in die Matrix übernommen.</li><li>Der bereits bearbeitete Mandantenbranch verweist auf diese Rollout-SHA.</li></ul> |
-| 4.4 | offen | Verbleibende Mandantenbranches im Batch aktualisieren | <ul><li>Der Batchlauf verwendet für alle verbleibenden Matrixeinträge dieselbe Rollout-SHA.</li><li>Workflowaufruf und Python-Checkout jedes bearbeiteten Branches verweisen auf diese SHA.</li><li>Der erzeugte Mandanten-Commit und der erfolgreiche Lauf sind in der Matrix vermerkt.</li><li>Eine Wiederholung setzt einen teilweise erfolgreichen Lauf ohne zusätzliche Commits fort.</li></ul> |
-| 4.5 | offen | Rollout abschließend prüfen | <ul><li>Für jeden Matrixeintrag wird ein Kontrolllauf mit der Rollout-SHA ausgeführt.</li><li>Jeder Kontrolllauf endet erfolgreich und ohne neuen Commit.</li><li>Alle vorgesehenen Mandantenbranches verwenden dieselbe `mtext-actions`-Version.</li></ul> |
+| 4.1 | in Vorbereitung | `Update mandant workflows` im Testbereich abnehmen | <ul><li>Der Lauf verlangt eine vollständige freigegebene `mtext-actions`-SHA.</li><li>Der Vorbereitungsjob prüft den zentralen Stand und erzeugt die gemeinsame Rollout-SHA.</li><li>Jeder Mandanten-Commit enthält ausschließlich Änderungen unter `.github/workflows`.</li><li>Workflowaufruf und Python-Checkout verwenden dieselbe Rollout-SHA.</li><li>Die Diffs werden vor dem Push im Workflow-Log angezeigt.</li><li>Die Abschlussprüfung ist leer, bevor ein Commit gepusht wird.</li><li>Eine Wiederholung für den erreichten Zielzustand erzeugt keinen Commit.</li></ul> |
+| 4.2 | bestätigt | Rollout-Matrix und Batchablauf festlegen | <ul><li>Die Matrix übernimmt die vollständigen GitHub-Namen aus der verbindlichen Mandantenzuordnung.</li><li>Sie kombiniert diese mit den aktiven Releaselinien und den Branchstufen Entwicklung, Abnahme und Bereitstellung.</li><li>Ein manueller Batchstart verarbeitet alle Einträge ausgehend von derselben Rollout-SHA.</li><li>Der Workflow-Lauf weist Ergebnis und Mandanten-Commit je Matrixeintrag nach.</li></ul> |
+| 4.3 | offen | Ersten Batchlauf ausführen | <ul><li>Der Lauf verwendet die freigegebene Ausgangs-SHA.</li><li>Fehlt das feste Runner-Kennzeichen noch, erzeugt der Vorbereitungsjob einmalig einen Commit in `mtext-actions`.</li><li>Die SHA dieses Commits wird als Rollout-SHA an alle Matrixjobs übergeben.</li><li>Alle erreichbaren Mandantenbranches werden auf diese Rollout-SHA aktualisiert.</li></ul> |
+| 4.4 | offen | Teilweise fehlgeschlagenen Batch wiederholen | <ul><li>Fehler eines Matrixeintrags verhindern nicht die Verarbeitung der übrigen Einträge.</li><li>Die Ursache jedes fehlgeschlagenen Eintrags ist behoben.</li><li>Die Wiederholung verwendet dieselbe Rollout-SHA und erzeugt auf bereits aktuellen Branches keine zusätzlichen Commits.</li></ul> |
+| 4.5 | offen | Rollout abschließend prüfen | <ul><li>Ein erneuter Lauf mit der Rollout-SHA endet für alle Matrixeinträge erfolgreich.</li><li>Der Kontrolllauf erzeugt keinen neuen Mandanten-Commit.</li><li>Alle vorgesehenen Mandantenbranches verwenden dieselbe `mtext-actions`-Version.</li></ul> |
 
-Bei späteren `mtext-actions`-Versionen werden die Schritte 4.2 bis 4.5
+Bei späteren `mtext-actions`-Versionen werden die Schritte 4.3 bis 4.5
 wiederholt. Das Runner-Kennzeichen ist dann bereits fest eingetragen, sodass
 kein zusätzlicher Commit in `mtext-actions` entsteht.
 

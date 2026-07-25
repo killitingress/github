@@ -1,10 +1,5 @@
 # `mtext-actions`
 
-Dieses Dokument richtet sich an Entwickler und technische Verantwortliche der
-zentralen M/Text-Automatisierung. Die Bedienung in den Mandanten-Repositories
-ist in der [Benutzeranleitung](../docs/confluence/Benutzeranleitung.md)
-beschrieben.
-
 Das Repository stellt vier CLI-Kommandos für die wiederverwendbaren
 GitHub-Workflows bereit:
 
@@ -39,12 +34,12 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 PYTHONPATH=src python3 -m lbs_delivery --help
 ```
 
-## Workflowdateien über GitHub einrichten
+## Mandanten-Workflows im Batch aktualisieren
 
-Der manuell gestartete Workflow **Configure workflow files** setzt das von der
+Der manuell gestartete Workflow **Update mandant workflows** setzt das von der
 FI bestätigte Runner-Kennzeichen in den zentralen Fach- und Testjobs und bindet
-Workflowaufruf sowie Python-Checkout eines Mandanten-Repositories gemeinsam an
-den daraus entstehenden vollständigen Commit-SHA von `mtext-actions`.
+Workflowaufruf sowie Python-Checkout aller vorgesehenen Mandantenbranches an
+dieselbe vollständige Commit-SHA von `mtext-actions`.
 
 Vor dem ersten Lauf werden in GitHub eingerichtet:
 
@@ -57,31 +52,26 @@ Das technische Token ist auf `mtext-actions` und die vorgesehenen
 Mandanten-Repositories begrenzt. Es benötigt dort die Berechtigung, geschützte
 Workflowdateien auf den ausgewählten Branches festzuschreiben.
 
-Unter **Actions** wird **Configure workflow files** mit drei Angaben gestartet:
+Unter **Actions** wird **Update mandant workflows** mit der vollständigen
+Commit-SHA der freigegebenen `mtext-actions`-Version gestartet.
 
-- vollständige Commit-SHA der freigegebenen `mtext-actions`-Version,
-- vollständiger Name des Mandanten-Repositories,
-- zu aktualisierender Mandantenbranch.
+Der Vorbereitungsjob checkt exakt die angegebene SHA aus und lehnt einen
+abweichenden Stand ab. Bei der erstmaligen Aktualisierung kann die
+Finalisierung des Runner-Kennzeichens noch einen zentralen Commit erzeugen.
+Dessen SHA ist anschließend die gemeinsame Rollout-Version. Spätere Versionen
+enthalten bereits das feste Runner-Kennzeichen und verändern das zentrale
+Repository nicht mehr.
 
-Der Lauf checkt exakt die angegebene zentrale SHA aus und lehnt einen
-abweichenden Stand ab. Bei der erstmaligen Einrichtung kann die Finalisierung
-des Runner-Kennzeichens noch einen zentralen Commit erzeugen. Dessen im Log
-ausgewiesene SHA ist anschließend die gemeinsame Rollout-Version. Spätere
-Versionen enthalten bereits das feste Runner-Kennzeichen und verändern das
-zentrale Repository nicht mehr.
-
-Der Mandanten-Commit bindet Workflowaufruf und Python-Checkout gemeinsam an die
+Die Matrix kombiniert alle Repositories aus `config/mandanten.json`, alle
+aktiven Releaselinien aus `config/releaselinien.json` und die Branchstufen
+`Entwicklung`, `Abnahme` und `Bereitstellung`. Jeder Matrixjob bindet
+Workflowaufruf und Python-Checkout seines Mandantenbranches gemeinsam an die
 Rollout-Version. Erst wenn die abschließende Prüfung keine Änderung mehr
-ermittelt, wird er gepusht. Die vorgenommenen Änderungen bleiben als Diffs im
-Workflow-Log sichtbar. Ein erneuter Lauf mit derselben SHA erzeugt keine
-weiteren Commits. Der Lauf wird für jeden Eintrag der freigegebenen
-Rollout-Matrix aus Mandanten-Repository und Branch wiederholt.
+ermittelt, wird der Commit gepusht. Die vorgenommenen Änderungen bleiben als
+Diffs im Workflow-Log sichtbar. Ein erneuter Lauf mit derselben SHA erzeugt
+keine weiteren Commits.
 
-Die technische Umsetzung liegt außerhalb der Lieferlogik unter
-`src/workflow_configuration.py`. Der Workflow führt keinen Code aus dem
+Die technische Ablaufsteuerung liegt unter `src/workflow_configuration.py`.
+Sie nutzt `lbs_delivery.config` gemeinsam mit den Lieferkommandos als
+verbindliche Konfigurationsschicht. Der Workflow führt keinen Code aus dem
 Mandanten-Repository aus.
-
-Rulesets, weitere Environments, Team-Zuordnungen und Actions-Zugriffe gehören
-nicht zum derzeitigen Workflow. Ihre Umsetzung und Abnahme sind in
-[Nächste Schritte](../docs/confluence/Naechste_Schritte.md) als offener
-API-Teil geführt.

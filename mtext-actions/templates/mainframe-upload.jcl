@@ -25,12 +25,12 @@
 //*                        !
 //*                        V
 //COPYIN   DD DISP=SHR,DSN=IEA.LOMS.TONICZ
-//* ZIELDATEI  ------------.       .------------- INSTANZ T=TEST/P=PROD
-//*                        !       ! .----------- STREAM (BOAS)
-//*                        !       ! !    .------ LEVEL  (FKTE/JURP)
-//*                        !       ! !    !    .- TYPE   (TONICZ)
-//*                        !       ! !    !    !
-//*                        V       V V    V    V
+//* ZIELDATEI  ------------.         .----------- INSTANZ T=TEST/P=PROD
+//*                        !         !      .---- STREAM (BOAS)
+//*                        !         !      !   . LEVEL  (FKTE/JURP)
+//*                        !         !      !   ! TYPE   (TONICZ)
+//*                        !         !      !   !           !
+//*                        V         V      V   V           V
 //COPYOUT  DD DISP=SHR,DSN=IEA.ISPW@@ISPW@@.BOAS.@@LEVEL@@.TONICZ
 //SYSIN    DD *
   COPYMOD OUTDD=COPYOUT,INDD=COPYIN,LIST=YES

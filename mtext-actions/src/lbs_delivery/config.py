@@ -83,7 +83,7 @@ def _read_json(path: str | Path) -> Any:
         ) from exc
 
 
-def _load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
+def load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
     """Lädt die eindeutige Zuordnung mit dem Repository als Zugriffsschlüssel."""
 
     mandanten = _read_json(path)
@@ -116,6 +116,15 @@ def _load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
             subsystem=values["subsystem"],
         )
     return zuordnung
+
+
+def load_releaselinien_zuordnung(path: str | Path) -> dict[str, Any]:
+    """Lädt die nicht leere zentrale Releaselinienzuordnung."""
+
+    releaselinien = _read_json(path)
+    if not isinstance(releaselinien, dict) or not releaselinien:
+        raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinien fehlen")
+    return releaselinien
 
 
 def _read_mandant_configuration(
@@ -257,9 +266,7 @@ def _read_releaselinien(
 ) -> dict[str, dict[str, str]]:
     """Validiert die zentrale Releaselinien-Zuordnung gegen die Hostprofile."""
 
-    releaselinien = _read_json(path)
-    if not isinstance(releaselinien, dict) or not releaselinien:
-        raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinien fehlen")
+    releaselinien = load_releaselinien_zuordnung(path)
     for values in releaselinien.values():
         if (
             not isinstance(values, dict)
@@ -289,7 +296,7 @@ def load_configuration(
     if not mandant_file.is_absolute():
         mandant_file = root / mandant_file
 
-    mandanten_zuordnung = _load_mandanten_zuordnung(mandanten_path)
+    mandanten_zuordnung = load_mandanten_zuordnung(mandanten_path)
     mandant = _read_mandant_configuration(
         mandant_file, mandanten_zuordnung, repository_name
     )
