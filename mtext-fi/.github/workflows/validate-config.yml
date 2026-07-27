@@ -26,6 +26,5 @@ jobs:
     with:
       # Die Einrichtungsautomation ersetzt beide technischen Platzhalter gemeinsam
       # durch den mtext-actions-Commit.
-      repository_name: ${{ github.repository }}
       commit_sha: ${{ github.sha }}
       automation_ref: 0000000000000000000000000000000000000000

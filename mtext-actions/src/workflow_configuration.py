@@ -203,11 +203,11 @@ def build_update_matrix(
 
     include = [
         {
-            "repository": repository,
-            "kuerzel": stammdaten.kuerzel,
+            "repository": stammdaten.repository,
+            "kuerzel": kuerzel,
             "branch": f"{releaselinie}/{stufe}",
         }
-        for repository, stammdaten in sorted(mandanten.items())
+        for kuerzel, stammdaten in sorted(mandanten.items())
         for releaselinie in sorted(releaselinien)
         for stufe in MANDANT_BRANCH_STUFEN
     ]

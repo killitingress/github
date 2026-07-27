@@ -5,16 +5,7 @@ name: Reusable M/Text resource sync
 'on':
   workflow_call:
     inputs:
-      repository_name:
-        required: true
-        type: string
       commit_sha:
-        required: true
-        type: string
-      source_branch:
-        required: true
-        type: string
-      target_environment:
         required: true
         type: string
       automation_ref:
@@ -63,18 +54,7 @@ jobs:
       - name: Stage, publish and synchronously call the adapter
         env:
           INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}
-          INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}
-          INPUT_SOURCE_BRANCH: ${{ inputs.source_branch }}
-          INPUT_TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
           PYTHONPATH: automation/src
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery sync-resources
-          --repository-root source
-          --mandanten automation/config/mandanten.json
-          --releaselinien automation/config/releaselinien.json
-          --repository-name "$INPUT_REPOSITORY_NAME"
           --commit "$INPUT_COMMIT_SHA"
-          --source-branch "$INPUT_SOURCE_BRANCH"
-          --environment "$INPUT_TARGET_ENVIRONMENT"
-          --staging-dir "$RUNNER_TEMP/resources-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          --execute

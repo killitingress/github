@@ -10,6 +10,10 @@ from typing import Any, NamedTuple
 from .errors import DeliveryError, Status
 
 
+# Diese Datei gehört zum ausgecheckten Automatisierungsstand und verankert
+# dadurch die gemeinsam versionierten Zuordnungen unabhängig vom Arbeitsverzeichnis.
+AUTOMATION_ROOT = Path(__file__).resolve().parents[2]
+
 # ISPW-Instanz des Mandanten: T für Test, P für Produktion; steuert JCL und Mainframe-Ziel.
 ISPW_INSTANZEN = {"T", "P"}
 
@@ -44,6 +48,7 @@ ADAPTER_PAYLOAD = {"mandant": "MAN", "institut": "INR"}
 class Configuration:
     """Enthält die einmalig gelesenen Werte aller internen Abläufe."""
 
+    repository: str
     kuerzel: str
     ispw: str
     subsystem: str
@@ -57,7 +62,7 @@ class Configuration:
 class MandantStamm:
     """Verbindet ein Mandanten-Repository mit Kürzel und Mainframe-Subsystem."""
 
-    kuerzel: str
+    repository: str
     subsystem: str
 
 
@@ -84,7 +89,7 @@ def _read_json(path: str | Path) -> Any:
 
 
 def load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
-    """Lädt die eindeutige Zuordnung mit dem Repository als Zugriffsschlüssel."""
+    """Lädt die eindeutige Zuordnung mit dem Mandantenkürzel als Schlüssel."""
 
     mandanten = _read_json(path)
     if not isinstance(mandanten, dict) or not mandanten:
@@ -93,6 +98,7 @@ def load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
         )
 
     zuordnung: dict[str, MandantStamm] = {}
+    repositories: set[str] = set()
     for kuerzel, values in mandanten.items():
         if (
             not isinstance(kuerzel, str)
@@ -107,12 +113,13 @@ def load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
                 Status.VALIDATION_FAILED, "Mandantenzuordnung ist ungültig"
             )
         repository = values["repository"]
-        if repository in zuordnung:
+        if repository in repositories:
             raise DeliveryError(
                 Status.VALIDATION_FAILED, "Mandantenzuordnung ist nicht eindeutig"
             )
-        zuordnung[repository] = MandantStamm(
-            kuerzel=kuerzel,
+        repositories.add(repository)
+        zuordnung[kuerzel] = MandantStamm(
+            repository=repository,
             subsystem=values["subsystem"],
         )
     return zuordnung
@@ -158,11 +165,11 @@ def _read_mandant_configuration(
             Status.VALIDATION_FAILED, "Konfiguration ist unvollständig"
         ) from exc
 
-    mandant_stammdaten = mandanten_zuordnung.get(repository_name)
+    mandant_stammdaten = mandanten_zuordnung.get(kuerzel)
     if (
         not isinstance(kuerzel, str)
         or mandant_stammdaten is None
-        or kuerzel != mandant_stammdaten.kuerzel
+        or repository_name != mandant_stammdaten.repository
     ):
         raise DeliveryError(
             Status.VALIDATION_FAILED, "Mandant passt nicht zum Repository"
@@ -280,29 +287,27 @@ def _read_releaselinien(
 
 
 def load_configuration(
-    mandant_path: str | Path,
-    mandanten_path: str | Path,
-    releaselinien_path: str | Path,
-    *,
-    repository_name: str,
     repository_root: str | Path,
+    repository_name: str,
 ) -> Configuration:
     """Lädt den Mandanten aus dem Repository und verknüpft ihn mit den Releaselinien."""
 
     root = Path(repository_root)
-    mandant_file = Path(mandant_path)
-    # Ein relativer Mandantenpfad bezeichnet immer eine Datei im ausgecheckten
-    # Mandanten-Repository und ist unabhängig vom Arbeitsverzeichnis des Aufrufers.
-    if not mandant_file.is_absolute():
-        mandant_file = root / mandant_file
-
-    mandanten_zuordnung = load_mandanten_zuordnung(mandanten_path)
+    mandanten_zuordnung = load_mandanten_zuordnung(
+        AUTOMATION_ROOT / "config/mandanten.json"
+    )
     mandant = _read_mandant_configuration(
-        mandant_file, mandanten_zuordnung, repository_name
+        root / ".github/config.json",
+        mandanten_zuordnung,
+        repository_name,
     )
     projects = _scan_projects(root, mandant.kuerzel, mandant.excluded_projects)
-    releaselinien = _read_releaselinien(releaselinien_path, mandant.hostprofile)
+    releaselinien = _read_releaselinien(
+        AUTOMATION_ROOT / "config/releaselinien.json",
+        mandant.hostprofile,
+    )
     return Configuration(
+        repository=repository_name,
         kuerzel=mandant.kuerzel,
         ispw=mandant.ispw,
         subsystem=mandant.subsystem,

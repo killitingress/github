@@ -210,7 +210,6 @@ def build_release(
     *,
     repository_root: str | Path,
     output_directory: str | Path,
-    repository_name: str,
     tag: str,
     trigger_sha: str,
 ) -> Path:
@@ -300,7 +299,7 @@ def build_release(
     hostprofil_name = configuration.releaselinien[releaselinie]["hostprofil"]
     hostprofil = configuration.hostprofile[hostprofil_name]
     manifest = {
-        "repository": repository_name,
+        "repository": configuration.repository,
         "mandant": configuration.kuerzel,
         "release_tag": tag,
         "delivery_type": delivery_type,

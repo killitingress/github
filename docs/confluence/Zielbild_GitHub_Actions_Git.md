@@ -285,20 +285,27 @@ Akzeptanztests:
 mtext-actions/
   .github/
     workflows/
+      ci.yml
+      reusable-release.yml
+      reusable-sync-resources.yml
+      reusable-validate-config.yml
+      update-mandant-workflows.yml
   config/
     mandanten.json
     releaselinien.json
   scripts/
     runner-preflight.sh
-  src/lbs_delivery/
-    cli.py
-    config.py
-    errors.py
-    git.py
-    mainframe.py
-    manifest.py
-    release.py
-    sync.py
+  src/
+    workflow_configuration.py
+    lbs_delivery/
+      cli.py
+      config.py
+      errors.py
+      git.py
+      mainframe.py
+      manifest.py
+      release.py
+      sync.py
   templates/
     mainframe-upload.jcl
   tests/
@@ -413,11 +420,15 @@ Matrix die vollständigen GitHub-Namen. Die aktiven Releaselinien werden aus
 `config/releaselinien.json` gelesen und jeweils mit `Entwicklung`, `Abnahme`
 und `Bereitstellung` kombiniert.
 
-Vor dem ersten Lauf werden der Runner der FI, dessen Repositoryvariable
-`FI_RUNNER_LABEL` sowie das Environment `Einrichtung` mit dem Secret
-`WORKFLOW_CONFIGURATION_TOKEN` bereitgestellt. Der Workflow wird in GitHub mit
-der vollständigen SHA des `mtext-actions`-Commits
-gestartet.
+Vor dem ersten Lauf wird im Repository `mtext-actions` das
+`runs-on`-Kennzeichen des verwendeten FI-Runners als Repositoryvariable
+`FI_RUNNER_LABEL` hinterlegt. Dort wird außerdem das Environment `Einrichtung`
+eingerichtet und darin das Secret `WORKFLOW_CONFIGURATION_TOKEN` hinterlegt.
+Das Token gehört zu einer technischen Identität, die Workflowdateien in
+`mtext-actions` und in den vorgesehenen Mandantenbranches festschreiben darf.
+Anschließend wird der Workflow **Update mandant workflows** im Repository
+`mtext-actions` manuell gestartet. Als Eingabe wird die vollständige SHA des
+auszurollenden `mtext-actions`-Commits angegeben.
 
 Der Vorbereitungsjob prüft den zentralen Checkout und bestimmt die
 Rollout-SHA. Anschließend erzeugt er die Matrix und stellt allen Einträgen
@@ -592,7 +603,7 @@ Werte erst in die übrigen zentralen Workflowdateien einträgt.
 |---|---|---|---|
 | `python -m workflow_configuration` | `update-mandant-workflows.yml` | Zentraler Checkout entspricht dem `mtext-actions`-Commit oder der vorbereiteten Rollout-SHA. Runner-Kennzeichen der FI. Eindeutige Mandantenzuordnung. Aktive Releaselinien. Vollständige Workflow- und Codebezüge. Diffs sind fehlerfrei und die Abschlussprüfung ist leer | Rollout-Matrix sowie geprüfte lokale Workflow-Commits für die betroffenen Repositories. Der Workflow pusht sie in der erforderlichen Reihenfolge |
 | `validate-config` | `reusable-validate-config.yml` | Bekanntes Mandantenkürzel, Repositoryidentität, gültige CodePipeline-Stage-Codes, eindeutige Projektcodes und vorhandene Hostprofile der Releaselinien | Status `CONFIG_VALIDATED` |
-| `sync-resources` | `reusable-sync-resources.yml` | Branch und Zielstufe stimmen überein. Vollständige SHA. Checkout entspricht SHA. Commit ist aus dem Remote-Branch erreichbar. Projektbäume enthalten keine Symlinks | Vollständiger Projektstand nach `serverSync`, Adapteraufruf gemäß Transportvertrag, Status `ADAPTER_ACCEPTED` |
+| `sync-resources` | `reusable-sync-resources.yml` | Branch bezeichnet eine bekannte Zielstufe. Vollständige SHA. Checkout entspricht SHA. Commit ist aus dem Remote-Branch erreichbar. Projektbäume enthalten keine Symlinks | Vollständiger Projektstand nach `serverSync`, Adapteraufruf gemäß Transportvertrag, Status `ADAPTER_ACCEPTED` |
 | `build-release` | Job `build` in `reusable-release.yml` | Tagformat und konfigurierte Releaselinie. Tag aus Bereitstellungsbranch erreichbar. Checkout entspricht Tag-SHA. DELTA-Basis `.100`. Projektbäume enthalten keine Symlinks | Reproduzierbare FULL-/DELTA-Archive, Informationsdateien und `manifest.json` mit SHA-256. Status `ARTIFACT_READY` |
 | `publish-mainframe` | Job `publish` in `reusable-release.yml` | Artefaktpfade, Dateigrößen und SHA-256 aus dem Manifest. JCL-Werte beim Rendern. FTP-Secrets vor der Übergabe | JCL je Paket, FTP-Übertragung und Übergabe an JES. Status `MAINFRAME_SUBMITTED` |
 
@@ -605,6 +616,13 @@ verschiedener Exitcode lässt den jeweiligen GitHub-Job fehlschlagen. Der
 Mandanten-Aktualisierungsworkflow startet dagegen das getrennte Modul
 [`workflow_configuration.py`](../../mtext-actions/src/workflow_configuration.py)
 direkt mit `python -m workflow_configuration`.
+
+Die Lieferkommandos verwenden den festen Runneraufbau aus `source/` und
+`automation/`. Repositoryidentität und Arbeitsbereich stammen aus dem
+GitHub-Kontext. Zentrale Konfigurationsdateien und die JCL-Vorlage werden
+relativ zur ausgeführten Automatisierungsversion gelesen. Als CLI-Argumente
+bleiben dadurch Commit und Tag, wenn das jeweilige Kommando diese Laufdaten
+benötigt. Der Sync-Branch stammt aus `GITHUB_REF_NAME`.
 
 ### Environments, Secrets und Serialisierung
 

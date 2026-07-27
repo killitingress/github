@@ -11,10 +11,6 @@ from lbs_delivery.config import Configuration, load_configuration
 
 # Diese Wurzel enthält Releaselinien, Templates und Workflow-Dateien der Automation.
 AUTOMATION_ROOT = Path(__file__).resolve().parents[1]
-# Die produktionsnahe Releaselinienzuordnung gehört zum Testvertrag.
-RELEASELINIEN = AUTOMATION_ROOT / "config/releaselinien.json"
-# Die zentrale Mandantenzuordnung liefert Repositoryidentität und Subsystem.
-MANDANTEN = AUTOMATION_ROOT / "config/mandanten.json"
 
 
 def git(repository: Path, *arguments: str) -> str:
@@ -47,7 +43,7 @@ def write_mandant(path: Path, **overrides: object) -> None:
 def init_repository(root: Path, *, branch: str) -> Path:
     """Erzeugt ein leeres Mandanten-Repository mit Git-Benutzer."""
 
-    repository = root / "mtext-fi"
+    repository = root / "source"
     repository.mkdir()
     git(repository, "init", "-b", branch)
     git(repository, "config", "user.name", "Test")
@@ -125,23 +121,14 @@ def setup_release_repository(root: Path) -> Path:
 
 
 def load_test_configuration(
-    root: Path,
     repository: Path,
     *,
-    mandant_path: Path | None = None,
-    mandanten_path: Path | None = None,
-    releaselinien_path: Path | None = None,
     mandant: dict[str, object] | None = None,
     repository_name: str = "<oms_team>/mtext-fi",
 ) -> Configuration:
     """Schreibt die Mandantenkonfiguration und lädt den Testvertrag."""
 
-    path = mandant_path or root / "mandant.json"
+    path = repository / ".github/config.json"
+    path.parent.mkdir(exist_ok=True)
     write_mandant(path, **(mandant or {}))
-    return load_configuration(
-        path,
-        mandanten_path or MANDANTEN,
-        releaselinien_path or RELEASELINIEN,
-        repository_name=repository_name,
-        repository_root=repository,
-    )
+    return load_configuration(repository, repository_name)

@@ -34,6 +34,15 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 PYTHONPATH=src python3 -m lbs_delivery --help
 ```
 
+Die vier Lieferkommandos laufen im festen Aufbau der wiederverwendbaren
+Workflows. `GITHUB_WORKSPACE/source` enthält den Mandantenstand,
+`GITHUB_REPOSITORY` dessen vollständigen Namen und `RUNNER_TEMP` die
+kurzlebigen Arbeitsverzeichnisse. Zentrale Konfiguration und JCL-Vorlage
+werden aus derselben `mtext-actions`-Version wie der Python-Code gelesen.
+Die CLI nimmt deshalb nur Commit oder Tag entgegen, wenn das jeweilige
+Kommando diese Laufdaten benötigt. Der Sync-Branch stammt aus
+`GITHUB_REF_NAME`.
+
 ## Mandanten-Workflows im Batch aktualisieren
 
 Der manuell gestartete Workflow **Update mandant workflows** setzt das von der

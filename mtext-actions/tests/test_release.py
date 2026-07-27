@@ -28,7 +28,7 @@ class ReleaseTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.repository = setup_release_repository(self.root)
-        self.configuration = load_test_configuration(self.root, self.repository)
+        self.configuration = load_test_configuration(self.repository)
 
     def test_builds_reproducible_full_and_delta_archives(self) -> None:
         """Prüft Archivvertrag, Reproduzierbarkeit, Manifest und gerenderte JCL."""
@@ -40,7 +40,6 @@ class ReleaseTests(unittest.TestCase):
             self.configuration,
             repository_root=self.repository,
             output_directory=first,
-            repository_name="<oms_team>/mtext-fi",
             tag="R261.108",
             trigger_sha=target_sha,
         )
@@ -48,7 +47,6 @@ class ReleaseTests(unittest.TestCase):
             self.configuration,
             repository_root=self.repository,
             output_directory=second,
-            repository_name="<oms_team>/mtext-fi",
             tag="R261.108",
             trigger_sha=target_sha,
         )
@@ -86,7 +84,6 @@ class ReleaseTests(unittest.TestCase):
             self.configuration,
             repository_root=self.repository,
             output_directory=self.root / "full",
-            repository_name="<oms_team>/mtext-fi",
             tag="R261.100",
             trigger_sha=git(self.repository, "rev-parse", "HEAD"),
         )
@@ -104,7 +101,6 @@ class ReleaseTests(unittest.TestCase):
             self.configuration,
             repository_root=self.repository,
             output_directory=output,
-            repository_name="<oms_team>/mtext-fi",
             tag="R261.108",
             trigger_sha=git(self.repository, "rev-parse", "HEAD"),
         )

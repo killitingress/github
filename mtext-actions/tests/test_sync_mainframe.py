@@ -20,7 +20,7 @@ class SyncTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.repository = setup_sync_repository(self.root)
-        self.configuration = load_test_configuration(self.root, self.repository)
+        self.configuration = load_test_configuration(self.repository)
 
     def test_sync_stages_complete_project_and_rejects_invalid_branch(self) -> None:
         """Prüft Staging, Ersetzung und die Branch-Zuordnung zur Zielstufe."""
@@ -31,9 +31,7 @@ class SyncTests(unittest.TestCase):
             repository_root=self.repository,
             commit=git(self.repository, "rev-parse", "HEAD"),
             source_branch="R261/Entwicklung",
-            environment="Entwicklung",
             staging_root=staging,
-            timeout=60.0,
             execute=False,
         )
         self.assertEqual(result["projects"], ["LOMS_Basis"])
@@ -51,10 +49,8 @@ class SyncTests(unittest.TestCase):
                 self.configuration,
                 repository_root=self.repository,
                 commit=git(self.repository, "rev-parse", "HEAD"),
-                source_branch="R261/Entwicklung",
-                environment="Abnahme",
+                source_branch="R261/Ungueltig",
                 staging_root=self.root / "staging-invalid",
-                timeout=60.0,
                 execute=False,
             )
 

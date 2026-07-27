@@ -12,16 +12,12 @@ name: Sync M/Text resources
     # und verteilt keine unveränderten Ressourcen.
     paths-ignore:
       - .github/config.json
-  # Initiale Vollsynchronisationen und Wiederholungen verlangen einen
-  # Commit und den dazugehörigen Branch.
+  # Initiale Vollsynchronisationen und Wiederholungen verlangen einen Commit.
+  # Der Branch wird beim manuellen Start über den GitHub-Branchwähler festgelegt.
   workflow_dispatch:
     inputs:
       commit_sha:
         description: Exakter Commit-SHA für initiale Vollsynchronisation oder Wiederholung
-        required: true
-        type: string
-      source_branch:
-        description: Branch im Format Rnnn/Entwicklung oder Rnnn/Abnahme
         required: true
         type: string
 
@@ -29,36 +25,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: mtext-sync-${{ github.repository }}-${{ inputs.source_branch || github.ref_name }}
+  group: mtext-sync-${{ github.repository }}-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  # Dieser Aufruf übergibt Commits der Entwicklungs-Branches an den zentralen Workflow.
-  sync-entwicklung:
-    name: Sync to Entwicklung
-    if: >-
-      (github.event_name == 'push' && endsWith(github.ref_name, '/Entwicklung')) ||
-      (github.event_name == 'workflow_dispatch' && endsWith(inputs.source_branch, '/Entwicklung'))
+  # Der zentrale Ablauf leitet die Zielstufe aus dem geprüften Branchnamen ab.
+  sync:
+    name: Sync resources
     uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
     with:
       # Workflow und Implementierung verwenden denselben mtext-actions-Commit.
-      repository_name: ${{ github.repository }}
       commit_sha: ${{ inputs.commit_sha || github.sha }}
-      source_branch: ${{ github.event_name == 'push' && github.ref_name || inputs.source_branch }}
-      target_environment: Entwicklung
       # Der Runner checkt diese Version nach automation/ aus
-      automation_ref: 0000000000000000000000000000000000000000
-
-  # Dieser Aufruf übergibt Commits der Abnahme-Branches an den zentralen Workflow.
-  sync-abnahme:
-    name: Sync to Abnahme
-    if: >-
-      (github.event_name == 'push' && endsWith(github.ref_name, '/Abnahme')) ||
-      (github.event_name == 'workflow_dispatch' && endsWith(inputs.source_branch, '/Abnahme'))
-    uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
-    with:
-      repository_name: ${{ github.repository }}
-      commit_sha: ${{ inputs.commit_sha || github.sha }}
-      source_branch: ${{ github.event_name == 'push' && github.ref_name || inputs.source_branch }}
-      target_environment: Abnahme
       automation_ref: 0000000000000000000000000000000000000000

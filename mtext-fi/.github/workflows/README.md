@@ -31,8 +31,9 @@ verwendete Konfiguration erneut.
 
 Ein Push auf `Rnnn/Entwicklung` oder `Rnnn/Abnahme` startet die zentrale
 Synchronisation für die passende M/Text-Umgebung. Der manuelle Start verlangt
-einen Commit-SHA und den zugehörigen Branch. Die zentrale Umsetzung prüft beides
-und leitet daraus Releaselinie und Zielumgebung ab.
+einen Commit-SHA. Der zugehörige Branch wird im GitHub-Branchwähler ausgewählt.
+Die zentrale Umsetzung prüft beide Werte und leitet daraus Releaselinie und
+Zielumgebung ab.
 
 Jede Synchronisation überträgt den vollständigen Stand aller sichtbaren
 Projektverzeichnisse in der Repositorywurzel. Der frühere Jenkins-Parameter
@@ -73,13 +74,17 @@ GitHub-Artefakts.
 
 Der zentrale Workflow verwendet die folgenden mandantenseitigen Angaben:
 
-- `repository_name`: vollständiger GitHub-Name des Auslösers mit Owner
 - `commit_sha` beziehungsweise `release_tag` und optional `trigger_sha`
-- `target_environment` als feste fachliche Zielstufe Entwicklung oder Abnahme
-- `source_branch`, aus dem Releaselinie und Stufe validiert abgeleitet werden
 - `automation_ref` als zentral gepflegte technische Referenz für den Checkout
   des `mtext-actions`-Commits. Die Einrichtungsautomation hält sie mit
   der Version des aufgerufenen Workflows identisch.
 
-Die Sync-Jobs binden kein GitHub Environment. Nur der Publish-Job bindet das
+Der vollständige GitHub-Name des Mandanten-Repositories stammt aus
+`GITHUB_REPOSITORY`. Der zentrale Workflow checkt den Mandantenstand nach
+`source/` und seine eigene Version nach `automation/` aus. Diese festen
+Bestandteile des Runneraufbaus werden nicht als fachliche Eingaben übergeben.
+Releaselinie und Zielstufe der Synchronisation stammen aus
+`GITHUB_REF_NAME`.
+
+Der Sync-Job bindet kein GitHub Environment. Nur der Publish-Job bindet das
 Environment `Bereitstellung` und liest dort die Mainframe-Secrets.

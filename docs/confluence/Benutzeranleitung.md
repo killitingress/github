@@ -725,11 +725,11 @@ ausdrücklich angegebenem Commit oder Tag erforderlich ist.
 
 ### M/Text-Vollsynchronisation initial starten oder wiederholen
 
-Unter **Actions → Sync M/Text resources → Run workflow** angeben:
+Unter **Actions → Sync M/Text resources → Run workflow** zuerst im
+GitHub-Branchwähler `Rnnn/Entwicklung` oder `Rnnn/Abnahme` auswählen und dann
+angeben:
 
-- `commit_sha`: vollständiger 40-stelliger SHA des bereits geprüften Commits,
-- `source_branch`: der passende Branch `Rnnn/Entwicklung` oder
-  `Rnnn/Abnahme`.
+- `commit_sha`: vollständiger 40-stelliger SHA des bereits geprüften Commits.
 
 Die Automation weist den Lauf zurück, wenn der Commit nicht aus dem gewählten
 Branch erreichbar ist. Das Zielsystem wird aus dem Branch abgeleitet.

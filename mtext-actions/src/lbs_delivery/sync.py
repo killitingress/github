@@ -17,7 +17,10 @@ from .git import require_checkout
 
 
 # Obergrenze für den gelesenen Adapter-Antwortkörper in Bytes; verhindert unbeschränkten Speicherverbrauch.
-ADAPTER_RESPONSE_LIMIT = 1024 * 1024 # 1 MB
+ADAPTER_RESPONSE_LIMIT = 1024 * 1024  # 1 MB
+
+# Der Adapteraufruf darf den Workflow höchstens eine Minute blockieren.
+ADAPTER_TIMEOUT = 60.0
 
 
 def stage_projects(
@@ -113,20 +116,18 @@ def sync_resources(
     repository_root: str | Path,
     commit: str,
     source_branch: str,
-    environment: str,
     staging_root: str | Path,
-    timeout: float,
     execute: bool,
 ) -> dict[str, object]:
     """Führt Prüfung, Staging und optional die externe Synchronisation aus."""
 
+    releaselinie, separator, environment = source_branch.partition("/")
     if environment not in SYNC_STAGES:
         raise DeliveryError(
             Status.VALIDATION_FAILED,
             "Zielumgebung ist ungültig",
         )
-    releaselinie = source_branch.partition("/")[0]
-    if source_branch != f"{releaselinie}/{environment}":
+    if not separator or source_branch != f"{releaselinie}/{environment}":
         raise DeliveryError(
             Status.VALIDATION_FAILED, "Branch passt nicht zur Zielumgebung"
         )
@@ -146,7 +147,7 @@ def sync_resources(
     )
     status, body = call_adapter(
         f"https://{etaps_linie}{host_suffix}.ltoma.intern/vMtextAdapter/sync",
-        timeout=timeout,
+        timeout=ADAPTER_TIMEOUT,
     )
     return {
         "status": Status.ADAPTER_ACCEPTED.value,

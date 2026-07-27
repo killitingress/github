@@ -5,9 +5,6 @@ name: Reusable mandant configuration validation
 'on':
   workflow_call:
     inputs:
-      repository_name:
-        required: true
-        type: string
       commit_sha:
         required: true
         type: string
@@ -55,11 +52,6 @@ jobs:
       # aufrufende Repository; dieser Schritt führt keine externe Übergabe aus.
       - name: Validate configuration without external access
         env:
-          INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}
           PYTHONPATH: automation/src
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery validate-config
-          --repository-root source
-          --mandanten automation/config/mandanten.json
-          --releaselinien automation/config/releaselinien.json
-          --repository-name "$INPUT_REPOSITORY_NAME"

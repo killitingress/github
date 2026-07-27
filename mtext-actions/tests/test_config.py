@@ -8,13 +8,13 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
-from lbs_delivery.cli import main
+from lbs_delivery.cli import build_parser, main
+from lbs_delivery.config import load_mandanten_zuordnung
 from lbs_delivery.errors import DeliveryError, Status
 
 from tests.support import (
-    MANDANTEN,
-    RELEASELINIEN,
     load_test_configuration,
     setup_repository,
     write_mandant,
@@ -29,7 +29,6 @@ class ConfigTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.repository = setup_repository(self.root, branch="R261/Entwicklung")
-        self.mandant_path = self.root / "mandant.json"
 
     def test_warns_on_project_deviation(self) -> None:
         """Meldet fehlende und zusätzliche Projekte ohne fachliche Sperre."""
@@ -37,11 +36,7 @@ class ConfigTests(unittest.TestCase):
         (self.repository / "Fonts/value.txt").unlink()
         (self.repository / "Fonts").rmdir()
         (self.repository / "LOMS_Autonom").mkdir()
-        configuration = load_test_configuration(
-            self.root,
-            self.repository,
-            mandant_path=self.mandant_path,
-        )
+        configuration = load_test_configuration(self.repository)
         self.assertTrue(
             any("Projekte fehlen" in warnung for warnung in configuration.warnungen)
         )
@@ -60,9 +55,7 @@ class ConfigTests(unittest.TestCase):
         )
         (self.repository / "LOMS_Autonom[BY]").mkdir()
         configuration = load_test_configuration(
-            self.root,
             self.repository,
-            mandant_path=self.mandant_path,
             mandant={"kuerzel": "BY"},
             repository_name="<oms_team>/mtext-by",
         )
@@ -77,17 +70,13 @@ class ConfigTests(unittest.TestCase):
 
         with self.assertRaises(DeliveryError):
             load_test_configuration(
-                self.root,
                 self.repository,
-                mandant_path=self.mandant_path,
                 mandant={"kuerzel": "BY"},
             )
 
         with self.assertRaises(DeliveryError):
             load_test_configuration(
-                self.root,
                 self.repository,
-                mandant_path=self.mandant_path,
                 repository_name="<oms_team>/unbekannt",
             )
 
@@ -108,19 +97,12 @@ class ConfigTests(unittest.TestCase):
             encoding="utf-8",
         )
         with self.assertRaises(DeliveryError):
-            load_test_configuration(
-                self.root,
-                self.repository,
-                mandant_path=self.mandant_path,
-                mandanten_path=mandanten_path,
-            )
+            load_mandanten_zuordnung(mandanten_path)
 
         (self.repository / "LOMS_Basisdaten").mkdir()
         with self.assertRaises(DeliveryError):
             load_test_configuration(
-                self.root,
                 self.repository,
-                mandant_path=self.mandant_path,
             )
 
         (self.repository / "LOMS_Basisdaten").rmdir()
@@ -129,9 +111,7 @@ class ConfigTests(unittest.TestCase):
         )
         with self.assertRaises(DeliveryError):
             load_test_configuration(
-                self.root,
                 self.repository,
-                mandant_path=self.mandant_path,
             )
 
     def test_validate_config_cli_maps_validation_errors(self) -> None:
@@ -141,22 +121,28 @@ class ConfigTests(unittest.TestCase):
         mandant_path.parent.mkdir()
         write_mandant(mandant_path, kuerzel="BY")
         stderr = io.StringIO()
-        with redirect_stdout(io.StringIO()), redirect_stderr(stderr):
-            exit_code = main(
-                [
-                    "validate-config",
-                    "--repository-root",
-                    str(self.repository),
-                    "--releaselinien",
-                    str(RELEASELINIEN),
-                    "--mandanten",
-                    str(MANDANTEN),
-                    "--repository-name",
-                    "<oms_team>/mtext-fi",
-                ]
-            )
+        environment = {
+            "GITHUB_REPOSITORY": "<oms_team>/mtext-fi",
+            "GITHUB_WORKSPACE": str(self.root),
+        }
+        with (
+            patch.dict("os.environ", environment, clear=True),
+            redirect_stdout(io.StringIO()),
+            redirect_stderr(stderr),
+        ):
+            exit_code = main(["validate-config"])
         self.assertEqual(exit_code, 2)
         self.assertIn(Status.VALIDATION_FAILED.value, stderr.getvalue())
+        self.assertIn("Mandant passt nicht zum Repository", stderr.getvalue())
+
+    def test_cli_contains_only_run_specific_arguments(self) -> None:
+        """Hält technische Pfade und Repositoryidentität aus der CLI heraus."""
+
+        parser = build_parser()
+        sync = parser.parse_args(["sync-resources", "--commit", "a" * 40])
+        self.assertFalse(hasattr(sync, "source_branch"))
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            parser.parse_args(["validate-config", "--repository-root", "source"])
 
 
 if __name__ == "__main__":

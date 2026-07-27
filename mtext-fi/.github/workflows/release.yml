@@ -31,7 +31,6 @@ jobs:
     with:
       # Die Einrichtungsautomation ersetzt beide technischen Platzhalter gemeinsam
       # durch den mtext-actions-Commit.
-      repository_name: ${{ github.repository }}
       release_tag: ${{ inputs.release_tag || github.ref_name }}
       trigger_sha: ${{ github.event_name == 'push' && github.sha || '' }}
       automation_ref: 0000000000000000000000000000000000000000

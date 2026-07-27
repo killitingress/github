@@ -4,23 +4,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
+from pathlib import Path
 
-from .config import load_configuration
+from .config import AUTOMATION_ROOT, load_configuration
 from .errors import DeliveryError, Status
 from .mainframe import publish_mainframe
 from .release import build_release
 from .sync import sync_resources
-
-
-def _add_configuration_arguments(parser: argparse.ArgumentParser) -> None:
-    """Ergänzt die drei Kommandos mit gemeinsamer Lieferkonfiguration."""
-
-    parser.add_argument("--mandant-config", default=".github/config.json")
-    parser.add_argument("--mandanten", required=True)
-    parser.add_argument("--repository-root", default=".")
-    parser.add_argument("--releaselinien", required=True)
-    parser.add_argument("--repository-name", required=True)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,76 +22,65 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="lbs-delivery")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    validate = commands.add_parser("validate-config")
-    _add_configuration_arguments(validate)
+    commands.add_parser("validate-config")
 
     sync = commands.add_parser("sync-resources")
-    _add_configuration_arguments(sync)
     sync.add_argument("--commit", required=True)
-    sync.add_argument("--source-branch", required=True)
-    sync.add_argument("--environment", required=True)
-    sync.add_argument("--staging-dir", required=True)
-    sync.add_argument("--timeout", type=float, default=60.0)
-    sync.add_argument("--execute", action="store_true")
 
     release = commands.add_parser("build-release")
-    _add_configuration_arguments(release)
     release.add_argument("--tag", required=True)
     release.add_argument("--trigger-sha", default="")
-    release.add_argument("--output", default="dist")
 
-    publish = commands.add_parser("publish-mainframe")
-    publish.add_argument("--manifest", required=True)
-    publish.add_argument("--artifact-root", required=True)
-    publish.add_argument("--template", required=True)
-    publish.add_argument("--temporary-dir", required=True)
-    publish.add_argument("--execute", action="store_true")
+    commands.add_parser("publish-mainframe")
     return parser
 
 
 def run(arguments: argparse.Namespace) -> dict[str, object]:
     """Führt den vom Parser ausgewählten fachlichen Ablauf aus."""
 
-    if arguments.command == "publish-mainframe":
-        return publish_mainframe(
-            manifest_path=arguments.manifest,
-            artifact_root=arguments.artifact_root,
-            template_path=arguments.template,
-            temporary_directory=arguments.temporary_dir,
-            execute=arguments.execute,
-        )
+    workspace = Path(os.environ["GITHUB_WORKSPACE"])
 
-    configuration = load_configuration(
-        arguments.mandant_config,
-        arguments.mandanten,
-        arguments.releaselinien,
-        repository_name=arguments.repository_name,
-        repository_root=arguments.repository_root,
-    )
+    if arguments.command == "publish-mainframe":
+        with tempfile.TemporaryDirectory(
+            prefix="jcl-",
+            dir=os.environ["RUNNER_TEMP"],
+        ) as temporary:
+            return publish_mainframe(
+                manifest_path=workspace / "dist" / "manifest.json",
+                artifact_root=workspace / "dist",
+                template_path=AUTOMATION_ROOT / "templates/mainframe-upload.jcl",
+                temporary_directory=temporary,
+                execute=True,
+            )
+
+    repository_name = os.environ["GITHUB_REPOSITORY"]
+    repository_root = workspace / "source"
+    configuration = load_configuration(repository_root, repository_name)
     if arguments.command == "validate-config":
         result = {
             "status": Status.CONFIG_VALIDATED.value,
             "mandanten_kuerzel": configuration.kuerzel,
-            "repository": arguments.repository_name,
+            "repository": configuration.repository,
             "releaselinien": sorted(configuration.releaselinien),
         }
     elif arguments.command == "sync-resources":
-        result = sync_resources(
-            configuration,
-            repository_root=arguments.repository_root,
-            commit=arguments.commit,
-            source_branch=arguments.source_branch,
-            environment=arguments.environment,
-            staging_root=arguments.staging_dir,
-            timeout=arguments.timeout,
-            execute=arguments.execute,
-        )
+        with tempfile.TemporaryDirectory(
+            prefix="resources-",
+            dir=os.environ["RUNNER_TEMP"],
+        ) as staging:
+            result = sync_resources(
+                configuration,
+                repository_root=repository_root,
+                commit=arguments.commit,
+                source_branch=os.environ["GITHUB_REF_NAME"],
+                staging_root=staging,
+                execute=True,
+            )
     elif arguments.command == "build-release":
         manifest = build_release(
             configuration,
-            repository_root=arguments.repository_root,
-            output_directory=arguments.output,
-            repository_name=arguments.repository_name,
+            repository_root=repository_root,
+            output_directory=workspace / "dist",
             tag=arguments.tag,
             trigger_sha=arguments.trigger_sha,
         )
@@ -121,6 +103,13 @@ def main(argv: list[str] | None = None) -> int:
     except DeliveryError as exc:
         print(str(exc), file=sys.stderr)
         return exc.exit_code
+    except KeyError as exc:
+        print(
+            f"{Status.VALIDATION_FAILED.value}: "
+            f"GitHub-Runnerkontext fehlt: {exc.args[0]}",
+            file=sys.stderr,
+        )
+        return 2
     except (OSError, UnicodeError) as exc:
         print(
             f"{Status.VALIDATION_FAILED.value}: lokale Dateioperation fehlgeschlagen: {exc}",

@@ -5,9 +5,6 @@ name: Reusable release
 'on':
   workflow_call:
     inputs:
-      repository_name:
-        required: true
-        type: string
       release_tag:
         required: true
         type: string
@@ -73,18 +70,12 @@ jobs:
       - name: Build release and manifest
         env:
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
-          INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}
           INPUT_TRIGGER_SHA: ${{ inputs.trigger_sha }}
           PYTHONPATH: automation/src
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery build-release
-          --repository-root source
-          --mandanten automation/config/mandanten.json
-          --releaselinien automation/config/releaselinien.json
-          --repository-name "$INPUT_REPOSITORY_NAME"
           --tag "$INPUT_RELEASE_TAG"
           --trigger-sha "$INPUT_TRIGGER_SHA"
-          --output dist
 
       # Bildet aus Repository und Release-Tag einen eindeutigen Artefaktnamen und
       # stellt ihn dem Upload sowie dem nachfolgenden Veröffentlichungsjob bereit.
@@ -92,9 +83,8 @@ jobs:
         id: metadata
         env:
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
-          INPUT_REPOSITORY_NAME: ${{ inputs.repository_name }}
         run: |
-          repository_short="${INPUT_REPOSITORY_NAME##*/}"
+          repository_short="${GITHUB_REPOSITORY##*/}"
           printf 'artifact_name=%s-%s\n' "$repository_short" "$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
       # Speichert den vollständigen dist-Inhalt ohne zusätzliche Komprimierung
@@ -156,8 +146,3 @@ jobs:
           PYTHONPATH: automation/src
         run: >-
           "${{ steps.runtime.outputs.python }}" -m lbs_delivery publish-mainframe
-          --manifest dist/manifest.json
-          --artifact-root dist
-          --template automation/templates/mainframe-upload.jcl
-          --temporary-dir "$RUNNER_TEMP/jcl-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          --execute
