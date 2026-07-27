@@ -1,8 +1,11 @@
 """Bereitet abgestimmte Workflow-Aktualisierungen für Automation und Mandanten-Repositories vor.
 
-Das Werkzeug setzt die Runner-Kennzeichen in den zentralen Workflows, bindet die
-Mandanten-Workflows an den entstandenen Commit und erstellt die Rollout-Matrix
-für alle aktiven Releaselinienbranches.
+Das Werkzeug wird vom Batch-Workflow `update-mandant-workflows` in drei Schritten
+aufgerufen:
+
+- `prepare-automation`: zentrale Runner-Kennzeichen finalisieren und Rollout-SHA liefern
+- `update-matrix`: Rollout-Matrix für alle Mandantenbranches erzeugen
+- `prepare-mandant`: einen Mandantenbranch an die Rollout-SHA binden
 """
 
 from __future__ import annotations
@@ -16,8 +19,10 @@ from pathlib import Path
 
 from lbs_delivery.config import (
     AUTOMATION_ROOT,
-    load_mandanten_zuordnung,
-    load_releaselinien_zuordnung,
+    MANDANTEN_ZUORDNUNG_PATH,
+    RELEASELINIEN_ZUORDNUNG_PATH,
+    _load_mandanten_zuordnung,
+    _load_releaselinien_zuordnung,
 )
 from lbs_delivery.process import DeliveryError
 
@@ -124,9 +129,14 @@ def _commit(repository: Path, message: str) -> str:
 
     changed = bool(_git(repository, "status", "--short", "--", ".github/workflows").stdout)
     if changed:
+        # Diff prüfen und für die Protokollierung ausgeben.
         _git(repository, "diff", "--check", "--", ".github/workflows")
         print(_git(repository, "diff", "--", ".github/workflows").stdout, file=sys.stderr)
+
+        # Geänderte Workflow-Dateien committen.
         _git(repository, "commit", "--no-gpg-sign", "--only", "-m", message, "--", ".github/workflows")
+
+    # Aktuelle Revision zurückgeben, auch wenn nichts zu committen war.
     return _git(repository, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
 
 
@@ -138,16 +148,24 @@ def prepare_automation_update(automation_root: Path, runner_label: str, automati
     vorgesehener Platzhalter oder veraltetes Kennzeichen verblieben ist.
     """
 
+    # Runner-Kennzeichen prüfen.
     if not runner_label.strip() or "\n" in runner_label or runner_label == RUNNER_PLACEHOLDER:
         raise ValueError("Runner-Kennzeichen muss ein einzeiliger Wert der FI sein")
+
+    # Automations-Checkout gegen die erwartete Revision absichern.
     checkout_sha = _git(automation_root, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
     if checkout_sha != automation_sha:
         raise ValueError("zentraler Checkout entspricht nicht dem angegebenen Commit")
 
+    # Runner-Kennzeichen in zentrale Workflows einsetzen.
     automation_changes = _automation_changes(automation_root, runner_label)
     for path, text in automation_changes.items():
         path.write_text(text, encoding="utf-8")
+
+    # Änderungen committen.
     automation_sha = _commit(automation_root, "Runner der FI in zentralen Workflows aktualisieren")
+
+    # Abschließende Prüfung der Workflow-Umformung.
     if _automation_changes(automation_root, runner_label):
         raise RuntimeError("abschließende Prüfung der zentralen Workflows ist nicht leer")
     return automation_sha
@@ -161,14 +179,20 @@ def prepare_mandant_update(automation_root: Path, mandant_root: Path, rollout_sh
     Commit einheitliche Workflow- und Codereferenzen enthält.
     """
 
+    # Automations-Checkout gegen die Rollout-SHA absichern.
     checkout_sha = _git(automation_root, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
     if checkout_sha != rollout_sha:
         raise ValueError("zentraler Checkout entspricht nicht der Rollout-SHA")
 
+    # Mandanten-Workflows an den Rollout-Commit binden.
     mandant_changes = _mandant_changes(mandant_root, rollout_sha)
     for path, text in mandant_changes.items():
         path.write_text(text, encoding="utf-8")
+
+    # Änderungen committen.
     mandant_sha = _commit(mandant_root, "Zentrale Workflowversion aktualisieren [skip ci]")
+
+    # Abschließende Prüfung der Referenzbindung.
     if _mandant_changes(mandant_root, rollout_sha):
         raise RuntimeError("abschließende Prüfung des Mandantenbranches ist nicht leer")
     return mandant_sha
@@ -181,9 +205,11 @@ def build_update_matrix(mandanten_path: Path, releaselinien_path: Path) -> dict[
     Releaselinienbestand ab, den auch die Lieferprüfung verwendet.
     """
 
-    mandanten = load_mandanten_zuordnung(mandanten_path)
-    releaselinien = load_releaselinien_zuordnung(releaselinien_path)
+    # Zentrale Zuordnungen laden.
+    mandanten = _load_mandanten_zuordnung(mandanten_path)
+    releaselinien = _load_releaselinien_zuordnung(releaselinien_path)
 
+    # Matrix für Mandanten, Releaselinien und Branchstufen aufbauen.
     include = [
         {
             "repository": stammdaten.repository,
@@ -207,44 +233,56 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="workflow-configuration")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    automation = commands.add_parser("prepare-automation")
+    automation = commands.add_parser(
+        "prepare-automation",
+        help="zentrale Runner-Kennzeichen finalisieren und Rollout-SHA zurückgeben",
+    )
     automation.add_argument("--runner-label", required=True)
     automation.add_argument("--automation-sha", required=True)
 
-    mandant = commands.add_parser("prepare-mandant")
+    mandant = commands.add_parser(
+        "prepare-mandant",
+        help="einen Mandantenbranch an die Rollout-SHA binden",
+    )
     mandant.add_argument("--mandant-root", type=Path, required=True)
     mandant.add_argument("--rollout-sha", required=True)
 
-    commands.add_parser("update-matrix")
+    commands.add_parser(
+        "update-matrix",
+        help="Rollout-Matrix aus Mandanten- und Releaselinienzuordnung erzeugen",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Führt den ausgewählten Vorbereitungsschritt aus und gibt kompaktes JSON aus.
+    """Führt eines der drei Rollout-Kommandos aus und gibt kompaktes JSON aus.
 
-    Erwartete Konfigurations-, Datei- und Git-Fehler werden in einen
-    Kommandozeilenfehler übersetzt. Erfolgreiche Ausgaben bleiben für
-    Workflow-Schritte leicht verarbeitbar.
+    `prepare-automation` und `update-matrix` laufen im zentralen Vorbereitungsjob.
+    `prepare-mandant` läuft einmal pro Matrixeintrag im Mandanten-Updatejob.
     """
 
     arguments = build_parser().parse_args(argv)
+
+    # Rollout-Kommando ausführen.
     try:
         if arguments.command == "prepare-automation":
+            # Zentralen Commit vorbereiten: Runner setzen, committen, SHA zurückgeben.
             rollout_sha = prepare_automation_update(AUTOMATION_ROOT, arguments.runner_label, arguments.automation_sha)
             result = {"rollout_sha": rollout_sha}
         elif arguments.command == "prepare-mandant":
+            # Einen Mandantenbranch an Workflow- und Codereferenzen der Rollout-SHA binden.
             result = {
                 "mandant_sha": prepare_mandant_update(AUTOMATION_ROOT, arguments.mandant_root, arguments.rollout_sha)
             }
         elif arguments.command == "update-matrix":
-            result = build_update_matrix(
-                AUTOMATION_ROOT / "config/mandanten.json",
-                AUTOMATION_ROOT / "config/releaselinien.json",
-            )
+            # Matrix für alle Mandanten-, Releaselinien- und Branchstufen-Kombinationen erzeugen.
+            result = build_update_matrix(MANDANTEN_ZUORDNUNG_PATH, RELEASELINIEN_ZUORDNUNG_PATH)
         else:
             raise AssertionError(f"unbekanntes Kommando: {arguments.command}")
     except (DeliveryError, OSError, RuntimeError, ValueError) as error:
         raise SystemExit(f"Mandanten-Aktualisierung kann nicht vorbereitet werden: {error}") from None
+
+    # Ergebnis als JSON ausgeben.
     print(json.dumps(result, separators=(",", ":")))
     return 0
 

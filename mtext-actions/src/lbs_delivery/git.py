@@ -32,8 +32,11 @@ class GitChange:
     DELTA-Paketbau Löschungen von neu angelegten Pfaden unterscheiden muss.
     """
 
+    # Status aus `git diff --name-status`: A, M, D, T, R oder C
     status: str
+    # Betroffener Pfad, bei Umbenennung und Kopie das Ziel
     path: str
+    # Quellpfad bei Umbenennung und Kopie
     old_path: str | None = None
 
 
@@ -67,8 +70,11 @@ def resolve(repository: str | Path, reference: str) -> str:
     Vergleiche gelangen.
     """
 
+    # `^{commit}` löst die Referenz bis zum Commit auf und lehnt Tree- und Blob-Objekte ab.
     output = _git(repository, "rev-parse", "--verify", "--end-of-options", f"{reference}^{{commit}}")
+    # Git liefert die SHA als ASCII-Bytes, meist mit nachgestelltem Zeilenumbruch.
     value = output.decode("ascii").strip()
+    # Nur eine vollständige 40-stellige Hex-SHA weiterverwenden.
     if FULL_SHA_RE.fullmatch(value) is None:
         raise DeliveryError(Status.SOURCE_FAILED, "Git lieferte keine Commit-SHA")
     return value
@@ -81,26 +87,14 @@ def require_ancestor(repository: str | Path, ancestor: str, descendant: str) -> 
     Remote-Branch gehört und nicht lediglich im lokalen Repository vorhanden ist.
     """
 
+    # `--is-ancestor` liefert Exit 0 nur bei echter Abstammung, `_git` wertet den Rückgabecode aus.
     _git(repository, "merge-base", "--is-ancestor", ancestor, descendant)
 
 
-def require_checkout(repository: str | Path, commit: str, branch: str) -> None:
-    """Prüft einen durch Commit ausgelösten Checkout gegen seinen Zielbranch.
-
-    Sowohl HEAD als auch die Abstammung vom Remote-Branch werden geprüft. So kann
-    keine gültige SHA aus einer fremden Historie synchronisiert werden.
-    """
-
-    if FULL_SHA_RE.fullmatch(commit) is None or resolve(repository, "HEAD") != commit:
-        raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Commit")
-    require_ancestor(repository, commit, f"refs/remotes/origin/{branch}")
-
-
 def require_release_tag(repository: str | Path, tag: str, branch: str) -> str:
-    """Prüft einen Release-Tag und gibt den ausgecheckten Commit zurück.
+    """Prüft den Release-Tag-Namen und gibt die zugehörige Commit-SHA zurück.
 
-    Vor dem Paketbau muss der Tag dem Namensvertrag entsprechen, auf HEAD zeigen
-    und vom vorgesehenen Bereitstellungsbranch erreichbar sein.
+    Der Tag muss existieren und auf dem angegebenen Remote-Branch liegen.
     """
 
     if RELEASE_TAG_RE.fullmatch(tag) is None:
@@ -120,6 +114,8 @@ def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:
     für korrekte DELTA-Pakete.
     """
 
+    # `git diff --name-status -z --find-renames --find-copies-harder` liefert
+    # eine nullgetrennte Liste von Status- und Pfadpaaren für die Änderungen.
     output = _git(repository, "diff", "--name-status", "-z", "--find-renames", "--find-copies-harder", base, target)
     data = output.decode("utf-8").rstrip("\0")
     if not data:
@@ -139,19 +135,23 @@ def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:
 def previous_tag(repository: str | Path, target_tag: str) -> str | None:
     """Ermittelt den numerisch größten Release-Tag vor dem Zieltag.
 
-    Der numerische Vergleich vermeidet Fehler einer lexikografischen Sortierung
-    und ignoriert Tags außerhalb des Release-Namensvertrags.
+    Der Lieferbeleg vergleicht den Zieltag mit seinem direkten Release-Vorgänger.
+    Dafür zählt die numerische Folge `Rnnn.nnn`, nicht die lexikografische
+    Sortierung der Tag-Namen in Git.
     """
 
     target_match = RELEASE_TAG_RE.fullmatch(target_tag)
     if target_match is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
-    target = (int(target_match.group(1)), int(target_match.group(2)))
-    candidates: list[tuple[tuple[int, int], str]] = []
+    target_number = (int(target_match.group(1)), int(target_match.group(2)))
+
+    # Den größten gültigen Tag wählen, der numerisch noch vor dem Zieltag liegt.
+    best: tuple[tuple[int, int], str] | None = None
     for tag in _git(repository, "tag", "--list", "R*.*").decode("ascii").splitlines():
         match = RELEASE_TAG_RE.fullmatch(tag)
-        if match:
-            numeric = (int(match.group(1)), int(match.group(2)))
-            if numeric < target:
-                candidates.append((numeric, tag))
-    return max(candidates)[1] if candidates else None
+        if match is None:
+            continue
+        number = (int(match.group(1)), int(match.group(2)))
+        if number < target_number and (best is None or number > best[0]):
+            best = (number, tag)
+    return best[1] if best else None

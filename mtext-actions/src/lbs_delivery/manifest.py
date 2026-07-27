@@ -15,23 +15,14 @@ from .process import DeliveryError, Status
 
 
 def sha256_file(path: str | Path) -> str:
-    """Berechnet die SHA-256-Prüfsumme zur Bindung einer Datei an das Manifest.
-
-    Die Verarbeitung über die Standardbibliothek lädt Releasepakete nicht
-    vollständig in den Speicher. Erzeugung und Prüfung verwenden dadurch
-    dieselbe Prüfsummenberechnung.
-    """
+    """Berechnet die SHA-256-Prüfsumme zur Bindung einer Datei an das Manifest."""
 
     with Path(path).open("rb") as source:
         return hashlib.file_digest(source, "sha256").hexdigest()
 
 
 def write_manifest(path: str | Path, manifest: dict[str, Any]) -> Path:
-    """Schreibt ein intern aufgebautes Manifest in stabiler und lesbarer Form.
-
-    Sortierte Schlüssel und ein abschließender Zeilenumbruch machen die Datei
-    reproduzierbar und in den Workflow-Artefakten leicht prüfbar.
-    """
+    """Schreibt ein intern aufgebautes Manifest in stabiler und lesbarer Form."""
 
     target = Path(path)
     target.write_text(json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -39,34 +30,56 @@ def write_manifest(path: str | Path, manifest: dict[str, Any]) -> Path:
 
 
 def load_and_verify(
-    manifest_path: str | Path, artifact_root: str | Path
+    manifest_path: str | Path, artifact_root: str | Path,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Lädt ein Manifest und prüft, ob die Paketdateien noch zum Releasebau passen.
-
-    Beim Publish liegt das Manifest als Protokoll des Releasebaus vor. Größe und
-    Prüfsumme jedes Pakets werden gegen die Dateien im Artefaktverzeichnis
-    gehalten, damit veränderte oder beschädigte Dateien vor der Übergabe
-    auffallen.
-    """
+    """Lädt ein Manifest und prüft, ob die Paketdateien noch zum Releasebau passen."""
 
     try:
         manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-        artifacts = manifest["artifacts"]
-    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise DeliveryError(Status.PACKAGE_FAILED, "Manifest ist ungültig") from exc
 
-    root = Path(artifact_root)
+    try:
+        artifacts = manifest["artifacts"]
+    except (KeyError, TypeError) as exc:
+        raise DeliveryError(Status.PACKAGE_FAILED, "Manifest ist unvollständig") from exc
+    if not isinstance(artifacts, list):
+        raise DeliveryError(Status.PACKAGE_FAILED, "Manifest ist unvollständig")
+
     packages: list[dict[str, Any]] = []
+
+    # Nur Paket-Artefakte übernehmen; Informationsdateien bleiben außen vor.
     for artifact in artifacts:
-        if artifact.get("kind") != "package":
+        if not isinstance(artifact, dict) or artifact.get("kind") != "package":
             continue
+
         try:
-            path = root / artifact["path"]
-            if path.stat().st_size != artifact["size"] or sha256_file(path) != artifact["sha256"]:
-                raise ValueError
-            packages.append(artifact)
-        except (KeyError, TypeError, ValueError, OSError) as exc:
-            raise DeliveryError(Status.PACKAGE_FAILED, "Releaseartefakt ist ungültig") from exc
+            relative_path = artifact["path"]
+            expected_size = artifact["size"]
+            expected_sha256 = artifact["sha256"]
+        except KeyError as exc:
+            raise DeliveryError(Status.PACKAGE_FAILED, "Releaseartefakt ist unvollständig") from exc
+
+        # Datei, Größe und Prüfsumme gegen das Manifest prüfen.
+        path = Path(artifact_root) / relative_path
+        if not path.is_file():
+            raise DeliveryError(Status.PACKAGE_FAILED, f"Releaseartefakt fehlt: {relative_path}")
+
+        size = path.stat().st_size
+        if size != expected_size:
+            raise DeliveryError(
+                Status.PACKAGE_FAILED,
+                f"Releaseartefakt hat falsche Größe: {relative_path} "
+                f"(erwartet {expected_size}, gefunden {size})",
+            )
+
+        if sha256_file(path) != expected_sha256:
+            raise DeliveryError(Status.PACKAGE_FAILED, f"Releaseartefakt hat falsche Prüfsumme: {relative_path}")
+
+        packages.append(artifact)
+
+    # Mindestens ein Paket muss für die Mainframe-Übergabe vorliegen.
     if not packages:
         raise DeliveryError(Status.PACKAGE_FAILED, "Manifest enthält kein Paket")
+
     return manifest, packages

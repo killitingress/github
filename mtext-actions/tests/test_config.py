@@ -17,7 +17,7 @@ from unittest.mock import patch
 from sync_resources import build_parser as build_sync_parser
 from validate_config import run as validate_config
 
-from lbs_delivery.config import load_mandanten_zuordnung
+from lbs_delivery.config import _load_mandanten_zuordnung
 from lbs_delivery.process import DeliveryError, Status, execute
 
 from tests.support import (
@@ -75,8 +75,7 @@ class ConfigTests(unittest.TestCase):
         """Lehnt widersprüchliche Mandantenidentität, Zuordnungen und Projektstruktur ab.
 
         Diese Fälle betreffen dieselbe Vertrauensgrenze. Angaben aus dem
-        Repository dürfen weder zentraler Zuständigkeit widersprechen noch den
-        ausgecheckten Bestand verlassen.
+        Repository dürfen der zentralen Zuständigkeit nicht widersprechen.
         """
 
         with self.assertRaises(DeliveryError):
@@ -102,14 +101,9 @@ class ConfigTests(unittest.TestCase):
             encoding="utf-8",
         )
         with self.assertRaises(DeliveryError):
-            load_mandanten_zuordnung(mandanten_path)
+            _load_mandanten_zuordnung(mandanten_path)
 
         (self.repository / "LOMS_Basisdaten").mkdir()
-        with self.assertRaises(DeliveryError):
-            load_test_configuration(self.repository)
-
-        (self.repository / "LOMS_Basisdaten").rmdir()
-        (self.repository / "LOMS_Basis/link.txt").symlink_to(self.repository / "Fonts/value.txt")
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository)
 

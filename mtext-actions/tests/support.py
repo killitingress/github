@@ -11,7 +11,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from lbs_delivery.config import Configuration, load_configuration
+from lbs_delivery.config import Configuration, MANDANT_CONFIG_PATH, load_configuration
 
 
 # Die Tests lesen zentrale Zuordnungen, Vorlagen und Workflows aus demselben
@@ -142,10 +142,7 @@ def setup_release_repository(root: Path) -> Path:
 
 
 def load_test_configuration(
-    repository: Path,
-    *,
-    mandant: dict[str, object] | None = None,
-    repository_name: str = "<oms_team>/mtext-fi",
+    repository: Path, *, mandant: dict[str, object] | None = None, repository_name: str = "<oms_team>/mtext-fi",
 ) -> Configuration:
     """Schreibt lokale Mandantenangaben und lädt die produktive Konfiguration.
 
@@ -154,7 +151,7 @@ def load_test_configuration(
     Releaselinienzuordnungen aus dem Automations-Checkout.
     """
 
-    path = repository / ".github/config.json"
+    path = repository / MANDANT_CONFIG_PATH
     path.parent.mkdir(exist_ok=True)
     write_mandant(path, **(mandant or {}))
     return load_configuration(repository, repository_name)

@@ -17,11 +17,7 @@ from lbs_delivery.sync import sync_resources
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Fordert die vom Synchronisationsworkflow übergebene Commit-SHA an.
-
-    Bevor Dateien ein externes Ziel erreichen, wird der Commit gegen HEAD und den
-    ausgewählten Remote-Branch geprüft.
-    """
+    """Fordert die vom Synchronisationsworkflow übergebene Commit-SHA an."""
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--commit", required=True)
@@ -31,15 +27,19 @@ def build_parser() -> argparse.ArgumentParser:
 def run() -> dict[str, object]:
     """Prüft und synchronisiert den vollständigen Projektstand aus dem Arbeitsbereich.
 
-    Ein temporäres Runner-Verzeichnis trennt das Staging vom Checkout. Hinweise
-    zum unverbindlichen Projektbestand werden zusammen mit dem Adapterergebnis
-    an die gemeinsame Prozessausgabe übergeben.
+    Ein temporäres Runner-Verzeichnis trennt das Staging vom Checkout. Die
+    eigentliche Prüfung, ob der Commit zum Remote-Branch gehört, erfolgt in
+    `sync_resources`. Hinweise zum unverbindlichen Projektbestand werden
+    zusammen mit dem Adapterergebnis an die gemeinsame Prozessausgabe übergeben.
     """
 
+    # Argumente auslesen und Konfiguration laden.
     arguments = build_parser().parse_args()
     workspace = Path(os.environ["GITHUB_WORKSPACE"])
     repository_root = workspace / "source"
     configuration = load_configuration(repository_root, os.environ["GITHUB_REPOSITORY"])
+
+    # Temporäres Verzeichnis für das Staging erstellen.
     with tempfile.TemporaryDirectory(prefix="resources-", dir=os.environ["RUNNER_TEMP"]) as staging:
         result = sync_resources(
             configuration,
@@ -48,8 +48,11 @@ def run() -> dict[str, object]:
             source_branch=os.environ["GITHUB_REF_NAME"],
             staging_root=staging,
         )
+
+    # Hinweise zum unverbindlichen Projektbestand anhängen.
     if configuration.warnungen:
         result["warnungen"] = list(configuration.warnungen)
+
     return result
 
 

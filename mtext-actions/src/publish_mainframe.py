@@ -25,6 +25,7 @@ def run() -> dict[str, object]:
     """
 
     workspace = Path(os.environ["GITHUB_WORKSPACE"])
+
     with tempfile.TemporaryDirectory(prefix="jcl-", dir=os.environ["RUNNER_TEMP"]) as temporary:
         return publish_mainframe(
             manifest_path=workspace / "dist" / "manifest.json",

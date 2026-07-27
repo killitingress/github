@@ -1,7 +1,7 @@
 """Rendert die feste JCL-Vorlage und übergibt Releasepakete per FTP und JES.
 
-Die Übergabe beginnt mit einem geprüften Manifest, rendert für jedes Paket eine
-JCL-Datei und lädt beide Teile mit den Zugangsdaten der Workflow-Umgebung hoch.
+Die Übergabe prüft zuerst Manifest und Vorlage vollständig, rendert für jedes
+Paket eine eigene JCL-Datei und startet erst danach die externe Übertragung.
 """
 
 from __future__ import annotations
@@ -30,65 +30,63 @@ _ASSIGNMENT_RE = re.compile(r"[A-Z0-9]{1,12}")
 MAINFRAME_DATASET = "IEA.LOMS.TONICZ"
 # Die gerenderte Jobsteuerung wird an dieses bestehende JES-Ziel übergeben.
 MAINFRAME_JES_TARGET = "LIT9028A"
-# Ein Verbindungsversuch darf den Übergabeworkflow höchstens eine Minute aufhalten.
-MAINFRAME_TIMEOUT = 60.0
+# Wartezeit pro FTP-Verbindungsaufbau. Der Wert soll den Workflow nicht länger
+# blockieren als für die FI üblich nötig.
+MAINFRAME_TIMEOUT = 30.0
 
 
 def render_jcl(template: str, jcl: dict[str, str], member: str) -> str:
-    """Prüft externe Werte und setzt sie in die JCL-Vorlage ein.
-
-    Die Prüfung erfolgt vor der Textersetzung, weil die Werte in die Syntax der
-    Jobsteuerung eingehen. Verbleibende Platzhalter kennzeichnen eine
-    unvollständige oder unpassende Vorlage und führen zum Abbruch.
-    """
+    """Prüft externe Werte und setzt sie in die JCL-Vorlage ein."""
 
     try:
-        valid = (
-            jcl["ISPW"] in {"T", "P"}
-            and jcl["LEVEL"] in CODEPIPELINE_STAGES
-            and _SUBSYSTEM_RE.fullmatch(jcl["SUBSYS"]) is not None
-            and _ASSIGNMENT_RE.fullmatch(jcl["ASSIGNMENT"]) is not None
-            and _MEMBER_RE.fullmatch(member) is not None
-        )
+        ispw = jcl["ISPW"]
+        level = jcl["LEVEL"]
+        subsys = jcl["SUBSYS"]
+        assignment = jcl["ASSIGNMENT"]
     except (KeyError, TypeError) as exc:
         raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Werte sind ungültig") from exc
-    if not valid:
+
+    # Manifest-Werte müssen den JCL-Vertrag erfüllen, bevor Platzhalter ersetzt werden.
+    if (
+        ispw not in {"T", "P"}
+        or level not in CODEPIPELINE_STAGES
+        or _SUBSYSTEM_RE.fullmatch(subsys) is None
+        or _ASSIGNMENT_RE.fullmatch(assignment) is None
+        or _MEMBER_RE.fullmatch(member) is None
+    ):
         raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Werte sind ungültig")
 
+    # Platzhalter in der Vorlage durch die geprüften Werte ersetzen.
     values = {**jcl, "MEMBER": member}
     rendered = template
     for name, value in values.items():
         rendered = rendered.replace(f"@@{name}@@", value)
+
+    # Verbleibende Platzhalter zeigen eine unpassende oder unvollständige Vorlage.
     if "@@" in rendered:
         raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Template ist ungültig")
+
     return rendered
 
 
 def submit_package(
-    package_path: str | Path,
-    jcl_path: str | Path,
-    member: str,
-    *,
-    host: str,
-    user: str,
-    password: str,
+    package_path: str | Path, jcl_path: str | Path, member: str, *, host: str, user: str, password: str,
 ) -> None:
-    """Lädt einen Paket-Member hoch und übergibt seine gerenderte JCL.
-
-    Die FTP-Sitzung schreibt zunächst die binären Paketdaten in das feste
-    Dataset. Anschließend wechselt sie in den JES-Modus und übergibt den
-    zugehörigen Textjob.
-    """
+    """Lädt ein Paket-Member per FTP hoch und übergibt die gerenderte JCL an JES."""
 
     session = ftplib.FTP()
     try:
         session.connect(host, timeout=MAINFRAME_TIMEOUT)
         session.login(user, password)
+
         with Path(package_path).open("rb") as package:
             session.storbinary(f"STOR '{MAINFRAME_DATASET}({member})'", package)
+
         session.sendcmd("SITE FILETYPE=JES")
+
         with Path(jcl_path).open("rb") as jcl:
             session.storlines(f"STOR {MAINFRAME_JES_TARGET}", jcl)
+
         session.quit()
     except ftplib.all_errors as exc:
         session.close()
@@ -96,42 +94,44 @@ def submit_package(
 
 
 def publish_mainframe(
-    *,
-    manifest_path: str | Path,
-    artifact_root: str | Path,
-    template_path: str | Path,
-    temporary_directory: str | Path,
+    *, manifest_path: str | Path, artifact_root: str | Path, template_path: str | Path, temporary_directory: str | Path,
 ) -> dict[str, object]:
-    """Prüft eine Lieferung und übergibt alle enthaltenen Pakete an den Mainframe.
+    """Prüft eine Lieferung und übergibt alle enthaltenen Pakete an den Mainframe."""
 
-    Sämtliche JCL-Dateien werden gerendert, bevor Zugangsdaten gelesen werden oder
-    ein Netzwerktransfer beginnt. Fehler in Manifest oder Vorlage werden dadurch
-    erkannt, bevor eine unvollständige externe Übergabe entstehen kann.
-    """
-
+    # Manifest und Pakete laden und prüfen.
     manifest, packages = load_and_verify(manifest_path, artifact_root)
+
+    # JCL-Vorlage und Manifestwerte für die spätere Erzeugung bereitstellen.
     try:
         template = Path(template_path).read_text(encoding="ascii")
         jcl_values = manifest["jcl"]
-        temporary = Path(temporary_directory)
-        temporary.mkdir(parents=True, exist_ok=True)
-    except (OSError, UnicodeError, KeyError, TypeError) as exc:
+        if not isinstance(jcl_values, dict):
+            raise TypeError
+    except (OSError, UnicodeError) as exc:
         raise DeliveryError(Status.VALIDATION_FAILED, "JCL kann nicht vorbereitet werden") from exc
+    except (KeyError, TypeError) as exc:
+        raise DeliveryError(Status.PACKAGE_FAILED, "Manifest ist unvollständig") from exc
 
-    rendered: list[tuple[dict[str, Any], Path]] = []
+    temporary = Path(temporary_directory)
+    temporary.mkdir(parents=True, exist_ok=True)
+
+    # Alle JCL-Dateien erzeugen, bevor Zugangsdaten gelesen oder übertragen werden.
+    prepared: list[tuple[dict[str, Any], Path]] = []
     for package in packages:
         member = package["member"]
         jcl_path = temporary / f"{member}.jcl"
         jcl_path.write_text(render_jcl(template, jcl_values, member), encoding="ascii")
-        rendered.append((package, jcl_path))
+        prepared.append((package, jcl_path))
 
+    # FTP-Secrets einmal lesen; danach folgt nur noch die externe Übergabe.
     try:
         host = os.environ["MAINFRAME_FTP_HOST"]
         user = os.environ["MAINFRAME_FTP_USER"]
         password = os.environ["MAINFRAME_FTP_PASSWORD"]
     except KeyError as exc:
         raise DeliveryError(Status.VALIDATION_FAILED, "Mainframe-FTP-Secrets fehlen") from exc
-    for package, jcl_path in rendered:
+
+    for package, jcl_path in prepared:
         submit_package(
             Path(artifact_root) / package["path"],
             jcl_path,
@@ -140,4 +140,5 @@ def publish_mainframe(
             user=user,
             password=password,
         )
+
     return {"status": Status.MAINFRAME_SUBMITTED.value}

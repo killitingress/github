@@ -98,7 +98,7 @@ def execute(operation: Callable[[], dict[str, object]]) -> int:
         print(str(exc), file=sys.stderr)
         return exc.exit_code
     except KeyError as exc:
-        print(f"{Status.VALIDATION_FAILED.value}: GitHub-Runnerkontext fehlt: {exc.args[0]}", file=sys.stderr)
+        print(f"{Status.VALIDATION_FAILED.value}: fehlender Eingabewert: {exc.args[0]}", file=sys.stderr)
         return 2
     except (OSError, UnicodeError) as exc:
         print(f"{Status.VALIDATION_FAILED.value}: lokale Dateioperation fehlgeschlagen: {exc}", file=sys.stderr)
