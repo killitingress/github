@@ -233,9 +233,10 @@ def build_release(
 
     # Neues Ausgabeverzeichnis anlegen.
     output = Path(output_directory)
-    if output.exists():
-        raise DeliveryError(Status.PACKAGE_FAILED, "Release-Ausgabeverzeichnis ist nicht neu")
-    output.mkdir(parents=True)
+    try:
+        output.mkdir(parents=True, exist_ok=False)
+    except OSError as exc:
+        raise DeliveryError(Status.PACKAGE_FAILED, "Release-Ausgabeverzeichnis ist nicht neu") from exc
 
     # Projektpakete, Lieferbelege und Artefaktmetadaten erzeugen.
     artifacts: list[dict[str, object]] = []

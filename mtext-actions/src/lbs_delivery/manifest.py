@@ -59,6 +59,12 @@ def load_and_verify(
             expected_sha256 = artifact["sha256"]
         except KeyError as exc:
             raise DeliveryError(Status.PACKAGE_FAILED, "Releaseartefakt ist unvollständig") from exc
+        if (
+            not isinstance(relative_path, str)
+            or not isinstance(expected_size, int)
+            or not isinstance(expected_sha256, str)
+        ):
+            raise DeliveryError(Status.PACKAGE_FAILED, "Releaseartefakt ist ungültig")
 
         # Datei, Größe und Prüfsumme gegen das Manifest prüfen.
         path = Path(artifact_root) / relative_path
