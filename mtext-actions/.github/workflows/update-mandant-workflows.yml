@@ -62,11 +62,9 @@ jobs:
         env:
           AUTOMATION_SHA: ${{ inputs.automation_sha }}
           FI_RUNNER_LABEL: ${{ vars.FI_RUNNER_LABEL }}
-          PYTHONPATH: automation/src
         run: >-
-          "${{ steps.runtime.outputs.python }}" -m workflow_configuration
+          "${{ steps.runtime.outputs.python }}" automation/src/workflow_configuration.py
           prepare-automation
-          --automation-root automation
           --runner-label "$FI_RUNNER_LABEL"
           --automation-sha "$AUTOMATION_SHA"
 
@@ -84,15 +82,10 @@ jobs:
       # Die aktiven Releaselinien werden mit allen drei Branchstufen kombiniert.
       - name: Build update matrix
         id: rollout
-        env:
-          PYTHONPATH: automation/src
         run: |
           rollout_sha="$(git -C automation rev-parse HEAD)"
           update_matrix="$(
-            "${{ steps.runtime.outputs.python }}" -m workflow_configuration \
-              update-matrix \
-              --mandanten automation/config/mandanten.json \
-              --releaselinien automation/config/releaselinien.json
+            "${{ steps.runtime.outputs.python }}" automation/src/workflow_configuration.py update-matrix
           )"
           printf 'rollout_sha=%s\n' "$rollout_sha" >> "$GITHUB_OUTPUT"
           printf 'update_matrix=%s\n' "$update_matrix" >> "$GITHUB_OUTPUT"
@@ -145,12 +138,10 @@ jobs:
       # Python-Logik committet ausschließlich Dateien unter .github/workflows.
       - name: Prepare and verify mandant update
         env:
-          PYTHONPATH: automation/src
           ROLLOUT_SHA: ${{ needs.prepare.outputs.rollout_sha }}
         run: >-
-          "${{ steps.runtime.outputs.python }}" -m workflow_configuration
+          "${{ steps.runtime.outputs.python }}" automation/src/workflow_configuration.py
           prepare-mandant
-          --automation-root automation
           --mandant-root mandant
           --rollout-sha "$ROLLOUT_SHA"
 

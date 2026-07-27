@@ -1,4 +1,9 @@
-"""Erzeugt FULL- und kumulative DELTA-Lieferungen aus einem Release-Tag."""
+"""Erzeugt reproduzierbare FULL- und kumulative DELTA-Lieferungen aus einem Release-Tag.
+
+Der Releasebau prüft die Git-Quelle, verpackt jedes konfigurierte Projekt,
+erstellt den lesbaren Lieferbeleg und schreibt ein Manifest mit Prüfsummen für
+die spätere Mainframe-Übergabe.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +15,7 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 from .config import Configuration
-from .errors import DeliveryError, Status
+from .process import DeliveryError, Status
 from .git import (
     GitChange,
     changes,
@@ -22,18 +27,23 @@ from .git import (
 from .manifest import sha256_file, write_manifest
 
 
-# Ohne echten Vorgänger verwendet der bestehende Informationsvertrag diesen Wert.
+# Die Informationsdatei verlangt auch beim ersten Release eine Bezeichnung für
+# den Vorgängertag, obwohl dafür kein entsprechender Git-Tag vorhanden ist.
 LEGACY_PREVIOUS_TAG = "R001.100"
-# Die Endung `.100` kennzeichnet den vollständigen Stand einer Releaselinie.
+# Ein Tag mit der Endung `.100` bezeichnet den vollständigen Ausgangsstand einer
+# Releaselinie und wählt deshalb den FULL- statt des kumulativen DELTA-Paketbaus.
 FULL_SUFFIX = ".100"
-# Informationsdateien dokumentieren Projekt, Lieferart und verglichene Tags.
-INFORMATION_NAME = (
-    "_INFO_{mandant}-{project}-{delivery_type}-{tag}-{previous_tag}.txt"
-)
+# Der Dateiname des Lieferbelegs nennt Projekt, Lieferart und verglichene Tags,
+# damit der Betrieb ihn dem zugehörigen Paket zuordnen kann.
+INFORMATION_NAME = "_INFO_{mandant}-{project}-{delivery_type}-{tag}-{previous_tag}.txt"
 
 
 def _normalize_tar_info(info: tarfile.TarInfo) -> tarfile.TarInfo:
-    """Entfernt lokale Dateimetadaten aus einem reproduzierbaren Archiv."""
+    """Vereinheitlicht lokale Metadaten, bevor ein Eintrag in das Archiv gelangt.
+
+    Feste Zeitstempel, Eigentümer und Dateimodi erzeugen für denselben
+    Repositorystand bytegleiche Pakete, unabhängig vom ausführenden Runner.
+    """
 
     info.mtime = 0
     info.uid = 0
@@ -44,35 +54,32 @@ def _normalize_tar_info(info: tarfile.TarInfo) -> tarfile.TarInfo:
     return info
 
 
-def _write_archive(
-    archive_path: Path, entries: Iterable[tuple[Path, str]]
-) -> list[str]:
-    """Schreibt vorbereitete Dateien und Verzeichnisse in ein bytegleiches TAR.GZ."""
+def _write_archive(archive_path: Path, entries: Iterable[tuple[Path, str]]) -> list[str]:
+    """Schreibt vorbereitete Einträge in ein reproduzierbares gzip-komprimiertes TAR-Archiv.
+
+    Der Aufrufer bestimmt die Reihenfolge der Einträge. Metadaten und
+    gzip-Zeitstempel werden hier vereinheitlicht. Die zurückgegebenen Namen
+    erscheinen anschließend im Lieferbeleg.
+    """
 
     try:
         with archive_path.open("wb") as raw:
             with gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as zipped:
-                with tarfile.open(
-                    fileobj=zipped, mode="w", format=tarfile.GNU_FORMAT
-                ) as archive:
+                with tarfile.open(fileobj=zipped, mode="w", format=tarfile.GNU_FORMAT) as archive:
                     for source, name in entries:
-                        archive.add(
-                            source,
-                            arcname=name,
-                            recursive=True,
-                            filter=_normalize_tar_info,
-                        )
+                        archive.add(source, arcname=name, recursive=True, filter=_normalize_tar_info)
                     return archive.getnames()
     except (OSError, tarfile.TarError) as exc:
-        raise DeliveryError(
-            Status.PACKAGE_FAILED, "Releasearchiv kann nicht erzeugt werden"
-        ) from exc
+        raise DeliveryError(Status.PACKAGE_FAILED, "Releasearchiv kann nicht erzeugt werden") from exc
 
 
-def _project_changes(
-    git_changes: Iterable[GitChange], project: str
-) -> Iterator[tuple[str, str]]:
-    """Projiziert Git-Status einmalig auf fachliche Projektänderungen."""
+def _project_changes(git_changes: Iterable[GitChange], project: str) -> Iterator[tuple[str, str]]:
+    """Überträgt Git-Änderungen des Repositories auf ein einzelnes Projekt.
+
+    Umbenennungen erscheinen als Löschung und Hinzufügung, Kopien als
+    Hinzufügung. Das entspricht den Dateioperationen beim Einspielen eines
+    DELTA-Pakets.
+    """
 
     prefix = f"{project}/"
     for change in git_changes:
@@ -95,7 +102,12 @@ def _delta_archive(
     deleted: list[str],
     deletion_name: str,
 ) -> list[str]:
-    """Baut den DELTA-Verzeichnisstand und archiviert ihn (wie bisher der Jenkins-Hook)"""
+    """Bereitet geänderte Dateien und Löschliste für ein DELTA-Archiv vor.
+
+    Ein temporärer Verzeichnisbaum bildet die repositoryrelativen Pfade ab.
+    Das erzeugte Archiv kann dadurch ohne nachträgliche Rekonstruktion der
+    Verzeichnisangaben eingespielt werden.
+    """
 
     with tempfile.TemporaryDirectory() as temporary:
         staging = Path(temporary)
@@ -103,15 +115,11 @@ def _delta_archive(
         for relative in included:
             source = repository_root / relative
             if not source.is_file():
-                raise DeliveryError(
-                    Status.PACKAGE_FAILED, "DELTA-Datei fehlt"
-                )
+                raise DeliveryError(Status.PACKAGE_FAILED, "DELTA-Datei fehlt")
             destination = staging / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, destination)
-        (staging / deletion_name).write_text(
-            "".join(f"{path}\n" for path in deleted), encoding="utf-8"
-        )
+        (staging / deletion_name).write_text("".join(f"{path}\n" for path in deleted), encoding="utf-8")
         entries = [(item, item.name) for item in sorted(staging.iterdir())]
         return _write_archive(archive_path, entries)
 
@@ -126,7 +134,12 @@ def _build_project_packages(
     delivery_type: str,
     cumulative_changes: Iterable[GitChange],
 ) -> tuple[list[tuple[Path, str]], list[str]]:
-    """Trennt den fachlich unterschiedlichen Paketbau vom gemeinsamen Releaseablauf."""
+    """Erzeugt die für ein konfiguriertes Projekt benötigten Paketdateien.
+
+    FULL-Lieferungen enthalten das vollständige Projekt und ein leeres
+    DELTA-Paket. DELTA-Lieferungen enthalten die geänderten Dateien und eine aus
+    dem kumulativen Git-Diff abgeleitete Löschliste.
+    """
 
     package_prefix = f"{configuration.kuerzel}{projektcode}"
     delivery_code = "F" if delivery_type == "FULL" else "D"
@@ -134,15 +147,11 @@ def _build_project_packages(
     deletion_name = f"{package_prefix}D.txt"
     if delivery_type == "FULL":
         source = repository_root / project
-        archive_names = _write_archive(
-            archive_path, [(source, f"./{project}")]
-        )
+        archive_names = _write_archive(archive_path, [(source, f"./{project}")])
         delta_path = output / f"{package_prefix}D.tgz"
-        # Das bei FULL zusätzlich erzeugte leere D-Paket gehört zum
-        # bestehenden Mainframe-Übergabevertrag.
-        _delta_archive(
-            delta_path, repository_root, project, [], [], deletion_name
-        )
+        # Die Mainframe-Übergabe erwartet neben jedem FULL-Paket einen
+        # DELTA-Member, auch wenn dieser keine Änderungen oder Löschungen enthält.
+        _delta_archive(delta_path, repository_root, project, [], [], deletion_name)
         return [(archive_path, "F"), (delta_path, "D")], archive_names
 
     included: set[str] = set()
@@ -152,14 +161,9 @@ def _build_project_packages(
             included.add(path)
         elif status == "D":
             deleted.add(path)
-    archive_names = _delta_archive(
-        archive_path,
-        repository_root,
-        project,
-        sorted(included),
-        sorted(deleted),
-        deletion_name,
-    )
+    included_paths = sorted(included)
+    deleted_paths = sorted(deleted)
+    archive_names = _delta_archive(archive_path, repository_root, project, included_paths, deleted_paths, deletion_name)
     return [(archive_path, "D")], archive_names
 
 
@@ -174,7 +178,12 @@ def _write_information(
     git_changes: Iterable[GitChange],
     archive_names: Iterable[str],
 ) -> None:
-    """Schreibt den bestehenden lesbaren Releasebeleg eines Projektpakets."""
+    """Schreibt den lesbaren Lieferbeleg zu einem Projektpaket.
+
+    Er dokumentiert die direkten Git-Änderungen seit dem vorigen Release und die
+    Einträge des Archivs. Der Paketinhalt kann dadurch geprüft werden, ohne das
+    Archiv zu entpacken.
+    """
 
     lines = [
         (
@@ -213,19 +222,20 @@ def build_release(
     tag: str,
     trigger_sha: str,
 ) -> Path:
-    """Prüft den Releasebezug und erzeugt alle Lieferdateien in einem Ablauf."""
+    """Prüft die Releasequelle und erzeugt alle vorgesehenen Lieferartefakte.
+
+    Die Funktion bindet den Tag an den Bereitstellungsbranch, wählt FULL- oder
+    DELTA-Verarbeitung und schreibt Projektpakete sowie Informationsdateien.
+    Größen und Prüfsummen werden im Manifest für die spätere Übergabe festgehalten.
+    """
 
     root = Path(repository_root)
     releaselinie = tag[:4]
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
-    target_sha = require_release_tag(
-        root, tag, f"{releaselinie}/Bereitstellung"
-    )
+    target_sha = require_release_tag(root, tag, f"{releaselinie}/Bereitstellung")
     if trigger_sha and trigger_sha != target_sha:
-        raise DeliveryError(
-            Status.SOURCE_FAILED, "auslösender Commit stimmt nicht zum Tag"
-        )
+        raise DeliveryError(Status.SOURCE_FAILED, "auslösender Commit stimmt nicht zum Tag")
 
     delivery_type = "FULL" if tag.endswith(FULL_SUFFIX) else "DELTA"
     base = f"{releaselinie}{FULL_SUFFIX}" if delivery_type == "DELTA" else None
@@ -241,9 +251,7 @@ def build_release(
     try:
         output.mkdir(parents=True, exist_ok=False)
     except OSError as exc:
-        raise DeliveryError(
-            Status.PACKAGE_FAILED, "Release-Ausgabeverzeichnis ist nicht neu"
-        ) from exc
+        raise DeliveryError(Status.PACKAGE_FAILED, "Release-Ausgabeverzeichnis ist nicht neu") from exc
 
     artifacts: list[dict[str, object]] = []
     previous_label = previous or LEGACY_PREVIOUS_TAG

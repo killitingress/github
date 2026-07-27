@@ -1,4 +1,9 @@
-"""Synchronisiert einen geprüften Repositorystand nach M/Text."""
+"""Synchronisiert einen geprüften Repositorystand mit den externen M/Text-Systemen.
+
+Der Ablauf stellt die Projektverzeichnisse bereit, ersetzt ihre serverSync-Ziele
+mit Rückfallmöglichkeit und ruft den zur Releaselinie und Umgebung des
+Quellbranches gehörenden Adapter auf.
+"""
 
 from __future__ import annotations
 
@@ -9,43 +14,32 @@ import urllib.error
 import urllib.request
 import uuid
 from pathlib import Path
-from typing import Any, Callable
 
-from .config import ADAPTER_PAYLOAD, SYNC_STAGES, Configuration
-from .errors import DeliveryError, Status
+from .process import DeliveryError, Status
+from .config import Configuration
 from .git import require_checkout
 
 
-# Obergrenze für den gelesenen Adapter-Antwortkörper in Bytes; verhindert unbeschränkten Speicherverbrauch.
+# Jede Synchronisationsumgebung liefert die Endungen für ihr serverSync-Verzeichnis
+# und ihren Adapterhost.
+SYNC_STAGES = {"Entwicklung": ("E", "e"), "Abnahme": ("A", "a")}
+
+# Antworttexte des Adapters werden auf ein MiB begrenzt. So kann eine unerwartete
+# Gegenstelle beim Sammeln der Diagnose nicht unbegrenzt Runner-Speicher belegen.
 ADAPTER_RESPONSE_LIMIT = 1024 * 1024  # 1 MB
 
-# Der Adapteraufruf darf den Workflow höchstens eine Minute blockieren.
+# Eine blockierte Adapterverbindung darf den Workflow höchstens eine Minute
+# aufhalten, bevor die Synchronisation als fehlgeschlagen gilt.
 ADAPTER_TIMEOUT = 60.0
 
 
-def stage_projects(
-    repository_root: str | Path,
-    staging_root: str | Path,
-    projects: list[str],
-) -> list[str]:
-    """Kopiert die zentral geprüften Projektbäume in das Staging."""
-
-    source_root = Path(repository_root)
-    staging = Path(staging_root)
-    try:
-        staging.mkdir(parents=True, exist_ok=False)
-        for project in projects:
-            source = source_root / project
-            shutil.copytree(source, staging / project, copy_function=shutil.copy2)
-    except (OSError, shutil.Error) as exc:
-        raise DeliveryError(
-            Status.RESOURCE_TRANSFER_FAILED, "Ressourcen-Staging fehlgeschlagen"
-        ) from exc
-    return projects
-
-
 def publish_server_sync(staging_root: str | Path, target_root: str | Path) -> None:
-    """Kapselt die wiederherstellbare Ersetzung am externen serverSync-Ziel."""
+    """Ersetzt bereitgestellte Projekte unter serverSync mit Rückfallmöglichkeit.
+
+    Jeder neue Verzeichnisbaum wird neben sein Ziel kopiert und anschließend
+    eingewechselt. Scheitert dieser Wechsel nach dem Verschieben des alten
+    Verzeichnisses, wird dessen Sicherung vor der Fehlermeldung wiederhergestellt.
+    """
 
     staging = Path(staging_root)
     target = Path(target_root)
@@ -67,46 +61,36 @@ def publish_server_sync(staging_root: str | Path, target_root: str | Path) -> No
             if backup.exists():
                 shutil.rmtree(backup)
     except (OSError, shutil.Error) as exc:
-        raise DeliveryError(
-            Status.RESOURCE_TRANSFER_FAILED,
-            "serverSync-Veröffentlichung fehlgeschlagen",
-        ) from exc
+        raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "serverSync-Veröffentlichung fehlgeschlagen") from exc
 
 
-def call_adapter(
-    url: str,
-    *,
-    timeout: float,
-    opener: Callable[..., Any] = urllib.request.urlopen,
-) -> tuple[int, str]:
-    """Kapselt den HTTP-Aufruf des M/Text-Adapters als externe Systemgrenze."""
+def call_adapter(url: str, *, timeout: float) -> tuple[int, str]:
+    """Ruft den M/Text-Adapter auf und gibt seine erfolgreiche HTTP-Antwort zurück.
+
+    An dieser externen Grenze werden Transportfehler, nicht erfolgreiche
+    Statuscodes und begrenzt gelesene Antworttexte in das Lieferfehlermodell
+    übersetzt.
+    """
 
     request = urllib.request.Request(
         url,
-        data=json.dumps(ADAPTER_PAYLOAD, separators=(",", ":")).encode("utf-8"),
+        # Der Adaptervertrag verlangt diese festen technischen Kennungen in
+        # jeder Synchronisationsanfrage.
+        data=json.dumps({"mandant": "MAN", "institut": "INR"}, separators=(",", ":")).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
-        with opener(request, timeout=timeout) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             status = int(response.status)
-            body = response.read(ADAPTER_RESPONSE_LIMIT).decode(
-                "utf-8", errors="replace"
-            )
+            body = response.read(ADAPTER_RESPONSE_LIMIT).decode("utf-8", errors="replace")
     except urllib.error.HTTPError as exc:
         body = exc.read(ADAPTER_RESPONSE_LIMIT).decode("utf-8", errors="replace")
-        raise DeliveryError(
-            Status.ADAPTER_FAILED,
-            f"Adapter antwortet mit HTTP {exc.code}: {body[:1000]}",
-        ) from exc
+        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {exc.code}: {body[:1000]}") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
-        raise DeliveryError(
-            Status.ADAPTER_FAILED, "Adapter-Transport fehlgeschlagen"
-        ) from exc
+        raise DeliveryError(Status.ADAPTER_FAILED, "Adapter-Transport fehlgeschlagen") from exc
     if not 200 <= status < 300:
-        raise DeliveryError(
-            Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {status}: {body[:1000]}"
-        )
+        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {status}: {body[:1000]}")
     return status, body
 
 
@@ -117,40 +101,35 @@ def sync_resources(
     commit: str,
     source_branch: str,
     staging_root: str | Path,
-    execute: bool,
 ) -> dict[str, object]:
-    """Führt Prüfung, Staging und optional die externe Synchronisation aus."""
+    """Prüft den angeforderten Quellstand und führt die vollständige Synchronisation aus.
 
-    releaselinie, separator, environment = source_branch.partition("/")
+    Die Branchstruktur bestimmt eine konfigurierte Releaselinie und Umgebung.
+    Erst nach dem Nachweis des erreichbaren Checkouts werden die Projektverzeichnisse
+    bereitgestellt, veröffentlicht und dem zugehörigen Adapter gemeldet.
+    """
+
+    releaselinie, _, environment = source_branch.partition("/")
     if environment not in SYNC_STAGES:
-        raise DeliveryError(
-            Status.VALIDATION_FAILED,
-            "Zielumgebung ist ungültig",
-        )
-    if not separator or source_branch != f"{releaselinie}/{environment}":
-        raise DeliveryError(
-            Status.VALIDATION_FAILED, "Branch passt nicht zur Zielumgebung"
-        )
+        raise DeliveryError(Status.VALIDATION_FAILED, "Zielumgebung ist ungültig")
+    if source_branch != f"{releaselinie}/{environment}":
+        raise DeliveryError(Status.VALIDATION_FAILED, "Branch passt nicht zur Zielumgebung")
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
     require_checkout(repository_root, commit, source_branch)
-    projects = stage_projects(
-        repository_root, staging_root, list(configuration.projects)
-    )
-    if not execute:
-        return {"status": Status.ARTIFACT_READY.value, "projects": projects}
+
+    source_root = Path(repository_root)
+    staging = Path(staging_root)
+    try:
+        staging.mkdir(parents=True, exist_ok=False)
+        for project in configuration.projects:
+            shutil.copytree(source_root / project, staging / project, copy_function=shutil.copy2)
+    except (OSError, shutil.Error) as exc:
+        raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "Ressourcen-Staging fehlgeschlagen") from exc
 
     etaps_linie = configuration.releaselinien[releaselinie]["etaps_linie"]
     path_suffix, host_suffix = SYNC_STAGES[environment]
-    publish_server_sync(
-        staging_root, f"/nfs/mtext/{etaps_linie}{path_suffix}/serverSync"
-    )
-    status, body = call_adapter(
-        f"https://{etaps_linie}{host_suffix}.ltoma.intern/vMtextAdapter/sync",
-        timeout=ADAPTER_TIMEOUT,
-    )
-    return {
-        "status": Status.ADAPTER_ACCEPTED.value,
-        "http_status": status,
-        "response_body": body,
-    }
+    publish_server_sync(staging_root, f"/nfs/mtext/{etaps_linie}{path_suffix}/serverSync")
+    adapter_url = f"https://{etaps_linie}{host_suffix}.ltoma.intern/vMtextAdapter/sync"
+    status, body = call_adapter(adapter_url, timeout=ADAPTER_TIMEOUT)
+    return {"status": Status.ADAPTER_ACCEPTED.value, "http_status": status, "response_body": body}

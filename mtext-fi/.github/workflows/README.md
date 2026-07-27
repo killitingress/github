@@ -13,7 +13,7 @@ Der Ablauf ist immer wie folgt:
 - Anschließend führt der Runner den dort liegenden Python-Code aus, beispielsweise:
 
 ```shell
-python -m lbs_delivery build-release
+python automation/src/build_release.py
 ```
 
 ## Workflow-Übersicht

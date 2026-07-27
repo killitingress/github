@@ -71,9 +71,8 @@ jobs:
         env:
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
           INPUT_TRIGGER_SHA: ${{ inputs.trigger_sha }}
-          PYTHONPATH: automation/src
         run: >-
-          "${{ steps.runtime.outputs.python }}" -m lbs_delivery build-release
+          "${{ steps.runtime.outputs.python }}" automation/src/build_release.py
           --tag "$INPUT_RELEASE_TAG"
           --trigger-sha "$INPUT_TRIGGER_SHA"
 
@@ -143,6 +142,5 @@ jobs:
           MAINFRAME_FTP_HOST: ${{ secrets.MAINFRAME_FTP_HOST }}
           MAINFRAME_FTP_PASSWORD: ${{ secrets.MAINFRAME_FTP_PASSWORD }}
           MAINFRAME_FTP_USER: ${{ secrets.MAINFRAME_FTP_USER }}
-          PYTHONPATH: automation/src
         run: >-
-          "${{ steps.runtime.outputs.python }}" -m lbs_delivery publish-mainframe
+          "${{ steps.runtime.outputs.python }}" automation/src/publish_mainframe.py

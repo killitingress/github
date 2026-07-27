@@ -1,29 +1,33 @@
 # `mtext-actions`
 
-Das Repository stellt vier CLI-Kommandos für die wiederverwendbaren
+Das Repository stellt vier Python-Skripte für die wiederverwendbaren
 GitHub-Workflows bereit:
 
-- `validate-config`
-- `sync-resources`
-- `build-release`
-- `publish-mainframe`
+- `src/validate_config.py`
+- `src/sync_resources.py`
+- `src/build_release.py`
+- `src/publish_mainframe.py`
 
 Die Anwendung benötigt nur die Python-Standardbibliothek.
 
 ## Aufbau
 
-- `cli.py`: Kommandozeile, Ausgabe und Exitcodes
-- `config.py`: Mandanten- und Releaselinienkonfiguration
+- `src/validate_config.py`: Prüfung der Mandantenkonfiguration
+- `src/sync_resources.py`: Einstieg in die Ressourcensynchronisation
+- `src/build_release.py`: Einstieg in den Releasebau
+- `src/publish_mainframe.py`: Einstieg in die Mainframe-Übergabe
+- `src/lbs_delivery/process.py`: gemeinsame Ausgabe, Statuswerte und Exitcodes
+- `src/lbs_delivery/config.py`: Mandanten- und Releaselinienkonfiguration
 - `config/mandanten.json`: vollständige GitHub-Namen, Mandantenkürzel und
   Mainframe-Subsysteme
 - `config/releaselinien.json`: aktive Releaselinien, ETAPS-Linien und
   Hostprofile
-- `git.py`: Commit-, Branch-, Tag- und Diff-Abfragen
-- `sync.py`: Staging, `serverSync` und M/Text-Adapter
-- `release.py`: FULL, DELTA, Archive und Informationsdateien
-- `manifest.py`: Manifestvertrag und Artefaktprüfung vor der Übergabe
-- `mainframe.py`: JCL-Rendering und FTP-/JES-Übergabe
-- `errors.py`: Status- und Fehlervertrag
+- `src/lbs_delivery/git.py`: Commit-, Branch-, Tag- und Diff-Abfragen
+- `src/lbs_delivery/sync.py`: Staging, `serverSync` und M/Text-Adapter
+- `src/lbs_delivery/release.py`: FULL, DELTA, Archive und Informationsdateien
+- `src/lbs_delivery/manifest.py`: Manifestvertrag und Artefaktprüfung vor der
+  Übergabe
+- `src/lbs_delivery/mainframe.py`: JCL-Rendering und FTP-/JES-Übergabe
 - `src/workflow_configuration.py`: interne Vorbereitung der zentralen und
   mandantenseitigen Workflowdateien
 
@@ -31,7 +35,8 @@ Die Anwendung benötigt nur die Python-Standardbibliothek.
 
 ```bash
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-PYTHONPATH=src python3 -m lbs_delivery --help
+python3 src/sync_resources.py --help
+python3 src/build_release.py --help
 ```
 
 Die vier Lieferkommandos laufen im festen Aufbau der wiederverwendbaren
@@ -39,8 +44,8 @@ Workflows. `GITHUB_WORKSPACE/source` enthält den Mandantenstand,
 `GITHUB_REPOSITORY` dessen vollständigen Namen und `RUNNER_TEMP` die
 kurzlebigen Arbeitsverzeichnisse. Zentrale Konfiguration und JCL-Vorlage
 werden aus derselben `mtext-actions`-Version wie der Python-Code gelesen.
-Die CLI nimmt deshalb nur Commit oder Tag entgegen, wenn das jeweilige
-Kommando diese Laufdaten benötigt. Der Sync-Branch stammt aus
+Die Skripte nehmen deshalb nur Commit oder Tag entgegen, wenn das jeweilige
+Skript diese Laufdaten benötigt. Der Sync-Branch stammt aus
 `GITHUB_REF_NAME`.
 
 ## Mandanten-Workflows im Batch aktualisieren

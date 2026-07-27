@@ -1,4 +1,9 @@
-"""Prüft die Vorbereitung der Mandanten-Aktualisierungen."""
+"""Prüft die Vorbereitung abgestimmter zentraler und mandantenseitiger Workflow-Aktualisierungen.
+
+Temporäre Git-Repositories prüfen Commit-Grenzen, einheitliche Revisionsbindungen,
+Wiederholbarkeit und Abdeckung der Rollout-Matrix, ohne echte Repositories zu
+verändern.
+"""
 
 from __future__ import annotations
 
@@ -19,22 +24,23 @@ from workflow_configuration import (
 )
 
 
-# Diese Wurzel enthält die Aktualisierungslogik und die zentralen Workflowvorlagen.
+# Der Testaufbau kopiert die zentralen Workflows aus dem geprüften Automations-Checkout.
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class UpdateWorkflowsTests(unittest.TestCase):
     def setUp(self) -> None:
-        """Erzeugt zwei getrennte temporäre Git-Repositories mit Workflowdateien."""
+        """Erzeugt getrennte temporäre Automations- und Mandanten-Repositories.
+
+        Unabhängige Historien bilden die tatsächliche Rollout-Grenze ab. Die
+        Tests können damit prüfen, welches Repository den jeweiligen Commit erhält.
+        """
 
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.automation_root = self.root / "automation"
-        shutil.copytree(
-            ROOT / ".github/workflows",
-            self.automation_root / ".github/workflows",
-        )
+        shutil.copytree(ROOT / ".github/workflows", self.automation_root / ".github/workflows")
 
         self.mandant_root = self.root / "mandant"
         mandant_workflows = self.mandant_root / ".github/workflows"
@@ -57,40 +63,35 @@ class UpdateWorkflowsTests(unittest.TestCase):
             self.run_git(repository, "commit", "-q", "-m", "Ausgangsstand")
 
     def run_git(self, repository: Path, *arguments: str) -> str:
-        """Führt eine erwartbar erfolgreiche Git-Operation im Test-Repository aus."""
+        """Führt eine erwartbar erfolgreiche Git-Operation mit hilfreicher Diagnose aus.
 
-        result = subprocess.run(
-            ["git", "-C", str(repository), *arguments],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        Die Test-Assertion statt `check=True` nimmt stderr in die reguläre
+        unittest-Fehlermeldung auf, wenn die Testhistorie nicht wie vorgesehen
+        aufgebaut wurde.
+        """
+
+        command = ["git", "-C", str(repository), *arguments]
+        result = subprocess.run(command, check=False, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         return result.stdout.strip()
 
     def test_prepares_verified_workflow_updates_idempotently(self) -> None:
-        """Prüft Rollout, Mandanten-Pins, SHA-Ablehnung und Wiederholbarkeit."""
+        """Prüft Rollout-Commits, einheitliche Mandantenbindungen und Wiederholbarkeit.
+
+        Eine abweichende zentrale SHA muss vor jeder Änderung scheitern.
+        Erfolgreiche Wiederholungen müssen dieselben Commits behalten, sobald alle
+        vorgesehenen Felder aktuell sind.
+        """
 
         initial_sha = self.run_git(self.automation_root, "rev-parse", "HEAD")
         with self.assertRaisesRegex(ValueError, "angegebenen Commit"):
             prepare_automation_update(self.automation_root, "fi-runner", "1" * 40)
 
         with redirect_stderr(io.StringIO()):
-            automation_sha = prepare_automation_update(
-                self.automation_root,
-                "fi-runner",
-                initial_sha,
-            )
-            mandant_sha = prepare_mandant_update(
-                self.automation_root,
-                self.mandant_root,
-                automation_sha,
-            )
+            automation_sha = prepare_automation_update(self.automation_root, "fi-runner", initial_sha)
+            mandant_sha = prepare_mandant_update(self.automation_root, self.mandant_root, automation_sha)
         self.assertNotEqual(automation_sha, initial_sha)
-        self.assertEqual(
-            self.mandant_workflow.read_text(encoding="utf-8").count(automation_sha),
-            2,
-        )
+        self.assertEqual(self.mandant_workflow.read_text(encoding="utf-8").count(automation_sha), 2)
 
         for path in (self.automation_root / ".github/workflows").glob("*.yml"):
             workflow = path.read_text(encoding="utf-8")
@@ -102,20 +103,21 @@ class UpdateWorkflowsTests(unittest.TestCase):
 
         with redirect_stderr(io.StringIO()):
             self.assertEqual(
-                prepare_automation_update(
-                    self.automation_root, "fi-runner", automation_sha
-                ),
+                prepare_automation_update(self.automation_root, "fi-runner", automation_sha),
                 automation_sha,
             )
             self.assertEqual(
-                prepare_mandant_update(
-                    self.automation_root, self.mandant_root, automation_sha
-                ),
+                prepare_mandant_update(self.automation_root, self.mandant_root, automation_sha),
                 mandant_sha,
             )
 
     def test_builds_update_matrix(self) -> None:
-        """Bildet alle Mandantenbranches aus Zuordnung, Releaselinien und Stufen."""
+        """Bildet alle Mandantenbranches aus zentralen Zuordnungen und Rollout-Stufen.
+
+        Das kartesische Produkt stellt sicher, dass jeder konfigurierte Mandant
+        und jede Releaselinie über Entwicklungs-, Abnahme- und
+        Bereitstellungsbranch aktualisiert wird.
+        """
 
         mandanten = self.root / "mandanten.json"
         mandanten.write_text(

@@ -51,7 +51,5 @@ jobs:
       # Prüft Struktur und fachliche Zuordnungen der .github/config.json für das
       # aufrufende Repository; dieser Schritt führt keine externe Übergabe aus.
       - name: Validate configuration without external access
-        env:
-          PYTHONPATH: automation/src
         run: >-
-          "${{ steps.runtime.outputs.python }}" -m lbs_delivery validate-config
+          "${{ steps.runtime.outputs.python }}" automation/src/validate_config.py

@@ -54,7 +54,6 @@ jobs:
       - name: Stage, publish and synchronously call the adapter
         env:
           INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}
-          PYTHONPATH: automation/src
         run: >-
-          "${{ steps.runtime.outputs.python }}" -m lbs_delivery sync-resources
+          "${{ steps.runtime.outputs.python }}" automation/src/sync_resources.py
           --commit "$INPUT_COMMIT_SHA"
