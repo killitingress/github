@@ -1,11 +1,11 @@
-"""Bereitet abgestimmte Workflow-Aktualisierungen für Automation und Mandanten-Repositories vor.
+"""Bereitet Workflow-Aktualisierungen für Automation und Mandanten-Repositories vor.
 
 Das Werkzeug wird vom Batch-Workflow `update-mandant-workflows` in drei Schritten
 aufgerufen:
 
-- `prepare-automation`: zentrale Runner-Kennzeichen finalisieren und Rollout-SHA liefern
-- `update-matrix`: Rollout-Matrix für alle Mandantenbranches erzeugen
-- `prepare-mandant`: einen Mandantenbranch an die Rollout-SHA binden
+- `prepare-automation` setzt das Runner-Kennzeichen und liefert die Rollout-SHA.
+- `update-matrix` erzeugt die Rollout-Matrix für die Mandantenbranches.
+- `prepare-mandant` bindet einen Mandantenbranch an die Rollout-SHA.
 """
 
 from __future__ import annotations

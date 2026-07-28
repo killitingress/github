@@ -1,7 +1,8 @@
 """Kommandozeileneinstieg für die Prüfung der Konfiguration eines Mandanten-Repositories.
 
-Das Skript verwendet den festen Arbeitsbereich von GitHub Actions und gibt die
-kleine Konfigurationsübersicht für die nachfolgenden Workflow-Jobs aus.
+Das Skript lädt die Mandantenkonfiguration aus dem ausgecheckten Repository und
+gleicht sie mit den zentralen Mandanten- und Releaselinienzuordnungen ab. Das
+Ergebnis enthält Mandantenkürzel, Repository, Releaselinien und Warnungen.
 """
 
 from __future__ import annotations
@@ -16,9 +17,9 @@ from lbs_delivery.process import Status, execute
 def run() -> dict[str, object]:
     """Lädt die Konfiguration des aufrufenden Repositories und gibt die Workflow-Übersicht zurück.
 
-    Die gemeinsame Ladelogik übernimmt die vollständige Prüfung. Dadurch gilt in
-    diesem frühen Workflow-Schritt derselbe Vertrag wie bei Synchronisation und
-    Releasebau.
+    `load_configuration` prüft Mandantenidentität, Hostprofile, Releaselinien
+    und die lieferbaren Projektverzeichnisse. Synchronisation und Releasebau
+    laden ihre Konfiguration auf dieselbe Weise.
     """
 
     workspace = Path(os.environ["GITHUB_WORKSPACE"])

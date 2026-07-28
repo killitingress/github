@@ -1,8 +1,9 @@
 """Kommandozeileneinstieg für die Übergabe eines erzeugten Releases an den Mainframe.
 
-Das Skript findet die Artefakte im Arbeitsbereich von GitHub Actions und stellt
-einen temporären Ablageort für die gerenderte JCL bereit. Anschließend übernimmt
-die gemeinsame Übergabelogik Prüfung und Transfer.
+Das Skript liest Manifest und Releaseartefakte aus dem Arbeitsbereich von
+GitHub Actions und stellt ein temporäres Verzeichnis für die erzeugten
+JCL-Dateien bereit. Anschließend werden die Artefakte geprüft und per FTP und
+JES an den Mainframe übergeben.
 """
 
 from __future__ import annotations

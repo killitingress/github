@@ -1,7 +1,9 @@
 """Kommandozeileneinstieg für die Synchronisation eines ausgewählten Quellstands nach M/Text.
 
-Das Skript überträgt Arbeitsbereich und Branch-Kontext von GitHub Actions in die
-geprüften Eingaben der gemeinsamen Ressourcensynchronisation.
+Das Skript ermittelt den ausgecheckten Mandantenstand im Arbeitsbereich von
+GitHub Actions, lädt seine Konfiguration und startet die Ressourcensynchronisation
+für den angegebenen Commit und den auslösenden Branch. Die Synchronisation prüft
+Branch und Commit vor der Übertragung.
 """
 
 from __future__ import annotations
@@ -29,8 +31,8 @@ def run() -> dict[str, object]:
 
     Ein temporäres Runner-Verzeichnis trennt das Staging vom Checkout. Die
     eigentliche Prüfung, ob der Commit zum Remote-Branch gehört, erfolgt in
-    `sync_resources`. Hinweise zum unverbindlichen Projektbestand werden
-    zusammen mit dem Adapterergebnis an die gemeinsame Prozessausgabe übergeben.
+    `sync_resources`. Warnungen zu Abweichungen vom Projekt-Referenzbestand
+    werden dem Adapterergebnis hinzugefügt.
     """
 
     # Argumente auslesen und Konfiguration laden.

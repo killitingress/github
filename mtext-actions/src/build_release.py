@@ -1,7 +1,8 @@
 """Kommandozeileneinstieg für den Artefaktbau zu einem ausgewählten Release-Tag.
 
-Das Skript liest den Checkout-Kontext von GitHub Actions, lädt die zugehörige
-Mandantenkonfiguration und übergibt den Artefaktbau an die gemeinsame Releaselogik.
+Das Skript lädt die Mandantenkonfiguration aus dem ausgecheckten Repository und
+übergibt den Release-Tag sowie die optionale Auslöser-SHA an den Artefaktbau.
+Den Pfad des erzeugten Manifests gibt das Skript als Prozessergebnis aus.
 """
 
 from __future__ import annotations
