@@ -81,6 +81,29 @@ ist noch nicht festgelegt.
 Unabhängig vom Transportweg entsteht für jedes synchronisierte Projekt auf
 `serverSync` derselbe vollständige Verzeichnisbaum mit denselben relativen
 Pfaden, Dateinamen und Dateiinhalten wie im bisherigen Jenkins-/SVN-Verfahren.
+Der Workflow bereitet diesen Stand zunächst in einem temporären
+Staging-Verzeichnis des Runners vor. Die drei Transportwege verwenden damit
+denselben fachlichen Inhalt.
+
+Für die Übertragung per PUT oder über den Artefaktspeicher von GitHub Actions
+verpackt der Workflow das Staging-Verzeichnis als ZIP. Darin liegen die
+Projektverzeichnisse unmittelbar auf der obersten Ebene:
+
+```text
+serverSync-R261-Entwicklung-<Commit-SHA>.zip
+  LOMS_Basis[BY]/
+    <vollständiger Projektbaum>
+  LOMS_Autonom[BY]/
+    <vollständiger Projektbaum>
+```
+
+Dasselbe ZIP dient als PUT-Nutzlast oder als Inhalt eines
+GitHub-Actions-Artefakts. Ein GitHub-Actions-Artefakt speichert Dateien eines
+Workflow-Laufs in GitHub. Nach dem Upload meldet der Workflow Repository,
+Artefakt-ID und Paketdateiname an die Zielkomponente. Der Vertrag für diese
+Meldung ist noch festzulegen. Beim direkten Sharezugriff veröffentlicht der
+Workflow den vorbereiteten Verzeichnisbaum ohne ZIP.
+
 Die Veröffentlichung erfolgt erst, nachdem der gesamte Projektstand erfolgreich
 übertragen wurde. Dadurch verschwinden innerhalb eines weiterhin
 synchronisierten Projekts auch in Git entfernte Dateien. Mehrere
@@ -100,16 +123,15 @@ serverSync/
     <vollständiger Projektbaum>
 ```
 
-Es gibt keine zusätzliche Paketwurzel. Archiv, Manifest und andere
-Transportdateien liegen nicht unter `serverSync`.
+ZIP-Dateien und andere Transportdateien liegen nicht unter `serverSync`.
 
 Für die Versorgung von `serverSync` werden drei mögliche Varianten geprüft:
 
 | Variante | Ablauf und Verantwortung | Vor der Entscheidung zu klären | Aufwand |
 |---|---|---|---|
-| PUT an den Adapter | Der Runner überträgt die Ressourcendaten per PUT-Request an den Adapter. Der Adapter prüft die Übertragung, schreibt zunächst in einen temporären Bereich, veröffentlicht den vollständigen Stand nach `serverSync` und startet die interne Synchronisation. Der Runner benötigt keinen Sharezugriff. | HTTP-Vertrag, Authentifizierung, Größenlimits, Prüfsummen, Zeitgrenzen, Wiederholung, Parallelität und Erfolgsstatus | mittel bis hoch |
-| Direkter Sharezugriff des Runners | Der Runner stellt den vollständigen Stand auf dem NFS-/Netzlaufwerk des M/Text-Servers bereit und ruft erst danach den Adapter auf. Staging, Veröffentlichung und Wiederanlauf liegen damit in der GitHub-Automatisierung. Diese Variante entspricht dem aktuellen Entwicklungsstand. | Verfügbarkeit und Einbindung des Shares, Pfad, Rechte, Kapazität, atomare Ersetzung, Schutz vor parallelen Schreibvorgängen und Bereinigung nach Fehlern | gering |
-| Download aus dem Artefaktspeicher von GitHub Actions | Der Workflow speichert den für `serverSync` vorbereiteten Verzeichnisbaum als Artefakt seines GitHub-Actions-Laufs. Eine noch festzulegende Zielkomponente lädt den Stand herunter, prüft ihn und veröffentlicht ihn unter `serverSync`. Danach startet sie die interne Synchronisation. Die Releaseartefakte für die Mainframe-Lieferung entstehen unabhängig davon. | Zuständige Zielkomponente, eindeutige Identifikation durch Repository, Workflow-Lauf und Artefakt-ID, technische Identität mit `Actions: read`, Prüfsumme, Erreichbarkeit, Aufbewahrungsfrist, Wiederholung und Bereinigung | mittel |
+| PUT an den Adapter | Der Workflow sendet das ZIP an den Adapter. Der Adapter prüft und entpackt es in einem temporären Bereich, veröffentlicht die Projektverzeichnisse unter `serverSync` und startet die interne Synchronisation. | HTTP-Vertrag, Authentifizierung, Größenlimits, Prüfverfahren, Zeitgrenzen, Wiederholung, Parallelität und Erfolgsstatus | mittel bis hoch |
+| Direkter Sharezugriff des Runners | Der Runner veröffentlicht den vorbereiteten Verzeichnisbaum direkt auf dem NFS-/Netzlaufwerk und ruft danach den Adapter auf. Diese Variante entspricht dem aktuellen Entwicklungsstand. | Einbindung des Shares, Pfad, Rechte, Kapazität, atomare Ersetzung, Parallelität und Bereinigung nach Fehlern | gering |
+| Übergabe über den Artefaktspeicher von GitHub Actions | Der Workflow lädt das ZIP als GitHub-Actions-Artefakt hoch und meldet dessen Downloadangaben an die Zielkomponente. Diese lädt das Artefakt herunter, prüft und entpackt das ZIP, veröffentlicht die Projektverzeichnisse unter `serverSync` und startet die interne Synchronisation. Die Mainframe-Releaseartefakte entstehen unabhängig davon. | Zielkomponente, Meldung der Downloadangaben, technische Identität mit `Actions: read`, Prüfverfahren, Erreichbarkeit, Aufbewahrungsfrist, Wiederholung und Bereinigung | mittel |
 
 Vor dem nichtproduktiven Integrationslauf wird genau eine Variante ausgewählt.
 Die Entscheidung berücksichtigt Netzwerk- und Sicherheitsvorgaben,

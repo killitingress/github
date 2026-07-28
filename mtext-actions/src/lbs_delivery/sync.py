@@ -77,13 +77,32 @@ def publish_server_sync(staging_root: str | Path, target_root: str | Path) -> No
         raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "serverSync-Veröffentlichung fehlgeschlagen") from exc
 
 
-def call_adapter(url: str, *, timeout: float) -> tuple[int, str]:
-    """Ruft den M/Text-Adapter auf und gibt seine erfolgreiche HTTP-Antwort zurück.
+def _send_adapter_request(request: urllib.request.Request, *, timeout: float) -> tuple[int, str]:
+    """Führt einen vorbereiteten Adapteraufruf aus und wertet seine Antwort aus.
 
-    An dieser externen Grenze werden Transportfehler, nicht erfolgreiche
-    Statuscodes und begrenzt gelesene Antworttexte in das Lieferfehlermodell
-    übersetzt.
+    Die gemeinsame HTTP-Grenze begrenzt Antworttexte und übersetzt
+    Transportfehler sowie nicht erfolgreiche Statuscodes in das
+    Lieferfehlermodell.
     """
+
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            status = int(response.status)
+            body = response.read(ADAPTER_RESPONSE_LIMIT).decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        body = exc.read(ADAPTER_RESPONSE_LIMIT).decode("utf-8", errors="replace")
+        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {exc.code}: {body[:1000]}") from exc
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        raise DeliveryError(Status.ADAPTER_FAILED, "Adapter-Transport fehlgeschlagen") from exc
+
+    if not 200 <= status < 300:
+        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {status}: {body[:1000]}")
+
+    return status, body
+
+
+def call_adapter(url: str, *, timeout: float) -> tuple[int, str]:
+    """Ruft die bestehende POST-Synchronisation des M/Text-Adapters auf."""
 
     request = urllib.request.Request(
         url,
@@ -91,25 +110,31 @@ def call_adapter(url: str, *, timeout: float) -> tuple[int, str]:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
+    return _send_adapter_request(request, timeout=timeout)
 
-    # Adapter aufrufen und Antwort oder Fehler auswerten.
+
+def put_server_sync(package_path: str | Path, url: str, *, timeout: float) -> tuple[int, str]:
+    """Dient als Vorlage für einen späteren PUT-Transportweg.
+
+    Die Funktion ist nicht an `sync_resources` angebunden. Sie liest ein
+    vorbereitetes ZIP-Transportpaket und baut den PUT-Aufruf auf.
+    """
+
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            status = int(response.status)
-            body = response.read(ADAPTER_RESPONSE_LIMIT).decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as exc:
-        # HTTP-Fehlerantwort lesen und als Adapterfehler melden.
-        body = exc.read(ADAPTER_RESPONSE_LIMIT).decode("utf-8", errors="replace")
-        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {exc.code}: {body[:1000]}") from exc
-    except (urllib.error.URLError, OSError, TimeoutError) as exc:
-        # Verbindungs- oder Transportfehler ohne HTTP-Antwort melden.
-        raise DeliveryError(Status.ADAPTER_FAILED, "Adapter-Transport fehlgeschlagen") from exc
+        package = Path(package_path).read_bytes()
+    except OSError as exc:
+        raise DeliveryError(
+            Status.RESOURCE_TRANSFER_FAILED,
+            "ZIP-Transportpaket konnte nicht gelesen werden",
+        ) from exc
 
-    # Antworten außerhalb des erfolgreichen 2xx-Bereichs ablehnen.
-    if not 200 <= status < 300:
-        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {status}: {body[:1000]}")
-
-    return status, body
+    request = urllib.request.Request(
+        url,
+        data=package,
+        headers={"Content-Type": "application/zip"},
+        method="PUT",
+    )
+    return _send_adapter_request(request, timeout=timeout)
 
 
 def sync_resources(
