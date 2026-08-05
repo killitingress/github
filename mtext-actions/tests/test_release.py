@@ -56,14 +56,14 @@ class ReleaseTests(unittest.TestCase):
             self.configuration,
             repository_root=self.repository,
             output_directory=first,
-            tag="R261.108",
+            tag="v261.108",
             trigger_sha=target_sha,
         )
         second_manifest_path = build_release(
             self.configuration,
             repository_root=self.repository,
             output_directory=second,
-            tag="R261.108",
+            tag="v261.108",
             trigger_sha=target_sha,
         )
         first_manifest, packages = load_and_verify(first_manifest_path, first)
@@ -103,12 +103,12 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("MEMBER=((FIBASISD,,R))", rendered)
         self.assertNotIn("@@", rendered)
 
-        git(self.repository, "checkout", "--detach", "R261.100")
+        git(self.repository, "checkout", "--detach", "v261.100")
         full_manifest = build_release(
             self.configuration,
             repository_root=self.repository,
             output_directory=self.root / "full",
-            tag="R261.100",
+            tag="v261.100",
             trigger_sha=git(self.repository, "rev-parse", "HEAD"),
         )
         _manifest, full_packages = load_and_verify(full_manifest, self.root / "full")
@@ -127,12 +127,30 @@ class ReleaseTests(unittest.TestCase):
             self.configuration,
             repository_root=self.repository,
             output_directory=output,
-            tag="R261.108",
+            tag="v261.108",
             trigger_sha=git(self.repository, "rev-parse", "HEAD"),
         )
         (output / "FIBASISD.tgz").write_bytes(b"tampered")
         with self.assertRaises(DeliveryError):
             load_and_verify(manifest_path, output)
+
+    def test_accepts_main_only_for_its_configured_release_line(self) -> None:
+        """Bindet einen Release-Tag auf main an die versionierte Releaselinie.
+
+        Ein Tag für R261 darf nicht allein deshalb von main erreichbar sein,
+        wenn der getaggte Mandantenstand main als R270 ausweist.
+        """
+
+        git(self.repository, "update-ref", "-d", "refs/remotes/origin/release/R261")
+        git(self.repository, "update-ref", "refs/remotes/origin/main", "HEAD")
+        with self.assertRaises(DeliveryError):
+            build_release(
+                self.configuration,
+                repository_root=self.repository,
+                output_directory=self.root / "wrong-main-line",
+                tag="v261.108",
+                trigger_sha=git(self.repository, "rev-parse", "HEAD"),
+            )
 
 
 if __name__ == "__main__":

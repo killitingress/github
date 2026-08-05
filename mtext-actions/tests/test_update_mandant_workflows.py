@@ -15,12 +15,16 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
+from urllib.error import HTTPError
+from unittest.mock import MagicMock, patch
 
 from workflow_configuration import (
-    UPDATE_WORKFLOW,
+    RUNNER_PLACEHOLDER,
     build_update_matrix,
-    prepare_automation_update,
+    check_target_branch,
+    open_update_pull_request,
     prepare_mandant_update,
+    verify_automation,
 )
 
 
@@ -41,6 +45,9 @@ class UpdateWorkflowsTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.automation_root = self.root / "automation"
         shutil.copytree(ROOT / ".github/workflows", self.automation_root / ".github/workflows")
+        for path in (self.automation_root / ".github/workflows").glob("*.yml"):
+            workflow = path.read_text(encoding="utf-8").replace(RUNNER_PLACEHOLDER, "fi-runner")
+            path.write_text(workflow, encoding="utf-8")
 
         self.mandant_root = self.root / "mandant"
         mandant_workflows = self.mandant_root / ".github/workflows"
@@ -49,7 +56,7 @@ class UpdateWorkflowsTests(unittest.TestCase):
         self.mandant_workflow.write_text(
             """jobs:
   sync-entwicklung:
-    uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
     with:
       automation_ref: 0000000000000000000000000000000000000000
 """,
@@ -76,47 +83,35 @@ class UpdateWorkflowsTests(unittest.TestCase):
         return result.stdout.strip()
 
     def test_prepares_verified_workflow_updates_idempotently(self) -> None:
-        """Prüft Rollout-Commits, einheitliche Mandantenbindungen und Wiederholbarkeit.
+        """Prüft freigegebene Rollout-SHA, Mandantenbindung und Wiederholbarkeit.
 
         Eine abweichende zentrale SHA muss vor jeder Änderung scheitern.
-        Erfolgreiche Wiederholungen müssen dieselben Commits behalten, sobald alle
-        vorgesehenen Felder aktuell sind.
+        Erfolgreiche Wiederholungen behalten denselben Mandanten-Commit.
         """
 
         initial_sha = self.run_git(self.automation_root, "rev-parse", "HEAD")
         with self.assertRaisesRegex(ValueError, "angegebenen Commit"):
-            prepare_automation_update(self.automation_root, "fi-runner", "1" * 40)
+            verify_automation(self.automation_root, "1" * 40)
 
         with redirect_stderr(io.StringIO()):
-            automation_sha = prepare_automation_update(self.automation_root, "fi-runner", initial_sha)
+            automation_sha = verify_automation(self.automation_root, initial_sha)
             mandant_sha = prepare_mandant_update(self.automation_root, self.mandant_root, automation_sha)
-        self.assertNotEqual(automation_sha, initial_sha)
+        self.assertEqual(automation_sha, initial_sha)
         self.assertEqual(self.mandant_workflow.read_text(encoding="utf-8").count(automation_sha), 2)
 
-        for path in (self.automation_root / ".github/workflows").glob("*.yml"):
-            workflow = path.read_text(encoding="utf-8")
-            if path.name == UPDATE_WORKFLOW:
-                self.assertIn("runs-on: ${{ vars.FI_RUNNER_LABEL }}", workflow)
-            else:
-                self.assertNotIn("FI_RUNNER_LABEL_TO_BE_SET", workflow)
-                self.assertIn('runs-on: "fi-runner"', workflow)
-
         with redirect_stderr(io.StringIO()):
-            self.assertEqual(
-                prepare_automation_update(self.automation_root, "fi-runner", automation_sha),
-                automation_sha,
-            )
+            self.assertEqual(verify_automation(self.automation_root, automation_sha), automation_sha)
             self.assertEqual(
                 prepare_mandant_update(self.automation_root, self.mandant_root, automation_sha),
                 mandant_sha,
             )
 
     def test_builds_update_matrix(self) -> None:
-        """Bildet alle Mandantenbranches aus zentralen Zuordnungen und Rollout-Stufen.
+        """Bildet die geschützten Mandantenbranches aus den zentralen Zuordnungen.
 
         Das kartesische Produkt stellt sicher, dass jeder konfigurierte Mandant
-        und jede Releaselinie über Entwicklungs-, Abnahme- und
-        Bereitstellungsbranch aktualisiert wird.
+        `main` und die möglichen Release-Branches erhält. Feature-Branches sind
+        kein eigenes Rollout-Ziel.
         """
 
         mandanten = self.root / "mandanten.json"
@@ -148,15 +143,109 @@ class UpdateWorkflowsTests(unittest.TestCase):
 
         matrix = build_update_matrix(mandanten, releaselinien)["include"]
 
-        self.assertEqual(len(matrix), 12)
+        self.assertEqual(len(matrix), 6)
         self.assertIn(
             {
                 "repository": "<oms_team>/mtext-fi",
                 "kuerzel": "FI",
-                "branch": "R261/Entwicklung",
+                "branch": "release/R261",
             },
             matrix,
         )
+        self.assertIn(
+            {
+                "repository": "<oms_team>/mtext-by",
+                "kuerzel": "BY",
+                "branch": "main",
+            },
+            matrix,
+        )
+
+    def test_rejects_unconfigured_central_runner(self) -> None:
+        """Prüft Runnerfelder, ohne harmlose Kommentare als Konfiguration zu lesen."""
+
+        workflow = self.automation_root / ".github/workflows/ci.yml"
+        workflow.write_text(
+            workflow.read_text(encoding="utf-8") + f"\n# {RUNNER_PLACEHOLDER}\n",
+            encoding="utf-8",
+        )
+        automation_sha = self.run_git(self.automation_root, "rev-parse", "HEAD")
+        self.assertEqual(verify_automation(self.automation_root, automation_sha), automation_sha)
+
+        workflow.write_text(
+            workflow.read_text(encoding="utf-8") + f"\nruns-on: {RUNNER_PLACEHOLDER}\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "Runner-Kennzeichen"):
+            verify_automation(self.automation_root, automation_sha)
+
+    def test_checks_target_branches_through_github_api(self) -> None:
+        """Kodiert Branchpfade und unterscheidet fehlende Release-Branches von main."""
+
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.status = 200
+        response.read.return_value = b'{"ref":"refs/heads/release/R261"}'
+        with patch("workflow_configuration.urllib.request.urlopen", return_value=response) as urlopen:
+            self.assertTrue(
+                check_target_branch("https://api.github.test", "team/mandant", "release/R261", "token")
+            )
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://api.github.test/repos/team/mandant/git/ref/heads/release%2FR261",
+        )
+
+        missing = HTTPError(
+            "https://api.github.test",
+            404,
+            "Not Found",
+            None,
+            io.BytesIO(b'{"message":"Not Found"}'),
+        )
+        with patch("workflow_configuration.urllib.request.urlopen", side_effect=missing):
+            self.assertFalse(
+                check_target_branch("https://api.github.test", "team/mandant", "release/R261", "token")
+            )
+
+        missing_main = HTTPError(
+            "https://api.github.test",
+            404,
+            "Not Found",
+            None,
+            io.BytesIO(b'{"message":"Not Found"}'),
+        )
+        with (
+            patch("workflow_configuration.urllib.request.urlopen", side_effect=missing_main),
+            self.assertRaisesRegex(RuntimeError, "HTTP 404"),
+        ):
+            check_target_branch("https://api.github.test", "team/mandant", "main", "token")
+
+    def test_accepts_existing_update_pull_request(self) -> None:
+        """Behandelt den bereits vorhandenen technischen Pull Request als Wiederanlauf."""
+
+        existing = HTTPError(
+            "https://api.github.test",
+            422,
+            "Unprocessable Entity",
+            None,
+            io.BytesIO(
+                json.dumps(
+                    {"errors": [{"message": "A pull request already exists for team:update"}]}
+                ).encode("utf-8")
+            ),
+        )
+        with patch("workflow_configuration.urllib.request.urlopen", side_effect=existing) as urlopen:
+            open_update_pull_request(
+                "https://api.github.test",
+                "team/mandant",
+                "release/R261",
+                "mtext-actions/workflow-release-R261",
+                "token",
+            )
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.method, "POST")
+        self.assertEqual(json.loads(request.data)["base"], "release/R261")
 
 
 if __name__ == "__main__":

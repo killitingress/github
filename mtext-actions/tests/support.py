@@ -40,6 +40,7 @@ def write_mandant(path: Path, **overrides: object) -> None:
 
     mandant: dict[str, object] = {
         "kuerzel": "FI",
+        "releaselinie": "R270",
         "ispw": "P",
         "hostprofile": {
             "FKT": {"assignment": "LOMS000066", "stage": "FKTE"},
@@ -101,13 +102,13 @@ def setup_sync_repository(root: Path) -> Path:
     konzentrieren.
     """
 
-    repository = init_repository(root, branch="R261/Entwicklung")
+    repository = init_repository(root, branch="feature/R261/test-sync")
     project = repository / "LOMS_Basis"
     project.mkdir()
     (project / "value.txt").write_text("new", encoding="utf-8")
     git(repository, "add", ".")
     git(repository, "commit", "-m", "sync")
-    track_remote_branch(repository, "R261/Entwicklung")
+    track_remote_branch(repository, "feature/R261/test-sync")
     return repository
 
 
@@ -118,7 +119,7 @@ def setup_release_repository(root: Path) -> Path:
     Historie für die Prüfung von Archivbau und lesbarem Lieferbeleg.
     """
 
-    repository = init_repository(root, branch="R261/Bereitstellung")
+    repository = init_repository(root, branch="release/R261")
     project = repository / "LOMS_Basis"
     project.mkdir()
     (project / "baseline.txt").write_text("base\n", encoding="utf-8")
@@ -126,18 +127,18 @@ def setup_release_repository(root: Path) -> Path:
     (project / "rename-old.txt").write_text("rename\n", encoding="utf-8")
     git(repository, "add", ".")
     git(repository, "commit", "-m", "full")
-    git(repository, "tag", "R261.100")
+    git(repository, "tag", "v261.100")
     (project / "baseline.txt").write_text("changed\n", encoding="utf-8")
     git(repository, "add", ".")
     git(repository, "commit", "-m", "previous")
-    git(repository, "tag", "R261.107")
+    git(repository, "tag", "v261.107")
     (project / "deleted.txt").unlink()
     (project / "new.txt").write_text("new\n", encoding="utf-8")
     git(repository, "mv", "LOMS_Basis/rename-old.txt", "LOMS_Basis/rename-new.txt")
     git(repository, "add", "-A")
     git(repository, "commit", "-m", "delta")
-    git(repository, "tag", "R261.108")
-    track_remote_branch(repository, "R261/Bereitstellung")
+    git(repository, "tag", "v261.108")
+    track_remote_branch(repository, "release/R261")
     return repository
 
 

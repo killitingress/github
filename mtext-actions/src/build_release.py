@@ -40,7 +40,8 @@ def run() -> dict[str, object]:
     arguments = build_parser().parse_args()
     workspace = Path(os.environ["GITHUB_WORKSPACE"])
     repository_root = workspace / "source"
-    configuration = load_configuration(repository_root, os.environ["GITHUB_REPOSITORY"])
+    repository_name = os.environ.get("SOURCE_REPOSITORY", os.environ["GITHUB_REPOSITORY"])
+    configuration = load_configuration(repository_root, repository_name)
     manifest = build_release(
         configuration,
         repository_root=repository_root,

@@ -28,6 +28,7 @@ def run() -> dict[str, object]:
         "status": Status.CONFIG_VALIDATED.value,
         "mandanten_kuerzel": configuration.kuerzel,
         "repository": configuration.repository,
+        "releaselinie": configuration.releaselinie,
         "releaselinien": sorted(configuration.releaselinien),
     }
     if configuration.warnungen:

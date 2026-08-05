@@ -1,40 +1,49 @@
 name: Sync M/Text resources
 
-# Dieser Workflow verteilt Entwicklungs- oder Abnahme-Branches über die
-# zentralen Workflows an den entsprechenden M/Text-Server.
+# Feature-Pushes versorgen Entwicklung. Merges auf geschützte Zielbranches
+# erscheinen als Push auf main oder release/Rnnn und versorgen Abnahme.
 'on':
-  # Nur Änderungen auf den Branches für Entwicklung und Abnahme lösen automatisch eine Verteilung aus.
   push:
     branches:
-      - R[0-9][0-9][0-9]/Entwicklung
-      - R[0-9][0-9][0-9]/Abnahme
-    # Eine reine Änderung der Mandantenkonfiguration wird separat validiert
-    # und verteilt keine unveränderten Ressourcen.
+      - main
+      - release/R[0-9][0-9][0-9]
+      - feature/R[0-9][0-9][0-9]/**
+    # Eine reine Konfigurationsänderung wird geprüft, überträgt aber keine
+    # unveränderten Ressourcen. Der Linienwechsel besitzt einen eigenen FULL-Lauf.
     paths-ignore:
       - .github/config.json
-  # Initiale Vollsynchronisationen und Wiederholungen verlangen einen Commit.
-  # Der Branch wird beim manuellen Start über den GitHub-Branchwähler festgelegt.
+  # Der manuelle Start dient der ersten Vollsynchronisation und der
+  # Wiederherstellung. Der Branch wird über den GitHub-Branchwähler festgelegt.
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: Exakter Commit-SHA für initiale Vollsynchronisation oder Wiederholung
+        description: Exakter Commit-SHA des wiederherzustellenden Stands
         required: true
         type: string
+      full_sync:
+        description: Vollständigen Projektstand wiederherstellen
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
 
+# Ein gemeinsamer Mandantenbereich unter serverSync darf nicht durch zwei
+# gleichzeitige Läufe desselben Repositories verändert werden.
 concurrency:
-  group: mtext-sync-${{ github.repository }}-${{ github.ref_name }}
+  group: mtext-sync-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
-  # Der zentrale Ablauf leitet die Zielstufe aus dem geprüften Branchnamen ab.
+  # Die zentrale Automatisierung leitet Releaselinie und M/Text-Ziel aus dem
+  # geprüften Branch und der Mandantenkonfiguration ab.
   sync:
     name: Sync resources
-    uses: j520730/mtext-actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
     with:
-      # Workflow und Implementierung verwenden denselben mtext-actions-Commit.
       commit_sha: ${{ inputs.commit_sha || github.sha }}
-      # Der Runner checkt diese Version nach automation/ aus
       automation_ref: 0000000000000000000000000000000000000000
+      full_sync: ${{ inputs.full_sync || false }}
+    secrets:
+      automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

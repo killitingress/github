@@ -1,66 +1,126 @@
-Rnnn/Entwicklung
-        │ ausgewählte Commits einzeln per Cherry-Pick
-        ▼
-lokaler Rnnn/Abnahme
-        │ Push
-        ▼
-GitHub Rnnn/Abnahme ──→ M/Text-Abnahme synchronisieren
+Frage:
+Es gibt ja im Leitfaden vor allem `main` und daneben `feature/`, `release/`, und `WARTUNG/` als definierte Branches. Die Frage ist vor allem, ob wir dieses Modell irgendwie übernehmen sollten oder überhaupt könnten. Feature-Branches sind klar, haben wir ja erstmal auch grundsätzlich vorgesehen. Die Unterscheidung zwischen Release und main ist mir nicht ganz klar, und Wartung soll soweit ich das verstanden habe für noch in Wartung befindliche Releases verwendet werden. Also wenn wir im produktiv im Release R26.1 sind wäre Wartung dafür zuständig, während in main schon für R27.0 entwickelt werden könnte (so wie ich es verstehe).
 
-Rnnn/Abnahme
-        │ abgenommene Commits einzeln per Cherry-Pick
-        ▼
-lokaler Rnnn/Bereitstellung
-        │ Push
-        ▼
-GitHub Rnnn/Bereitstellung ──→ noch keine Lieferung
-        │
-        │ Release-Tag erstellen und gezielt pushen
-        ▼
-Paketbau und Mainframe-Übergabe
+Antwort:
+Dein Verständnis ist im Kern richtig. Eine wichtige Korrektur: `release/`, `WARTUNG-` und `WART-` sind im Leitfaden keine unterschiedlichen Branchtypen. Sie sind alternative Benennungen für denselben Release-Branch. Die Änderungshistorie empfiehlt für frühere Support- beziehungsweise Wartungsbranches inzwischen `release/`. :codex-file-citation{path="/Users/rs/code/shell/github/Leitfaden Branches mit Git-v68-20260804_102407.pdf" purpose="source"}
 
+Das Modell des Leitfadens lässt sich so verstehen:
 
-Warum Cherry-Pick immer nur einen Commit auswählt
-Ein Commit speichert zwar einen vollständigen Repositoryzustand. Beim Cherry-Pick übernimmt Git aber die Änderung, die dieser Commit gegenüber seinem Eltern-Commit eingeführt hat.
-EGit unterstützt dabei tatsächlich die Auswahl eines einzelnen Commits. Das ist für euren Prozess passend:
-Zielbranch auschecken, beispielsweise R261/Abnahme.
-In der History den ersten ausgewählten Commit aus R261/Entwicklung auswählen.
-Cherry-Pick ausführen.
-Den nächsten Commit auswählen und erneut Cherry-Pick ausführen.
-Bei Abhängigkeiten vom ältesten zum neuesten Commit vorgehen.
-Nach der Kontrolle alle entstandenen Commits gemeinsam mit einem Push übertragen.
-Damit werden beispielsweise B und D übernommen, ohne dass A, C und E automatisch mitkommen. Die offizielle EGit-Dokumentation beschreibt dieses Verhalten ausdrücklich als Übernahme der durch einen Commit eingeführten Änderung auf den aktuell ausgecheckten Branch. EGit Cherry-Picking
-
-
-| Funktion | Bedeutung für euren Ablauf |
+| Branch | Bedeutung |
 |---|---|
-| Cherry-Pick | Übernimmt eine fachlich ausgewählte Änderung in die nächste Stage |
-| Merge | Würde die zusammenhängende Historie eines Branches in den aktuellen Branch integrieren |
-| Push | Veröffentlicht die lokal entstandenen Commits oder Tags auf GitHub |
-| Tag-Push | Startet die Lieferung des getaggten Bereitstellungsstands |
+| `main` | Führende Entwicklungslinie. Der Entwicklungsfortschritt ist hier sichtbar. Ausgelieferter Code findet sich grundsätzlich ebenfalls hier. |
+| `feature/...` | Kurzlebiger Arbeitsbranch für eine Änderung. Anschließend Pull Request auf den zugehörigen geschützten Branch. |
+| `release/...` | Parallel weitergeführte Version, etwa für Stabilisierung oder Wartung, während `main` schon weiterläuft. |
+| `WARTUNG-...` oder `WART-...` | Alternative Namen für einen Release-Branch, keine zusätzliche Stufe. |
+| `v...` | Unveränderlicher Release-Tag auf einem geschützten Branch. |
+
+Dein Beispiel würde daher ungefähr so aussehen:
+
+```text
+main
+  R26.1 freigegeben und getaggt
+       │
+       ├── main entwickelt anschließend R27.0 weiter
+       │
+       └── release/R261 erhält weiterhin Fehlerkorrekturen
+              └── vR261.108
+```
+
+Eine Korrektur für R26.1 entstünde auf einem Feature-Branch, der von `release/R261` ausgeht, und käme per Pull Request zurück nach `release/R261`. Wenn die Korrektur auch für R27.0 benötigt wird, müsste sie zusätzlich nach `main` übernommen werden.
+
+Für unser Modell wäre die entscheidende Änderung, Branches und Prozess-Stages voneinander zu trennen:
+
+```text
+Git-Entwicklungslinie:
+main oder release/R261
+
+Prozesszustand eines Commits:
+Entwicklung → Abnahme → Bereitstellung/Lieferung
+```
+
+Ein mögliches angepasstes Modell wäre:
+
+1. `main` enthält die führende Releaselinie, beispielsweise R27.0.
+2. Parallel betreute Linien liegen auf `release/R260` und `release/R261`.
+3. Änderungen gelangen über `feature/...` und Pull Requests auf `main` beziehungsweise den passenden Release-Branch.
+4. Ein Commit wird zunächst nach M/Text-Entwicklung synchronisiert.
+5. Derselbe Commit wird anschließend gezielt nach Abnahme befördert.
+6. Nach erfolgreicher Abnahme erhält dieser Commit einen geschützten Release-Tag, der die Lieferung startet.
+
+Damit würden `Entwicklung`, `Abnahme` und `Bereitstellung` nicht mehr durch drei Git-Branches dargestellt. Die Automation müsste stattdessen nachvollziehbar festhalten, welcher Commit einer Entwicklungslinie zuletzt in welcher Stage verarbeitet wurde. Wie dieser Stand abgebildet wird, wäre noch festzulegen.
+
+Das hätte einen fachlichen Vorteil: Zwischen Entwicklung, Abnahme und Lieferung könnte derselbe Commit mit derselben SHA verwendet werden. In unserem aktuellen Modell erzeugt jeder Cherry-Pick auf den nächsten Stage-Branch eine neue SHA.
+
+Technisch könnten wir das umsetzen. Betroffen wären insbesondere:
+
+- die Ableitung von Releaselinie und Stage aus `Rnnn/Entwicklung` beziehungsweise `Rnnn/Abnahme`
+- die automatischen Workflow-Auslöser
+- die Prüfung, zu welchem geschützten Branch ein Release-Tag gehört
+- das Tagformat und die derzeit vorgesehene Taglöschung
+- die Aktualisierung der Mandanten-Workflows, die momentan direkt auf alle Stage-Branches pusht
+- Benutzeranleitung und Branchschutz
+
+Der Paketbau, die DELTA-Ermittlung und die Mainframe-Übergabe müssten konzeptionell nicht neu aufgebaut werden. Sie benötigen weiterhin einen geprüften Release-Tag und dessen Commit.
+
+Wenn die Regeln tatsächlich für uns gelten, würde ich dieses Modell eher übernehmen, als zusätzlich einen weitgehend ungenutzten `main` neben unseren neun Stage-Branches einzuführen. Die wichtigste noch offene Frage wäre dann, wie wir die drei M/Text-Stages revisionssicher abbilden, ohne dafür eigene Branches zu verwenden.
 
 
-7 Mandanten × 3 aktive Releaselinien × 3 Stages
-= bis zu 63 Mandantenbranches
+Frage:
+Ich denke wir können davon ausgehen, dass diese Regeln für uns gelten. Was meinst du mit M/Text Stages? In M/Text gibt es (aufgrund der umgebenen Systeme, die diese Stages kennen) nur Entwicklung und Abnahme - also z.B. en01e.ltoms.intern und en01a.ltoms.intern, wie bisher bekannt.
 
-Tag R261.108
-  → Releaselinie R261
-  → releaselinien.json: hostprofil FKT
-  → FI-config.json: FKT
-       assignment = LOMS000066
-       stage      = FKTE
-  → JCL:
-       ASSIGNMENT = LOMS000066
-       LEVEL      = FKTE
+Antwort:
+Das war von mir ungenau formuliert. Mit „M/Text-Stages“ meinte ich den gesamten bisherigen Prozess. Tatsächlich gibt es in M/Text nur:
+
+- Entwicklung, beispielsweise `en01e.ltoms.intern`
+- Abnahme, beispielsweise `en01a.ltoms.intern`
+
+`Bereitstellung` ist keine M/Text-Umgebung. In unserem bisherigen Modell ist sie ein Git-seitiger Zwischenstand, auf dem abgenommene Änderungen für die Lieferung gesammelt werden. Ein Push dorthin synchronisiert nichts. Erst der Release-Tag startet Paketbau und Mainframe-Übergabe.
+
+Wenn die Branchregeln gelten, könnte das neue Modell so aussehen:
+
+```text
+feature/... 
+    │ Pull Request
+    ▼
+main oder release/Rnnn
+    │
+    ├── Commit nach M/Text-Entwicklung synchronisieren
+    │
+    ├── denselben Commit gezielt nach M/Text-Abnahme synchronisieren
+    │
+    └── nach erfolgreicher Abnahme geschützten Release-Tag setzen
+            ▼
+        Paketbau und Mainframe-Übergabe
+```
+
+Damit entfiele der Branch `Rnnn/Bereitstellung`. Das GitHub Environment `Bereitstellung` könnte weiterhin für Freigabe und Mainframe-Secrets bestehen. Es wäre aber kein Branch und keine M/Text-Stage.
+
+Für dein Beispiel ergäbe sich:
+
+- `main` enthält die Entwicklung für R27.0.
+- `release/R261` enthält die weiter gepflegte Linie R26.1.
+- Änderungen entstehen auf `feature/...` und gelangen per Pull Request auf den passenden Zielbranch.
+- Ein Commit von `main` oder `release/R261` wird zunächst nach Entwicklung und anschließend mit derselben SHA nach Abnahme synchronisiert.
+- Der abgenommene Commit erhält den geschützten Release-Tag und wird geliefert.
+
+Ein wichtiger Unterschied zum heutigen Modell bleibt: Wenn Änderungen A, B und C bereits gemeinsam auf `main` liegen, kann man nicht später B ohne A ausliefern. Die Auswahl müsste früher erfolgen:
+
+- Noch nicht vorgesehene Änderungen bleiben auf ihren Feature-Branches.
+- Oder für eine konkrete Lieferung wird ein `release/Rnnn` angelegt und nur die ausgewählten Änderungen werden per Pull Request dort aufgenommen.
+
+Das passt sogar recht gut zur Rolle eines Release-Branches: Er enthält den für eine Releaseversion zusammengestellten und anschließend gewarteten Stand. `Entwicklung` und `Abnahme` wären dann Zustände dieses Stands in den angebundenen Systemen, keine eigenen Git-Branches.
+
+Ich halte dieses Modell inzwischen für die passendere Richtung:
+
+```text
+main                         führende Entwicklung
+release/R261                 produktive Linie R26.1 und Wartung
+release/R260                 ältere Linie, solange noch gepflegt
+feature/...                  einzelne Änderungen
+geschützter Release-Tag      abgenommener Lieferstand
+```
+
+Die größte fachliche Umstellung wäre daher nicht bei M/Text, sondern bei der Auswahl von Änderungen: Sie müsste über Feature- und Release-Branches mit Pull Requests erfolgen, statt durch Cherry-Picks zwischen drei Stage-Branches.
 
 
-Ein alter Tag bleibt vollständig nachvollziehbar:
- R261.108 + config.json aus R261.108 + gepinnte mtext-actions-Version
-Damit kann später festgestellt werden, mit welchem Assignment und welchem
-Stage-Code die Lieferung erzeugt wurde (sehr gut).
-Wäre eine zwischen gleichzeitig aktiven Branches problematisch?:
-R261/Bereitstellung: FKT → LOMS000066
-R270/Bereitstellung: FKT → LOMS009999
-Technisch ist das derzeit zulässig. Und es könnte sogar sinnvoll / hilfreich
-oder sogar notwendig sein.
 
-Also zwei Argumente für die aktuelle Umsetzung...

@@ -11,14 +11,16 @@ import gzip
 import shutil
 import tarfile
 import tempfile
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable
 from pathlib import Path
 
 from .config import Configuration
 from .process import DeliveryError, Status
 from .git import (
     GitChange,
+    RELEASE_TAG_RE,
     changes,
+    project_changes,
     previous_tag,
     require_ancestor,
     require_release_tag,
@@ -29,7 +31,7 @@ from .manifest import sha256_file, write_manifest
 
 # Die Informationsdatei verlangt auch beim ersten Release eine Bezeichnung für
 # den Vorgängertag, obwohl dafür kein entsprechender Git-Tag vorhanden ist.
-LEGACY_PREVIOUS_TAG = "R001.100"
+LEGACY_PREVIOUS_TAG = "v001.100"
 # Ein Tag mit der Endung `.100` bezeichnet den vollständigen Ausgangsstand einer
 # Releaselinie und wählt deshalb den FULL- statt des kumulativen DELTA-Paketbaus.
 FULL_SUFFIX = ".100"
@@ -78,27 +80,6 @@ def _write_archive(archive_path: Path, entries: Iterable[tuple[Path, str]]) -> l
         raise DeliveryError(Status.PACKAGE_FAILED, "Releasearchiv kann nicht erzeugt werden") from exc
 
     return names
-
-
-def _project_changes(git_changes: Iterable[GitChange], project: str) -> Iterator[tuple[str, str]]:
-    """Überträgt Git-Änderungen des Repositories auf ein einzelnes Projekt.
-
-    Umbenennungen erscheinen als Löschung und Hinzufügung, Kopien als
-    Hinzufügung. Das entspricht den Dateioperationen beim Einspielen eines
-    DELTA-Pakets.
-    """
-
-    prefix = f"{project}/"
-    for change in git_changes:
-        if change.status == "R":
-            projected = (("D", change.old_path), ("A", change.path))
-        elif change.status == "C":
-            projected = (("A", change.path),)
-        else:
-            projected = ((change.status, change.path),)
-        for status, path in projected:
-            if path == project or path.startswith(prefix):
-                yield status, path
 
 
 def _delta_archive(
@@ -152,7 +133,7 @@ def _build_project_packages(
 
     included: set[str] = set()
     deleted: set[str] = set()
-    for status, path in _project_changes(cumulative_changes, project):
+    for status, path in project_changes(cumulative_changes, project):
         if status in {"A", "M", "T"}:
             included.add(path)
         elif status == "D":
@@ -176,7 +157,7 @@ def _write_information(
 
     diff_lines = "\n".join(
         f"{status}       VORRELEASE/{changed_path}"
-        for status, changed_path in _project_changes(git_changes, project)
+        for status, changed_path in project_changes(git_changes, project)
     )
     archive_lines = "\n".join(archive_names)
     path.write_text(
@@ -205,7 +186,7 @@ def build_release(
 ) -> Path:
     """Prüft die Releasequelle und erzeugt alle vorgesehenen Lieferartefakte.
 
-    Die Funktion bindet den Tag an den Bereitstellungsbranch, wählt FULL- oder
+    Die Funktion bindet den Tag an einen geschützten Branch, wählt FULL- oder
     DELTA-Verarbeitung und schreibt Projektpakete sowie Informationsdateien.
     Größen und Prüfsummen werden im Manifest für die spätere Übergabe festgehalten.
     """
@@ -213,16 +194,24 @@ def build_release(
     root = Path(repository_root)
 
     # Release-Tag, Releaselinie und optional auslösenden Commit prüfen.
-    releaselinie = tag[:4]
+    tag_match = RELEASE_TAG_RE.fullmatch(tag)
+    if tag_match is None:
+        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
+    releaselinie = f"R{tag_match.group(1)}"
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
-    target_sha = require_release_tag(root, tag, f"{releaselinie}/Bereitstellung")
+    allowed_branches = (
+        ("main", f"release/{releaselinie}")
+        if configuration.releaselinie == releaselinie
+        else (f"release/{releaselinie}",)
+    )
+    target_sha = require_release_tag(root, tag, allowed_branches)
     if trigger_sha and trigger_sha != target_sha:
         raise DeliveryError(Status.SOURCE_FAILED, "auslösender Commit stimmt nicht zum Tag")
 
     # FULL- oder DELTA-Lieferung und die zugehörigen Git-Vergleiche bestimmen.
     delivery_type = "FULL" if tag.endswith(FULL_SUFFIX) else "DELTA"
-    base = f"{releaselinie}{FULL_SUFFIX}" if delivery_type == "DELTA" else None
+    base = f"v{tag_match.group(1)}{FULL_SUFFIX}" if delivery_type == "DELTA" else None
     base_sha = resolve(root, f"refs/tags/{base}") if base else None
     if base_sha:
         require_ancestor(root, base_sha, target_sha)

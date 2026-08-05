@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,9 +17,15 @@ from .process import DeliveryError, Status
 
 
 # Reguläre Ausdrücke für Werte an der Git-Grenze.
-# Prüft einen vollständigen Release-Tag wie `R261.108` und erfasst beide
+# Prüft einen vollständigen Release-Tag wie `v261.108` und erfasst beide
 # Zahlenteile für den chronologischen Vergleich.
-RELEASE_TAG_RE = re.compile(r"R([0-9]{3})\.([0-9]{3})")
+RELEASE_TAG_RE = re.compile(r"v([0-9]{3})\.([0-9]{3})")
+# Prüft einen geschützten Branch einer gepflegten Releaselinie und erfasst die
+# Releaselinie für die Auswahl des M/Text-Ziels.
+RELEASE_BRANCH_RE = re.compile(r"release/(R[0-9]{3})")
+# Prüft einen Feature-Branch einschließlich hierarchischer Bezeichnung und
+# erfasst die Releaselinie für die Entwicklungssynchronisation.
+FEATURE_BRANCH_RE = re.compile(r"feature/(R[0-9]{3})/(.+)")
 # Prüft die vom Workflow-Vertrag geforderte vollständige Commit-SHA in
 # Kleinbuchstaben. Die vollständige SHA verhindert Mehrdeutigkeit beim Vergleich.
 FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
@@ -91,10 +98,30 @@ def require_ancestor(repository: str | Path, ancestor: str, descendant: str) -> 
     _git(repository, "merge-base", "--is-ancestor", ancestor, descendant)
 
 
-def require_release_tag(repository: str | Path, tag: str, branch: str) -> str:
+def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str, bool]:
+    """Ordnet einen zulässigen Quellbranch seiner Releaselinie und Branchart zu.
+
+    Der boolesche Rückgabewert kennzeichnet einen Feature-Branch. `main` und
+    `release/Rnnn` führen dadurch zur Abnahme, `feature/Rnnn/<Bezeichnung>` zur
+    Entwicklung. Weitere Schrägstriche in der Feature-Bezeichnung sind erlaubt.
+    """
+
+    if source_branch == "main":
+        return main_releaselinie, False
+    release_match = RELEASE_BRANCH_RE.fullmatch(source_branch)
+    if release_match is not None:
+        return release_match.group(1), False
+    feature_match = FEATURE_BRANCH_RE.fullmatch(source_branch)
+    if feature_match is not None:
+        return feature_match.group(1), True
+    raise DeliveryError(Status.VALIDATION_FAILED, "Branch ist kein Synchronisationszweig")
+
+
+def require_release_tag(repository: str | Path, tag: str, branches: tuple[str, ...]) -> str:
     """Prüft den Release-Tag-Namen und gibt die zugehörige Commit-SHA zurück.
 
-    Der Tag muss existieren und auf dem angegebenen Remote-Branch liegen.
+    Der Tag muss existieren und auf einem der angegebenen geschützten
+    Remote-Branches liegen.
     """
 
     if RELEASE_TAG_RE.fullmatch(tag) is None:
@@ -102,7 +129,17 @@ def require_release_tag(repository: str | Path, tag: str, branch: str) -> str:
     target = resolve(repository, f"refs/tags/{tag}")
     if resolve(repository, "HEAD") != target:
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Tag")
-    require_ancestor(repository, target, f"refs/remotes/origin/{branch}")
+    output = _git(
+        repository,
+        "for-each-ref",
+        "--format=%(refname:short)",
+        "--contains",
+        target,
+        "refs/remotes/origin",
+    )
+    containing = set(output.decode("utf-8").splitlines())
+    if not any(f"origin/{branch}" in containing for branch in branches):
+        raise DeliveryError(Status.SOURCE_FAILED, "Release-Tag liegt auf keinem zulässigen Branch")
     return target
 
 
@@ -132,11 +169,31 @@ def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:
     return result
 
 
+def project_changes(git_changes: Iterable[GitChange], project: str) -> Iterator[tuple[str, str]]:
+    """Überträgt Repositoryänderungen auf die Dateioperationen eines Projekts.
+
+    Umbenennungen werden als Löschung und Hinzufügung ausgegeben, Kopien als
+    Hinzufügung. Releasebau und serverSync verwenden damit dieselbe Semantik.
+    """
+
+    prefix = f"{project}/"
+    for change in git_changes:
+        if change.status == "R":
+            projected = (("D", change.old_path), ("A", change.path))
+        elif change.status == "C":
+            projected = (("A", change.path),)
+        else:
+            projected = ((change.status, change.path),)
+        for status, path in projected:
+            if path == project or path.startswith(prefix):
+                yield status, path
+
+
 def previous_tag(repository: str | Path, target_tag: str) -> str | None:
     """Ermittelt den numerisch größten Release-Tag vor dem Zieltag.
 
     Der Lieferbeleg vergleicht den Zieltag mit seinem direkten Release-Vorgänger.
-    Dafür zählt die numerische Folge `Rnnn.nnn`, nicht die lexikografische
+    Dafür zählt die numerische Folge `vnnn.nnn`, nicht die lexikografische
     Sortierung der Tag-Namen in Git.
     """
 
@@ -147,9 +204,9 @@ def previous_tag(repository: str | Path, target_tag: str) -> str | None:
 
     # Den größten gültigen Tag wählen, der numerisch noch vor dem Zieltag liegt.
     best: tuple[tuple[int, int], str] | None = None
-    for tag in _git(repository, "tag", "--list", "R*.*").decode("ascii").splitlines():
+    for tag in _git(repository, "tag", "--list", "v*.*").decode("ascii").splitlines():
         match = RELEASE_TAG_RE.fullmatch(tag)
-        if match is None:
+        if match is None or match.group(1) != target_match.group(1):
             continue
         number = (int(match.group(1)), int(match.group(2)))
         if number < target_number and (best is None or number > best[0]):

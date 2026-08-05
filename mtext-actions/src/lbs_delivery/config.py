@@ -1,6 +1,6 @@
-"""Lädt und prüft die versionierte Konfiguration der Lieferworkflows.
+"""Zentrale Validierung von .github/config.json der Mandanten.
 
-Das Modul verbindet zentral gepflegte Mandanten- und Releaselinienzuordnungen
+Das Modul verbindet die Mandanten- und Releaselinienzuordnungen
 mit der Konfiguration und den Projektverzeichnissen des ausgecheckten
 Repositories. Alle späteren Lieferschritte erhalten so ein geprüftes,
 unveränderliches Eingabemodell.
@@ -19,24 +19,20 @@ from .process import DeliveryError, Status
 # Pfad des Automation-Root-Verzeichnisses (darin suchen wir die
 # Konfigurationsdateien für Mandanten und Releaselinien)
 AUTOMATION_ROOT = Path(__file__).resolve().parents[2]
-# Zentrale Zuordnung vom Mandantenkürzel zum GitHub-Repository und Mainframe-Subsystem.
+# Zuordnung vom Mandantenkürzel zum GitHub-Repository und Mainframe-Subsystem.
 MANDANTEN_ZUORDNUNG_PATH = AUTOMATION_ROOT / "config/mandanten.json"
-# Zentrale Zuordnung der aktiven Releaselinien zu ETAPS-Linien und Hostprofilen.
+# Zuordnung der aktiven Releaselinien zu ETAPS-Linien und Hostprofilen.
 RELEASELINIEN_ZUORDNUNG_PATH = AUTOMATION_ROOT / "config/releaselinien.json"
-# Mandantenkonfiguration im ausgecheckten Repository, relativ zum Repository-Root.
+# Mandantenkonfiguration im ausgecheckten Repository.
 MANDANT_CONFIG_PATH = Path(".github/config.json")
 
-# CodePipeline-Umgebung - wobei nur "P" wirklich realistisch ist bzw. im alten
-# Jenkins Skript verwendet wurde. "T" ist für eine theoretische Testumgebung.
+# CodePipeline-Umgebung - "P" = Produktion, "T" = Testumgebung
 ISPW_INSTANZEN = {"T", "P"}
 
 # Hostprofile dürfen auf diese sechs eingerichteten CodePipeline-Stages zeigen.
-# Die Liste an dieser Stelle macht das Modul zum Eigentümer dieses externen Vertrags.
 CODEPIPELINE_STAGES = {"FKTE", "FKTF", "JURJ", "JURP", "SVTS", "VPTV"}
 
-# Dieser Referenzbestand macht fehlende oder zusätzliche Projektverzeichnisse
-# als Warnungen sichtbar, ohne den aktuellen Betriebsstand zu einer
-# Validierungsregel zu machen.
+# Referenz-Projektbestand je Mandant, für Warnungen bei Abweichungen
 PROJEKTREFERENZ = {
     "FI": {"Configuration", "Fonts", "LOMS_Framework", "LOMS_Basis", "LOMS_PKA"},
     "IT": {"LOMS_Autonom"},
@@ -50,20 +46,34 @@ PROJEKTREFERENZ = {
 
 @dataclass(frozen=True)
 class Configuration:
-    """Enthält die geprüften Eingaben, die alle Lieferabläufe gemeinsam verwenden.
+    """Enthält die geprüften Eingaben, die alle Workflows gemeinsam verwenden.
 
     Die Konfiguration wird einmal an der Workflow-Grenze aufgebaut. Paketbau,
     Synchronisation und Übergabe müssen die Repositorydaten dadurch nicht
-    jeweils neu auslegen.
+    neu ermitteln. Wird von load_configuration() zurückgegeben.
     """
 
+    # Name des GitHub-Repositories
     repository: str
+    # Mandantenkürzel
     kuerzel: str
+    # Releaselinie, die `main` in diesem Repository führt. Steht in
+    # `.github/config.json` und gilt für Sync und Release auf `main`, wenn der
+    # Branchname keine Linie enthält.
+    releaselinie: str
+    # CodePipeline-Umgebung (Produktion oder Testumgebung)
     ispw: str
+    # Mainframe-Subsystem
     subsystem: str
+    # Dictionary von Projektnamen zu Projektcodes (Beispiel: LOMS_Basis[BY] -> BASIS)
     projects: dict[str, str]
+    # Dictionary von Hostprofilen zu Hostprofilen 
     hostprofile: dict[str, dict[str, str]]
+    # Zentrale Zuordnung aller aktiven Linien aus `releaselinien.json`. Die
+    # Schlüssel sind Linien wie `R270`, die Werte nennen ETAPS-Linie und
+    # Hostprofil.
     releaselinien: dict[str, dict[str, str]]
+    # Tuple von Warnungen bei Abweichungen vom Referenzbestand
     warnungen: tuple[str, ...]
 
 
@@ -98,7 +108,7 @@ def _load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
         raise DeliveryError(Status.VALIDATION_FAILED, "Mandantenzuordnung ist ungültig")
 
     zuordnung: dict[str, MandantStamm] = {}
-    repositories: set[str] = set()
+    repositories: set[str] = set() # Set für Eindeutigkeit
 
     # Jede Zuordnung braucht eindeutiges Repository und Subsystem.
     for kuerzel, values in mandanten.items():
@@ -111,11 +121,14 @@ def _load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
             subsystem = values["subsystem"]
         except KeyError as exc:
             raise DeliveryError(Status.VALIDATION_FAILED, "Mandantenzuordnung ist ungültig") from exc
+
         if not isinstance(repository, str) or not repository or not isinstance(subsystem, str) or not subsystem:
             raise DeliveryError(Status.VALIDATION_FAILED, "Mandantenzuordnung ist ungültig")
 
         if repository in repositories:
             raise DeliveryError(Status.VALIDATION_FAILED, "Mandantenzuordnung ist nicht eindeutig")
+        
+        # Gültiges Repository und Subsystem hinzufügen
         repositories.add(repository)
         zuordnung[kuerzel] = MandantStamm(repository=repository, subsystem=subsystem)
 
@@ -132,11 +145,8 @@ def _load_releaselinien_zuordnung(path: str | Path) -> dict[str, Any]:
 
 
 def load_configuration(repository_root: str | Path, repository_name: str) -> Configuration:
-    """Lädt die Konfiguration für ein ausgechecktes Mandanten-Repository.
-
-    Liest die zentrale Zuordnung aus `mtext-actions`, die Mandantenangaben aus
-    `.github/config.json` im Repository und den Projektstand aus dem Checkout.
-    Wird auch von validate_config.py verwendet.
+    """Hauptmethode - lädt die Konfiguration für ein ausgechecktes
+    Mandanten-Repository. Wird auch von validate_config.py verwendet.
     """
 
     root = Path(repository_root)
@@ -155,13 +165,17 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
 
     try:
         kuerzel = mandant["kuerzel"]
+        releaselinie = mandant["releaselinie"]
         ispw = mandant["ispw"]
         hostprofile = mandant["hostprofile"]
         excluded_projects = mandant.get("excluded_projects", [])
     except KeyError as exc:
         raise DeliveryError(Status.VALIDATION_FAILED, "Konfiguration ist unvollständig") from exc
+
     if not isinstance(kuerzel, str) or not kuerzel:
         raise DeliveryError(Status.VALIDATION_FAILED, "Konfiguration ist unvollständig")
+    if releaselinie not in releaselinien:
+        raise DeliveryError(Status.VALIDATION_FAILED, "führende Releaselinie ist ungültig")
     if not isinstance(excluded_projects, list) or not all(isinstance(item, str) for item in excluded_projects):
         raise DeliveryError(Status.VALIDATION_FAILED, "ausgeschlossene Projekte sind ungültig")
 
@@ -175,6 +189,7 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
 
     if not isinstance(hostprofile, dict) or not hostprofile:
         raise DeliveryError(Status.VALIDATION_FAILED, "Hostprofile fehlen")
+
     for profile in hostprofile.values():
         if not isinstance(profile, dict):
             raise DeliveryError(Status.VALIDATION_FAILED, "Hostprofil ist ungültig")
@@ -191,9 +206,11 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
         if not isinstance(etaps_linie, str) or not etaps_linie or hostprofil not in hostprofile:
             raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist ungültig")
 
+    # Konfiguration zurückgeben
     return Configuration(
         repository=repository_name,
         kuerzel=kuerzel,
+        releaselinie=releaselinie,
         ispw=ispw,
         subsystem=mandant_stammdaten.subsystem,
         projects=projects,
@@ -204,20 +221,20 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
 
 
 def _scan_projects(root: Path, kuerzel: str, excluded_projects: tuple[str, ...]) -> dict[str, str]:
-    """Ermittelt lieferbare Projekte und leitet ihre externen Projektcodes ab.
-
-    Ausgeschlossene und versteckte Verzeichnisse entfallen vor der Pfadprüfung.
-    Die zurückgegebenen Codes werden Teil von Paketnamen und Mainframe-Membern.
-    Kollisionen werden deshalb vor dem Artefaktbau abgelehnt.
+    """Ermittelt lieferbare Projekte und leitet deren "Projektcodes" ab.
+    (Beispiel: LOMS_Basis[BY] -> BASIS)
     """
 
     projects: dict[str, str] = {}
     for item in sorted(root.iterdir(), key=lambda path: path.name):
+        # Ausgeschlossene und versteckte Verzeichnisse entfallen vor der Pfadprüfung
         if not item.is_dir() or item.name.startswith(".") or item.name in excluded_projects:
             continue
         projects[item.name] = item.name.removesuffix(f"[{kuerzel}]").removeprefix("LOMS_")[:5].upper()
+
     if not projects or len(projects) != len(set(projects.values())):
         raise DeliveryError(Status.VALIDATION_FAILED, "abgeleitete Projektcodes sind nicht eindeutig")
+
     return projects
 
 

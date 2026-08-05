@@ -12,7 +12,7 @@
           <mxGeometry x="30" y="55" width="1550" height="30" as="geometry"/>
         </mxCell>
 
-        <mxCell id="col-user" value="Anwender und Release-Team" style="swimlane;html=1;horizontal=1;startSize=42;container=0;collapsible=0;fillColor=#f5f5f5;strokeColor=#666666;fontSize=15;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="col-user" value="Entwickler und Repository-Verantwortliche" style="swimlane;html=1;horizontal=1;startSize=42;container=0;collapsible=0;fillColor=#f5f5f5;strokeColor=#666666;fontSize=15;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="30" y="100" width="235" height="1350" as="geometry"/>
         </mxCell>
         <mxCell id="col-mandant" value="Mandanten-Repository (z. B. mtext-fi)" style="swimlane;html=1;horizontal=1;startSize=42;container=0;collapsible=0;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=15;fontStyle=1" vertex="1" parent="1">
@@ -25,31 +25,31 @@
           <mxGeometry x="1570" y="100" width="400" height="1350" as="geometry"/>
         </mxCell>
 
-        <mxCell id="stage-dev" value="1. Entwicklung" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#1a4f8b" vertex="1" parent="1">
+        <mxCell id="stage-dev" value="1. Feature entwickeln und testen" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#1a4f8b" vertex="1" parent="1">
           <mxGeometry x="45" y="150" width="200" height="30" as="geometry"/>
         </mxCell>
-        <mxCell id="dev-user" value="M/Text Workbench&#xa;Ressource ändern&#xa;Commit und Push" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="dev-user" value="M/Text Workbench&#xa;Feature-Branch erstellen&#xa;Ressource ändern&#xa;Commit und Push" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="55" y="205" width="185" height="95" as="geometry"/>
         </mxCell>
-        <mxCell id="dev-branch" value="Exakter Commit auf&#xa;Rnnn/Entwicklung&#xa;vollständige SHA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="dev-branch" value="feature/Rnnn/Bezeichnung&#xa;exakter Commit&#xa;vollständige SHA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="310" y="205" width="190" height="95" as="geometry"/>
         </mxCell>
         <mxCell id="dev-caller" value="sync-resources.yml&#xa;Trigger-Workflow&#xa;Ziel: Entwicklung" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
           <mxGeometry x="525" y="205" width="205" height="95" as="geometry"/>
         </mxCell>
-        <mxCell id="config-source" value="Änderung an .github/config.json auf jedem Branch&#xa;kuerzel / ispw T|P&#xa;hostprofile / excluded_projects" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
+        <mxCell id="config-source" value="Änderung an .github/config.json&#xa;kuerzel / releaselinie / ispw&#xa;hostprofile / excluded_projects" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="310" y="325" width="420" height="85" as="geometry"/>
         </mxCell>
-        <mxCell id="dev-sync" value="reusable-sync-resources.yml&#xa;Zielstufe Entwicklung&#xa;Checkout: Mandant + gepinnte Automation&#xa;Prüfung von Config, Branch, SHA und Historie&#xa;sync-resources --execute" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="dev-sync" value="reusable-sync-resources.yml&#xa;M/Text-Ziel Entwicklung&#xa;Checkout: Mandant + gepinnte Automation&#xa;Prüfung von Config, Branch und SHA&#xa;Differenz zum letzten erfolgreichen Commit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="805" y="190" width="285" height="130" as="geometry"/>
         </mxCell>
-        <mxCell id="dev-staging" value="Laufbezogenes Staging&#xa;unter RUNNER_TEMP&#xa;vollständiger Projektstand&#xa;Symlinks gesperrt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656" vertex="1" parent="1">
+        <mxCell id="dev-staging" value="Laufbezogenes Staging&#xa;unter RUNNER_TEMP&#xa;geänderte Ressourcen aus Git-Differenz&#xa;Erst-/Wiederherstellung: vollständiger Stand" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656" vertex="1" parent="1">
           <mxGeometry x="1120" y="200" width="195" height="110" as="geometry"/>
         </mxCell>
         <mxCell id="config-validate" value="reusable-validate-config.yml&#xa;.github/config.json + zentrale Zuordnungen&#xa;frühes Feedback, kein Zielzugriff&#xa;kein Gate; Sync und Release prüfen erneut" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="805" y="340" width="310" height="70" as="geometry"/>
         </mxCell>
-        <mxCell id="dev-target" value="M/Text-Entwicklung / serverSync&#xa;Transport vor Integration festlegen:&#xa;ZIP per PUT | Runner-Share |&#xa;ZIP aus Actions-Artefakt laden&#xa;vollständig veröffentlichen, dann synchronisieren&#xa;ADAPTER_ACCEPTED" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="dev-target" value="M/Text-Entwicklung / serverSync&#xa;dauerhafter Projektstand&#xa;geänderte Ressourcen nachführen&#xa;gelöschte Ressourcen entfernen&#xa;danach LTOMA aufrufen&#xa;ADAPTER_ACCEPTED" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1605" y="190" width="330" height="140" as="geometry"/>
         </mxCell>
 
@@ -59,41 +59,41 @@
         <mxCell id="stage-acc" value="2. Abnahme" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#2f6b2f" vertex="1" parent="1">
           <mxGeometry x="45" y="450" width="200" height="30" as="geometry"/>
         </mxCell>
-        <mxCell id="acc-user" value="Fachlich geprüfte Änderung&#xa;Cherry-Pick in Reihenfolge&#xa;Konflikte fachlich klären" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366" vertex="1" parent="1">
+        <mxCell id="acc-user" value="Pull Request erstellen&#xa;Vier-Augen-Review&#xa;Squash Merge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366" vertex="1" parent="1">
           <mxGeometry x="50" y="505" width="195" height="120" as="geometry"/>
         </mxCell>
-        <mxCell id="acc-branch" value="Neuer Commit auf&#xa;Rnnn/Abnahme&#xa;neue SHA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="acc-branch" value="main oder release/Rnnn&#xa;ein Squash-Commit&#xa;geschützter Branch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="310" y="510" width="190" height="105" as="geometry"/>
         </mxCell>
         <mxCell id="acc-caller" value="sync-resources.yml&#xa;Trigger-Workflow&#xa;Ziel: Abnahme" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
           <mxGeometry x="525" y="505" width="205" height="115" as="geometry"/>
         </mxCell>
-        <mxCell id="acc-sync" value="reusable-sync-resources.yml&#xa;Zielstufe Abnahme&#xa;derselbe geprüfte Ablauf&#xa;exakter Commit + gepinnte Automation&#xa;sync-resources --execute" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="acc-sync" value="reusable-sync-resources.yml&#xa;M/Text-Ziel Abnahme&#xa;derselbe geprüfte Ablauf&#xa;exakter Commit + gepinnte Automation&#xa;Differenz zum letzten erfolgreichen Commit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="805" y="500" width="285" height="125" as="geometry"/>
         </mxCell>
-        <mxCell id="acc-staging" value="Laufbezogenes Staging&#xa;vollständiger Projektstand&#xa;Veröffentlichung erst danach" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656" vertex="1" parent="1">
+        <mxCell id="acc-staging" value="Laufbezogenes Staging&#xa;geänderte Ressourcen aus Git-Differenz&#xa;Erst-/Wiederherstellung: vollständiger Stand" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656" vertex="1" parent="1">
           <mxGeometry x="1120" y="510" width="195" height="105" as="geometry"/>
         </mxCell>
-        <mxCell id="acc-target" value="M/Text-Abnahme / serverSync&#xa;gewählter Transportweg&#xa;vollständigen Commit veröffentlichen&#xa;keine Transportdateien im Zielbestand&#xa;danach intern synchronisieren&#xa;ADAPTER_ACCEPTED" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="acc-target" value="M/Text-Abnahme / serverSync&#xa;dauerhafter Projektstand&#xa;Änderungen des Squash-Commits&#xa;danach LTOMA aufrufen&#xa;ADAPTER_ACCEPTED" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1605" y="495" width="330" height="140" as="geometry"/>
         </mxCell>
 
         <mxCell id="divider-2" style="shape=line;strokeColor=#b3b3b3;dashed=1" vertex="1" parent="1">
           <mxGeometry x="45" y="685" width="1890" height="1" as="geometry"/>
         </mxCell>
-        <mxCell id="stage-rel" value="3. Bereitstellung und Release-Tag" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#a65a00" vertex="1" parent="1">
+        <mxCell id="stage-rel" value="3. Geschützten Release-Tag erstellen" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#a65a00" vertex="1" parent="1">
           <mxGeometry x="45" y="700" width="350" height="30" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-user" value="Mandanten-Release-Team&#xa;freigegebene Commits auswählen&#xa;Cherry-Pick nach Bereitstellung&#xa;kein Force-Push" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="rel-user" value="Berechtigter Entwickler&#xa;abgenommenen Commit auswählen&#xa;Release-Tag vorbereiten" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="50" y="750" width="195" height="120" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-branch" value="Rnnn/Bereitstellung&#xa;neuer Commit / neue SHA&#xa;Push erzeugt keine Lieferung" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="rel-branch" value="main oder release/Rnnn&#xa;geschützter und&#xa;abgenommener Commit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="295" y="750" width="180" height="105" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-tag" value="Release-Tag Rnnn.nnn&#xa;auf den bestätigten&#xa;Commit setzen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="rel-tag" value="Release-Tag vnnn.nnn&#xa;organisationsweit geschützt&#xa;nicht löschen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="510" y="735" width="235" height="90" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-caller" value="release.yml · Trigger-Workflow&#xa;Tag-Push oder manueller Start mit Tag&#xa;ruft reusable-release.yml auf" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
+        <mxCell id="rel-caller" value="release.yml im Mandanten&#xa;Tag-Push startet Dispatch&#xa;Fine-grained PAT: Actions write" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
           <mxGeometry x="510" y="980" width="235" height="100" as="geometry"/>
         </mxCell>
 
@@ -103,7 +103,7 @@
         <mxCell id="stage-publish" value="4. Release-Automation und Mainframe-Übergabe" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;fontColor=#6b3d7c" vertex="1" parent="1">
           <mxGeometry x="45" y="920" width="460" height="30" as="geometry"/>
         </mxCell>
-        <mxCell id="release-workflow" value="reusable-release.yml&#xa;zentraler Release-Workflow&#xa;Paketbau und Übergabe getrennt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
+        <mxCell id="release-workflow" value="release.yml in mtext-actions&#xa;zentraler Release-Workflow&#xa;Paketbau und Übergabe getrennt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="790" y="980" width="210" height="100" as="geometry"/>
         </mxCell>
         <mxCell id="build-job" value="Paketbau&#xa;Tag und Konfiguration prüfen&#xa;FULL oder kumulatives DELTA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontStyle=1" vertex="1" parent="1">
@@ -118,7 +118,7 @@
         <mxCell id="mainframe" value="Mainframe IZE9 / CodePipeline&#xa;Lieferung registriert" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
           <mxGeometry x="1605" y="1155" width="330" height="120" as="geometry"/>
         </mxCell>
-        <mxCell id="controls" value="Schutzgrenzen: feste Quellen und zentrale Automation | minimale Berechtigungen | geschützte Zugangsdaten | kontrollierte Wiederanläufe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
+        <mxCell id="controls" value="Schutzgrenzen: Pull Requests und Squash Merge | geschützte v-Tags | FTP-Secret nur in mtext-actions | kontrollierte Wiederanläufe" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=11" vertex="1" parent="1">
           <mxGeometry x="790" y="1340" width="665" height="65" as="geometry"/>
         </mxCell>
 
@@ -126,25 +126,25 @@
         <mxCell id="e-dev-2" value="Push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="dev-branch" target="dev-caller"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-dev-3" value="workflow_call" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="dev-caller" target="dev-sync"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-dev-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="dev-sync" target="dev-staging"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-dev-5" value="vollständiger Stand" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="dev-staging" target="dev-target"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-dev-5" value="geänderte Ressourcen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="dev-staging" target="dev-target"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-config" value="Push-Check" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="config-source" target="config-validate"><mxGeometry relative="1" as="geometry"/></mxCell>
 
         <mxCell id="e-stage-1" value="fachlich geprüft" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0" edge="1" parent="1" source="dev-target" target="acc-user">
           <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1950" y="445"/><mxPoint x="45" y="445"/></Array></mxGeometry>
         </mxCell>
-        <mxCell id="e-acc-1" value="Push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="acc-user" target="acc-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-acc-1" value="Squash Merge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="acc-user" target="acc-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-acc-2" value="Push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="acc-branch" target="acc-caller"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-acc-3" value="workflow_call" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="acc-caller" target="acc-sync"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-acc-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="acc-sync" target="acc-staging"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-acc-5" value="vollständiger Stand" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="acc-staging" target="acc-target"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-acc-5" value="geänderte Ressourcen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="acc-staging" target="acc-target"><mxGeometry relative="1" as="geometry"/></mxCell>
 
         <mxCell id="e-stage-2" value="fachlich freigegeben" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0" edge="1" parent="1" source="acc-target" target="rel-user">
           <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1950" y="695"/><mxPoint x="45" y="695"/></Array></mxGeometry>
         </mxCell>
-        <mxCell id="e-rel-1" value="Push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="rel-user" target="rel-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-rel-1" value="Stand wählen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="rel-user" target="rel-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-rel-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="rel-branch" target="rel-tag"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-rel-3" value="Push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="rel-tag" target="rel-caller"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-rel-build" value="workflow_call" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="rel-caller" target="release-workflow"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-rel-build" value="workflow_dispatch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;fontSize=10" edge="1" parent="1" source="rel-caller" target="release-workflow"><mxGeometry relative="1" as="geometry"/></mxCell>
 
         <mxCell id="e-release-workflow" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="release-workflow" target="build-job"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-build-artifact" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1" edge="1" parent="1" source="build-job" target="artifact"><mxGeometry relative="1" as="geometry"/></mxCell>

@@ -5,6 +5,9 @@ name: Reusable release
 'on':
   workflow_call:
     inputs:
+      source_repository:
+        required: true
+        type: string
       release_tag:
         required: true
         type: string
@@ -24,6 +27,11 @@ name: Reusable release
         required: false
         default: true
         type: boolean
+    secrets:
+      source_token:
+        required: true
+      mainframe_ftp_password:
+        required: true
 
 permissions:
   contents: read
@@ -47,14 +55,16 @@ jobs:
           fetch-depth: 0
           path: source
           persist-credentials: false
+          repository: ${{ inputs.source_repository }}
           ref: refs/tags/${{ inputs.release_tag }}
+          token: ${{ secrets.source_token }}
 
       # Lädt genau den vom Aufrufer festgelegten Stand der Build-Logik und
       # speichert keine GitHub-Zugangsdaten in der Git-Konfiguration.
       - name: Check out pinned automation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          repository: j520730/mtext-actions
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
           ref: ${{ inputs.automation_ref }}
           path: automation
           persist-credentials: false
@@ -71,6 +81,7 @@ jobs:
         env:
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
           INPUT_TRIGGER_SHA: ${{ inputs.trigger_sha }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
         run: >-
           "${{ steps.runtime.outputs.python }}" automation/src/build_release.py
           --tag "$INPUT_RELEASE_TAG"
@@ -82,8 +93,9 @@ jobs:
         id: metadata
         env:
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
         run: |
-          repository_short="${GITHUB_REPOSITORY##*/}"
+          repository_short="${SOURCE_REPOSITORY##*/}"
           printf 'artifact_name=%s-%s\n' "$repository_short" "$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
       # Speichert den vollständigen dist-Inhalt ohne zusätzliche Komprimierung
@@ -97,17 +109,15 @@ jobs:
           retention-days: ${{ inputs.retention_days }}
           compression-level: 0
 
-  # Erst dieser Job bindet das Environment mit den Mainframe-Secrets und darf
-  # externe Systeme ansprechen.
+  # Erst dieser Job erhält das zentrale FTP-Secret und darf externe Systeme ansprechen.
   publish:
     name: Verify and hand over artifact to Mainframe
     needs: build
     # Auch der Publish-Job verwendet ausschließlich den zentral
     # festgelegten Runner der FI und keine Auswahl des Mandanten-Workflows.
     runs-on: FI_RUNNER_LABEL_TO_BE_SET
-    environment: Bereitstellung
     concurrency:
-      group: ${{ inputs.serialize_publication && format('mainframe-{0}', github.repository) || format('mainframe-{0}-{1}', github.repository, github.run_id) }}
+      group: ${{ inputs.serialize_publication && format('mainframe-{0}', inputs.source_repository) || format('mainframe-{0}-{1}', inputs.source_repository, github.run_id) }}
       cancel-in-progress: false
     timeout-minutes: 30
     steps:
@@ -116,7 +126,7 @@ jobs:
       - name: Check out pinned automation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          repository: j520730/mtext-actions
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
           ref: ${{ inputs.automation_ref }}
           path: automation
           persist-credentials: false
@@ -139,8 +149,8 @@ jobs:
       # rendert die JCL in einem temporären Verzeichnis und reicht sie bei JES ein.
       - name: Verify artifact, render JCL and submit FTP/JES
         env:
-          MAINFRAME_FTP_HOST: ${{ secrets.MAINFRAME_FTP_HOST }}
-          MAINFRAME_FTP_PASSWORD: ${{ secrets.MAINFRAME_FTP_PASSWORD }}
-          MAINFRAME_FTP_USER: ${{ secrets.MAINFRAME_FTP_USER }}
+          MAINFRAME_FTP_HOST: ${{ vars.MAINFRAME_FTP_HOST }}
+          MAINFRAME_FTP_PASSWORD: ${{ secrets.mainframe_ftp_password }}
+          MAINFRAME_FTP_USER: ${{ vars.MAINFRAME_FTP_USER }}
         run: >-
           "${{ steps.runtime.outputs.python }}" automation/src/publish_mainframe.py

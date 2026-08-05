@@ -1,37 +1,30 @@
-name: Build and publish release
+name: Start central release
 
-# Dieser Workflow lässt aus einem vorhandenen Release-Tag ein unveränderliches
-# Release-Artefakt bauen, prüfen und an den Mainframe übergeben.
+# Ein geschützter Release-Tag startet den zentralen Lauf in mtext-actions. Das
+# Mandanten-Repository erhält dabei keinen Mainframe-Zugang.
 'on':
-  # Das Mandanten-Release-Team setzt den Tag. Erst dessen Push startet Build und
-  # nachgelagerte Übergabe.
   push:
     tags:
-      - R[0-9][0-9][0-9].[0-9][0-9][0-9]
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: Vorhandener Release-Tag im Format Rnnn.nnn
-        required: true
-        type: string
+      - v[0-9][0-9][0-9].[0-9][0-9][0-9]
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.repository }}-${{ inputs.release_tag || github.ref_name }}
+  group: release-dispatch-${{ github.repository }}-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  # Dieser Aufruf übergibt den Release-Tag an den zentralen Workflow, der Build
-  # und Veröffentlichung in getrennten Jobs ausführt.
-  release:
-    name: Build and publish release
-    uses: j520730/mtext-actions/.github/workflows/reusable-release.yml@0000000000000000000000000000000000000000
+  # Der gepinnte zentrale Workflow validiert das Tag-Ereignis und verwendet
+  # das auf Actions: write in mtext-actions begrenzte Mandanten-Secret.
+  dispatch:
+    name: Start release in mtext-actions
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-release-dispatch.yml@0000000000000000000000000000000000000000
     with:
-      # Die Einrichtungsautomation ersetzt beide technischen Platzhalter gemeinsam
-      # durch den mtext-actions-Commit.
-      release_tag: ${{ inputs.release_tag || github.ref_name }}
-      trigger_sha: ${{ github.event_name == 'push' && github.sha || '' }}
+      source_repository: ${{ github.repository }}
+      target_repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+      release_tag: ${{ github.ref_name }}
+      trigger_sha: ${{ github.sha }}
       automation_ref: 0000000000000000000000000000000000000000
-      serialize_publication: true
+    secrets:
+      dispatch_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

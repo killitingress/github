@@ -1,0 +1,43 @@
+name: Central release
+
+# Dieser Workflow läuft in mtext-actions und besitzt deshalb Zugriff auf die
+# zentralen Mainframe-Zugangsdaten. Er wird vom geprüften Mandanten-Dispatch
+# automatisch gestartet.
+'on':
+  workflow_dispatch:
+    inputs:
+      source_repository:
+        description: Vollständiger Name des Mandanten-Repositories
+        required: true
+        type: string
+      release_tag:
+        description: Geschützter Release-Tag im Format vnnn.nnn
+        required: true
+        type: string
+      trigger_sha:
+        description: Commit des auslösenden Tag-Ereignisses
+        required: true
+        type: string
+      automation_ref:
+        description: Vollständige SHA der geprüften Automatisierung
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # Der zentrale Aufruf reicht ausschließlich geprüfte Eingaben und die beiden
+  # benötigten Repository-Secrets an den Releasevertrag weiter.
+  release:
+    name: Build and publish central release
+    uses: ./.github/workflows/reusable-release.yml
+    with:
+      source_repository: ${{ inputs.source_repository }}
+      release_tag: ${{ inputs.release_tag }}
+      trigger_sha: ${{ inputs.trigger_sha }}
+      automation_ref: ${{ inputs.automation_ref }}
+      serialize_publication: true
+    secrets:
+      source_token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+      mainframe_ftp_password: ${{ secrets.MAINFRAME_FTP_PASSWORD }}

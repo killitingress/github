@@ -1,20 +1,26 @@
 """Bereitet Workflow-Aktualisierungen für Automation und Mandanten-Repositories vor.
 
-Das Werkzeug wird vom Batch-Workflow `update-mandant-workflows` in drei Schritten
+Das Werkzeug wird vom Batch-Workflow `update-mandant-workflows` in fünf Schritten
 aufgerufen:
 
-- `prepare-automation` setzt das Runner-Kennzeichen und liefert die Rollout-SHA.
-- `update-matrix` erzeugt die Rollout-Matrix für die Mandantenbranches.
+- `verify-automation` prüft die bereits per Pull Request freigegebene Rollout-SHA.
+- `update-matrix` erzeugt die Rollout-Matrix für geschützte Mandantenbranches.
+- `check-target-branch` prüft, ob ein Matrixeintrag verarbeitet werden kann.
 - `prepare-mandant` bindet einen Mandantenbranch an die Rollout-SHA.
+- `open-update-pull-request` eröffnet den zugehörigen Pull Request.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 from lbs_delivery.config import (
@@ -28,19 +34,17 @@ from lbs_delivery.process import DeliveryError
 
 
 # Die von Mandanten-Repositories eingebundenen wiederverwendbaren Workflows werden hier gepflegt.
-AUTOMATION_REPOSITORY = "j520730/mtext-actions"
-# Dieses Kennzeichen markiert einen Runner, dessen betrieblicher Wert vor dem
-# Rollout der zentralen Workflows noch festgelegt werden muss.
+AUTOMATION_REPOSITORY = "FinanzInformatik/fi_lbs_entw_oms_mtext_actions"
+# Dieses Kennzeichen darf in einer freigegebenen Automationsversion nicht mehr
+# vorkommen, weil das Runnerangebot vor dem Rollout per Pull Request feststeht.
 RUNNER_PLACEHOLDER = "FI_RUNNER_LABEL_TO_BE_SET"
-# Der Aktualisierungsworkflow behält seinen konfigurierbaren Bootstrap-Runner und
-# wird deshalb beim Einsetzen fester Runner-Kennzeichen ausgelassen.
-UPDATE_WORKFLOW = "update-mandant-workflows.yml"
-# Jede aktive Releaselinie wird über diese drei Branchstufen aktualisiert.
-MANDANT_BRANCH_STUFEN = ("Entwicklung", "Abnahme", "Bereitstellung")
-
+# GitHub-Antworten werden begrenzt, damit ein fehlerhafter oder vorgeschalteter
+# Dienst nicht beliebig viel Runner-Speicher belegen kann.
+GITHUB_RESPONSE_LIMIT = 1024 * 1024
+# API-Aufrufe erhalten eine feste Wartezeit, damit ein Rollout bei gestörter
+# GitHub-Verbindung mit einer verständlichen Fehlermeldung endet.
+GITHUB_TIMEOUT = 30.0
 # Reguläre Ausdrücke finden die technischen Workflow-Felder dieses Werkzeugs.
-# Erfasst ein skalares `runs-on`-Feld und erhält Einrückung sowie Schlüssel.
-RUNS_ON_PATTERN = re.compile(r"(?m)^(\s*runs-on:\s*).+$")
 # Erfasst die Revision eines wiederverwendbaren Workflows aus dem zentralen
 # Automations-Repository und erhält Kommentare sowie umgebendes YAML.
 CENTRAL_USES_PATTERN = re.compile(
@@ -50,6 +54,11 @@ CENTRAL_USES_PATTERN = re.compile(
 # Erfasst den Wert `automation_ref` für den Checkout der Python-Implementierung
 # und erhält Leerraum sowie einen möglichen nachgestellten YAML-Kommentar.
 AUTOMATION_REF_PATTERN = re.compile(r"(?m)^(\s*automation_ref:\s*)([^\s#]+)(\s*(?:#.*)?)$")
+# Prüft ausschließlich ausführbare `runs-on`-Felder auf das noch nicht gesetzte
+# Runnerkennzeichen. Kommentare und Beschreibungen beeinflussen den Rollout nicht.
+RUNS_ON_PLACEHOLDER_PATTERN = re.compile(
+    rf"(?m)^\s*runs-on:\s*[^#\n]*\b{re.escape(RUNNER_PLACEHOLDER)}\b"
+)
 
 
 def _git(repository: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
@@ -69,28 +78,107 @@ def _git(repository: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
         raise RuntimeError(f"Git-Operation fehlgeschlagen: {detail}") from None
 
 
-def _automation_changes(automation_root: Path, runner_label: str) -> dict[Path, str]:
-    """Setzt das gewählte Runner-Kennzeichen in alle zentralen wiederverwendbaren Workflows ein.
+def _github_request(
+    api_url: str,
+    path: str,
+    token: str,
+    *,
+    method: str = "GET",
+    payload: dict[str, str] | None = None,
+) -> tuple[int, dict[str, object]]:
+    """Ruft die GitHub-API ohne Shell auf und begrenzt ihre JSON-Antwort.
 
-    Die Funktion gibt die vorgesehenen Dateiinhalte zurück, ohne sie zu schreiben.
-    Dieselbe Umformung kann dadurch für Aktualisierung und Abschlussprüfung
-    verwendet werden.
+    HTTP-Fehler werden als reguläre Statusantworten zurückgegeben, damit die
+    fachlichen Aufrufer erwartete 404- und 422-Fälle gezielt behandeln können.
+    Transportfehler und ungültige Antworten beenden dagegen den Rollout.
     """
 
-    workflow_paths = (automation_root / ".github/workflows").glob("*.yml")
-    workflows = sorted(path for path in workflow_paths if path.name != UPDATE_WORKFLOW)
-    if not workflows:
-        raise ValueError("keine zentralen Workflows gefunden")
+    body = json.dumps(payload, separators=(",", ":")).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(
+        f"{api_url.rstrip('/')}/{path.lstrip('/')}",
+        data=body,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=GITHUB_TIMEOUT) as response:
+            status = int(response.status)
+            response_body = response.read(GITHUB_RESPONSE_LIMIT + 1)
+    except urllib.error.HTTPError as error:
+        status = error.code
+        response_body = error.read(GITHUB_RESPONSE_LIMIT + 1)
+    except (urllib.error.URLError, OSError, TimeoutError) as error:
+        raise RuntimeError("GitHub-API ist nicht erreichbar") from error
+    if len(response_body) > GITHUB_RESPONSE_LIMIT:
+        raise RuntimeError("GitHub-API-Antwort ist zu groß")
+    try:
+        parsed = json.loads(response_body) if response_body else {}
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError("GitHub-API liefert keine gültige JSON-Antwort") from error
+    if not isinstance(parsed, dict):
+        raise RuntimeError("GitHub-API-Antwort ist ungültig")
+    return status, parsed
 
-    changes: dict[Path, str] = {}
-    for path in workflows:
-        original = path.read_text(encoding="utf-8")
-        rendered, replacements = RUNS_ON_PATTERN.subn(rf"\g<1>{json.dumps(runner_label)}", original)
-        if replacements == 0:
-            raise ValueError(f"kein runs-on-Feld in {path}")
-        if rendered != original:
-            changes[path] = rendered
-    return changes
+
+def check_target_branch(api_url: str, repository: str, branch: str, token: str) -> bool:
+    """Prüft einen geschützten Zielbranch für die Rollout-Matrix.
+
+    Ein fehlender Release-Branch wird übersprungen. `main` muss in jedem
+    Mandanten-Repository bestehen. Andere API-Statuswerte zeigen einen echten
+    Berechtigungs- oder Betriebsfehler an.
+    """
+
+    repository_path = urllib.parse.quote(repository, safe="/")
+    branch_path = urllib.parse.quote(branch, safe="")
+    status, _ = _github_request(api_url, f"repos/{repository_path}/git/ref/heads/{branch_path}", token)
+    if status == 200:
+        return True
+    if status == 404 and branch != "main":
+        return False
+    raise RuntimeError(f"Zielbranchprüfung ist mit HTTP {status} fehlgeschlagen")
+
+
+def open_update_pull_request(
+    api_url: str,
+    repository: str,
+    target_branch: str,
+    update_branch: str,
+    token: str,
+) -> None:
+    """Eröffnet den Pull Request für einen vorbereiteten Workflow-Branch.
+
+    Ein bereits vorhandener Pull Request derselben Branchkombination gilt als
+    erfolgreicher Wiederanlauf. Andere Validierungsantworten werden abgelehnt.
+    """
+
+    repository_path = urllib.parse.quote(repository, safe="/")
+    status, response = _github_request(
+        api_url,
+        f"repos/{repository_path}/pulls",
+        token,
+        method="POST",
+        payload={
+            "title": "Zentrale Workflowversion aktualisieren",
+            "head": update_branch,
+            "base": target_branch,
+            "body": "Aktualisiert die Mandanten-Workflows auf den freigegebenen Stand von mtext-actions.",
+        },
+    )
+    if status == 201:
+        return
+    if status == 422:
+        errors = response.get("errors", [])
+        if isinstance(errors, list) and any(
+            isinstance(error, dict) and "A pull request already exists" in str(error.get("message", ""))
+            for error in errors
+        ):
+            return
+    raise RuntimeError(f"Pull Request konnte nicht erstellt werden: HTTP {status}")
 
 
 def _mandant_changes(mandant_root: Path, automation_sha: str) -> dict[Path, str]:
@@ -140,35 +228,23 @@ def _commit(repository: Path, message: str) -> str:
     return _git(repository, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
 
 
-def prepare_automation_update(automation_root: Path, runner_label: str, automation_sha: str) -> str:
-    """Finalisiert die zentralen Runner-Kennzeichen und gibt den Commit für die Mandantenbindung zurück.
+def verify_automation(automation_root: Path, automation_sha: str) -> str:
+    """Prüft die freigegebene Automationsversion vor dem Mandanten-Rollout.
 
-    Die erwartete Checkout-SHA verhindert die Bearbeitung einer anderen zentralen
-    Revision. Eine erneute Umformung nach dem Commit belegt, dass kein
-    vorgesehener Platzhalter oder veraltetes Kennzeichen verblieben ist.
+    Der Checkout muss genau der angegebenen SHA entsprechen. Zentrale Workflows
+    dürfen außerdem keinen offenen Runner-Platzhalter mehr enthalten. Das
+    Runnerkennzeichen wird dadurch regulär per Pull Request festgelegt.
     """
 
-    # Runner-Kennzeichen prüfen.
-    if not runner_label.strip() or "\n" in runner_label or runner_label == RUNNER_PLACEHOLDER:
-        raise ValueError("Runner-Kennzeichen muss ein einzeiliger Wert der FI sein")
-
-    # Automations-Checkout gegen die erwartete Revision absichern.
     checkout_sha = _git(automation_root, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
     if checkout_sha != automation_sha:
         raise ValueError("zentraler Checkout entspricht nicht dem angegebenen Commit")
-
-    # Runner-Kennzeichen in zentrale Workflows einsetzen.
-    automation_changes = _automation_changes(automation_root, runner_label)
-    for path, text in automation_changes.items():
-        path.write_text(text, encoding="utf-8")
-
-    # Änderungen committen.
-    automation_sha = _commit(automation_root, "Runner der FI in zentralen Workflows aktualisieren")
-
-    # Abschließende Prüfung der Workflow-Umformung.
-    if _automation_changes(automation_root, runner_label):
-        raise RuntimeError("abschließende Prüfung der zentralen Workflows ist nicht leer")
-    return automation_sha
+    workflows = sorted((automation_root / ".github/workflows").glob("*.yml"))
+    if not workflows:
+        raise ValueError("keine zentralen Workflows gefunden")
+    if any(RUNS_ON_PLACEHOLDER_PATTERN.search(path.read_text(encoding="utf-8")) for path in workflows):
+        raise ValueError("Runner-Kennzeichen ist in der Automationsversion noch nicht festgelegt")
+    return checkout_sha
 
 
 def prepare_mandant_update(automation_root: Path, mandant_root: Path, rollout_sha: str) -> str:
@@ -199,32 +275,33 @@ def prepare_mandant_update(automation_root: Path, mandant_root: Path, rollout_sh
 
 
 def build_update_matrix(mandanten_path: Path, releaselinien_path: Path) -> dict[str, list[dict[str, str]]]:
-    """Erstellt die Workflow-Matrix für alle Mandanten, Releaselinien und Branchstufen.
+    """Erstellt die Workflow-Matrix für geschützte Mandantenbranches.
 
-    Die zentralen Zuordnungen gleichen den Rollout mit demselben Repository- und
-    Releaselinienbestand ab, den auch die Lieferprüfung verwendet.
+    `main` wird in jedem Repository berücksichtigt. Für aktive Releaselinien
+    enthält die Matrix mögliche `release/Rnnn`-Branches. Der Workflow überspringt
+    einen Eintrag, wenn der betreffende Release-Branch nicht besteht.
     """
 
     # Zentrale Zuordnungen laden.
     mandanten = _load_mandanten_zuordnung(mandanten_path)
     releaselinien = _load_releaselinien_zuordnung(releaselinien_path)
 
-    # Matrix für Mandanten, Releaselinien und Branchstufen aufbauen.
+    # Matrix für main und die möglichen gepflegten Release-Branches aufbauen.
+    branches = ["main", *(f"release/{releaselinie}" for releaselinie in sorted(releaselinien))]
     include = [
         {
             "repository": stammdaten.repository,
             "kuerzel": kuerzel,
-            "branch": f"{releaselinie}/{stufe}",
+            "branch": branch,
         }
         for kuerzel, stammdaten in sorted(mandanten.items())
-        for releaselinie in sorted(releaselinien)
-        for stufe in MANDANT_BRANCH_STUFEN
+        for branch in branches
     ]
     return {"include": include}
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Definiert die drei Kommandos des Workflow-Aktualisierungsprozesses.
+    """Definiert die fünf Kommandos des Workflow-Aktualisierungsprozesses.
 
     Jedes Unterkommando entspricht der Grenze eines Workflow-Jobs und nimmt die
     von diesem Job benötigten Werte entgegen.
@@ -234,10 +311,9 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     automation = commands.add_parser(
-        "prepare-automation",
-        help="zentrale Runner-Kennzeichen finalisieren und Rollout-SHA zurückgeben",
+        "verify-automation",
+        help="freigegebene zentrale Automationsversion prüfen",
     )
-    automation.add_argument("--runner-label", required=True)
     automation.add_argument("--automation-sha", required=True)
 
     mandant = commands.add_parser(
@@ -251,13 +327,30 @@ def build_parser() -> argparse.ArgumentParser:
         "update-matrix",
         help="Rollout-Matrix aus Mandanten- und Releaselinienzuordnung erzeugen",
     )
+
+    branch = commands.add_parser(
+        "check-target-branch",
+        help="Existenz eines geschützten Mandantenbranches prüfen",
+    )
+    branch.add_argument("--api-url", required=True)
+    branch.add_argument("--repository", required=True)
+    branch.add_argument("--branch", required=True)
+
+    pull_request = commands.add_parser(
+        "open-update-pull-request",
+        help="Pull Request für einen vorbereiteten Workflow-Branch eröffnen",
+    )
+    pull_request.add_argument("--api-url", required=True)
+    pull_request.add_argument("--repository", required=True)
+    pull_request.add_argument("--target-branch", required=True)
+    pull_request.add_argument("--update-branch", required=True)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Führt eines der drei Rollout-Kommandos aus und gibt kompaktes JSON aus.
+    """Führt eines der fünf Rollout-Kommandos aus und gibt kompaktes JSON aus.
 
-    `prepare-automation` und `update-matrix` laufen im zentralen Vorbereitungsjob.
+    `verify-automation` und `update-matrix` laufen im zentralen Vorbereitungsjob.
     `prepare-mandant` läuft einmal pro Matrixeintrag im Mandanten-Updatejob.
     """
 
@@ -265,21 +358,38 @@ def main(argv: list[str] | None = None) -> int:
 
     # Rollout-Kommando ausführen.
     try:
-        if arguments.command == "prepare-automation":
-            # Zentralen Commit vorbereiten: Runner setzen, committen, SHA zurückgeben.
-            rollout_sha = prepare_automation_update(AUTOMATION_ROOT, arguments.runner_label, arguments.automation_sha)
-            result = {"rollout_sha": rollout_sha}
+        if arguments.command == "verify-automation":
+            # Bereits per Pull Request freigegebenen zentralen Commit prüfen.
+            result = {"rollout_sha": verify_automation(AUTOMATION_ROOT, arguments.automation_sha)}
         elif arguments.command == "prepare-mandant":
             # Einen Mandantenbranch an Workflow- und Codereferenzen der Rollout-SHA binden.
             result = {
                 "mandant_sha": prepare_mandant_update(AUTOMATION_ROOT, arguments.mandant_root, arguments.rollout_sha)
             }
         elif arguments.command == "update-matrix":
-            # Matrix für alle Mandanten-, Releaselinien- und Branchstufen-Kombinationen erzeugen.
+            # Matrix für alle geschützten Mandantenbranches erzeugen.
             result = build_update_matrix(MANDANTEN_ZUORDNUNG_PATH, RELEASELINIEN_ZUORDNUNG_PATH)
+        elif arguments.command == "check-target-branch":
+            # Matrixeintrag über die GitHub-API prüfen.
+            result = check_target_branch(
+                arguments.api_url,
+                arguments.repository,
+                arguments.branch,
+                os.environ["WORKFLOW_CONFIGURATION_TOKEN"],
+            )
+        elif arguments.command == "open-update-pull-request":
+            # Pull Request für den vorbereiteten technischen Branch eröffnen.
+            open_update_pull_request(
+                arguments.api_url,
+                arguments.repository,
+                arguments.target_branch,
+                arguments.update_branch,
+                os.environ["WORKFLOW_CONFIGURATION_TOKEN"],
+            )
+            result = {"pull_request": "erstellt oder bereits vorhanden"}
         else:
             raise AssertionError(f"unbekanntes Kommando: {arguments.command}")
-    except (DeliveryError, OSError, RuntimeError, ValueError) as error:
+    except (DeliveryError, KeyError, OSError, RuntimeError, ValueError) as error:
         raise SystemExit(f"Mandanten-Aktualisierung kann nicht vorbereitet werden: {error}") from None
 
     # Ergebnis als JSON ausgeben.

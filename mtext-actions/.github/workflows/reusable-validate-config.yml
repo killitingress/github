@@ -11,6 +11,9 @@ name: Reusable mandant configuration validation
       automation_ref:
         required: true
         type: string
+    secrets:
+      automation_token:
+        required: true
 
 permissions:
   contents: read
@@ -37,10 +40,11 @@ jobs:
       - name: Check out pinned automation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          repository: j520730/mtext-actions
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
           ref: ${{ inputs.automation_ref }}
           path: automation
           persist-credentials: false
+          token: ${{ secrets.automation_token }}
 
       # Prüft den von der FI bereitgestellten Runner und stellt den Pfad zur vorgegebenen
       # Python-Laufzeit als Ausgabe für die Validierung bereit.

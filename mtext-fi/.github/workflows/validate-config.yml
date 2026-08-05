@@ -22,9 +22,11 @@ jobs:
   # Validierungsworkflow prüfen.
   validate:
     name: Validate mandant configuration
-    uses: j520730/mtext-actions/.github/workflows/reusable-validate-config.yml@0000000000000000000000000000000000000000
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-validate-config.yml@0000000000000000000000000000000000000000
     with:
       # Die Einrichtungsautomation ersetzt beide technischen Platzhalter gemeinsam
       # durch den mtext-actions-Commit.
       commit_sha: ${{ github.sha }}
       automation_ref: 0000000000000000000000000000000000000000
+    secrets:
+      automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

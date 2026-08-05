@@ -1,6 +1,7 @@
 {
   "mandant": {
     "kuerzel": "FI",
+    "releaselinie": "R270",
     "ispw": "P",
     "excluded_projects": [
       "LOMS_Testdaten"

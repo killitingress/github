@@ -19,10 +19,11 @@ from lbs_delivery.sync import sync_resources
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Fordert die vom Synchronisationsworkflow übergebene Commit-SHA an."""
+    """Fordert Commit und optional eine vollständige Wiederherstellung an."""
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--commit", required=True)
+    parser.add_argument("--full", action="store_true")
     return parser
 
 
@@ -49,6 +50,7 @@ def run() -> dict[str, object]:
             commit=arguments.commit,
             source_branch=os.environ["GITHUB_REF_NAME"],
             staging_root=staging,
+            full_sync=arguments.full,
         )
 
     # Hinweise zum unverbindlichen Projektbestand anhängen.

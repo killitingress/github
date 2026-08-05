@@ -1,14 +1,17 @@
 # `mtext-actions`
 
-Das Repository stellt vier Python-Skripte für die wiederverwendbaren
-GitHub-Workflows bereit:
+Dieses Repository enthält die zentrale Automatisierung für
+Mandantenkonfiguration, M/Text-Synchronisation, Releasebau und
+Mainframe-Übergabe.
 
-- `src/validate_config.py`
-- `src/sync_resources.py`
-- `src/build_release.py`
-- `src/publish_mainframe.py`
+## Git-Vertrag
 
-Die Anwendung benötigt nur die Python-Standardbibliothek.
+- `main` vertritt die führende Releaselinie eines Mandanten.
+- `release/Rnnn` vertritt eine parallel gepflegte Releaselinie.
+- `feature/Rnnn/<Bezeichnung>` enthält eine einzelne Änderung.
+- Feature-Pushes synchronisieren nach M/Text-Entwicklung.
+- Merges nach `main` oder `release/Rnnn` synchronisieren nach M/Text-Abnahme.
+- Tags wie `v261.100` und `v261.108` starten den zentralen Releaseweg.
 
 ## Aufbau
 
@@ -16,20 +19,48 @@ Die Anwendung benötigt nur die Python-Standardbibliothek.
 - `src/sync_resources.py`: Einstieg in die Ressourcensynchronisation
 - `src/build_release.py`: Einstieg in den Releasebau
 - `src/publish_mainframe.py`: Einstieg in die Mainframe-Übergabe
-- `src/lbs_delivery/process.py`: gemeinsame Ausgabe, Statuswerte und Exitcodes
+- `src/workflow_configuration.py`: geprüfte Workflow-Aktualisierungen
 - `src/lbs_delivery/config.py`: Mandanten- und Releaselinienkonfiguration
-- `config/mandanten.json`: vollständige GitHub-Namen, Mandantenkürzel und
-  Mainframe-Subsysteme
-- `config/releaselinien.json`: aktive Releaselinien, ETAPS-Linien und
-  Hostprofile
 - `src/lbs_delivery/git.py`: Commit-, Branch-, Tag- und Diff-Abfragen
-- `src/lbs_delivery/sync.py`: Staging, `serverSync` und M/Text-Adapter
-- `src/lbs_delivery/release.py`: FULL, DELTA, Archive und Informationsdateien
-- `src/lbs_delivery/manifest.py`: Manifestvertrag und Artefaktprüfung vor der
-  Übergabe
+- `src/lbs_delivery/sync.py`: dauerhafter `serverSync`-Stand und LTOMA-Aufruf
+- `src/lbs_delivery/release.py`: FULL, DELTA, Archive und Lieferbelege
+- `src/lbs_delivery/manifest.py`: Manifest und Artefaktprüfung
 - `src/lbs_delivery/mainframe.py`: JCL-Rendering und FTP-/JES-Übergabe
-- `src/workflow_configuration.py`: interne Vorbereitung der zentralen und
-  mandantenseitigen Workflowdateien
+- `config/mandanten.json`: Mandantenkürzel, Repositories und Subsysteme
+- `config/releaselinien.json`: aktive Releaselinien, ETAPS-Linien und Hostprofile
+
+## GitHub-Konfiguration
+
+In `mtext-actions` werden eingerichtet:
+
+| Name | Art | Verwendung |
+|---|---|---|
+| `FI_RUNNER_LABEL` | Repositoryvariable | Runner des Aktualisierungsworkflows |
+| `MAINFRAME_FTP_HOST` | Repositoryvariable | FTP-Ziel |
+| `MAINFRAME_FTP_USER` | Repositoryvariable | zentraler technischer FTP-Benutzer |
+| `MAINFRAME_FTP_PASSWORD` | Repository-Secret | FTP-Passwort für den zentralen Übergabejob |
+| `WORKFLOW_CONFIGURATION_TOKEN` | Repository-Secret | Mandantenstände lesen sowie Aktualisierungsbranches und Pull Requests erstellen |
+
+Jedes Mandanten-Repository erhält `MTEXT_ACTIONS_TOKEN` als Repository-Secret.
+Der Fine-grained PAT ist auf
+`FinanzInformatik/fi_lbs_entw_oms_mtext_actions` begrenzt und besitzt dort
+`Contents: read` sowie `Actions: write`.
+
+GitHub Environments werden nicht verwendet.
+
+## Workflow-Aktualisierungen
+
+Der manuell gestartete Workflow **Update mandant workflows** erhält die
+vollständige SHA eines bereits per Pull Request freigegebenen
+`mtext-actions`-Stands. Er prüft, dass alle Runnerkennzeichen festgelegt sind,
+und verarbeitet für jeden Mandanten:
+
+- `main`,
+- vorhandene `release/Rnnn`-Branches der aktiven Releaselinien.
+
+Der Lauf erstellt einen technischen Branch und einen Pull Request. Er pusht
+nicht direkt auf einen geschützten Branch. Nicht vorhandene Release-Branches
+werden übersprungen. Feature-Branches sind keine Rollout-Ziele.
 
 ## Lokale Prüfung
 
@@ -39,53 +70,5 @@ python3 src/sync_resources.py --help
 python3 src/build_release.py --help
 ```
 
-Die vier Lieferkommandos laufen im festen Aufbau der wiederverwendbaren
-Workflows. `GITHUB_WORKSPACE/source` enthält den Mandantenstand,
-`GITHUB_REPOSITORY` dessen vollständigen Namen und `RUNNER_TEMP` die
-kurzlebigen Arbeitsverzeichnisse. Zentrale Konfiguration und JCL-Vorlage
-werden aus derselben `mtext-actions`-Version wie der Python-Code gelesen.
-Die Skripte nehmen deshalb nur Commit oder Tag entgegen, wenn das jeweilige
-Skript diese Laufdaten benötigt. Der Sync-Branch stammt aus
-`GITHUB_REF_NAME`.
-
-## Mandanten-Workflows im Batch aktualisieren
-
-Der manuell gestartete Workflow **Update mandant workflows** setzt das von der
-FI festgelegte Runner-Kennzeichen in den zentralen Fach- und Testjobs und bindet
-Workflowaufruf sowie Python-Checkout aller vorgesehenen Mandantenbranches an
-dieselbe vollständige Commit-SHA von `mtext-actions`.
-
-Vor dem ersten Lauf werden in GitHub eingerichtet:
-
-- der abgenommene Runner der FI,
-- die Repositoryvariable `FI_RUNNER_LABEL` in `mtext-actions`,
-- das Environment `Einrichtung` mit dem Secret
-  `WORKFLOW_CONFIGURATION_TOKEN`.
-
-Das technische Token ist auf `mtext-actions` und die vorgesehenen
-Mandanten-Repositories begrenzt. Es benötigt dort die Berechtigung, geschützte
-Workflowdateien auf den ausgewählten Branches festzuschreiben.
-
-Unter **Actions** wird **Update mandant workflows** mit der vollständigen
-SHA des `mtext-actions`-Commits gestartet.
-
-Der Vorbereitungsjob checkt den angegebenen Commit aus und vergleicht seine
-SHA mit der Eingabe. Bei der erstmaligen Aktualisierung kann die
-Finalisierung des Runner-Kennzeichens noch einen zentralen Commit erzeugen.
-Dessen SHA ist anschließend die gemeinsame Rollout-Version. Spätere Versionen
-enthalten bereits das feste Runner-Kennzeichen und verändern das zentrale
-Repository nicht mehr.
-
-Die Matrix kombiniert alle Repositories aus `config/mandanten.json`, alle
-aktiven Releaselinien aus `config/releaselinien.json` und die Branchstufen
-`Entwicklung`, `Abnahme` und `Bereitstellung`. Jeder Matrixjob bindet
-Workflowaufruf und Python-Checkout seines Mandantenbranches gemeinsam an die
-Rollout-Version. Erst wenn die abschließende Prüfung keine Änderung mehr
-ermittelt, wird der Commit gepusht. Die vorgenommenen Änderungen bleiben als
-Diffs im Workflow-Log sichtbar. Ein erneuter Lauf mit derselben SHA erzeugt
-keine weiteren Commits.
-
-Die technische Ablaufsteuerung liegt unter `src/workflow_configuration.py`.
-Sie nutzt `lbs_delivery.config` gemeinsam mit den Lieferkommandos als
-verbindliche Konfigurationsschicht. Der Workflow führt keinen Code aus dem
-Mandanten-Repository aus.
+Die Anwendung benötigt Python ab Version 3.11 und verwendet für ihre
+Produktivlogik die Standardbibliothek.

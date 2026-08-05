@@ -1,90 +1,51 @@
-# GitHub-Actions-Vertrag
+# Workflow-Vertrag des Mandanten-Repositories
 
-Die drei YAML-Dateien in diesem Verzeichnis sind Trigger-Workflows. Fachlogik,
-Zielauflösung, Paketbau und Integrationen befinden sich im zentrale Repository.
+Die Workflowdateien enthalten die Git-Auslöser des Mandanten. Die fachliche
+Implementierung wird über eine vollständige Commit-SHA aus
+`FinanzInformatik/fi_lbs_entw_oms_mtext_actions` geladen.
 
-Der Ablauf ist immer wie folgt:
+## Benötigtes Repository-Secret
 
-- Ein Ereignis startet den entsprechenden kleinen Trigger-Workflow
-- GitHub lädt die referenzierte Workflowdatei aus mtext-actions@SHA
-- Die Jobs dieses zentralen Workflows laufen auf dem Runner des Mandanten-Workflows
-- Der Runner checkt den Mandantenstand nach source/ aus.
-- Der Runner checkt zusätzlich mtext-actions@automation_ref nach automation/ aus.
-- Anschließend führt der Runner den dort liegenden Python-Code aus, beispielsweise:
+`MTEXT_ACTIONS_TOKEN` ist ein Fine-grained PAT eines technischen
+GitHub-Benutzers. Es ist auf das zentrale Automatisierungs-Repository begrenzt
+und besitzt:
 
-```shell
-python automation/src/build_release.py
-```
+- `Contents: read` zum Laden der gepinnten Automatisierung,
+- `Actions: write` zum Starten des zentralen Release-Workflows.
 
-## Workflow-Übersicht
+Mainframe-Zugangsdaten liegen nicht im Mandanten-Repository.
 
-### `validate-config.yml`
+## `validate-config.yml`
 
-Jeder Push, der `.github/config.json` ändert, ruft eine reine
-Konfigurationsprüfung auf. Sie validiert die Datei gegen das zentrale Schema,
-prüft Repository-Identität und Eindeutigkeit sowie die gemeinsame
-Deploymentkonfiguration. Der Check besitzt keinen `--execute`-Pfad, bindet kein
-Environment und liest keine Secrets. Sync und Release validieren die
-verwendete Konfiguration erneut.
+Ein Push mit einer Änderung an `.github/config.json` startet die zentrale
+Konfigurationsprüfung. Der Lauf überträgt keine Ressourcen und liest keine
+Mainframe-Secrets.
 
-### `sync-resources.yml`
+## `sync-resources.yml`
 
-Ein Push auf `Rnnn/Entwicklung` oder `Rnnn/Abnahme` startet die zentrale
-Synchronisation für die passende M/Text-Umgebung. Der manuelle Start verlangt
-einen Commit-SHA. Der zugehörige Branch wird im GitHub-Branchwähler ausgewählt.
-Die zentrale Umsetzung prüft beide Werte und leitet daraus Releaselinie und
-Zielumgebung ab.
+Automatische Auslöser:
 
-Jede Synchronisation überträgt den vollständigen Stand aller sichtbaren
-Projektverzeichnisse in der Repositorywurzel. Der frühere Jenkins-Parameter
-`UMFANG=DELTA` aktualisierte normalerweise vorhandene SVN-Arbeitskopien.
-`UMFANG=FULL` legte sie für eine initiale Vollsynchronisation neu an. Da die
-GitHub-Automatisierung keine langlebigen Arbeitskopien verwendet, veröffentlicht
-sie bei jedem Lauf vollständige Projektstände. Das ist unabhängig von den
-FULL- und DELTA-Releasepaketen für den Mainframe. Versteckte Verzeichnisse
-werden ignoriert. Weitere Ausschlüsse stehen in `excluded_projects` der
-`.github/config.json`.
+| Branch | Ziel |
+|---|---|
+| `feature/Rnnn/<Bezeichnung>` | M/Text-Entwicklung der Releaselinie |
+| `release/Rnnn` | M/Text-Abnahme der Releaselinie |
+| `main` | M/Text-Abnahme der in `.github/config.json` genannten Releaselinie |
 
-Zwei Schreibvorgänge auf dasselbe
-Mandanten-/Linien-/Stufen-Ziel werden durch Concurrency serialisiert.
+Der manuelle Start dient der ersten Vollsynchronisation oder einer
+Wiederherstellung. Normale Läufe verwenden den zuletzt von LTOMA angenommenen
+Commit als Vergleichsstand und übertragen die geänderten Ressourcen.
 
-Die zentrale Automatisierung prüft den Commit und die Repository-Identität.
-URL und Mandant lassen sich nicht frei eingeben.
+## `release.yml`
 
-### `release.yml`
+Ein Push eines Tags wie `v261.100` oder `v261.108` ruft den gepinnten
+Dispatch-Workflow auf. Dieser startet `release.yml` in `mtext-actions` mit
+Repository, Tag, auslösender Commit-SHA und Automationsversion.
 
-Der Workflow reagiert auf Tags der Form `Rnnn.nnn` oder auf
-eine manuelle Wiederholung mit einem bereits vorhandenen Tag. Die zentrale
-Automatisierung leitet daraus den Branch `Rnnn/Bereitstellung` ab und
-prüft, dass der Tag von dort erreichbar ist. `.100` erzeugt FULL. Andere
-dreistellige Endungen erzeugen DELTA gegen den `.100`-Tag derselben Linie.
-Ein FULL erzeugt je Projekt das vollständige F-Paket und zusätzlich ein leeres
-D-Paket mit leerem Projektverzeichnis und leerer Löschliste.
+Paketbau und Mainframe-Übergabe laufen anschließend in `mtext-actions`. Der
+Mandantenlauf erhält keinen FTP-Zugang.
 
-Ein Push nach `Rnnn/Bereitstellung` startet keine Lieferung. Erst der
-Release-Tag prüft Konfiguration und Branchzuordnung und startet den
-Paketbau.
+## Aktualisierung
 
-Paketbau und Mainframe-Übergabe sind zwei getrennte Jobs desselben zentralen
-Release-Workflows. Der zweite Job verwendet den Namen des im ersten Job
-einmalig hochgeladenen und durch Manifest-Prüfsummen gesicherten
-GitHub-Artefakts.
-
-## Erwarteter Vertrag der zentralen Workflows
-
-Der zentrale Workflow verwendet die folgenden mandantenseitigen Angaben:
-
-- `commit_sha` beziehungsweise `release_tag` und optional `trigger_sha`
-- `automation_ref` als zentral gepflegte technische Referenz für den Checkout
-  des `mtext-actions`-Commits. Die Einrichtungsautomation hält sie mit
-  der Version des aufgerufenen Workflows identisch.
-
-Der vollständige GitHub-Name des Mandanten-Repositories stammt aus
-`GITHUB_REPOSITORY`. Der zentrale Workflow checkt den Mandantenstand nach
-`source/` und seine eigene Version nach `automation/` aus. Diese festen
-Bestandteile des Runneraufbaus werden nicht als fachliche Eingaben übergeben.
-Releaselinie und Zielstufe der Synchronisation stammen aus
-`GITHUB_REF_NAME`.
-
-Der Sync-Job bindet kein GitHub Environment. Nur der Publish-Job bindet das
-Environment `Bereitstellung` und liest dort die Mainframe-Secrets.
+Der zentrale Aktualisierungsworkflow erstellt für `main` und vorhandene
+Release-Branches einen technischen Aktualisierungsbranch und einen Pull
+Request. Nach Review wird dieser mit Squash Merge zusammengeführt.

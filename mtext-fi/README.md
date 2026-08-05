@@ -1,11 +1,9 @@
 # Kurzanleitung
 
-Dieses Repository enthält die M/Text-Briefressourcen der FI.
-Diese Kurzanleitung fasst die häufigsten Abläufe zusammen. Die separate
-Benutzeranleitung enthält zusätzlich Git-Grundlagen, Rücknahmen, Wiederanläufe
-und Fehlerbilder.
+Dieses Repository enthält die M/Text-Briefressourcen der FI. Die ausführlichen
+Bedienabläufe stehen in der zentralen Benutzeranleitung.
 
-Der aktuelle Projektstand dieses Mandanten umfasst folgende Projekte:
+Der aktuelle Projektstand umfasst:
 
 - `Configuration`
 - `Fonts`
@@ -13,70 +11,52 @@ Der aktuelle Projektstand dieses Mandanten umfasst folgende Projekte:
 - `LOMS_Basis`
 - `LOMS_PKA`
 
-`LOMS_Testdaten` gehört zum Repository, ist aber von der Synchronisation
-(mittels `excluded_projects` in `.github/config.json`) ausgeschlossen.
-Reguläre Dateien in der Repositorywurzel werden nicht als Projekte verarbeitet.
-Verzeichnisse, deren Namen mit einem Punkt beginnen, werden ebenfalls ignoriert.
+`LOMS_Testdaten` bleibt versioniert, ist aber in `.github/config.json` von
+Synchronisation und Releasepaketen ausgeschlossen.
 
 ## Branches
 
-Es gibt normaler Weise immer drei aktive Releaselinien und jede Releaselinie
-besitzt drei Branches:
-
 | Branch | Verwendung |
 |---|---|
-| `<Releaselinie>/Entwicklung` | Branch für initiale Entwicklungen fachlicher Anforderungen |
-| `<Releaselinie>/Abnahme` | Branch für Funktionstests und Abnahmen entwickelter Änderungen |
-| `<Releaselinie>/Bereitstellung` | abgenommene Änderungen für eine Lieferung zusammenstellen |
+| `main` | führende Releaselinie aus `.github/config.json` |
+| `release/Rnnn` | parallel gepflegte Releaselinie |
+| `feature/Rnnn/<Bezeichnung>` | einzelne fachliche Änderung |
 
-Zusätzlich können Feature-Branches verwendet werden.
-Der Default Branch ist üblicher Weise der Entwicklungsbranch der führenden
-Releaselinie.
+`main` und `release/Rnnn` sind geschützt. Änderungen werden über Pull Requests
+geprüft und mit Squash Merge zusammengeführt.
 
-## Änderung nach Entwicklung bringen
+## Änderung bearbeiten
 
-1. Entwicklungsbranch der Releaselinie auschecken / aktualisieren.
-2. M/Text-Ressourcen bearbeiten und lokal prüfen.
-3. Die Änderung committen und dann nach GitHub pushen.
-4. Den Workflow **Sync M/Text resources** kontrollieren.
+1. Den geschützten Zielbranch aktualisieren.
+2. Einen Feature-Branch der vorgesehenen Releaselinie erstellen.
+3. M/Text-Ressourcen bearbeiten und committen.
+4. Den Feature-Branch pushen.
+5. Den automatischen Entwicklungslauf und anschließend die Änderung in
+   M/Text-Entwicklung prüfen.
+6. Einen Pull Request auf `main` oder `release/Rnnn` erstellen.
+7. Nach Review mit Squash Merge zusammenführen.
+8. Den automatischen Abnahmelauf und den Stand in M/Text-Abnahme prüfen.
 
-Der Workflow synchronisiert den Projektstand des gepushten Commits mit
-M/Text-Entwicklung.
+## FULL oder DELTA auslösen
 
-## Änderung zur Abnahme und Bereitstellung weitergeben
+Ein berechtigter Benutzer setzt den organisationsweit geschützten Release-Tag
+auf einen Commit von `main` oder `release/Rnnn`:
 
-1. Den für die nächste Stage vorgesehenen Commit per Cherry-Pick auf den Zielbranch
-   übernehmen.
-2. Den übernommenen Gesamtstand prüfen.
-3. Den Zielbranch pushen. Bei der Abnahme anschließend den Workflow
-   **Sync M/Text resources** kontrollieren.
+- `v261.100` erzeugt ein FULL,
+- ein weiterer Tag wie `v261.108` erzeugt ein kumulatives DELTA gegen
+  `v261.100`.
 
-Die Weitergabe erfolgt zuerst nach `<Releaselinie>/Abnahme` und danach nach
-`<Releaselinie>/Bereitstellung`. Bei einer Push-Ablehnung oder einem Konflikt
-wird der Zielstand zuerst aktualisiert und das fachlich richtige Ergebnis vor
-dem nächsten Push geprüft.
-
-## FULL- oder DELTA-Lieferung auslösen
-
-Das Mandanten-Release-Team setzt einen Git-Tag auf den Commit des
-Bereitstellungsbranches:
-
-- `<Releaselinie>.100`, beispielsweise `R261.100`, erzeugt ein FULL.
-- Jeder weitere gültige Tag derselben Linie erzeugt ein kumulatives DELTA
-  gegenüber `.100`.
-
-Ein FULL enthält je Projekt das vollständige F-Paket und zusätzlich ein leeres
-D-Paket mit leerem Projektverzeichnis und leerer Löschliste.
-
-Der Release-Tag ist die fachliche Freigabe. Der Release-Workflow prüft den Tag,
-baut die Lieferdateien und übergibt sie nach erfolgreicher Prüfung automatisch
-an den Mainframe.
+Der Mandanten-Workflow startet automatisch den zentralen Release in
+`mtext-actions`. Das FTP-Passwort liegt nicht in diesem Repository.
 
 ## Mandantenkonfiguration
 
-.github/config.json legt für den Mandante relevante Parameter fest. Ein Push
-der Datei startet den Config-Check.
+`.github/config.json` enthält unter anderem Mandantenkürzel, führende
+`releaselinie`, Ausschlüsse und Hostprofile. Eine Änderung der Datei startet
+die Konfigurationsprüfung.
 
 ## Weitere Informationen
 
 - [Workflow-Vertrag und GitHub-Einrichtung](.github/workflows/README.md)
+- [Zielbild](../docs/confluence/Zielbild_GitHub_Actions_Git.md)
+- [Benutzeranleitung](../docs/confluence/Benutzeranleitung.md)

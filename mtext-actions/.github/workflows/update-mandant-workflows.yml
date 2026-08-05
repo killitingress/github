@@ -1,104 +1,77 @@
 name: Update mandant workflows
 
-# Dieser manuell gestartete Batch aktualisiert die Workflowdateien aller
-# vorgesehenen Mandantenbranches auf denselben zentralen Commit.
-# Er führt keinen Code aus den Mandanten-Repositories aus.
+# Dieser manuell gestartete Batch bereitet für main und bestehende
+# Release-Branches Pull Requests mit der freigegebenen zentralen Version vor.
+# Geschützte Zielbranches werden nicht direkt beschrieben.
 'on':
   workflow_dispatch:
     inputs:
       automation_sha:
-        description: Vollständige SHA des mtext-actions-Commits
+        description: Vollständige SHA des freigegebenen mtext-actions-Commits
         required: true
         type: string
 
-# Das normale GITHUB_TOKEN bleibt lesend. Schreibzugriffe verwenden nur das
-# auf die vorgesehenen Repositories begrenzte technische Token des Environments.
 permissions:
   contents: read
 
-# Mandanten-Aktualisierungen werden serialisiert, damit zwei Läufe nicht
-# gleichzeitig unterschiedliche zentrale Versionen verteilen.
+# Zwei Rollouts dürfen nicht gleichzeitig unterschiedliche Aktualisierungen
+# für dieselben Mandanten-Repositories vorbereiten.
 concurrency:
   group: mandanten-aktualisierung
   cancel-in-progress: false
 
 jobs:
   prepare:
-    name: Prepare shared rollout
-    # Diese vorab gesetzte Repositoryvariable löst das Bootstrap-Problem. Alle
-    # übrigen zentralen Jobs erhalten durch diesen Lauf einen festen Runnerwert.
+    name: Verify rollout and build matrix
     runs-on: ${{ vars.FI_RUNNER_LABEL }}
-    environment: Einrichtung
     timeout-minutes: 10
     outputs:
       rollout_sha: ${{ steps.rollout.outputs.rollout_sha }}
       update_matrix: ${{ steps.rollout.outputs.update_matrix }}
-    # Alle technischen Commits erhalten eine feste, nicht personenbezogene Identität.
-    env:
-      GIT_AUTHOR_NAME: mtext-actions Aktualisierung
-      GIT_AUTHOR_EMAIL: mtext-actions@users.noreply.github.com
-      GIT_COMMITTER_NAME: mtext-actions Aktualisierung
-      GIT_COMMITTER_EMAIL: mtext-actions@users.noreply.github.com
     steps:
-      # Das technische Token darf den möglichen Bootstrap-Commit im zentralen
-      # Repository und später die vorgesehenen Mandantenbranches schreiben.
-      - name: Check out central automation
+      # Die Automationsversion wurde zuvor über einen Pull Request geprüft. Der
+      # Batch lädt genau diese SHA und erzeugt keinen zentralen Bootstrap-Commit.
+      - name: Check out approved central automation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           path: automation
-          persist-credentials: true
+          persist-credentials: false
           ref: ${{ inputs.automation_sha }}
-          token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
 
-      # Python und Git müssen bereits auf dem Runner der FI bereitgestellt sein.
       - name: Prepare approved Python runtime
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
-      # Der zentrale Stand wird zuerst vollständig geprüft. Falls das feste
-      # Runner-Kennzeichen noch fehlt, entsteht vor dem Batch ein neuer Commit.
-      - name: Prepare central rollout version
+      - name: Verify central rollout version
         env:
           AUTOMATION_SHA: ${{ inputs.automation_sha }}
-          FI_RUNNER_LABEL: ${{ vars.FI_RUNNER_LABEL }}
         run: >-
           "${{ steps.runtime.outputs.python }}" automation/src/workflow_configuration.py
-          prepare-automation
-          --runner-label "$FI_RUNNER_LABEL"
+          verify-automation
           --automation-sha "$AUTOMATION_SHA"
 
-      # Ein Bootstrap-Commit muss erreichbar sein, bevor Mandanten-Commits auf
-      # ihn verweisen. Ein bereits finalisierter Stand erzeugt keinen Push.
-      - name: Push central rollout version
+      # Die Matrix enthält main und mögliche Release-Branches. Ein späterer
+      # Schritt überspringt Release-Branches, die im Mandanten nicht bestehen.
+      - name: Build protected branch matrix
+        id: rollout
         env:
           AUTOMATION_SHA: ${{ inputs.automation_sha }}
         run: |
-          if [[ "$(git -C automation rev-parse HEAD)" != "$AUTOMATION_SHA" ]]; then
-            git -C automation push origin HEAD:refs/heads/main
-          fi
-
-      # Repositorynamen stammen aus der verbindlichen Mandantenzuordnung.
-      # Die aktiven Releaselinien werden mit allen drei Branchstufen kombiniert.
-      - name: Build update matrix
-        id: rollout
-        run: |
-          rollout_sha="$(git -C automation rev-parse HEAD)"
           update_matrix="$(
             "${{ steps.runtime.outputs.python }}" automation/src/workflow_configuration.py update-matrix
           )"
-          printf 'rollout_sha=%s\n' "$rollout_sha" >> "$GITHUB_OUTPUT"
+          printf 'rollout_sha=%s\n' "$AUTOMATION_SHA" >> "$GITHUB_OUTPUT"
           printf 'update_matrix=%s\n' "$update_matrix" >> "$GITHUB_OUTPUT"
 
   update:
-    name: Update ${{ matrix.kuerzel }} ${{ matrix.branch }}
+    name: Prepare ${{ matrix.kuerzel }} ${{ matrix.branch }}
     needs: prepare
     runs-on: ${{ vars.FI_RUNNER_LABEL }}
-    environment: Einrichtung
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
-      # Fehler eines Mandantenbranches verhindern nicht die Aktualisierung der
-      # übrigen Matrixeinträge. Wiederholungen sind ohne zusätzliche Commits möglich.
+      # Ein Mandantenfehler verhindert nicht die Vorbereitung der übrigen Pull
+      # Requests. Schreibzugriffe bleiben trotzdem je Zielbranch getrennt.
       fail-fast: false
       max-parallel: 7
       matrix: ${{ fromJSON(needs.prepare.outputs.update_matrix) }}
@@ -108,8 +81,6 @@ jobs:
       GIT_COMMITTER_NAME: mtext-actions Aktualisierung
       GIT_COMMITTER_EMAIL: mtext-actions@users.noreply.github.com
     steps:
-      # Die Implementierung wird aus genau der zuvor vorbereiteten Rollout-SHA
-      # geladen und benötigt in diesem Checkout keine Schreibberechtigung.
       - name: Check out central rollout version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -118,9 +89,33 @@ jobs:
           persist-credentials: false
           ref: ${{ needs.prepare.outputs.rollout_sha }}
 
-      # Der Mandantencheckout dient nur als Dateienbestand. Aus ihm wird in
-      # diesem privilegierten Job kein Programmcode ausgeführt.
-      - name: Check out mandant workflow files
+      - name: Prepare approved Python runtime
+        id: runtime
+        run: automation/scripts/runner-preflight.sh
+
+      # Die API-Prüfung unterscheidet einen nicht vorhandenen Release-Branch von
+      # Berechtigungs- und Verbindungsfehlern des technischen Tokens.
+      - name: Check target branch
+        id: target
+        env:
+          GITHUB_API_URL: ${{ github.api_url }}
+          TARGET_REPOSITORY: ${{ matrix.repository }}
+          TARGET_BRANCH: ${{ matrix.branch }}
+          WORKFLOW_CONFIGURATION_TOKEN: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+        run: |
+          exists="$(
+            "${{ steps.runtime.outputs.python }}" automation/src/workflow_configuration.py \
+            check-target-branch \
+            --api-url "$GITHUB_API_URL" \
+            --repository "$TARGET_REPOSITORY" \
+            --branch "$TARGET_BRANCH"
+          )"
+          printf 'exists=%s\n' "$exists" >> "$GITHUB_OUTPUT"
+
+      # Der Checkout dient nur als Dateienbestand. Aus dem Mandanten-Repository
+      # wird in diesem privilegierten Job kein Programmcode ausgeführt.
+      - name: Check out protected mandant branch
+        if: steps.target.outputs.exists == 'true'
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
@@ -130,13 +125,15 @@ jobs:
           repository: ${{ matrix.repository }}
           token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
 
-      - name: Prepare approved Python runtime
-        id: runtime
-        run: automation/scripts/runner-preflight.sh
+      - name: Remember target commit
+        if: steps.target.outputs.exists == 'true'
+        id: before
+        run: printf 'sha=%s\n' "$(git -C mandant rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      # Workflowaufruf und Python-Checkout werden gemeinsam aktualisiert. Die
-      # Python-Logik committet ausschließlich Dateien unter .github/workflows.
+      # Workflowaufruf und Python-Checkout werden gemeinsam aktualisiert. Der
+      # Commit enthält ausschließlich Dateien unter .github/workflows.
       - name: Prepare and verify mandant update
+        if: steps.target.outputs.exists == 'true'
         env:
           ROLLOUT_SHA: ${{ needs.prepare.outputs.rollout_sha }}
         run: >-
@@ -145,9 +142,42 @@ jobs:
           --mandant-root mandant
           --rollout-sha "$ROLLOUT_SHA"
 
-      # Ein unveränderter Branch führt lediglich zu einem erfolgreichen
-      # idempotenten Push ohne zusätzlichen Commit.
-      - name: Push verified mandant update
+      # Jeder Ausgangsstand erhält einen eindeutigen technischen Branch. Der
+      # Batch benötigt dadurch keinen Force-Push und kann bestehende PRs erkennen.
+      - name: Push update branch
+        if: steps.target.outputs.exists == 'true'
+        id: pushed
         env:
           MANDANT_BRANCH: ${{ matrix.branch }}
-        run: git -C mandant push origin "HEAD:refs/heads/$MANDANT_BRANCH"
+          ROLLOUT_SHA: ${{ needs.prepare.outputs.rollout_sha }}
+          TARGET_SHA: ${{ steps.before.outputs.sha }}
+        run: |
+          updated_sha="$(git -C mandant rev-parse HEAD)"
+          if [[ "$updated_sha" == "$TARGET_SHA" ]]; then
+            printf 'changed=false\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          branch_slug="${MANDANT_BRANCH//\//-}"
+          update_branch="mtext-actions/workflow-${branch_slug}-${ROLLOUT_SHA:0:12}-${TARGET_SHA:0:12}"
+          git -C mandant push origin "HEAD:refs/heads/$update_branch"
+          printf 'changed=true\n' >> "$GITHUB_OUTPUT"
+          printf 'branch=%s\n' "$update_branch" >> "$GITHUB_OUTPUT"
+
+      # Der Pull Request unterliegt denselben Reviews und Schutzregeln wie eine
+      # fachliche Änderung. Ein HTTP 422 ist bei einem bereits vorhandenen PR
+      # derselben technischen Branchkombination ein erfolgreicher Wiederanlauf.
+      - name: Open update pull request
+        if: steps.pushed.outputs.changed == 'true'
+        env:
+          GITHUB_API_URL: ${{ github.api_url }}
+          TARGET_REPOSITORY: ${{ matrix.repository }}
+          TARGET_BRANCH: ${{ matrix.branch }}
+          UPDATE_BRANCH: ${{ steps.pushed.outputs.branch }}
+          WORKFLOW_CONFIGURATION_TOKEN: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+        run: >-
+          "${{ steps.runtime.outputs.python }}" automation/src/workflow_configuration.py
+          open-update-pull-request
+          --api-url "$GITHUB_API_URL"
+          --repository "$TARGET_REPOSITORY"
+          --target-branch "$TARGET_BRANCH"
+          --update-branch "$UPDATE_BRANCH"

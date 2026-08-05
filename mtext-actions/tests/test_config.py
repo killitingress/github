@@ -38,7 +38,7 @@ class ConfigTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        self.repository = setup_repository(self.root, branch="R261/Entwicklung")
+        self.repository = setup_repository(self.root, branch="main")
 
     def test_warns_on_project_deviation(self) -> None:
         """Meldet Abweichungen im Projektbestand, ohne die Konfiguration abzulehnen.
@@ -83,6 +83,9 @@ class ConfigTests(unittest.TestCase):
 
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository, repository_name="<oms_team>/unbekannt")
+
+        with self.assertRaises(DeliveryError):
+            load_test_configuration(self.repository, mandant={"releaselinie": "R999"})
 
         mandanten_path = self.root / "mandanten.json"
         mandanten_path.write_text(
@@ -140,6 +143,7 @@ class ConfigTests(unittest.TestCase):
         parser = build_sync_parser()
         sync = parser.parse_args(["--commit", "a" * 40])
         self.assertFalse(hasattr(sync, "source_branch"))
+        self.assertFalse(sync.full)
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             parser.parse_args(["--commit", "a" * 40, "--repository-root", "source"])
 
