@@ -31,6 +31,40 @@
   `Nur Repository X darf zugreifen` und `einen Lauf` statt `genau einen Lauf`,
   sofern keine fachliche Einschränkung beschrieben werden soll.
 
+## Dokumentation
+
+- Dokumentation enthält die Informationen, die ihre Leser zum Verständnis,
+  für eine Entscheidung oder zur Ausführung benötigen. Technische
+  Vollständigkeit ist dort erforderlich, wo ein verbindlicher Vertrag
+  beschrieben wird.
+- Bevor ein Detail aufgenommen wird, ist sein Nutzen für den Zweck der Seite
+  zu prüfen. Herleitungen, vorsorgliche Absicherungen, hypothetische
+  Sonderfälle und mögliche spätere Betriebsabläufe entfallen, wenn sie für den
+  beschriebenen Stand nicht benötigt werden.
+- Jeder Sachverhalt hat eine passende Dokumentationsseite als Eigentümer.
+  Andere Seiten verweisen darauf oder nennen die für ihren eigenen Zweck
+  benötigte Kurzfassung. Ausführliche Wiederholungen zwischen Zielbild,
+  Benutzeranleitung und Arbeitsliste sind zu vermeiden.
+- Ein Zielbild beschreibt den Sollzustand, den Hauptablauf, verbindliche
+  Schnittstellen und offene Entscheidungen. Implementierungsdetails und
+  Bedienhinweise gehören nur hinein, wenn sie den Sollzustand bestimmen.
+- Eine Benutzeranleitung beschreibt Voraussetzungen, konkrete Handlungen,
+  erwartete Ergebnisse und notwendige Kontrollen. Technische Einrichtung,
+  interne Implementierung und nicht benötigte Begründungen gehören nicht in
+  den Bedienablauf.
+- Eine Arbeitsliste enthält je Punkt eine Tätigkeit, ihren Status und ein
+  prüfbares Ergebnis. Einleitende Meta-Erklärungen, wiederholte Begründungen
+  und vorweggenommene Detailkonzepte sind zu vermeiden.
+- Rollen werden in der Granularität genannt, die für die konkrete Aussage
+  erforderlich ist. Mehrere Verantwortlichkeitskreise werden nicht aufgezählt,
+  wenn eine gemeinsame, im Betrieb verwendete Bezeichnung genügt.
+- Beispiele, technische Namen, Eingaben und Statuswerte bleiben erhalten,
+  wenn sie einen Vertrag oder Bedienweg eindeutig machen. Beispiele ohne
+  zusätzlichen Erkenntniswert entfallen.
+- Nach dem ersten Entwurf ist gezielt zu kürzen. Zu entfernen sind
+  Wiederholungen, entbehrliche Nebensätze, Meta-Navigation und Details, die
+  weder eine Entscheidung noch eine Handlung oder einen Vertrag beeinflussen.
+
 ## Kommentare
 
 - **jede** Python-Funktion muss einen Kommentar oder eine Docstring bekommen,

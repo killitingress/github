@@ -2,26 +2,15 @@
 
 ## 1. Zweck
 
-Diese Anleitung begleitet Text-Entwickler, Mitglieder des technischen
-Konfigurationskreises und Mandanten-Release-Teams durch den vollständigen
-Bedienablauf. Alle Angaben, die sie für ihre jeweilige Aufgabe benötigen,
-stehen in diesem Dokument.
+Diese Anleitung begleitet Text-Entwickler und Administratoren durch den
+vollständigen Bedienablauf. Alle Angaben, die sie für ihre jeweilige Aufgabe
+benötigen, stehen in diesem Dokument.
 
-Die Lösung führt M/Text-Ressourcen eines Mandanten über die drei Stages
-`Entwicklung`, `Abnahme` und `Bereitstellung`. Pushes nach Entwicklung und
-Abnahme lösen die jeweilige M/Text-Synchronisation aus. Der Push nach
+Die Lösung führt M/Text-Ressourcen über die drei Stages `Entwicklung`,
+`Abnahme` und `Bereitstellung`. Pushes nach Entwicklung und Abnahme lösen die
+Synchronisation mit dem jeweiligen M/Text-Server aus. Ein Push nach
 Bereitstellung liefert noch nichts aus. Erst ein Release-Tag startet eine
 FULL- oder DELTA-Lieferung mit anschließender Mainframe-Übergabe an die IZE9.
-
-### Schnell zum passenden Ablauf
-
-| Aufgabe | Relevante Kapitel |
-|---|---|
-| Briefressourcen bearbeiten und nach Entwicklung übertragen | [Git-Grundlagen](#3-grundlagen-zu-git), [Git-Anwendungen](#4-git-anwendungen-bedienen) und [Änderung nach Entwicklung bringen](#7-änderung-nach-entwicklung-bringen) |
-| Eine ausgewählte Änderung nach Abnahme oder Bereitstellung weitergeben | [Cherry-Pick](#cherry-pick-einfach-erklärt), [Abnahme](#8-stand-zur-abnahme-weitergeben) und [Bereitstellung](#9-ausgewählte-änderungen-bereitstellen) |
-| Mandantenkonfiguration oder Releaselinie pflegen | [Mandantenkonfiguration](#5-mandantenkonfiguration-in-githubconfigjson) und [Neue Releaselinie](#6-neue-releaselinie-einrichten) |
-| Eine FULL- oder DELTA-Lieferung auslösen | [FULL- oder DELTA-Lieferung](#10-full--oder-delta-lieferung-auslösen) |
-| Einen fehlgeschlagenen Lauf einordnen oder wiederholen | [Wiederholung](#11-einen-lauf-kontrolliert-wiederholen) und [Status und Fehlerbilder](#12-status-und-fehlerbilder-verstehen) |
 
 ### Abgrenzung
 
@@ -30,15 +19,15 @@ Bedienung. Für die dafür verantwortlichen Teams sind sie zusätzlich in
 [Nächste Schritte](./Naechste_Schritte.md) beschrieben.
 
 Die konkrete Benutzerverwaltung erfolgt je Mandanten-Repository. Für die
-`Bereitstellung` und das Setzen von Release-Tags benennt jeder Mandant ein
-Mandanten-Release-Team mit wenigen berechtigten Personen.
+`Bereitstellung` benennt jeder Mandant ein Mandanten-Release-Team mit wenigen
+berechtigten Personen.
 
 ## 2. Begriffe und Namensregeln
 
 Eine **Stage** ist in dieser Anleitung ein Abschnitt des Freigabe- und
-Lieferprozesses. Die drei Prozess-Stages heißen bei uns weiterhin
-`Entwicklung`, `Abnahme` und `Bereitstellung`. Jede Releaselinie besitzt einen
-eigenen Branch für jede dieser Stages.
+Lieferprozesses – bei uns wie gewohnt `Entwicklung`, `Abnahme` und
+`Bereitstellung`. Jede Releaselinie besitzt einen eigenen Branch für jede
+dieser Stages.
 
 | Element | Verbindliches Format | Beispiel |
 |---|---|---|
@@ -64,7 +53,7 @@ darin, wie Änderungen gespeichert und mit anderen geteilt werden.
 | Neue Stände erhalten fortlaufende Revisionsnummern wie `r12345`. | Jeder Stand erhält eine eindeutige Commit-SHA. |
 | Branches werden vergleichsweise selten und eher für länger getrennte Entwicklungslinien verwendet. | Branches lassen sich leicht als vorübergehende Arbeitsbereiche für einzelne Änderungen nutzen. |
 
-Für die tägliche Arbeit bedeutet das vor allem: **Committen und Pushen sind in
+Für die tägliche Arbeit bedeutet das unter anderem: **Committen und Pushen sind in
 Git zwei getrennte Schritte.** Ein lokaler Commit sichert den eigenen
 Arbeitsstand, verändert aber noch nichts auf GitHub und löst keine
 Synchronisation aus. Erst der Push auf den Branch einer Stage veröffentlicht
@@ -78,19 +67,15 @@ Oberfläche, Berechtigungen und die GitHub-Actions-Automation bereit.
 ### Commit und SHA einfach erklärt
 
 Ein **Commit** ist ein gespeicherter Stand im Git-Repository. Jeder Commit hat
-eine eindeutige technische Kennung, den **Commit-SHA**. Sie besteht in diesem
-Repository aus 40 Zeichen, zum Beispiel
+eine eindeutige technische Kennung, den **Commit-SHA**. Sie besteht aus 40
+Zeichen, zum Beispiel
 `8f3a1c2d4e5f67890123456789abcdef01234567`. Meist genügt in der Oberfläche
 eine verkürzte Darstellung. Für einen manuellen Wiederanlauf verlangt die
 Automation jedoch die vollständige Kennung.
 
-Ein Branchname wie `R261/Entwicklung` bezeichnet dagegen keinen dauerhaft
+Ein Branch-Name wie `R261/Entwicklung` bezeichnet dagegen keinen dauerhaft
 festen Stand. Er zeigt auf den jeweils neuesten Commit des Branches und bewegt
-sich mit jedem weiteren Push. Wenn in dieser Anleitung vom „exakten Commit“
-die Rede ist, bedeutet das deshalb: Verarbeitet wird genau der Stand, der den
-Lauf ausgelöst hat – nicht ein möglicherweise inzwischen neuerer Stand auf
-demselben Branch. Bei einem normalen Push übernimmt GitHub diese Kennung
-automatisch. Benutzer müssen sie nur bei einer manuellen Wiederholung angeben.
+sich mit jedem weiteren Push.
 
 ### SVN-Pfad und Git-Branch unterscheiden
 
@@ -108,10 +93,8 @@ Pfad direkt mit dem Projektverzeichnis.
 ### Lokales Repository vor der Arbeit aktualisieren
 
 Vor einer Bearbeitung, einem Cherry-Pick oder dem Anlegen eines Release-Tags
-muss der verwendete lokale Branch auf dem aktuellen GitHub-Stand sein. Für
-sämtliche Git-Arbeiten wird die M/Text Workbench verwendet. Sie bindet Git über
-das Eclipse-Plugin EGit ein, das im Folgenden als interner Git-Client der
-Workbench bezeichnet wird.
+muss der lokale Branch auf dem aktuellen GitHub-Stand sein. In der M/Text
+Workbench wird dafür das Eclipse-Plugin EGit verwendet.
 
 Git unterscheidet das Abrufen neuer GitHub-Stände vom Aktualisieren des
 ausgecheckten Branches:
@@ -121,12 +104,12 @@ ausgecheckten Branches:
 | `fetch` | Lädt neue Commits und Branchstände von GitHub, verändert aber weder den ausgecheckten lokalen Branch noch dessen Dateien |
 | `pull` | Ruft den GitHub-Stand ab und aktualisiert den ausgecheckten Branch |
 
-Welche Bedienfunktion diese Vorgänge in der eingesetzten Workbench-Version
-ausführt und wie sie dort heißt, wird bei der praktischen Abnahme festgelegt.
-Die festgelegte Funktion muss den lokalen Branch ohne automatischen Merge auf
-den aktuellen GitHub-Stand bringen.
+Welche EGit-Bedienfunktion diese Vorgänge in der M/Text Workbench und im
+zusätzlichen Git-Client ausführt und wie sie dort heißt, wird erst bei der
+praktischen Abnahme festgelegt. Die freigegebene Funktion muss den lokalen
+Branch ohne automatischen Merge auf den aktuellen GitHub-Stand bringen.
 
-Der sichere Standardablauf ist:
+Der Standardablauf in der Workbench ist:
 
 1. Das richtige Mandanten-Repository und den vorgesehenen Branch auswählen.
 2. Prüfen, dass keine noch nicht abgeschlossene Git-Operation und keine
@@ -144,16 +127,16 @@ noch ein Force-Push erzwungen. Dann gilt der Abschnitt
 ### Feature-Branch einfach erklärt
 
 Ein **Feature-Branch** ist ein eigener Arbeitsbereich für eine einzelne
-Änderung. Sofern dieser Bedienweg für den Mandanten vorgesehen ist, kann dort
-ein noch unfertiger Stand gespeichert und nach GitHub gepusht werden, ohne
+Änderung. Damit kann ein noch unfertiger Stand gespeichert und nach GitHub
+gepusht werden, ohne
 bereits das M/Text-Entwicklungssystem zu aktualisieren. Das ist besonders
-nützlich, wenn eine Änderung mehrere Tage dauert, mehrere Personen daran
-arbeiten oder der Zwischenstand zunächst geprüft werden soll.
+nützlich, wenn eine Änderung mehrere Tage dauert oder mehrere Personen daran
+arbeiten.
 
 Für eine kleine, fertig vorbereitete Änderung ist kein Feature-Branch nötig.
 Sie kann direkt auf dem passenden Entwicklungsbranch bearbeitet und gepusht
 werden. Ist die Arbeit auf einem Feature-Branch abgeschlossen, wird der
-Commit nach `<Releaselinie>/Entwicklung` übernommen. Erst der Push
+gewünschte Commit nach `<Releaselinie>/Entwicklung` übernommen. Erst der Push
 dieses Entwicklungsbranches startet die M/Text-Synchronisation. Der
 Feature-Branch selbst bezeichnet keine Stage des Lieferprozesses und löst
 weder eine M/Text-Synchronisation noch einen Release aus. Nur wenn
@@ -172,10 +155,10 @@ Der Cherry-Pick erzeugt auf dem Zielbranch einen **neuen Commit mit einer
 neuen SHA**. Es wird also dieselbe Änderung weitergegeben, nicht derselbe
 Commit.
 
-Mehrere ausgewählte Commits können in ihrer ursprünglichen Reihenfolge
+Mehrere freigegebene Commits können in ihrer ursprünglichen Reihenfolge
 nacheinander per Cherry-Pick übernommen und anschließend gemeinsam mit einem
-einzigen Push übertragen werden. Dabei wird jeweils ein ausgewählter Commit auf
-den aktuell ausgecheckten Zielbranch übernommen.
+einzigen Push übertragen werden. Jeder dabei neu erzeugte Commit dokumentiert
+die vollständige SHA seines jeweiligen Quell-Commits.
 
 Das folgende Beispiel zeigt die selektive Weitergabe. Auf Entwicklung liegen
 die unabhängigen Änderungen A, B und C. Nach Abnahme soll zunächst nur B:
@@ -221,7 +204,7 @@ Ein **Merge** verbindet zwei Entwicklungsverläufe, ohne vorhandene Commits
 umzuschreiben, und kann dabei einen zusätzlichen Merge-Commit erzeugen. Er ist
 in diesem Prozess weder zur Behebung einer Push-Ablehnung noch zur Weitergabe
 zwischen den Stage-Branches vorgesehen. Eigene noch nicht gepushte Commits
-werden per Rebase auf den aktuellen Stand gesetzt. Für die Weitergabe ausgewählte Änderungen
+werden per Rebase auf den aktuellen Stand gesetzt. Freigegebene Änderungen
 werden per Cherry-Pick in die nächste Stage übernommen.
 
 | Situation | Geeignetes Vorgehen | Ergebnis |
@@ -232,8 +215,8 @@ werden per Cherry-Pick in die nächste Stage übernommen.
 
 ### Konflikt bei Rebase oder Cherry-Pick auflösen
 
-Ein Konflikt bedeutet, dass Git den vorgesehenen Dateiinhalt nicht eindeutig
-bestimmen kann. Er wird wie folgt bearbeitet:
+Ein Konflikt bedeutet, dass Git den gewünschten Dateiinhalt nicht eindeutig
+bestimmen kann. Er wird im freigegebenen Git-Client wie folgt bearbeitet:
 
 1. Nicht pushen und zunächst prüfen, ob gerade ein Rebase oder ein Cherry-Pick
    läuft und welche Dateien betroffen sind.
@@ -266,29 +249,21 @@ verwendet:
 
 | Anwendung | Aufgabe | Benutzerkreis |
 |---|---|---|
-| M/Text Workbench mit internem Git-Client | Briefressourcen bearbeiten, Änderungen prüfen, committen und pushen, ausgewählte Commits per Cherry-Pick nach Abnahme und Bereitstellung weitergeben sowie Release-Tags anlegen oder löschen | Text-Entwickler sowie die dafür berechtigten Mitglieder des Mandanten-Release-Teams |
+| M/Text Workbench mit integriertem Git-Client (EGit-Plugin) | Briefressourcen bearbeiten, Änderungen prüfen, committen und nach Entwicklung pushen | Text-Entwickler |
 | GitHub im Browser | Commits, Release-Tags und Läufe prüfen sowie manuelle Läufe starten | Text-Entwickler sowie die jeweils berechtigten Verantwortlichen |
 
-Für die normale Ressourcenarbeit ist keine Git-Kommandozeile erforderlich.
-Mandantenbenutzer greifen nicht auf `mtext-actions` zu und ändern die zentral
-ausgerollten Workflowdateien nicht selbst.
-
 ### Benötigte Git-Funktionen
-
-Die Bezeichnungen der Schaltflächen können sich zwischen Versionen der
-Workbench unterscheiden. Folgende Git-Funktionen müssen im festgelegten
-Bedienweg eindeutig erkennbar sein:
 
 | Anwendungsfall | Git-Funktion beziehungsweise Befehlsentsprechung | Nächstliegende SVN-Funktion |
 |---|---|---|
 | Arbeitsstand und ausgewählte Änderungen prüfen | `status` und `diff` | `svn status` und `svn diff` |
-| GitHub-Stand abrufen und lokalen Branch ohne zusätzlichen Merge aktualisieren | `fetch` und anschließend `pull` beziehungsweise die festgelegte Aktualisierungsfunktion | `svn update` |
-| Stage-Branch auswählen | `switch` beziehungsweise die Branchauswahl | `svn switch <URL>` |
+| GitHub-Stand abrufen und lokalen Branch ohne zusätzlichen Merge aktualisieren | `fetch` und anschließend `pull` beziehungsweise die freigegebene Aktualisierungsfunktion des Clients | `svn update` |
+| Stage-Branch auswählen | `switch` beziehungsweise die Branchauswahl des Clients | `svn switch <URL>` |
 | Dateien auswählen, Commit erzeugen und übertragen | `add`, `commit` und `push` | `svn add` und `svn commit`. Der Commit überträgt die Änderung zugleich |
 | Commit-Historie, vollständige SHA und konkrete Änderungen prüfen | `log` und `show` | `svn log` und `svn diff -c <Revision>` |
 | Letzten lokalen, noch nicht gepushten Commit ergänzen oder seine Nachricht korrigieren | `commit --amend`, nur vor dem Push, da dabei eine neue Commit-SHA entsteht | Keine direkte Entsprechung, weil ein SVN-Commit bereits veröffentlicht ist |
-| Ausgewählten Commit in die nächste Stage übernehmen und Konflikte behandeln | `cherry-pick`, nach der geprüften Auflösung fortsetzen oder den Vorgang vollständig abbrechen | `svn merge -c <Revision> <URL>`. Konflikte werden vor dem anschließenden `svn commit` in der Arbeitskopie aufgelöst |
-| Release-Tag auf einem Commit anlegen, einzeln pushen und bei Bedarf wieder löschen | `tag` sowie gezielter Push oder Löschung der betreffenden Tag-Referenz. Die konkrete Bedienung wird praktisch abgenommen | `svn copy <Quell-URL> <Tag-URL>` beziehungsweise `svn delete <Tag-URL>`. Ein SVN-Tag ist ein Repositorypfad |
+| Ausgewählten Commit in die nächste Stage übernehmen und Konflikte behandeln | `cherry-pick`, nach der geprüften Auflösung `cherry-pick --continue` oder zum vollständigen Abbruch `cherry-pick --abort` | `svn merge -c <Revision> <URL>`. Konflikte werden vor dem anschließenden `svn commit` in der Arbeitskopie aufgelöst |
+| Release-Tag auf einem bestätigten Commit anlegen, einzeln pushen und bei Bedarf wieder löschen | `tag` sowie gezielter Push oder Löschung der betreffenden Tag-Referenz. Die konkrete Bedienung wird mit dem zusätzlichen Git-Client abgenommen | `svn copy <Quell-URL> <Tag-URL>` beziehungsweise `svn delete <Tag-URL>`. Ein SVN-Tag ist ein Repositorypfad |
 | Inzwischen fortgeschrittenen Remote-Branch mit eigenen, noch nicht gepushten Commits zusammenführen | `fetch`, danach kontrolliertes `rebase` auf den Remote-Branch. Konflikte auflösen und mit `rebase --continue` fortfahren oder mit `rebase --abort` abbrechen | `svn update` integriert lokale, noch nicht committete Änderungen. Lokale SVN-Commits gibt es nicht |
 | Noch nicht committete Arbeit vor einem Branchwechsel vorübergehend beiseitelegen | `stash push` und später `stash pop`. Danach die wiederhergestellten Änderungen vollständig prüfen | Keine direkte, durchgängig verfügbare Standardentsprechung |
 | Lokale Änderung, lokalen Commit oder gepushten Commit zurücknehmen | je nach Zustand `restore`, `reset` oder `revert` wie im Abschnitt [Änderung oder Commit zurücknehmen](#änderung-oder-commit-zurücknehmen) beschrieben | Lokal `svn revert`. Eine veröffentlichte Änderung wird durch umgekehrten Merge und anschließenden `svn commit` korrigiert |
@@ -306,22 +281,21 @@ Als herstellerseitige Vertiefung dienen die offiziellen Git-Anleitungen
 und
 [Ungewollte Änderungen rückgängig machen](https://git-scm.com/book/de/v2/Git-Grundlagen-Ungewollte-%C3%84nderungen-r%C3%BCckg%C3%A4ngig-machen.html)
 sowie das
-[Benutzerhandbuch des internen Git-Clients](https://help.eclipse.org/latest/topic/org.eclipse.egit.doc/help/EGit/User_Guide/User-Guide.html)
+[EGit-Benutzerhandbuch](https://help.eclipse.org/latest/topic/org.eclipse.egit.doc/help/EGit/User_Guide/User-Guide.html)
 für die Bedienung in der Eclipse-basierten M/Text Workbench.
-Verbindlich für diesen Prozess bleiben die hier beschriebenen Schutz- und
-Bedienregeln.
 
-### Stage-Weitergabe in der M/Text Workbench
+### Zusätzlicher Git-Client
 
-Der Standardablauf für die Weitergabe zwischen den Branches ist:
+Das Eclipse-Plugin EGit wird für die Ressourcenarbeit und die gezielte
+Weitergabe zwischen den Branches verwendet. Der Standardablauf ist:
 
 1. Das Mandanten-Repository öffnen und die neuesten GitHub-Stände abrufen.
 2. Den Zielbranch auschecken und nach dem Abschnitt
    [Lokales Repository vor der Arbeit aktualisieren](#lokales-repository-vor-der-arbeit-aktualisieren)
    auf den aktuellen GitHub-Stand bringen.
-3. Die fachlich vorgesehenen Quell-Commits auswählen und, falls Abhängigkeiten
+3. Die fachlich freigegebenen Quell-Commits auswählen und, falls Abhängigkeiten
    bestehen, ihre Reihenfolge festlegen.
-4. Alle ausgewählten Commits einzeln und in der festgelegten Reihenfolge per
+4. Alle ausgewählten Commits einzeln und in der gewünschten Reihenfolge per
    Cherry-Pick übernehmen.
 5. Bei einem Konflikt nicht pushen. Den Cherry-Pick entweder vollständig
    abbrechen oder nach dem Abschnitt
@@ -334,23 +308,23 @@ Der Standardablauf für die Weitergabe zwischen den Branches ist:
 ### Änderung oder Commit zurücknehmen
 
 Solange eine Änderung noch nicht gepusht wurde, kann sie lokal verworfen
-beziehungsweise ein lokaler Commit kontrolliert zurückgenommen werden. Vorher
-ist zu prüfen, dass dabei keine weiteren noch benötigten lokalen Änderungen
+beziehungsweise ein lokaler Commit kontrolliert zurückgenommen werden. Es ist
+zu prüfen, dass dabei keine weiteren noch benötigten lokalen Änderungen
 verloren gehen.
 
 Nach einem Push wird der Commit nicht aus dem Stage-Branch entfernt. Ein
 Force-Push oder das Zurücksetzen des gemeinsamen Branches ist verboten, weil
 die Commit-SHA bereits in GitHub-Läufen und gegebenenfalls in einer
-M/Text-Verteilung verwendet wurde. Stattdessen wird mit der Revert-Funktion ein
-neuer Commit erzeugt, der genau die Änderungen des fehlerhaften Commits
-umkehrt. Dieser Gegen-Commit wird wie jede andere Änderung geprüft und ohne
-Force-Push gepusht.
+M/Text-Verteilung verwendet wurde. Stattdessen wird mit der Revert-Funktion in
+EGit ein neuer Commit erzeugt, der genau die Änderungen des fehlerhaften
+Commits umkehrt. Dieser Gegen-Commit wird wie jede andere Änderung geprüft und
+gepusht.
 
 Die Git-Begriffe unterscheiden diese Fälle: `restore` verwirft noch nicht
 committete Änderungen an Dateien, `reset` nimmt einen noch nicht gepushten
 lokalen Commit zurück und `revert` erzeugt den Gegen-Commit für einen bereits
-gepushten Commit. Die konkreten Schaltflächen hängen von der eingesetzten
-Workbench-Version ab. Eine Git-Kommandozeile ist dafür nicht vorgeschrieben.
+gepushten Commit. Die konkreten Schaltflächen hängen vom freigegebenen
+Git-Client ab. Eine Git-Kommandozeile ist dafür nicht vorgeschrieben.
 Ein `reset`, `rebase` oder `commit --amend` auf einem bereits gepushten
 Stage-Branch würden dessen gemeinsame Historie umschreiben und sind deshalb
 nicht zulässig.
@@ -358,12 +332,12 @@ nicht zulässig.
 | Situation | Vorgehen |
 |---|---|
 | Lokale Änderung ohne Commit | Nur die nicht mehr benötigten Dateien oder Änderungen verwerfen und den verbleibenden Stand prüfen |
-| Lokaler Commit ohne Push | Commit mit der dafür abgenommenen Funktion zurücknehmen. Anschließend lokalen Branch und geänderte Dateien prüfen |
+| Lokaler Commit ohne Push | Commit zurücknehmen. Anschließend lokalen Branch und geänderte Dateien prüfen |
 | Commit auf Entwicklung oder Abnahme gepusht | Gegen-Commit auf demselben Branch erstellen und pushen. Der dadurch gestartete Sync verteilt den vollständigen korrigierten Stand |
 | Commit nach Bereitstellung gepusht, aber noch nicht getaggt | Das Mandanten-Release-Team erstellt und pusht den Gegen-Commit. Ein Push nach Bereitstellung allein erzeugt keine Lieferung |
 | Commit bereits in eine weitere Stage übernommen | Den betroffenen Commit in jeder Stage, in die er übernommen wurde, mit den dort geltenden Berechtigungen durch einen eigenen Gegen-Commit zurücknehmen. Ein Gegen-Commit auf Entwicklung ändert Abnahme oder Bereitstellung nicht automatisch |
-| Release-Tag falsch angelegt | Einen noch laufenden Ablauf abbrechen und den Tag nach dem in Kapitel 10 beschriebenen Verfahren zurücknehmen. Den Bereitstellungsbranch bei Bedarf mit einem Gegen-Commit korrigieren und anschließend den richtigen Tag anlegen |
-| Mainframe-Übergabe bereits erfolgt | Das Löschen des Tags nimmt die Lieferung nicht zurück. Der korrigierte Lauf überschreibt die betreffenden Member und CodePipeline versioniert den neuen Stand |
+| Release-Tag falsch angelegt | Einen noch laufenden Ablauf abbrechen und den Tag nach dem Verfahren in Kapitel 10 zurücknehmen. Den Bereitstellungsbranch bei Bedarf mit einem neuen Commit korrigieren und anschließend den korrekten Tag anlegen |
+| Mainframe-Übergabe bereits erfolgt | Das Löschen des Tags nimmt die Lieferung nicht zurück. Eine fachliche Korrektur erfolgt mit einem neuen Commit und einem neuen Release-Tag nach dem regulären Verfahren |
 
 Ist der Commit fachlich richtig und nur der Workflow technisch fehlgeschlagen,
 wird kein Gegen-Commit erzeugt. In diesem Fall wird derselbe Commit nach der
@@ -396,13 +370,17 @@ der lokalen Workbench stattfinden.
 - Vor jeder Wiederholung wird geprüft, ob das Zielsystem den vorherigen Lauf
   bereits angenommen hat.
 
-#### Mainframe-Übergabe kontrollieren
+#### Mainframe-Übergabe freigeben
 
 1. Im Release-Lauf prüfen, dass Tag, Ziel-Commit und Paketbau zum vorgesehenen
    Stand gehören.
 2. Den automatisch gestarteten Publish-Job bis zum Abschluss kontrollieren.
-3. Anschließend den technischen Status auf dem Host nach dem festgelegten
-   Betriebsverfahren prüfen.
+3. Anschließend den Status auf dem Host kontrollieren.
+
+Für diese Freigabe ist kein verpflichtendes Vier-Augen-Prinzip vorgesehen.
+Eine dafür berechtigte Person darf sowohl den Tag anlegen als auch den
+Publish-Job freigeben. Die inhaltlichen Prüfungen vor der Freigabe bleiben
+vollständig erforderlich.
 
 Das Anlegen und die kontrollierte Rücknahme eines Release-Tags sind in Kapitel
 10 beschrieben. Änderungen an Repositoryrechten, Rulesets, Environments oder
@@ -417,24 +395,8 @@ Lieferstand. Sie beantwortet drei Fragen:
 
 1. Zu welchem Mandanten gehört der Stand?
 2. Welche Projektverzeichnisse werden ausdrücklich ausgeschlossen?
-3. Welche mandantenspezifischen technischen Zuordnungen gelten für die
+3. Welche mandantenspezifischen CodePipeline-Zuordnungen gelten für die
    nachgelagerte Übergabe?
-
-Die Datei enthält keine Passwörter oder Ziel-URLs. Technische Übergabewerte
-sind auf die nachfolgend beschriebenen Felder beschränkt. Zugangsdaten werden
-in geschützten GitHub-Einstellungen verwaltet.
-
-### Mandantenidentität
-
-```json
-"kuerzel": "FI"
-```
-
-`kuerzel` ist das Mandantenkürzel und bildet unter anderem den Anfang
-der historischen Lieferdateinamen. Der vollständige Name des auslösenden
-GitHub-Repositories einschließlich Owner wird gegen die zentrale
-Mandantenzuordnung geprüft. Dadurch kann eine Konfiguration nicht versehentlich
-in einem anderen Mandanten-Repository verwendet werden.
 
 ### Projektverzeichnisse und Ausschlüsse
 
@@ -459,35 +421,36 @@ werden aus dem Projektnamen abgeleitet. Dafür entfallen das Präfix `LOMS_` und
 ein Mandantensuffix in eckigen Klammern. Von dem verbleibenden Namen werden
 höchstens die ersten fünf Zeichen in Großschreibung verwendet. So entstehen
 beispielsweise `CONFI`, `FRAME`, `BASIS`, `PKA` und `AUTON`. Zwei Projekte eines
-Repositorys dürfen dabei nicht denselben Projektcode ergeben. Projektcodes
-werden nicht in `.github/config.json` eingetragen oder geändert.
+Repositorys dürfen dabei nicht denselben Projektcode ergeben.
 
 Als aktueller fachlicher Referenzstand gelten folgende Projekte:
 
-| Repository | Mandantenkürzel | Projekte |
-|---|---|---|
-| `<oms_team>/mtext-fi` | `FI` | `Configuration`, `Fonts`, `LOMS_Framework`, `LOMS_Basis`, `LOMS_PKA` |
-| `<oms_team>/mtext-autonom` | `IT` | `LOMS_Autonom` |
-| `<oms_team>/mtext-by` | `BY` | `LOMS_Basis[BY]`, `LOMS_Autonom[BY]` |
-| `<oms_team>/mtext-lh` | `LH` | `LOMS_Basis[LH]`, `LOMS_Autonom[LH]` |
-| `<oms_team>/mtext-nw` | `NW` | `LOMS_Basis[NW]`, `LOMS_Autonom[NW]` |
-| `<oms_team>/mtext-os` | `OS` | `LOMS_Basis[OS]`, `LOMS_Autonom[OS]` |
-| `<oms_team>/mtext-sa` | `SA` | `LOMS_Basis[SA]`, `LOMS_Autonom[SA]` |
+| Repository | Mandantenkürzel | Projekte | CodePipeline-Subsystem |
+|---|---|---|---|
+| `mtext-fi` | `FI` | `Configuration`, `Fonts`, `LOMS_Framework`, `LOMS_Basis`, `LOMS_PKA` | `LOMS` |
+| `mtext-autonom` | `IT` | `LOMS_Autonom` | `ITMT` |
+| `mtext-by` | `BY` | `LOMS_Basis[BY]`, `LOMS_Autonom[BY]` | `BYMT` |
+| `mtext-lh` | `LH` | `LOMS_Basis[LH]`, `LOMS_Autonom[LH]` | `LHMT` |
+| `mtext-nw` | `NW` | `LOMS_Basis[NW]`, `LOMS_Autonom[NW]` | `NWMT` |
+| `mtext-os` | `OS` | `LOMS_Basis[OS]`, `LOMS_Autonom[OS]` | `OSMT` |
+| `mtext-sa` | `SA` | `LOMS_Basis[SA]`, `LOMS_Autonom[SA]` | `SAMT` |
 
 Die Matrix schreibt den Lieferumfang technisch nicht fest. Eine fachlich
 abgestimmte Änderung der Projektstruktur bleibt möglich. Der Config-Check gibt
 gegenüber diesem Referenzstand fehlende oder zusätzliche Projekte im
 Workflow-Protokoll mit dem Präfix `WARNUNG:` aus. Einen ansonsten gültigen Stand
-verarbeitet er weiter. Eine unpassende Kombination aus Repository und
-Mandantenkürzel wird dagegen abgelehnt.
+verarbeitet er weiter.
 
 ### Mandantenspezifische Werte für die technische Übergabe
 
-Die technische Übergabe benötigt die ISPW-Instanz, das Subsystem, das
-Assignment und den JCL-Stage-Code für das CodePipeline-`LEVEL`. ISPW-Instanz,
-Assignment und Stage-Code werden in `.github/config.json` versioniert und nur
-bei einer fachlich spezifizierten Änderung der Zuordnung angepasst. Das Beispiel
-der FI lautet:
+Die technische Übergabe an die IZE9 benötigt die
+ISPW/CodePipeline-Instanz `P` für Produktion oder `T` für Test, das Assignment
+und die CodePipeline-Stage. Diese Werte werden in `.github/config.json`
+versioniert und können aufgrund besonderer Erfordernisse angepasst werden. Da
+die Konfiguration Bestandteil eines Branches ist, sind zum Beispiel
+unterschiedliche Assignments je Release möglich.
+
+Beispiel:
 
 ```json
 "ispw": "P",
@@ -503,30 +466,9 @@ der FI lautet:
 }
 ```
 
-| Feld | Bedeutung | Verwendung in der versionierten JCL |
-|---|---|---|
-| `ispw` | ISPW-Instanz des Mandanten: `T` für Test oder `P` für Produktion | wird als `ISPW` unter anderem in Datasetnamen und im Aufruf von `WZZRCJOB` eingesetzt |
-| `assignment` | Assignment des Mandanten für das jeweilige Hostprofil | wird als `ASSIGNMENT` eingesetzt und dort für `PROJNO` verwendet |
-| `stage` | JCL-Stage-Code für das CodePipeline-`LEVEL`, beispielsweise `FKTE` oder `JURP` | wird in den `LEVEL`-Platzhalter eingesetzt und dort unter anderem für `CLVL` und `SLVL` verwendet |
-
-Das Mainframe-Subsystem wird nicht in `.github/config.json` gepflegt. Die
-zentrale Datei
-[`config/mandanten.json`](../../mtext-actions/config/mandanten.json) ordnet es
-dem vollständigen GitHub-Namen und Mandantenkürzel fest zu. Es wird für
-`APPLID` und `SUBAPPL` eingesetzt:
-
-| Repository | Mandantenkürzel | Subsystem |
-|---|---|---|
-| `<oms_team>/mtext-fi` | `FI` | `LOMS` |
-| `<oms_team>/mtext-by` | `BY` | `BYMT` |
-| `<oms_team>/mtext-lh` | `LH` | `LHMT` |
-| `<oms_team>/mtext-nw` | `NW` | `NWMT` |
-| `<oms_team>/mtext-os` | `OS` | `OSMT` |
-| `<oms_team>/mtext-sa` | `SA` | `SAMT` |
-| `<oms_team>/mtext-autonom` | `IT` | `ITMT` |
-
-Der CodePipeline-Elementname wird nicht konfiguriert. Er besteht aus
-Mandantenkürzel, abgeleitetem Projektcode und `F` für FULL oder `D` für DELTA.
+CodePipeline-Elemente werden gemäß Mandantenkürzel, einem höchstens
+fünfstelligen Projektcode aus dem Projektverzeichnisnamen und dem Suffix `F`
+für FULL oder `D` für DELTA benannt.
 So wird beispielsweise aus `LOMS_Autonom[BY]` das Element `BYAUTONF` oder
 `BYAUTOND`. Die zugehörige Archivdatei erhält zusätzlich die Endung `.tgz`.
 Ein F-Element enthält den vollständigen Projektbaum. Ein reguläres D-Element
@@ -536,52 +478,24 @@ leeres D-Element mit leerem Projektverzeichnis und leerer Löschliste. Die
 Informationsdatei `_INFO_...txt` gehört zum Releasebeleg und wird nicht als
 CodePipeline-Element registriert.
 
-Die Namen `FKT` und `JUR` unter `hostprofile` bezeichnen die fachlich
-festgelegten Hostprofile. Sie sind nicht selbst die Stage-Codes. Welche
-Releaselinie welches Profil verwendet, steht in der
-zentralen Releaselinienzuordnung, aktuell `R260 → JUR`, `R261 → FKT` und
-`R270 → JUR`. Der Mandant
-pflegt innerhalb beider Profile seine jeweils gültige Kombination aus
-Assignment und Stage-Code.
-
-Als Stage-Codes akzeptiert die Konfiguration ausschließlich `FKTE`,
-`FKTF`, `JURJ`, `JURP`, `SVTS` und `VPTV`. Das davon getrennte Feld `ispw`
-ist für jeden Mandanten verpflichtend und akzeptiert ausschließlich `T` für
-Test oder `P` für Produktion. Zugangsdaten gehören weiterhin nicht in
-`.github/config.json`.
-
-Eine Änderung an `ispw`, `assignment` oder `stage` verändert die
-spätere technische Übergabe. Sie ist deshalb keine gewöhnliche Änderung an
-einer Briefressource, aber ausdrücklich zulässig, wenn sich die fachlich
-spezifizierte Mandantenzuordnung ändert. Die Änderung erfolgt versioniert durch
-den dafür berechtigten Verantwortlichenkreis und wird mit den Mandanten- und
-Betriebsverantwortlichen abgestimmt. Normale Workbench-Pushes dürfen
-`.github/config.json` nicht verändern. GitHub schützt die Datei mit einer eigenen
-Pfadregel.
-
 Ein Push mit einer Änderung an `.github/config.json` startet automatisch
-**Validate mandant configuration**. Dieser Check prüft die Datei ohne Zugriff
-auf M/Text oder den Mainframe und liefert frühzeitig eine verständliche
+**Validate mandant configuration**. Dieser Check prüft die Datei technisch und
+liefert frühzeitig eine verständliche
 Fehlermeldung. Er erkennt ein unbekanntes Mandantenkürzel, ein unpassendes
 Repository, fehlende oder ungültige Hostprofile und mehrdeutige abgeleitete
-Projektcodes. `CONFIG_VALIDATED` bestätigt jedoch nur die technische
-Konsistenz. Der Status ersetzt keine fachliche Freigabe. Synchronisation und
-Release prüfen dieselbe Konfiguration vor ihrer jeweiligen Verarbeitung
-erneut. Warnungen zum Projekt-Referenzstand ändern den erfolgreichen Status
-`CONFIG_VALIDATED` nicht.
+Projektcodes.
 
 ## 6. Neue Releaselinie einrichten
 
-Für jede neue Linie werden drei Branches im Format `Rnnn/Entwicklung`,
-`Rnnn/Abnahme` und `Rnnn/Bereitstellung` angelegt. Ausgangspunkt ist der
-letzte Release-Tag der bisherigen Linie.
+Für jedes neue Release `Rnnn` werden die drei Branches `Rnnn/Entwicklung`,
+`Rnnn/Abnahme` und `Rnnn/Bereitstellung` von den
+Repository-Verantwortlichen angelegt. Ausgangspunkt ist normalerweise der
+zuletzt gelieferte Release-Tag der bisherigen Linie.
 
-Das zentrale Automatisierungsteam ergänzt in
+Für das neue Release wird der älteste Eintrag in
 [`config/releaselinien.json`](../../mtext-actions/config/releaselinien.json)
-genau eine Zuordnung aus neuer Releaselinie, technischer ETAPS-Linie und
-vorhandenem Hostprofil. Die Felder heißen `etaps_linie` und `hostprofil`. Der
-Profilname muss unter `hostprofile` in `.github/config.json` vorhanden sein. Ein
-vollständiges Beispiel für den aktuellen Stand lautet:
+mit der neuen Zuordnung aus Releaselinie, ETAPS-Linie und Hostprofil
+aktualisiert. Beispiel:
 
 ```json
 {
@@ -591,37 +505,36 @@ vollständiges Beispiel für den aktuellen Stand lautet:
 }
 ```
 
-Beim Aufnehmen der neuen Releaselinie wird die ausgeschiedene Zuordnung
-entfernt, sodass die Datei weiterhin genau drei aktive Releaselinien enthält.
-Weitere Werte werden nur angepasst, wenn sich ihre fachliche oder technische
-Zuordnung tatsächlich ändert.
-
-Anschließend wird der vollständige Projektstand über den manuellen Workflow
-**Sync M/Text resources** einmal nach Entwicklung und einmal nach Abnahme
-übertragen. Verwendet werden jeweils die Commit-SHA des Ausgangstags und der
-passende neue Branch der Stage.
+Bei Änderungen an den Releaselinien, die zentral durch die FI durchgeführt
+werden, müssen die Mandanten-Workflows anschließend einmal aktualisiert werden.
+Damit zeigen sie auf eine Version der zentralen Workflows, die die
+aktualisierten Releaselinien enthält. Bereitstellungen bleiben dadurch
+nachvollziehbar. Die verwendete Mandantenkonfiguration, die gesamte
+Tonic-Projektstruktur und die zum Releasezeitpunkt gültigen zentralen Elemente
+wie Releaselinien-Konfiguration und verwendete Workflows bilden eine
+zusammengehörige und unveränderliche Version.
 
 ## 7. Änderung nach Entwicklung bringen
 
 1. In der M/Text Workbench prüfen, dass der aktuelle
    `<Releaselinie>/Entwicklung` geöffnet ist. Für länger laufende oder
-   gemeinsam bearbeitete Änderungen kann – wenn dieser Bedienweg vorgesehen ist –
+   gemeinsam bearbeitete Änderungen kann – nach Freigabe dieses Bedienwegs –
    ein Feature-Branch verwendet werden.
 2. Die fachlich vorgesehenen Änderungen an den Briefressourcen durchführen.
-3. Nur die vorgesehenen Änderungen für den Commit auswählen und eine
-   aussagekräftige Commit-Nachricht eintragen.
+3. Im integrierten Git-Client nur die vorgesehenen Änderungen für den Commit
+   auswählen und eine aussagekräftige Commit-Nachricht eintragen.
 4. Commit und Push auf den vorgesehenen Entwicklungsbranch ausführen.
 5. In GitHub unter **Actions → Sync M/Text resources** den durch den Push
    ausgelösten Lauf kontrollieren.
 
-Der Push startet die Synchronisation des Commits mit dem aus
+Der Push startet die Synchronisation des exakten Commits mit dem aus
 Releaselinie und Stage zentral ermittelten M/Text-Ziel. Für `R261` sind dies
 beispielsweise `en01e` in Entwicklung und `en01a` in Abnahme. Ein erfolgreicher
 Lauf endet mit `ADAPTER_ACCEPTED`.
 
 Nach mehreren kurz aufeinanderfolgenden Pushes ist in GitHub zu prüfen, dass
 der letzte erfolgreiche Sync-Lauf den aktuellen Commit des Stage-Branches
-verarbeitet hat. Maßgeblich ist der vollständige Zielstand, nicht
+verarbeitet hat. Maßgeblich ist der gewünschte vollständige Zielstand, nicht
 die erfolgreiche Verarbeitung jedes zwischenzeitlichen Commits.
 
 ## 8. Stand zur Abnahme weitergeben
@@ -629,10 +542,10 @@ die erfolgreiche Verarbeitung jedes zwischenzeitlichen Commits.
 1. Die in Entwicklung erfolgreich geprüften Commits ermitteln.
 2. Den aktuellen Zielbranch `<Releaselinie>/Abnahme` auschecken und
    aktualisieren.
-3. Die ausgewählten Commits per Cherry-Pick aus
+3. Die freigegebenen Commits per Cherry-Pick aus
    `<Releaselinie>/Entwicklung` übernehmen.
 4. Die neu entstandenen Commits und ihre Änderungen kontrollieren und den
-   Abnahmebranch einmal ohne Force-Push pushen.
+   Abnahmebranch einmal pushen.
 5. Unter **Actions → Sync M/Text resources** den Abnahmelauf kontrollieren.
 6. Die fachliche Abnahme außerhalb des Workflows nach dem vereinbarten
    Verfahren dokumentieren.
@@ -642,7 +555,7 @@ Ziel-Commits. Er baut noch kein Mainframe-Paket.
 
 ## 9. Ausgewählte Änderungen bereitstellen
 
-1. In GitHub die für die Bereitstellung vorgesehenen Commits aus Abnahme bestimmen und,
+1. In GitHub die fachlich freigegebenen Commits aus Abnahme bestimmen und,
    falls Abhängigkeiten bestehen, ihre Reihenfolge festhalten.
 2. Den aktuellen Zielbranch `<Releaselinie>/Bereitstellung` auschecken und
    aktualisieren.
@@ -658,8 +571,8 @@ pushen.
 
 ## 10. FULL- oder DELTA-Lieferung auslösen
 
-Vor dem Taggen müssen Releaselinie, Mandant, Lieferungstyp und der Commit auf
-`<Releaselinie>/Bereitstellung` feststehen.
+Vor dem Taggen müssen Releaselinie, Mandant, gewünschter Lieferungstyp und der
+exakte Commit auf `<Releaselinie>/Bereitstellung` fachlich bestätigt sein.
 
 - `Rnnn.100` erzeugt je nicht ausgeschlossenem Projekt ein F-Paket mit dem
   vollständigen Stand und zusätzlich ein leeres D-Paket mit leerem
@@ -674,16 +587,16 @@ Der Release-Tag wird vom Mandanten-Release-Team als reiner Git-Tag angelegt.
 GitHub Releases mit Titel, Release Notes oder zusätzlichen Dateien werden
 nicht verwendet:
 
-1. Den aktuellen Branch `<Releaselinie>/Bereitstellung` auschecken und den
-   neuesten GitHub-Stand abrufen.
-2. Die vollständige SHA des Ziel-Commits erneut vergleichen.
+1. Den aktuellen Branch `<Releaselinie>/Bereitstellung` im zusätzlichen
+   Git-Client auschecken und den neuesten GitHub-Stand abrufen.
+2. Die vollständige SHA des bestätigten Ziel-Commits erneut vergleichen.
 3. Den neuen Tag, beispielsweise `R261.108`, genau auf diesem Commit anlegen.
 4. Ausschließlich diesen Tag nach GitHub pushen.
-5. In GitHub prüfen, dass der Tag auf die Commit-SHA zeigt und genau
+5. In GitHub prüfen, dass der Tag auf die bestätigte Commit-SHA zeigt und
    einen Lauf von **Build and publish release** gestartet hat.
 
 Das Pushen des Git-Tags ist die fachliche Freigabe. Es startet den Paketbau und
-nach erfolgreicher Prüfung automatisch die Mainframe-Übergabe.
+nach erfolgreicher Prüfung automatisch die Übergabe an die IZE9.
 
 Danach unter **Actions → Build and publish release** prüfen:
 
@@ -696,8 +609,8 @@ Danach unter **Actions → Build and publish release** prüfen:
 3. `Verify and hand over artifact to Mainframe` startet nach erfolgreichem
    Build automatisch und bindet das Environment `Bereitstellung`.
 4. Vor der Übergabe werden Pfad, Größe und SHA-256 jeder manifestierten Datei
-   geprüft. Danach werden die JCL-Werte validiert, das versionierte Template
-   gerendert und Paket plus JCL per FTP/JES übergeben.
+   geprüft. Danach werden die JCL-Werte validiert und in das Template
+   gerendert. Dann werden Paket und JCL per FTP/JES an die IZE9 übergeben.
 
 ### Irrtümlichen Tag zurücknehmen
 
@@ -725,11 +638,10 @@ ausdrücklich angegebenem Commit oder Tag erforderlich ist.
 
 ### M/Text-Vollsynchronisation initial starten oder wiederholen
 
-Unter **Actions → Sync M/Text resources → Run workflow** zuerst im
-GitHub-Branchwähler `Rnnn/Entwicklung` oder `Rnnn/Abnahme` auswählen und dann
-angeben:
+Unter **Actions → Sync M/Text resources → Run workflow** angeben:
 
-- `commit_sha`: vollständiger 40-stelliger SHA des bereits geprüften Commits.
+- `commit_sha`: vollständiger 40-stelliger SHA des bereits geprüften Commits
+- `source_branch`: der passende Branch `Rnnn/Entwicklung` oder `Rnnn/Abnahme`
 
 Die Automation weist den Lauf zurück, wenn der Commit nicht aus dem gewählten
 Branch erreichbar ist. Das Zielsystem wird aus dem Branch abgeleitet.
@@ -737,9 +649,9 @@ Branch erreichbar ist. Das Zielsystem wird aus dem Branch abgeleitet.
 Ein Wiederanlauf eines älteren Sync-Laufs kann einen inzwischen neueren
 M/Text-Zielstand wieder durch den vollständigen Stand des älteren Commits
 ersetzen. Vor **Re-run jobs** oder **Run workflow** müssen deshalb der
-angegebene Commit, der aktuelle Branch-Commit und der Zielstand
+angegebene Commit, der aktuelle Branch-Commit und der gewünschte Zielstand
 verglichen werden. Ist der Branch inzwischen weitergelaufen, wird nicht der
-alte Lauf wiederholt. Der Commit für den neuen Lauf wird erneut festgelegt und
+alte Lauf wiederholt, sondern ausschließlich der aktuell gewünschte Commit
 kontrolliert synchronisiert.
 
 ### Release-Lauf wiederholen
