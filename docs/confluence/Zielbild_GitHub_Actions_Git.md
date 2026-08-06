@@ -6,16 +6,18 @@ SVN wird durch Git und Jenkins durch GitHub Actions ersetzt. Dafür wird
 voraussichtlich ab November oder Dezember 2026 ein SVN-Abzug nach Git
 übernommen und in GitHub verprobt. Während dieser Testphase bleibt der
 bisherige Prozess produktiv. Unmittelbar vor der für Januar 2027 geplanten
-Produktivsetzung wird der dann freigegebene SVN-Endstand nach Git übertragen.
-Danach sind Git und GitHub Actions für diesen Prozess führend und SVN wird
-zusammen mit der EN4920 abgebaut.
+Produktivsetzung wird der dann gültige SVN-Stand nach Git übertragen.
+Danach sind Git und GitHub Actions für den Prozess führend und SVN wird
+zusammen mit dem EN4920-Netz abgebaut.
 
-Jeder Mandant erhält ein eigenes Repository mit seinen M/Text-Ressourcen sowie
-Angaben wie Mandantenkürzel und Releaselinie. Die gemeinsam genutzte
-Automatisierung liegt im Repository
-`FinanzInformatik/fi_lbs_entw_oms_mtext_actions` (im Folgenden
-`mtext_actions`). Sie prüft diese Angaben, synchronisiert M/Text, erstellt die
-FULL- und DELTA-Pakete und übergibt sie an den Mainframe.
+Jeder Mandant erhält ein eigenes Git-Repository mit seinen M/Text-Ressourcen,
+Trigger-Workflows und einer für diesen Prozess relevanten Konfigurationsdatei.
+Die CI/CD-Automatisierung, die von diesen Trigger-Workflows genutzt wird, liegt
+im Repository `FinanzInformatik/fi_lbs_entw_oms_mtext_actions` (im Folgenden
+`mtext_actions`). Sie validiert das Repo, synchronisiert M/Text, erstellt die
+FULL- und DELTA-Pakete und übergibt sie an den Mainframe. Nach erfolgreicher
+Übergabe erstellt sie außerdem ein GitHub Release im jeweiligen
+Mandanten-Repository.
 
 Das Branch-Modell folgt dem FI-Leitfaden:
 
@@ -97,8 +99,9 @@ Releaselinie gepflegt wird:
 
 Wenn eine Änderung fertig entwickelt und in M/Text-Entwicklung geprüft ist,
 erstellt der Entwickler einen Pull Request auf `main` oder den passenden
-Release-Branch. Eine zweite Person prüft die Änderung. Danach wird der Pull
-Request mit Squash Merge zusammengeführt.
+Release-Branch. Eine zweite Person prüft die Änderung und gibt sie idealer
+Weise frei. Danach wird der Pull Request mittels Squash Merge im Zielbranch
+zusammengeführt.
 
 In den Repository-Einstellungen ist `Allow squash merging` aktiviert. Die
 anderen Mergeverfahren sind deaktiviert, damit alle Beteiligten denselben
@@ -112,47 +115,41 @@ Squash Merge wird aus folgenden Gründen verwendet:
   Verlauf des Zielbranches nicht
 - Der lineare Verlauf ist für wenig erfahrene Git-Anwender gut
   nachvollziehbar
-- Der Squash-Commit kann bei Bedarf zurückgenommen oder auf eine weitere
-  Releaselinie übernommen werden
+- Der Squash-Commit kann bei Bedarf zurückgenommen oder mittels Cherry-Pick auf
+  eine weitere Releaselinie übernommen werden
 - Review, Diskussion und ursprüngliche Commits bleiben im Pull Request
   nachvollziehbar
-- Der Entwickler muss zum Zusammenführen keinen Rebase durchführen
-
-Für den Weg von Entwicklung nach Abnahme ist kein Cherry-Pick nötig. Ein
-Cherry-Pick wird verwendet, wenn eine bereits zusammengeführte Änderung auch
-in eine andere Releaselinie übernommen werden soll. Dafür kann der einzelne
-Squash-Commit übernommen werden.
 
 ### Wechsel der führenden Releaselinie
 
 Die führende Releaselinie wechselt mit dem OSPlus-Release, also zweimal im
 Jahr.
 
-Vor dem Wechsel wird aus dem freigegebenen `main`-Commit ein Branch
+Vor dem Wechsel wird aus einem geeigneten `main`-Commit ein Branch
 `release/Rnnn` für die bisherige Releaselinie erstellt. Danach wird in einem
 eigenen Pull Request auf `main` nur das Feld `releaselinie` in der
-Mandantenkonfiguration geändert. Die M/Text-Ressourcen bleiben dabei
-unverändert. Nach dem Merge steht `main` für die neue Releaselinie.
+Mandantenkonfiguration (`.github/config.json`) geändert. Die M/Text-Ressourcen
+bleiben dabei unverändert. Nach dem Merge steht `main` für die neue
+Releaselinie.
 
-GitHub Actions erkennt die geänderte `releaselinie` und synchronisiert die
-M/Text-Projekte aus `main` vollständig nach Entwicklung und Abnahme der neuen
+GitHub Actions erkennt dabei die geänderte `releaselinie` und synchronisiert die
+M/Text-Projekte aus `main` automatisch nach Entwicklung und Abnahme der neuen
 Linie. Die Verantwortlichen des Repositories führen den Wechsel durch und
-kontrollieren beide Ziele.
-
-Für `mtext_actions` und `fi_lbs_entw_oms_fi` sind dies die
-FI-Fachverantwortlichen. Für die weiteren Mandanten-Repositories sind es die
-jeweiligen Mandantenverantwortlichen.
+kontrollieren beide Ziele. Für `mtext_actions` und `fi_lbs_entw_oms_fi` sind
+dies die FI-Fachverantwortlichen. Für die weiteren Mandanten-Repositories sind
+es die jeweiligen Mandantenverantwortlichen.
 
 Release-Branches werden gelöscht, wenn keine Änderungen für die Linie mehr
-erwartet werden. Bereits veröffentlichte Versionen können weiterhin über ihre
-geschützten Release-Tags ausgecheckt werden.
+erwartet werden, bzw. in der Regel spätestens wenn es drei neuere Releases
+gibt. Bereits veröffentlichte Versionen können weiterhin über ihre geschützten
+Release-Tags ausgecheckt werden.
 
 ## 3. M/Text-Synchronisation
 
 ### Zielermittlung
 
 Jede Releaselinie ist einer technischen ETAPS-Linie zugeordnet. Zu jeder
-ETAPS-Linie gehören ein Entwicklungs- und ein Abnahmeziel.
+ETAPS-Linie gehören ein Entwicklungs- und ein Abnahmeziel (jeweils in Stage 0).
 
 Beispiel:
 
@@ -197,11 +194,12 @@ werden.
 
 ### M/Text-Transport nach `serverSync`
 
-Für M/Text ist das lokale `serverSync`-Verzeichnis das Repository. Dort müssen
-dieselben Verzeichnisse und Dateien liegen wie im ausgewählten Commit.
-Anschließend stößt der M/Text-Adapter die Synchronisierung an.
+Für M/Text ist das lokale `serverSync`-Verzeichnis die Grundlage für die
+Synchronisierung mit der internen Ressourcen-Verwaltung. Dort wird wie bisher
+der gesamte Projektbaum abgelegt, passend zu dem letzten synchronisierten
+Commit. Anschließend wird via M/Text-Adapter die Synchronisierung angestoßen.
 
-Der Transport nach `serverSync` ist noch festzulegen:
+Der Transport nach `serverSync` ist derzeit noch festzulegen:
 
 | Variante | Ablauf | Zu klären | Aufwand |
 |---|---|---|---|
@@ -211,22 +209,15 @@ Der Transport nach `serverSync` ist noch festzulegen:
 
 Unabhängig vom Transportweg werden jeweils die M/Text-Projekte aus dem
 ausgewählten Commit ausgecheckt. Es werden normaler Weise nur die Änderungen
-zum vorhandenen Stand zu M/Text übertragen. Allerdings werden die Projekte bei
-der ersten Synchronisation über GitHub Actions, beim Wechsel der führenden
-Releaselinie und bei einer manuellen Wiederherstellung vollständig
-abgeglichen.
+zum vorhandenen Stand zu M/Text übertragen, es sei denn es handelt sich um die
+erste Synchronisierung über GitHub Actions, um einen Wechsel der führenden
+Releaselinie, oder um eine manuelle Wiederherstellung.
 
 Bei einer manuellen Wiederherstellung wird mit der Commit-SHA ausgewählt,
 welche Version der M/Text-Projekte wiederhergestellt werden soll. Der in GitHub
-Actions ausgewählte Branch gibt vor, in welches M/Text-Ziel sie übertragen
-wird. Die Synchronisation ist idempotent und kann bei Abbrüchen / Fehlern
+Actions ausgewählte Branch gibt dann vor, welches M/Text-Ziel synchronisiert
+wird. Die Synchronisierung ist idempotent und kann bei Abbrüchen / Fehlern
 einfach wiederholt werden.
-
-Alle Feature-Branches einer Releaselinie teilen sich ein Entwicklungsziel. In
-M/Text-Entwicklung ist deshalb jeweils der Feature-Commit zu sehen, der zuletzt
-synchronisiert wurde. Vor dem nichtproduktiven Integrationslauf wird eine der
-drei Transportvarianten ausgewählt. Dabei wird auch festgelegt, was der Adapter
-für diese Variante können muss.
 
 ## 4. Release-Erstellung und Mainframe-Übergabe
 
@@ -241,7 +232,10 @@ Leitfadens:
 - Der Tag liegt auf einem Commit eines geschützten Branches
 - Ein Release-Tag wird nach der Erstellung nicht gelöscht
 
-Eine Korrektur bekommt einen neuen Release-Tag mit einem neuen Namen.
+Der Release-Tag entspricht der zentral vorgegebenen Release-Version. Vor dem
+Push muss sorgfältig geprüft werden, dass der Tag auf dem vorgesehenen Commit
+liegt. Eine nachträgliche Korrektur unter demselben Release-Tag ist im
+vorgesehenen Verfahren nicht möglich.
 
 ### Release automatisch bauen und übertragen
 

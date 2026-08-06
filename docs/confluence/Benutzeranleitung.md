@@ -60,18 +60,70 @@ Arbeitsbereich R271  → Klon mit feature/R271/...
 Git verwaltet die lokalen Versionsstände. GitHub stellt das gemeinsame
 Repository, Pull Requests und die GitHub-Actions-Automatisierung bereit.
 
+Commit und Push sind in Git zwei getrennte Schritte. Ein Commit speichert die
+Änderung zunächst im lokalen Repository. Erst der Push überträgt sie nach
+GitHub und startet die zum Branch gehörenden Workflows.
+
+Für Benutzer, die bisher mit SVN gearbeitet haben, sind vor allem diese
+Unterschiede wichtig:
+
+| SVN | Git |
+|---|---|
+| Der ausgecheckte Arbeitsbereich ist eine Arbeitskopie des zentralen SVN-Repositorys | Jeder lokale Klon ist ein eigenes Git-Repository mit Versionshistorie |
+| Ein Commit überträgt die Änderung direkt an den SVN-Server | Ein Commit speichert die Änderung lokal, ein anschließender Push überträgt sie nach GitHub |
+| Ein Stand wird mit einer Revisionsnummer wie `r12345` bezeichnet | Ein Stand wird mit seiner Commit-SHA bezeichnet |
+| Branches werden meist für länger getrennte Stände verwendet | Ein Feature-Branch dient als vorübergehender Arbeitsbereich für eine Änderung |
+
 | Begriff | Bedeutung |
 |---|---|
 | Commit | Speichert einen Stand zunächst im lokalen Repository. |
 | Push | Überträgt lokale Commits nach GitHub und startet die zum Branch gehörenden Workflows. |
 | Commit-SHA | Bezeichnet einen Commit eindeutig. Für einen manuellen Vollabgleich wird die vollständige, 40-stellige SHA benötigt. |
 | Fetch | Ruft neue Branchstände und Commits aus GitHub ab, ändert aber weder den ausgecheckten Branch noch dessen Dateien. |
-| Aktualisieren | Bringt den ausgecheckten Branch mit der freigegebenen Funktion des Git-Clients auf den aktuellen GitHub-Stand. |
+| Aktualisieren | Bringt den ausgecheckten Branch mit der dafür vorgesehenen Funktion des Git-Clients auf den aktuellen GitHub-Stand. |
 
-Vor einer Bearbeitung, einem Cherry-Pick oder dem Erstellen eines Release-Tags
-wird der vorgesehene Ausgangsbranch aktualisiert. Ein Fetch allein genügt
-dafür nicht. Anschließend ist zu kontrollieren, dass der lokale Branch und der
-GitHub-Branch auf denselben Commit zeigen.
+### Arbeitsmittel
+
+| Anwendung | Aufgabe |
+|---|---|
+| M/Text Workbench mit EGit | Ressourcen bearbeiten, Änderungen prüfen, Feature-Branches verwenden, committen und pushen |
+| GitHub im Browser | Pull Requests bearbeiten, Commits und Workflow-Läufe prüfen, manuelle Läufe starten und Lieferinformationen ansehen |
+| Für Release-Tags vorgesehener Git-Client | Geschützten Branch aktualisieren, Release-Tag auf dem bestätigten Commit anlegen und diesen Tag gezielt pushen |
+
+Die genaue Bedienung zum Erstellen und Pushen eines Release-Tags wird nach der
+praktischen Abnahme des dafür vorgesehenen Git-Clients ergänzt. Eine
+Git-Kommandozeile ist für den beschriebenen Ablauf nicht vorgeschrieben.
+
+Die folgenden Git-Funktionen werden im Ablauf benötigt. Wie sie im
+verwendeten Client heißen, kann sich unterscheiden:
+
+| Aufgabe | Git-Funktion |
+|---|---|
+| Arbeitsstand und Änderungen prüfen | Status und Diff |
+| GitHub-Stand abrufen und den lokalen Branch aktualisieren | Fetch und anschließend die vorgesehene Aktualisierungsfunktion |
+| Branch erstellen oder auswählen | Branch erstellen und Branch wechseln |
+| Änderungen speichern und übertragen | Add, Commit und Push |
+| Commit-SHA und konkrete Änderungen prüfen | Log und Show |
+| Einen Commit auf eine weitere Releaselinie übernehmen | Cherry-Pick |
+| Release-Tag auf einem Commit anlegen und gezielt pushen | Tag und Push des einzelnen Tags |
+| Änderungen zurücknehmen | Restore, Reset oder Revert – abhängig davon, ob die Änderung bereits committet oder gepusht wurde |
+
+### Lokalen Branch vor der Arbeit aktualisieren
+
+Vor einer Bearbeitung, einem Cherry-Pick oder dem Erstellen eines Release-Tags:
+
+1. Das richtige Mandanten-Repository und den vorgesehenen Branch auswählen
+2. Prüfen, dass keine Git-Operation und keine ungesicherte Bearbeitung offen
+   ist
+3. Die neuen GitHub-Stände abrufen und den ausgecheckten Branch aktualisieren
+4. Kontrollieren, dass der lokale Branch und der GitHub-Branch auf denselben
+   Commit zeigen
+5. Erst danach mit der vorgesehenen Arbeit beginnen
+
+Ein Fetch allein aktualisiert den ausgecheckten Branch und dessen Dateien
+nicht. Schlägt die Aktualisierung wegen lokaler Änderungen oder eigener
+Commits fehl, wird kein Force-Push erzwungen. Das weitere Vorgehen richtet sich
+nach [Push-Ablehnung und Konflikte behandeln](#push-ablehnung-und-konflikte-behandeln).
 
 ## 3. Zielbranch einer Änderung bestimmen
 
@@ -152,6 +204,17 @@ erfolgreiche Synchronisationslauf den aktuellen Commit des Feature-Branches
 verarbeitet hat. Erst dieser Stand wird in M/Text getestet.
 
 ### Mandantenkonfiguration ändern
+
+Die Datei `.github/config.json` enthält die Angaben, die für die Verarbeitung
+dieses Mandanten-Repositories benötigt werden. Dazu gehören die Releaselinie,
+das Mandantenkürzel, ausgeschlossene Projektverzeichnisse und die Zuordnung für
+die Mainframe-Übergabe.
+
+Als M/Text-Projekt gilt jedes nicht versteckte Verzeichnis direkt in der
+Repositorywurzel, sofern es nicht in `excluded_projects` ausgeschlossen ist.
+Vor dem Hinzufügen oder Umbenennen eines Projektverzeichnisses ist deshalb zu
+prüfen, ob es verarbeitet werden soll und ob der daraus gebildete Projektcode
+eindeutig bleibt.
 
 Eine Änderung an `.github/config.json` folgt demselben Feature- und
 Pull-Request-Ablauf wie eine Ressourcenänderung. Der Push startet zusätzlich
@@ -268,10 +331,10 @@ Releaselinie.
 
 Vor dem Erstellen eines Release-Tags müssen folgende Bedingungen erfüllt sein:
 
-- Der vorgesehene Stand liegt auf `main` oder `release/Rnnn`.
-- Die Abnahmesynchronisation dieses Stands war erfolgreich.
-- Der Benutzer darf nach der organisationsweiten Regel Release-Tags erstellen.
-- Der Tagname folgt dem vorgesehenen Releaseformat.
+- Der vorgesehene Stand liegt auf `main` oder `release/Rnnn`
+- Die Abnahmesynchronisation dieses Stands war erfolgreich
+- Die zentral vorgegebene Release-Version und damit der Tagname sind bekannt
+- Der Benutzer darf Release-Tags erstellen
 
 Beispiele:
 
@@ -282,22 +345,39 @@ v261.108   kumulatives DELTA gegen v261.100
 
 ### Tag erstellen und pushen
 
-1. Den geschützten Zielbranch im lokalen Git-Client aktualisieren.
-2. Prüfen, dass der Commit den vorgesehenen vollständigen Release-Stand
-   enthält.
-3. Den Release-Tag auf diesem Commit erstellen.
-4. Den Tag gezielt nach GitHub pushen.
-5. In GitHub prüfen, dass der Tag auf die Commit-SHA des freigegebenen Stands
-   zeigt.
-6. Prüfen, dass der zentrale Release-Lauf in
+1. Das Mandanten-Repository und darin `main` oder den passenden
+   `release/Rnnn`-Branch im Git-Client auswählen
+2. Den Branch wie unter
+   [Lokalen Branch vor der Arbeit aktualisieren](#lokalen-branch-vor-der-arbeit-aktualisieren)
+   beschrieben aktualisieren
+3. In GitHub den Commit bestimmen, der in Abnahme geprüft wurde, und dessen
+   vollständige Commit-SHA festhalten
+4. Kontrollieren, dass der lokale Branch auf genau diesen Commit zeigt und
+   dieser Commit den vorgesehenen Release-Stand enthält
+5. Den zentral vorgegebenen Tagnamen, beispielsweise `v261.108`, auf diesem
+   Commit anlegen
+6. Vor dem Push ein letztes Mal den Tagnamen und die vollständige Commit-SHA
+   kontrollieren
+7. Gezielt diesen Tag nach GitHub pushen
+8. In GitHub prüfen, dass der Tag auf die zuvor kontrollierte Commit-SHA zeigt
+9. Prüfen, dass der zentrale Release-Lauf in
    `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`
-   gestartet wurde.
+   gestartet wurde
 
 Mit dem Erstellen und Pushen des Tags wird der Stand fachlich zur Lieferung
 freigegeben.
 
-Ein Release-Tag wird nicht gelöscht. Wurde ein Tag irrtümlich erstellt, erfolgt
-die Korrektur mit einem neuen Commit und einem neuen Tag.
+Solange der Tag noch nicht nach GitHub gepusht wurde, kann ein Fehler lokal
+korrigiert werden. Nach dem Push wird der Release-Tag nicht gelöscht oder auf
+einen anderen Commit verschoben. Eine Korrektur unter demselben Release-Tag ist
+dann nicht mehr möglich.
+
+Wurde trotzdem ein falscher Tag oder ein Tag auf dem falschen Commit gepusht,
+wird ein noch laufender Release-Lauf nach Möglichkeit abgebrochen. Der Tag
+wird nicht selbst gelöscht oder verschoben. Tagname und Commit-SHA werden
+festgehalten und der Fehler wird den Repository-Verantwortlichen gemeldet. Das
+weitere Vorgehen muss dann geklärt werden. Es wird nicht eigenständig ein
+abweichender Tagname gewählt, weil die Release-Version zentral vorgegeben ist.
 
 ### Ergebnis kontrollieren
 
@@ -394,9 +474,24 @@ bleibt der Default Branch.
 | Feature-Stand wurde in Entwicklung bereitgestellt | Den Feature-Branch korrigieren und erneut pushen. Der neue Zielstand wird in Entwicklung bereitgestellt. |
 | Pull Request wurde bereits zusammengeführt | Einen neuen Feature-Branch anlegen und den Fehler über einen neuen Pull Request korrigieren. |
 | Änderung wird auf einer weiteren Releaselinie nicht benötigt | Den dortigen Feature-Branch oder Pull Request nicht weiterführen. Eine bereits erfolgte Übernahme über einen neuen korrigierenden Commit zurücknehmen. |
-| Release-Tag wurde irrtümlich erstellt | Den Tag nicht löschen. Die fachliche Korrektur mit einem neuen Commit und einem neuen Release-Tag liefern. |
+| Release-Tag wurde lokal, aber noch nicht nach GitHub gepusht | Den lokalen Tag korrigieren und Tagnamen sowie Commit-SHA erneut prüfen. |
+| Release-Tag wurde irrtümlich nach GitHub gepusht | Einen laufenden Release-Lauf nach Möglichkeit abbrechen. Den Tag nicht selbst löschen oder verschieben, Tagname und Commit-SHA festhalten und den Fehler den Repository-Verantwortlichen melden. |
 
 Force-Pushes auf geschützte Branches sind nicht zulässig.
+
+Die Git-Funktionen unterscheiden sich danach, wie weit eine Änderung bereits
+veröffentlicht wurde:
+
+| Funktion | Verwendung |
+|---|---|
+| `Restore` | Noch nicht committete Änderungen an ausgewählten Dateien verwerfen |
+| `Reset` | Einen eigenen, noch nicht gepushten Commit lokal zurücknehmen |
+| `Revert` | Einen neuen Commit erzeugen, der eine bereits veröffentlichte Änderung zurücknimmt |
+
+`Reset` und `Rebase` sowie das nachträgliche Ändern eines Commits werden nicht
+auf bereits veröffentlichte Commits angewendet. `Clean` gehört nicht zum
+normalen Bedienweg, weil es nicht versionierte M/Text-Ressourcen
+unwiederbringlich entfernen kann.
 
 ## 11. Workflow-Läufe kontrollieren
 
