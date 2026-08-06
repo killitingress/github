@@ -1,7 +1,8 @@
-# Kurzanleitung
+# `fi_lbs_entw_oms_fi`
 
-Dieses Repository enthält die M/Text-Briefressourcen der FI. Die ausführlichen
-Bedienabläufe stehen in der zentralen Benutzeranleitung.
+Das Repository `FinanzInformatik/fi_lbs_entw_oms_fi` enthält die
+M/Text-Briefressourcen der FI. Die ausführlichen Bedienabläufe stehen in der
+zentralen Benutzeranleitung.
 
 Der aktuelle Projektstand umfasst:
 
@@ -46,8 +47,9 @@ auf einen Commit von `main` oder `release/Rnnn`:
 - ein weiterer Tag wie `v261.108` erzeugt ein kumulatives DELTA gegen
   `v261.100`.
 
-Der Mandanten-Workflow startet automatisch den zentralen Release in
-`mtext-actions`. Das FTP-Passwort liegt nicht in diesem Repository.
+Der Mandanten-Workflow startet automatisch den zentralen CI/CD-Releaseweg in
+`FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Das FTP-Passwort liegt nicht
+in diesem Repository.
 
 ## Mandantenkonfiguration
 

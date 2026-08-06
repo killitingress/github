@@ -1,4 +1,4 @@
-"""Bereitet Workflow-Aktualisierungen für Automation und Mandanten-Repositories vor.
+"""Bereitet den Rollout freigegebener CI/CD-Versionen in Mandanten-Repositories vor.
 
 Das Werkzeug wird vom Batch-Workflow `update-mandant-workflows` in fünf Schritten
 aufgerufen:
@@ -27,26 +27,20 @@ from lbs_delivery.config import (
     AUTOMATION_ROOT,
     MANDANTEN_ZUORDNUNG_PATH,
     RELEASELINIEN_ZUORDNUNG_PATH,
-    _load_mandanten_zuordnung,
-    _load_releaselinien_zuordnung,
+    load_mandanten_zuordnung,
+    load_releaselinien_zuordnung,
 )
 from lbs_delivery.process import DeliveryError
 
 
 # Die von Mandanten-Repositories eingebundenen wiederverwendbaren Workflows werden hier gepflegt.
 AUTOMATION_REPOSITORY = "FinanzInformatik/fi_lbs_entw_oms_mtext_actions"
-# Dieses Kennzeichen darf in einer freigegebenen Automationsversion nicht mehr
+# Dieses Kennzeichen darf in einer freigegebenen CI/CD-Version nicht mehr
 # vorkommen, weil das Runnerangebot vor dem Rollout per Pull Request feststeht.
 RUNNER_PLACEHOLDER = "FI_RUNNER_LABEL_TO_BE_SET"
-# GitHub-Antworten werden begrenzt, damit ein fehlerhafter oder vorgeschalteter
-# Dienst nicht beliebig viel Runner-Speicher belegen kann.
-GITHUB_RESPONSE_LIMIT = 1024 * 1024
-# API-Aufrufe erhalten eine feste Wartezeit, damit ein Rollout bei gestörter
-# GitHub-Verbindung mit einer verständlichen Fehlermeldung endet.
-GITHUB_TIMEOUT = 30.0
 # Reguläre Ausdrücke finden die technischen Workflow-Felder dieses Werkzeugs.
 # Erfasst die Revision eines wiederverwendbaren Workflows aus dem zentralen
-# Automations-Repository und erhält Kommentare sowie umgebendes YAML.
+# CI/CD-Repository und erhält Kommentare sowie umgebendes YAML.
 CENTRAL_USES_PATTERN = re.compile(
     rf"(?m)^(\s*uses:\s+{re.escape(AUTOMATION_REPOSITORY)}"
     r"/\.github/workflows/[^\s@]+@)([^\s#]+)(\s*(?:#.*)?)$"
@@ -59,6 +53,12 @@ AUTOMATION_REF_PATTERN = re.compile(r"(?m)^(\s*automation_ref:\s*)([^\s#]+)(\s*(
 RUNS_ON_PLACEHOLDER_PATTERN = re.compile(
     rf"(?m)^\s*runs-on:\s*[^#\n]*\b{re.escape(RUNNER_PLACEHOLDER)}\b"
 )
+# GitHub-Antworten werden begrenzt, damit ein fehlerhafter oder vorgeschalteter
+# Dienst nicht beliebig viel Runner-Speicher belegen kann.
+GITHUB_RESPONSE_LIMIT = 1024 * 1024
+# API-Aufrufe erhalten eine feste Wartezeit, damit ein Rollout bei gestörter
+# GitHub-Verbindung mit einer verständlichen Fehlermeldung endet.
+GITHUB_TIMEOUT = 30.0
 
 
 def _git(repository: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
@@ -85,7 +85,7 @@ def _github_request(
     *,
     method: str = "GET",
     payload: dict[str, str] | None = None,
-) -> tuple[int, dict[str, object]]:
+) -> tuple[int, dict[str, object] | list[object]]:
     """Ruft die GitHub-API ohne Shell auf und begrenzt ihre JSON-Antwort.
 
     HTTP-Fehler werden als reguläre Statusantworten zurückgegeben, damit die
@@ -110,8 +110,11 @@ def _github_request(
             status = int(response.status)
             response_body = response.read(GITHUB_RESPONSE_LIMIT + 1)
     except urllib.error.HTTPError as error:
-        status = error.code
-        response_body = error.read(GITHUB_RESPONSE_LIMIT + 1)
+        try:
+            status = error.code
+            response_body = error.read(GITHUB_RESPONSE_LIMIT + 1)
+        finally:
+            error.close()
     except (urllib.error.URLError, OSError, TimeoutError) as error:
         raise RuntimeError("GitHub-API ist nicht erreichbar") from error
     if len(response_body) > GITHUB_RESPONSE_LIMIT:
@@ -120,7 +123,7 @@ def _github_request(
         parsed = json.loads(response_body) if response_body else {}
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise RuntimeError("GitHub-API liefert keine gültige JSON-Antwort") from error
-    if not isinstance(parsed, dict):
+    if not isinstance(parsed, (dict, list)):
         raise RuntimeError("GitHub-API-Antwort ist ungültig")
     return status, parsed
 
@@ -157,39 +160,52 @@ def open_update_pull_request(
     """
 
     repository_path = urllib.parse.quote(repository, safe="/")
-    status, response = _github_request(
+    status, _ = _github_request(
         api_url,
         f"repos/{repository_path}/pulls",
         token,
         method="POST",
         payload={
-            "title": "Zentrale Workflowversion aktualisieren",
+            "title": "Freigegebene CI/CD-Version aktualisieren",
             "head": update_branch,
             "base": target_branch,
-            "body": "Aktualisiert die Mandanten-Workflows auf den freigegebenen Stand von mtext-actions.",
+            "body": "Aktualisiert die Mandanten-Workflows auf den freigegebenen Stand von mtext_actions.",
         },
     )
     if status == 201:
         return
     if status == 422:
-        errors = response.get("errors", [])
-        if isinstance(errors, list) and any(
-            isinstance(error, dict) and "A pull request already exists" in str(error.get("message", ""))
-            for error in errors
-        ):
+        owner = repository.partition("/")[0]
+        query = urllib.parse.urlencode(
+            {
+                "state": "open",
+                "head": f"{owner}:{update_branch}",
+                "base": target_branch,
+            }
+        )
+        lookup_status, existing = _github_request(
+            api_url,
+            f"repos/{repository_path}/pulls?{query}",
+            token,
+        )
+        if lookup_status == 200 and isinstance(existing, list) and existing:
             return
     raise RuntimeError(f"Pull Request konnte nicht erstellt werden: HTTP {status}")
 
 
-def _mandant_changes(mandant_root: Path, automation_sha: str) -> dict[Path, str]:
-    """Setzt einen Automations-Commit in die Workflow-Referenzen eines Mandantenbranches ein.
+def _mandant_changes(
+    mandant_root: Path,
+    automation_sha: str,
+) -> dict[Path, str]:
+    """Bindet bestehende Mandanten-Workflows an eine freigegebene CI/CD-Version.
 
     Verweise auf wiederverwendbare Workflows und Python-Checkouts müssen gleich
     häufig vorkommen. Ein Mandant kann dadurch Workflow-YAML und
     Implementierungscode nicht aus unterschiedlichen Revisionen ausführen.
     """
 
-    workflows = sorted((mandant_root / ".github/workflows").glob("*.yml"))
+    workflow_root = mandant_root / ".github/workflows"
+    workflows = sorted(workflow_root.glob("*.yml"))
     if not workflows:
         raise ValueError(f"keine Mandanten-Workflows unter {mandant_root} gefunden")
 
@@ -229,7 +245,7 @@ def _commit(repository: Path, message: str) -> str:
 
 
 def verify_automation(automation_root: Path, automation_sha: str) -> str:
-    """Prüft die freigegebene Automationsversion vor dem Mandanten-Rollout.
+    """Prüft die freigegebene CI/CD-Version vor dem Mandanten-Rollout.
 
     Der Checkout muss genau der angegebenen SHA entsprechen. Zentrale Workflows
     dürfen außerdem keinen offenen Runner-Platzhalter mehr enthalten. Das
@@ -243,19 +259,19 @@ def verify_automation(automation_root: Path, automation_sha: str) -> str:
     if not workflows:
         raise ValueError("keine zentralen Workflows gefunden")
     if any(RUNS_ON_PLACEHOLDER_PATTERN.search(path.read_text(encoding="utf-8")) for path in workflows):
-        raise ValueError("Runner-Kennzeichen ist in der Automationsversion noch nicht festgelegt")
+        raise ValueError("Runner-Kennzeichen ist in der CI/CD-Version noch nicht festgelegt")
     return checkout_sha
 
 
 def prepare_mandant_update(automation_root: Path, mandant_root: Path, rollout_sha: str) -> str:
     """Bindet einen Mandantenbranch an den geprüften zentralen Rollout-Commit.
 
-    Vor Änderungen an Mandantendateien wird der Automations-Checkout geprüft.
+    Vor Änderungen an Mandantendateien wird der CI/CD-Checkout geprüft.
     Eine zweite Umformung belegt anschließend, dass der Branchstand nach dem
     Commit einheitliche Workflow- und Codereferenzen enthält.
     """
 
-    # Automations-Checkout gegen die Rollout-SHA absichern.
+    # CI/CD-Checkout gegen die Rollout-SHA absichern.
     checkout_sha = _git(automation_root, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
     if checkout_sha != rollout_sha:
         raise ValueError("zentraler Checkout entspricht nicht der Rollout-SHA")
@@ -266,7 +282,7 @@ def prepare_mandant_update(automation_root: Path, mandant_root: Path, rollout_sh
         path.write_text(text, encoding="utf-8")
 
     # Änderungen committen.
-    mandant_sha = _commit(mandant_root, "Zentrale Workflowversion aktualisieren [skip ci]")
+    mandant_sha = _commit(mandant_root, "Zentrale CI/CD-Version aktualisieren [skip ci]")
 
     # Abschließende Prüfung der Referenzbindung.
     if _mandant_changes(mandant_root, rollout_sha):
@@ -283,8 +299,8 @@ def build_update_matrix(mandanten_path: Path, releaselinien_path: Path) -> dict[
     """
 
     # Zentrale Zuordnungen laden.
-    mandanten = _load_mandanten_zuordnung(mandanten_path)
-    releaselinien = _load_releaselinien_zuordnung(releaselinien_path)
+    mandanten = load_mandanten_zuordnung(mandanten_path)
+    releaselinien = load_releaselinien_zuordnung(releaselinien_path)
 
     # Matrix für main und die möglichen gepflegten Release-Branches aufbauen.
     branches = ["main", *(f"release/{releaselinie}" for releaselinie in sorted(releaselinien))]
@@ -312,7 +328,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     automation = commands.add_parser(
         "verify-automation",
-        help="freigegebene zentrale Automationsversion prüfen",
+        help="freigegebene CI/CD-Version prüfen",
     )
     automation.add_argument("--automation-sha", required=True)
 

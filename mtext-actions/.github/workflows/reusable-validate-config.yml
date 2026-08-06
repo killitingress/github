@@ -35,9 +35,9 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
 
-      # Lädt den festgelegten Stand der zentralen Validierungslogik und ihrer
+      # Lädt die freigegebene CI/CD-Version mit der Validierungslogik und ihrer
       # versionierten Releaselinien-Zuordnung.
-      - name: Check out pinned automation
+      - name: Check out approved CI/CD version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions

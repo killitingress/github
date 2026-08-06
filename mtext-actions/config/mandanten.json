@@ -1,9 +1,9 @@
 {
-  "FI": {"repository": "<oms_team>/mtext-fi", "subsystem": "LOMS"},
-  "BY": {"repository": "<oms_team>/mtext-by", "subsystem": "BYMT"},
-  "LH": {"repository": "<oms_team>/mtext-lh", "subsystem": "LHMT"},
-  "NW": {"repository": "<oms_team>/mtext-nw", "subsystem": "NWMT"},
-  "OS": {"repository": "<oms_team>/mtext-os", "subsystem": "OSMT"},
-  "SA": {"repository": "<oms_team>/mtext-sa", "subsystem": "SAMT"},
-  "IT": {"repository": "<oms_team>/mtext-autonom", "subsystem": "ITMT"}
+  "FI": {"repository": "FinanzInformatik/fi_lbs_entw_oms_fi", "subsystem": "LOMS"},
+  "BY": {"repository": "FinanzInformatik/fi_lbs_entw_oms_by", "subsystem": "BYMT"},
+  "LH": {"repository": "FinanzInformatik/fi_lbs_entw_oms_lh", "subsystem": "LHMT"},
+  "NW": {"repository": "FinanzInformatik/fi_lbs_entw_oms_nw", "subsystem": "NWMT"},
+  "OS": {"repository": "FinanzInformatik/fi_lbs_entw_oms_os", "subsystem": "OSMT"},
+  "SA": {"repository": "FinanzInformatik/fi_lbs_entw_oms_sa", "subsystem": "SAMT"},
+  "IT": {"repository": "FinanzInformatik/fi_lbs_entw_oms_it", "subsystem": "ITMT"}
 }

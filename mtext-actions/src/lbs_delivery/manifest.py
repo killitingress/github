@@ -1,7 +1,7 @@
 """Schreibt und prüft das Manifest, das Releasemetadaten mit Artefaktdateien verbindet.
 
-Beim Publish vergleicht die Prüfung die Paketdateien mit Größe und Prüfsumme aus
-dem beim Releasebau geschriebenen Manifest.
+Beim Publish vergleicht die Prüfung die Paket- und Informationsdateien mit
+Größe und Prüfsumme aus dem beim Releasebau geschriebenen Manifest.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ def write_manifest(path: str | Path, manifest: dict[str, Any]) -> Path:
 def load_and_verify(
     manifest_path: str | Path, artifact_root: str | Path,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Lädt ein Manifest und prüft, ob die Paketdateien noch zum Releasebau passen."""
+    """Lädt ein Manifest und prüft alle Dateien aus dem Releasebau."""
 
     try:
         manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
@@ -48,10 +48,11 @@ def load_and_verify(
 
     packages: list[dict[str, Any]] = []
 
-    # Nur Paket-Artefakte übernehmen; Informationsdateien bleiben außen vor.
+    # Paket- und Informationsdateien gehören gemeinsam zur geprüften Lieferung.
+    # Die Paketliste wird getrennt zurückgegeben, weil nur sie an den Mainframe geht.
     for artifact in artifacts:
-        if not isinstance(artifact, dict) or artifact.get("kind") != "package":
-            continue
+        if not isinstance(artifact, dict) or artifact.get("kind") not in {"package", "information"}:
+            raise DeliveryError(Status.PACKAGE_FAILED, "Releaseartefakt ist ungültig")
 
         try:
             relative_path = artifact["path"]
@@ -82,7 +83,8 @@ def load_and_verify(
         if sha256_file(path) != expected_sha256:
             raise DeliveryError(Status.PACKAGE_FAILED, f"Releaseartefakt hat falsche Prüfsumme: {relative_path}")
 
-        packages.append(artifact)
+        if artifact["kind"] == "package":
+            packages.append(artifact)
 
     # Mindestens ein Paket muss für die Mainframe-Übergabe vorliegen.
     if not packages:

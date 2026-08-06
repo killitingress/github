@@ -1,7 +1,8 @@
 name: Reusable release
 
 # Dieser wiederverwendbare Workflow erzeugt aus einem Release-Tag ein FULL- oder
-# DELTA-Artefakt und übergibt es nach erfolgreicher Prüfung an den Mainframe.
+# DELTA-Artefakt, übergibt es an den Mainframe und veröffentlicht anschließend
+# die lesbare Rückmeldung im Mandanten-Repository.
 'on':
   workflow_call:
     inputs:
@@ -59,9 +60,9 @@ jobs:
           ref: refs/tags/${{ inputs.release_tag }}
           token: ${{ secrets.source_token }}
 
-      # Lädt genau den vom Aufrufer festgelegten Stand der Build-Logik und
-      # speichert keine GitHub-Zugangsdaten in der Git-Konfiguration.
-      - name: Check out pinned automation
+      # Lädt die festgelegte CI/CD-Version mit der Build-Logik und speichert
+      # keine GitHub-Zugangsdaten in der Git-Konfiguration.
+      - name: Check out selected CI/CD version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
@@ -121,9 +122,9 @@ jobs:
       cancel-in-progress: false
     timeout-minutes: 30
     steps:
-      # Lädt genau den festgelegten Stand der Übergabelogik und der JCL-Vorlage,
+      # Lädt die festgelegte CI/CD-Version mit Übergabelogik und JCL-Vorlage,
       # ohne GitHub-Zugangsdaten in der Git-Konfiguration zu speichern.
-      - name: Check out pinned automation
+      - name: Check out selected CI/CD version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
@@ -154,3 +155,43 @@ jobs:
           MAINFRAME_FTP_USER: ${{ vars.MAINFRAME_FTP_USER }}
         run: >-
           "${{ steps.runtime.outputs.python }}" automation/src/publish_mainframe.py
+
+  # Die Rückmeldung beginnt erst nach der erfolgreichen Mainframe-Übergabe.
+  # Ein Fehler in diesem Job kann deshalb wiederholt werden, ohne erneut zu übertragen.
+  report:
+    name: Publish delivery report in mandant repository
+    needs: [build, publish]
+    runs-on: FI_RUNNER_LABEL_TO_BE_SET
+    timeout-minutes: 15
+    steps:
+      # Lädt die zum Release gehörende CI/CD-Version ohne gespeicherte
+      # Zugangsdaten. Das Mandanten-Token erhält erst der Veröffentlichungsschritt.
+      - name: Check out selected CI/CD version
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+          ref: ${{ inputs.automation_ref }}
+          path: automation
+          persist-credentials: false
+
+      # Verwendet dasselbe geprüfte Artefakt wie die Mainframe-Übergabe.
+      - name: Download exact release artifact
+        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: dist
+
+      # Stellt die auf dem FI-Runner vorgegebene Python-Laufzeit bereit.
+      - name: Prepare approved Python runtime
+        id: runtime
+        run: automation/scripts/runner-preflight.sh
+
+      # Legt das GitHub Release für den vorhandenen Tag an. Bei einer Wiederholung
+      # werden Beschreibung und gleichnamige Informationsdateien aktualisiert.
+      - name: Publish GitHub release and information files
+        env:
+          MANDANT_REPOSITORY_TOKEN: ${{ secrets.source_token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+        run: >-
+          "${{ steps.runtime.outputs.python }}" automation/src/publish_github_release.py

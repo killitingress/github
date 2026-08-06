@@ -1,6 +1,6 @@
 name: Start central release
 
-# Ein geschützter Release-Tag startet den zentralen Lauf in mtext-actions. Das
+# Ein geschützter Release-Tag startet den zentralen Lauf in mtext_actions. Das
 # Mandanten-Repository erhält dabei keinen Mainframe-Zugang.
 'on':
   push:
@@ -15,10 +15,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Der gepinnte zentrale Workflow validiert das Tag-Ereignis und verwendet
-  # das auf Actions: write in mtext-actions begrenzte Mandanten-Secret.
+  # Der Workflow der festgelegten CI/CD-Version validiert das Tag-Ereignis und
+  # verwendet das auf Actions: write in mtext_actions begrenzte Mandanten-Secret.
   dispatch:
-    name: Start release in mtext-actions
+    name: Start release in mtext_actions
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-release-dispatch.yml@0000000000000000000000000000000000000000
     with:
       source_repository: ${{ github.repository }}

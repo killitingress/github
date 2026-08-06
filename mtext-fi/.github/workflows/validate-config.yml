@@ -18,14 +18,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Dieser Aufruf lässt den exakten Commit durch den fest gepinnten zentralen
-  # Validierungsworkflow prüfen.
+  # Dieser Aufruf lässt den exakten Commit durch den Validierungsworkflow der
+  # freigegebenen CI/CD-Version prüfen.
   validate:
     name: Validate mandant configuration
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-validate-config.yml@0000000000000000000000000000000000000000
     with:
-      # Die Einrichtungsautomation ersetzt beide technischen Platzhalter gemeinsam
-      # durch den mtext-actions-Commit.
+      # Der CI/CD-Rollout ersetzt beide technischen Platzhalter gemeinsam durch
+      # die Commit-SHA der freigegebenen Version von mtext_actions.
       commit_sha: ${{ github.sha }}
       automation_ref: 0000000000000000000000000000000000000000
     secrets:

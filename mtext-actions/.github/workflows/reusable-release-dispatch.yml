@@ -1,7 +1,7 @@
 name: Reusable central release dispatch
 
-# Dieser kleine Mandantenaufruf startet den eigentlichen Release in
-# mtext-actions. Er erhält keinen Mainframe-Zugang.
+# Dieser kleine Mandantenaufruf startet den zentralen CI/CD-Releaseweg in
+# mtext_actions. Er erhält keinen Mainframe-Zugang.
 'on':
   workflow_call:
     inputs:
@@ -28,11 +28,11 @@ permissions:
   contents: read
 
 jobs:
-  # Der Job ruft die GitHub-API mit dem auf mtext-actions begrenzten
+  # Der Job ruft die GitHub-API mit dem auf mtext_actions begrenzten
   # Dispatch-Token auf. Die zentrale Releaseverarbeitung prüft Repository,
-  # Tag, Commit und Automationsversion vor dem Paketbau.
+  # Tag, Commit und CI/CD-Version vor dem Paketbau.
   dispatch:
-    name: Start release in mtext-actions
+    name: Start release in mtext_actions
     runs-on: FI_RUNNER_LABEL_TO_BE_SET
     timeout-minutes: 10
     steps:
@@ -59,6 +59,6 @@ jobs:
             --data "$payload" \
             "$GITHUB_API_URL/repos/$TARGET_REPOSITORY/actions/workflows/release.yml/dispatches")"
           if [[ "$status" != "204" ]]; then
-            echo "Release-Dispatch an mtext-actions ist mit HTTP $status fehlgeschlagen" >&2
+            echo "Release-Dispatch an mtext_actions ist mit HTTP $status fehlgeschlagen" >&2
             exit 1
           fi

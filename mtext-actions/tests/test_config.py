@@ -1,8 +1,4 @@
-"""Prüft den Konfigurationsvertrag des Repositories ohne externe Systeme.
-
-Die Tests decken zentrale Identitätszuordnung, Projektermittlung,
-Warnungsverhalten und die Kommandozeilenübersetzung von Validierungsfehlern ab.
-"""
+"""Prüft den Konfigurationsvertrag des Repositories ohne externe Systeme."""
 
 from __future__ import annotations
 
@@ -17,23 +13,15 @@ from unittest.mock import patch
 from sync_resources import build_parser as build_sync_parser
 from validate_config import run as validate_config
 
-from lbs_delivery.config import _load_mandanten_zuordnung
+from lbs_delivery.config import load_mandanten_zuordnung
 from lbs_delivery.process import DeliveryError, Status, execute
 
-from tests.support import (
-    load_test_configuration,
-    setup_repository,
-    write_mandant,
-)
+from tests.support import load_test_configuration, setup_repository, write_mandant
 
 
 class ConfigTests(unittest.TestCase):
     def setUp(self) -> None:
-        """Erzeugt ein gültiges Mandanten-Repository als Ausgangspunkt jedes Tests.
-
-        Ein neuer temporärer Git-Bestand verhindert, dass Änderungen eines
-        Prüffalls einen anderen beeinflussen.
-        """
+        """Erzeugt ein gültiges Mandanten-Repository als Ausgangspunkt jedes Tests."""
 
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -41,11 +29,7 @@ class ConfigTests(unittest.TestCase):
         self.repository = setup_repository(self.root, branch="main")
 
     def test_warns_on_project_deviation(self) -> None:
-        """Meldet Abweichungen im Projektbestand, ohne die Konfiguration abzulehnen.
-
-        Der Referenzbestand dient der betrieblichen Sichtbarkeit. Fehlende und
-        zusätzliche Projekte müssen deshalb Warnungen bleiben.
-        """
+        """Meldet fehlende und zusätzliche Projekte als Warnung, nicht als Fehler."""
 
         (self.repository / "Fonts/value.txt").unlink()
         (self.repository / "Fonts").rmdir()
@@ -55,35 +39,28 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(any("zusätzlich" in warnung for warnung in configuration.warnungen))
 
     def test_derives_fragment_project_codes_for_by(self) -> None:
-        """Leitet die Projektcodes der BY-Fragmente aus ihren Verzeichnisnamen ab.
-
-        Der Test belegt, dass Mandantensuffixe die externen Projektcodes für
-        Paketnamen und Mainframe-Member nicht verändern.
-        """
+        """Leitet BY-Fragmentcodes aus Verzeichnisnamen ab."""
 
         for project in ("Configuration", "Fonts", "LOMS_Framework", "LOMS_PKA"):
             (self.repository / project / "value.txt").unlink()
             (self.repository / project).rmdir()
         (self.repository / "LOMS_Basis").rename(self.repository / "LOMS_Basis[BY]")
         (self.repository / "LOMS_Autonom[BY]").mkdir()
-        mandant = {"kuerzel": "BY"}
-        configuration = load_test_configuration(self.repository, mandant=mandant, repository_name="<oms_team>/mtext-by")
+        configuration = load_test_configuration(
+            self.repository,
+            mandant={"kuerzel": "BY"},
+            repository_name="FinanzInformatik/fi_lbs_entw_oms_by",
+        )
         self.assertEqual(configuration.projects, {"LOMS_Autonom[BY]": "AUTON", "LOMS_Basis[BY]": "BASIS"})
         self.assertEqual(configuration.subsystem, "BYMT")
 
     def test_rejects_invalid_configuration(self) -> None:
-        """Lehnt widersprüchliche Mandantenidentität, Zuordnungen und Projektstruktur ab.
-
-        Diese Fälle betreffen dieselbe Vertrauensgrenze. Angaben aus dem
-        Repository dürfen der zentralen Zuständigkeit nicht widersprechen.
-        """
+        """Lehnt widersprüchliche Identität, Zuordnung und Projektstruktur ab."""
 
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository, mandant={"kuerzel": "BY"})
-
         with self.assertRaises(DeliveryError):
-            load_test_configuration(self.repository, repository_name="<oms_team>/unbekannt")
-
+            load_test_configuration(self.repository, repository_name="FinanzInformatik/fi_lbs_entw_oms_unbekannt")
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository, mandant={"releaselinie": "R999"})
 
@@ -91,61 +68,50 @@ class ConfigTests(unittest.TestCase):
         mandanten_path.write_text(
             json.dumps(
                 {
-                    "FI": {
-                        "repository": "<oms_team>/mtext-fi",
-                        "subsystem": "LOMS",
-                    },
-                    "BY": {
-                        "repository": "<oms_team>/mtext-fi",
-                        "subsystem": "BYMT",
-                    },
+                    "FI": {"repository": "FinanzInformatik/fi_lbs_entw_oms_fi", "subsystem": "LOMS"},
+                    "BY": {"repository": "FinanzInformatik/fi_lbs_entw_oms_fi", "subsystem": "BYMT"},
                 }
             ),
             encoding="utf-8",
         )
         with self.assertRaises(DeliveryError):
-            _load_mandanten_zuordnung(mandanten_path)
+            load_mandanten_zuordnung(mandanten_path)
 
         (self.repository / "LOMS_Basisdaten").mkdir()
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository)
 
-    def test_validate_config_script_maps_validation_errors(self) -> None:
-        """Ordnet Konfigurationsfehler dem dokumentierten Validierungs-Exitcode zu.
+    def test_cli_keeps_runner_context_out_of_arguments(self) -> None:
+        """Übergibt nur den Commit. Branch und Ereignis stammen aus dem Runner."""
 
-        Passt die Mandantenangabe nicht zum aufrufenden Repository, muss der
-        Einstiegspunkt seinen stabilen Status und eine sichere Fehlermeldung
-        ausgeben.
-        """
+        with self.subTest(validate_config=True):
+            mandant_path = self.repository / ".github/config.json"
+            mandant_path.parent.mkdir()
+            write_mandant(mandant_path, kuerzel="BY")
+            stderr = io.StringIO()
+            with (
+                patch.dict(
+                    "os.environ",
+                    {
+                        "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
+                        "GITHUB_WORKSPACE": str(self.root),
+                    },
+                    clear=True,
+                ),
+                redirect_stdout(io.StringIO()),
+                redirect_stderr(stderr),
+            ):
+                exit_code = execute(validate_config)
+            self.assertEqual(exit_code, 2)
+            self.assertIn(Status.VALIDATION_FAILED.value, stderr.getvalue())
+            self.assertIn("Mandant passt nicht zum Repository", stderr.getvalue())
 
-        mandant_path = self.repository / ".github/config.json"
-        mandant_path.parent.mkdir()
-        write_mandant(mandant_path, kuerzel="BY")
-        stderr = io.StringIO()
-        environment = {"GITHUB_REPOSITORY": "<oms_team>/mtext-fi", "GITHUB_WORKSPACE": str(self.root)}
-        with (
-            patch.dict("os.environ", environment, clear=True),
-            redirect_stdout(io.StringIO()),
-            redirect_stderr(stderr),
-        ):
-            exit_code = execute(validate_config)
-        self.assertEqual(exit_code, 2)
-        self.assertIn(Status.VALIDATION_FAILED.value, stderr.getvalue())
-        self.assertIn("Mandant passt nicht zum Repository", stderr.getvalue())
-
-    def test_sync_script_contains_only_run_specific_arguments(self) -> None:
-        """Hält Infrastrukturpfade und Repositoryidentität aus den Kommandozeilenoptionen heraus.
-
-        Diese Werte stammen aus dem vertrauenswürdigen Runner-Kontext. Die
-        Kommandozeile übergibt lediglich den Commit, der sich je Aufruf ändert.
-        """
-
-        parser = build_sync_parser()
-        sync = parser.parse_args(["--commit", "a" * 40])
-        self.assertFalse(hasattr(sync, "source_branch"))
-        self.assertFalse(sync.full)
-        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            parser.parse_args(["--commit", "a" * 40, "--repository-root", "source"])
+        with self.subTest(sync_resources=True):
+            parser = build_sync_parser()
+            sync = parser.parse_args(["--commit", "a" * 40])
+            self.assertFalse(hasattr(sync, "source_branch"))
+            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                parser.parse_args(["--commit", "a" * 40, "--repository-root", "source"])
 
 
 if __name__ == "__main__":

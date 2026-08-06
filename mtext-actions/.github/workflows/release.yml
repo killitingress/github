@@ -1,6 +1,6 @@
 name: Central release
 
-# Dieser Workflow läuft in mtext-actions und besitzt deshalb Zugriff auf die
+# Dieser Workflow läuft in mtext_actions und besitzt deshalb Zugriff auf die
 # zentralen Mainframe-Zugangsdaten. Er wird vom geprüften Mandanten-Dispatch
 # automatisch gestartet.
 'on':
@@ -19,7 +19,7 @@ name: Central release
         required: true
         type: string
       automation_ref:
-        description: Vollständige SHA der geprüften Automatisierung
+        description: Vollständige SHA der freigegebenen CI/CD-Version
         required: true
         type: string
 

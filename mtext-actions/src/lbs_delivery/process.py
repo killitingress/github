@@ -23,7 +23,7 @@ class Status(str, Enum):
     PACKAGE_FAILED = "PACKAGE_FAILED"
     # Die lokalen Lieferartefakte wurden erfolgreich vorbereitet.
     ARTIFACT_READY = "ARTIFACT_READY"
-    # Staging oder Ersetzung der Projekte unter serverSync ist fehlgeschlagen.
+    # Die Projekte konnten unter serverSync nicht aktualisiert werden.
     RESOURCE_TRANSFER_FAILED = "RESOURCE_TRANSFER_FAILED"
     # Der Adapter hat die Synchronisationsanfrage angenommen.
     ADAPTER_ACCEPTED = "ADAPTER_ACCEPTED"
@@ -33,6 +33,10 @@ class Status(str, Enum):
     MAINFRAME_SUBMITTED = "MAINFRAME_SUBMITTED"
     # FTP-Verbindung, Paketübertragung oder JES-Übergabe sind fehlgeschlagen.
     MAINFRAME_TRANSFER_FAILED = "MAINFRAME_TRANSFER_FAILED"
+    # Zusammenfassung und Informationsdateien stehen im Mandanten-Repository bereit.
+    GITHUB_RELEASE_PUBLISHED = "GITHUB_RELEASE_PUBLISHED"
+    # Das GitHub Release oder seine Informationsdateien konnten nicht veröffentlicht werden.
+    GITHUB_RELEASE_FAILED = "GITHUB_RELEASE_FAILED"
 
 
 # Stabile Exitcodes unterscheiden die dokumentierten Fehlerklassen, ohne dass
@@ -44,6 +48,7 @@ _EXIT_CODES = {
     Status.RESOURCE_TRANSFER_FAILED: 5,
     Status.ADAPTER_FAILED: 6,
     Status.MAINFRAME_TRANSFER_FAILED: 7,
+    Status.GITHUB_RELEASE_FAILED: 8,
 }
 
 

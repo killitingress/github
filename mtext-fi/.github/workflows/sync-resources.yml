@@ -8,42 +8,34 @@ name: Sync M/Text resources
       - main
       - release/R[0-9][0-9][0-9]
       - feature/R[0-9][0-9][0-9]/**
-    # Eine reine Konfigurationsänderung wird geprüft, überträgt aber keine
-    # unveränderten Ressourcen. Der Linienwechsel besitzt einen eigenen FULL-Lauf.
-    paths-ignore:
-      - .github/config.json
-  # Der manuelle Start dient der ersten Vollsynchronisation und der
-  # Wiederherstellung. Der Branch wird über den GitHub-Branchwähler festgelegt.
+  # Der manuelle Start gleicht den angegebenen Commit vollständig mit dem Ziel
+  # ab, das sich aus dem in der Oberfläche ausgewählten Branch ergibt.
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: Exakter Commit-SHA des wiederherzustellenden Stands
+        description: Vollständige Commit-SHA auf dem ausgewählten Branch
         required: true
         type: string
-      full_sync:
-        description: Vollständigen Projektstand wiederherstellen
-        required: true
-        default: true
-        type: boolean
 
 permissions:
   contents: read
 
-# Ein gemeinsamer Mandantenbereich unter serverSync darf nicht durch zwei
-# gleichzeitige Läufe desselben Repositories verändert werden.
+# Zwei Läufe desselben Mandanten-Repositories dürfen dessen Projektstand unter
+# serverSync nicht gleichzeitig verändern. Projektverzeichnisse verschiedener
+# Mandanten überschneiden sich nicht und benötigen keine gemeinsame Sperre.
 concurrency:
   group: mtext-sync-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
-  # Die zentrale Automatisierung leitet Releaselinie und M/Text-Ziel aus dem
-  # geprüften Branch und der Mandantenkonfiguration ab.
+  # Der zentrale Ablauf erkennt den Releasewechsel am geänderten Feld
+  # `releaselinie` und versorgt diesen Stand vollständig in beiden Zielstufen.
+  # Andere Pushes und manuelle Vollabgleiche verwenden die Branchzuordnung.
   sync:
-    name: Sync resources
+    name: Ressourcen synchronisieren
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
     with:
-      commit_sha: ${{ inputs.commit_sha || github.sha }}
+      commit_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.commit_sha || github.sha }}
       automation_ref: 0000000000000000000000000000000000000000
-      full_sync: ${{ inputs.full_sync || false }}
     secrets:
       automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

@@ -64,8 +64,10 @@ def _git(repository: str | Path, *arguments: str, returncodes: tuple[int, ...] =
         )
     except OSError as exc:
         raise DeliveryError(Status.SOURCE_FAILED, "Git ist nicht verfügbar") from exc
+
     if result.returncode not in returncodes:
         raise DeliveryError(Status.SOURCE_FAILED, "Git-Operation fehlgeschlagen")
+
     return result.stdout
 
 
@@ -81,9 +83,11 @@ def resolve(repository: str | Path, reference: str) -> str:
     output = _git(repository, "rev-parse", "--verify", "--end-of-options", f"{reference}^{{commit}}")
     # Git liefert die SHA als ASCII-Bytes, meist mit nachgestelltem Zeilenumbruch.
     value = output.decode("ascii").strip()
+
     # Nur eine vollständige 40-stellige Hex-SHA weiterverwenden.
     if FULL_SHA_RE.fullmatch(value) is None:
         raise DeliveryError(Status.SOURCE_FAILED, "Git lieferte keine Commit-SHA")
+
     return value
 
 
@@ -98,22 +102,33 @@ def require_ancestor(repository: str | Path, ancestor: str, descendant: str) -> 
     _git(repository, "merge-base", "--is-ancestor", ancestor, descendant)
 
 
-def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str, bool]:
-    """Ordnet einen zulässigen Quellbranch seiner Releaselinie und Branchart zu.
+def read_file(repository: str | Path, commit: str, path: str | Path) -> bytes:
+    """Liest eine versionierte Datei aus einem geprüften Commit.
 
-    Der boolesche Rückgabewert kennzeichnet einen Feature-Branch. `main` und
-    `release/Rnnn` führen dadurch zur Abnahme, `feature/Rnnn/<Bezeichnung>` zur
-    Entwicklung. Weitere Schrägstriche in der Feature-Bezeichnung sind erlaubt.
+    Diese Git-I/O-Grenze wird beim Wechsel der führenden Releaselinie benötigt,
+    um die bisherige Mandantenkonfiguration ohne zweiten Checkout auszuwerten.
+    """
+
+    verified_commit = resolve(repository, commit)
+    return _git(repository, "show", f"{verified_commit}:{path}")
+
+
+def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str, str]:
+    """Ordnet einen zulässigen Quellbranch Releaselinie und M/Text-Zielstufe zu.
+
+    `main` und `release/Rnnn` führen zur Abnahme,
+    `feature/Rnnn/<Bezeichnung>` zur Entwicklung. Weitere Schrägstriche in der
+    Feature-Bezeichnung sind erlaubt.
     """
 
     if source_branch == "main":
-        return main_releaselinie, False
+        return main_releaselinie, "Abnahme"
     release_match = RELEASE_BRANCH_RE.fullmatch(source_branch)
     if release_match is not None:
-        return release_match.group(1), False
+        return release_match.group(1), "Abnahme"
     feature_match = FEATURE_BRANCH_RE.fullmatch(source_branch)
     if feature_match is not None:
-        return feature_match.group(1), True
+        return feature_match.group(1), "Entwicklung"
     raise DeliveryError(Status.VALIDATION_FAILED, "Branch ist kein Synchronisationszweig")
 
 

@@ -146,7 +146,7 @@ def _build_project_packages(
 
 def _write_information(
     path: Path, *, mandant: str, project: str, delivery_type: str, tag: str, previous: str,
-    git_changes: Iterable[GitChange], archive_names: Iterable[str],
+    git_changes: Iterable[tuple[str, str]], archive_names: Iterable[str],
 ) -> None:
     """Schreibt den lesbaren Lieferbeleg zu einem Projektpaket.
 
@@ -157,7 +157,7 @@ def _write_information(
 
     diff_lines = "\n".join(
         f"{status}       VORRELEASE/{changed_path}"
-        for status, changed_path in project_changes(git_changes, project)
+        for status, changed_path in git_changes
     )
     archive_lines = "\n".join(archive_names)
     path.write_text(
@@ -231,6 +231,7 @@ def build_release(
     artifacts: list[dict[str, object]] = []
     previous_label = previous or LEGACY_PREVIOUS_TAG
     for project, projektcode in configuration.projects.items():
+        direct_project_changes = list(project_changes(direct, project))
         packages, archive_names = _build_project_packages(
             configuration,
             repository_root=root,
@@ -255,7 +256,7 @@ def build_release(
             delivery_type=delivery_type,
             tag=tag,
             previous=previous_label,
-            git_changes=direct,
+            git_changes=direct_project_changes,
             archive_names=archive_names,
         )
         for package_path, package_code in packages:
@@ -274,6 +275,11 @@ def build_release(
                 "kind": "information",
                 "path": information_path.name,
                 "project": project,
+                "changes": [
+                    {"status": status, "path": changed_path}
+                    for status, changed_path in direct_project_changes
+                ],
+                "archive_entries": archive_names,
                 "size": information_path.stat().st_size,
                 "sha256": sha256_file(information_path),
             }

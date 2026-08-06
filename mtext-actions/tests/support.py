@@ -14,8 +14,8 @@ from pathlib import Path
 from lbs_delivery.config import Configuration, MANDANT_CONFIG_PATH, load_configuration
 
 
-# Die Tests lesen zentrale Zuordnungen, Vorlagen und Workflows aus demselben
-# Automations-Checkout wie die produktiven Module.
+# Die Tests lesen zentrale Zuordnungen und Workflows aus demselben
+# CI/CD-Checkout wie die produktiven Module.
 AUTOMATION_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -98,8 +98,8 @@ def setup_sync_repository(root: Path) -> Path:
     """Erzeugt einen von der Synchronisationsprüfung akzeptierten Entwicklungsstand.
 
     Der Aufbau enthält ein Projekt und einen passenden Remote-Branch. Die Tests
-    können sich dadurch auf Staging, Veröffentlichung und Adapterverhalten
-    konzentrieren.
+    können sich dadurch auf die Aktualisierung von serverSync und den
+    Adapteraufruf konzentrieren.
     """
 
     repository = init_repository(root, branch="feature/R261/test-sync")
@@ -143,13 +143,16 @@ def setup_release_repository(root: Path) -> Path:
 
 
 def load_test_configuration(
-    repository: Path, *, mandant: dict[str, object] | None = None, repository_name: str = "<oms_team>/mtext-fi",
+    repository: Path,
+    *,
+    mandant: dict[str, object] | None = None,
+    repository_name: str = "FinanzInformatik/fi_lbs_entw_oms_fi",
 ) -> Configuration:
     """Schreibt lokale Mandantenangaben und lädt die produktive Konfiguration.
 
     Die Tests erhalten dasselbe unveränderliche Modell wie die echten Workflows.
     Darin enthalten sind auch die zentralen Mandanten- und
-    Releaselinienzuordnungen aus dem Automations-Checkout.
+    Releaselinienzuordnungen aus dem CI/CD-Checkout.
     """
 
     path = repository / MANDANT_CONFIG_PATH

@@ -16,8 +16,8 @@ from typing import Any
 from .process import DeliveryError, Status
 
 
-# Pfad des Automation-Root-Verzeichnisses (darin suchen wir die
-# Konfigurationsdateien für Mandanten und Releaselinien)
+# Wurzel des zentralen CI/CD-Checkouts mit den versionierten Zuordnungen für
+# Mandanten und Releaselinien.
 AUTOMATION_ROOT = Path(__file__).resolve().parents[2]
 # Zuordnung vom Mandantenkürzel zum GitHub-Repository und Mainframe-Subsystem.
 MANDANTEN_ZUORDNUNG_PATH = AUTOMATION_ROOT / "config/mandanten.json"
@@ -99,7 +99,7 @@ def _read_json(path: str | Path) -> Any:
         raise DeliveryError(Status.VALIDATION_FAILED, message) from exc
 
 
-def _load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
+def load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
     """Lädt die Zuordnung des `kuerzel`s zur Repositoryidentität aus
     mandanten.json."""
 
@@ -108,7 +108,7 @@ def _load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
         raise DeliveryError(Status.VALIDATION_FAILED, "Mandantenzuordnung ist ungültig")
 
     zuordnung: dict[str, MandantStamm] = {}
-    repositories: set[str] = set() # Set für Eindeutigkeit
+    repositories: set[str] = set()
 
     # Jede Zuordnung braucht eindeutiges Repository und Subsystem.
     for kuerzel, values in mandanten.items():
@@ -127,15 +127,14 @@ def _load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
 
         if repository in repositories:
             raise DeliveryError(Status.VALIDATION_FAILED, "Mandantenzuordnung ist nicht eindeutig")
-        
-        # Gültiges Repository und Subsystem hinzufügen
+
         repositories.add(repository)
         zuordnung[kuerzel] = MandantStamm(repository=repository, subsystem=subsystem)
 
     return zuordnung
 
 
-def _load_releaselinien_zuordnung(path: str | Path) -> dict[str, Any]:
+def load_releaselinien_zuordnung(path: str | Path) -> dict[str, Any]:
     """Lädt die Zuordnung der aktiven Releaselinien aus releaselinien.json."""
 
     releaselinien = _read_json(path)
@@ -153,8 +152,8 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
 
     # Zentrale Zuordnungen und Mandantenkonfiguration laden.
     mandant_configuration = _read_json(root / MANDANT_CONFIG_PATH)
-    mandanten_zuordnung = _load_mandanten_zuordnung(MANDANTEN_ZUORDNUNG_PATH)
-    releaselinien = _load_releaselinien_zuordnung(RELEASELINIEN_ZUORDNUNG_PATH)
+    mandanten_zuordnung = load_mandanten_zuordnung(MANDANTEN_ZUORDNUNG_PATH)
+    releaselinien = load_releaselinien_zuordnung(RELEASELINIEN_ZUORDNUNG_PATH)
 
     try:
         mandant = mandant_configuration["mandant"]
@@ -206,7 +205,6 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
         if not isinstance(etaps_linie, str) or not etaps_linie or hostprofil not in hostprofile:
             raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist ungültig")
 
-    # Konfiguration zurückgeben
     return Configuration(
         repository=repository_name,
         kuerzel=kuerzel,

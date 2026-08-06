@@ -1,8 +1,8 @@
 """Synchronisiert einen geprüften Repositorystand mit den externen M/Text-Systemen.
 
-Der Ablauf bereitet einen vollständigen oder inkrementellen Ressourcenstand vor,
-aktualisiert das zugehörige serverSync-Ziel und ruft den zur Releaselinie und
-Umgebung des Quellbranches gehörenden Adapter auf.
+Der Ablauf kopiert einen vollständigen Projektstand oder einzelne Änderungen
+direkt aus dem Checkout nach serverSync. Anschließend ruft er den zur
+Releaselinie und Zielstufe gehörenden Adapter auf.
 """
 
 from __future__ import annotations
@@ -15,12 +15,12 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from .process import DeliveryError, Status
 from .config import Configuration
-from .git import changes, project_changes, require_ancestor, resolve, resolve_sync_branch
+from .git import changes, project_changes, require_ancestor, resolve
+from .process import DeliveryError, Status
 
 
-# Zuordnung der M/Text-Synchronisationsumgebungen zu den Endungen für ihr
+# Zuordnung der M/Text-Zielstufen zu den Endungen für ihr
 # serverSync-Verzeichnis und ihren Adapterhost.
 SYNC_STAGES = {"Entwicklung": ("E", "e"), "Abnahme": ("A", "a")}
 
@@ -40,57 +40,18 @@ ADAPTER_SYNC_URL = "https://{etaps_linie}{host_suffix}.ltoma.intern/vMtextAdapte
 SYNC_MARKER_DIRECTORY = ".mtext-sync"
 
 
-def publish_full_server_sync(staging_root: str | Path, target_root: str | Path) -> None:
-    """Wechselt vollständig vorbereitete Projekte atomar unter serverSync ein.
-
-    Die getrennte Funktion bildet die I/O-Grenze der Wiederherstellung ab. Jeder
-    Projektstand wird neben dem Ziel aufgebaut und bei einem Fehler zurückgerollt.
-    """
-
-    staging = Path(staging_root)
-    target = Path(target_root)
-    try:
-        target.mkdir(parents=True, exist_ok=True)
-        projects = sorted(path for path in staging.iterdir() if path.is_dir())
-        for project in projects:
-            destination = target / project.name
-            temporary = target / f".{project.name}.new-{uuid.uuid4().hex}"
-            backup = target / f".{project.name}.old-{uuid.uuid4().hex}"
-
-            # Neuen Stand neben das bisherige Ziel legen.
-            shutil.copytree(project, temporary, copy_function=shutil.copy2)
-
-            # Bisheriges Ziel zur Sicherung beiseite schieben.
-            if destination.exists():
-                os.replace(destination, backup)
-
-            # Atomar einwechseln; bei Fehler die Sicherung zurücklegen.
-            try:
-                os.replace(temporary, destination)
-            except OSError:
-                if backup.exists():
-                    os.replace(backup, destination)
-                raise
-
-            # Sicherung nach erfolgreichem Wechsel entfernen.
-            if backup.exists():
-                shutil.rmtree(backup)
-    except (OSError, shutil.Error) as exc:
-        raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "serverSync-Veröffentlichung fehlgeschlagen") from exc
-
-
-def apply_server_sync_changes(
-    staging_root: str | Path,
+def _apply_server_sync_changes(
+    source_root: str | Path,
     target_root: str | Path,
     operations: list[tuple[str, str]],
 ) -> None:
-    """Wendet vorbereitete Dateioperationen auf den dauerhaften serverSync-Stand an.
+    """Wendet die vorbereiteten Dateiänderungen idempotent auf serverSync an.
 
-    Diese I/O-Grenze überträgt bei normalen Läufen ausschließlich geänderte
-    Ressourcen. Löschungen räumen anschließend leer gewordene Unterverzeichnisse auf.
+    Der Vergleichsmarker wird erst nach dem Adapteraufruf fortgeschrieben. Nach
+    einem Abbruch kann dieselbe Liste deshalb erneut angewendet werden.
     """
 
-    staging = Path(staging_root)
+    source = Path(source_root)
     target = Path(target_root)
     try:
         target.mkdir(parents=True, exist_ok=True)
@@ -100,6 +61,8 @@ def apply_server_sync_changes(
             if status == "D":
                 if destination.is_file() or destination.is_symlink():
                     destination.unlink()
+                elif destination.exists():
+                    raise IsADirectoryError(destination)
                 parent = destination.parent
                 project_root = target / path.parts[0]
                 while parent != project_root and parent.exists() and not any(parent.iterdir()):
@@ -107,10 +70,12 @@ def apply_server_sync_changes(
                     parent = parent.parent
                 continue
 
-            source = staging / path
+            resource = source / path
+            if not resource.is_file():
+                raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "geänderte Ressource fehlt")
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
-    except (OSError, shutil.Error) as exc:
+            shutil.copy2(resource, destination)
+    except OSError as exc:
         raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "serverSync-Veröffentlichung fehlgeschlagen") from exc
 
 
@@ -143,20 +108,20 @@ def call_adapter(url: str, *, timeout: float) -> tuple[int, str]:
 
 def sync_resources(
     configuration: Configuration,
-    *, repository_root: str | Path, commit: str, source_branch: str, staging_root: str | Path,
-    full_sync: bool = False, server_sync_root: str | Path | None = None,
+    *, repository_root: str | Path, commit: str, source_branch: str,
+    releaselinie: str, zielstufe: str, vollabgleich: bool = False,
+    server_sync_root: str | Path | None = None,
 ) -> dict[str, object]:
     """Prüft den Quellstand und synchronisiert ihn mit dem zugehörigen M/Text-Ziel.
 
-    Feature-Branches führen nach Entwicklung, geschützte Zielbranches nach
-    Abnahme. Ein vorhandener erfolgreicher Commit begrenzt die Übertragung auf
-    die seitdem geänderten Ressourcen. Der erste oder ausdrücklich vollständige
-    Lauf ersetzt die Projektstände vollständig.
+    Releaselinie und Zielstufe wurden bereits aus dem Branch und dem
+    GitHub-Ereignis abgeleitet. Ein vorhandener erfolgreicher Commit begrenzt
+    normale Übertragungen auf die seitdem geänderten Ressourcen.
     """
 
-    # Quellbranch, Releaselinie und Commit-Zugehörigkeit prüfen.
-    releaselinie, is_feature = resolve_sync_branch(source_branch, configuration.releaselinie)
-    environment = "Entwicklung" if is_feature else "Abnahme"
+    # Geplantes Ziel und Commit-Zugehörigkeit prüfen.
+    if zielstufe not in SYNC_STAGES:
+        raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Zielstufe ist ungültig")
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
     if resolve(repository_root, "HEAD") != commit:
@@ -165,10 +130,10 @@ def sync_resources(
 
     # Zielpfad und letzter von LTOMA angenommener Mandantenstand bestimmen.
     etaps_linie = configuration.releaselinien[releaselinie]["etaps_linie"]
-    path_suffix, host_suffix = SYNC_STAGES[environment]
+    path_suffix, host_suffix = SYNC_STAGES[zielstufe]
     target_root = Path(server_sync_root or f"/nfs/mtext/{etaps_linie}{path_suffix}/serverSync")
     marker_path = target_root / SYNC_MARKER_DIRECTORY / f"{configuration.kuerzel}.json"
-    incremental_sync = marker_path.exists() and not full_sync
+    incremental_sync = marker_path.exists() and not vollabgleich
     operations: list[tuple[str, str]] = []
     if incremental_sync:
         try:
@@ -184,37 +149,28 @@ def sync_resources(
         git_changes = changes(repository_root, previous_commit, commit)
         operations = [
             operation
-            for project in configuration.projects
+            for project in configuration.projects.keys()
             for operation in project_changes(git_changes, project)
         ]
 
-    # Vollstände enthalten alle Projekte. Normale Läufe bereiten nur Dateien vor,
-    # die nach der zentralen Git-Projektion hinzugefügt oder geändert werden.
-    source_root = Path(repository_root)
-    staging = Path(staging_root)
-    try:
-        staging.mkdir(parents=True, exist_ok=False)
-        if not incremental_sync:
-            for project in configuration.projects:
-                shutil.copytree(source_root / project, staging / project, copy_function=shutil.copy2)
-        else:
-            for status_value, relative in operations:
-                if status_value == "D":
-                    continue
-                source = source_root / relative
-                if not source.is_file():
-                    raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "geänderte Ressource fehlt")
-                destination = staging / relative
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, destination)
-    except (OSError, shutil.Error) as exc:
-        raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "Ressourcen-Staging fehlgeschlagen") from exc
-
-    # Projektstand veröffentlichen und den passenden Adapter aufrufen.
+    # Den vollständigen Projektstand oder die ermittelten Änderungen direkt aus
+    # dem Checkout nach serverSync kopieren. Bei einem Fehler bleibt der Marker
+    # unverändert, sodass derselbe Commit erneut verarbeitet werden kann.
+    source = Path(repository_root)
     if incremental_sync:
-        apply_server_sync_changes(staging_root, target_root, operations)
+        _apply_server_sync_changes(source, target_root, operations)
     else:
-        publish_full_server_sync(staging_root, target_root)
+        try:
+            target_root.mkdir(parents=True, exist_ok=True)
+            for project in configuration.projects:
+                destination = target_root / project
+                if destination.exists():
+                    shutil.rmtree(destination)
+                shutil.copytree(source / project, destination, copy_function=shutil.copy2)
+        except (OSError, shutil.Error) as exc:
+            raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "serverSync-Veröffentlichung fehlgeschlagen") from exc
+
+    # Nach dem aktualisierten Projektstand den passenden Adapter aufrufen.
     adapter_url = ADAPTER_SYNC_URL.format(etaps_linie=etaps_linie, host_suffix=host_suffix)
     status, body = call_adapter(adapter_url, timeout=ADAPTER_TIMEOUT)
 
@@ -223,7 +179,10 @@ def sync_resources(
         marker_path.parent.mkdir(parents=True, exist_ok=True)
         temporary_marker = marker_path.with_suffix(f".{uuid.uuid4().hex}.tmp")
         temporary_marker.write_text(
-            json.dumps({"repository": configuration.repository, "commit": commit}, separators=(",", ":")),
+            json.dumps(
+                {"repository": configuration.repository, "commit": commit},
+                separators=(",", ":"),
+            ),
             encoding="utf-8",
         )
         os.replace(temporary_marker, marker_path)
