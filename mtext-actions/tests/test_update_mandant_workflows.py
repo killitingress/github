@@ -17,7 +17,6 @@ from workflow_configuration import (
     RUNNER_PLACEHOLDER,
     build_update_matrix,
     check_target_branch,
-    open_update_pull_request,
     prepare_mandant_update,
     verify_automation,
 )
@@ -140,8 +139,16 @@ class UpdateWorkflowsTests(unittest.TestCase):
             matrix,
         )
 
+    def test_rollout_workflow_updates_target_branch_directly(self) -> None:
+        """Sichert den administrativen Direkt-Push auf den geschützten Zielbranch ab."""
+
+        workflow = (ROOT / ".github/workflows/update-mandant-workflows.yml").read_text(encoding="utf-8")
+        self.assertIn('git -C mandant push origin "HEAD:refs/heads/$MANDANT_BRANCH"', workflow)
+        self.assertNotIn("open-update-pull-request", workflow)
+        self.assertNotIn("refs/heads/$update_branch", workflow)
+
     def test_github_api_for_rollout(self) -> None:
-        """Prüft Zielbranch und vorhandenen Pull Request über die GitHub-API."""
+        """Prüft vorhandene und fehlende Zielbranches über die GitHub-API."""
 
         with self.subTest(vorhandener_release_branch=True):
             response = MagicMock()
@@ -183,40 +190,6 @@ class UpdateWorkflowsTests(unittest.TestCase):
                 self.assertRaisesRegex(RuntimeError, "HTTP 404"),
             ):
                 check_target_branch("https://api.github.test", "team/mandant", "main", "token")
-
-        with self.subTest(vorhandener_pull_request=True):
-            existing = HTTPError(
-                "https://api.github.test",
-                422,
-                "Unprocessable Entity",
-                None,
-                io.BytesIO(
-                    json.dumps({"errors": [{"message": "A pull request already exists for team:update"}]}).encode(
-                        "utf-8"
-                    )
-                ),
-            )
-            lookup = MagicMock()
-            lookup.__enter__.return_value = lookup
-            lookup.status = 200
-            lookup.read.return_value = b'[{"number":42}]'
-            with patch(
-                "workflow_configuration.urllib.request.urlopen",
-                side_effect=(existing, lookup),
-            ) as urlopen:
-                open_update_pull_request(
-                    "https://api.github.test",
-                    "team/mandant",
-                    "release/R261",
-                    "mtext_actions/workflow-release-R261",
-                    "token",
-                )
-            create_request = urlopen.call_args_list[0].args[0]
-            self.assertEqual(create_request.method, "POST")
-            self.assertEqual(json.loads(create_request.data)["base"], "release/R261")
-            lookup_request = urlopen.call_args_list[1].args[0]
-            self.assertIn("head=team%3Amtext_actions%2Fworkflow-release-R261", lookup_request.full_url)
-
 
 if __name__ == "__main__":
     unittest.main()

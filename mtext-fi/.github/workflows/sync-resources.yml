@@ -8,6 +8,10 @@ name: Sync M/Text resources
       - main
       - release/R[0-9][0-9][0-9]
       - feature/R[0-9][0-9][0-9]/**
+    # Der administrative CI/CD-Rollout ändert ausschließlich Trigger-Workflows
+    # und darf deshalb keine Ressourcensynchronisation nach M/Text auslösen.
+    paths-ignore:
+      - .github/workflows/**
   # Der manuelle Start gleicht den angegebenen Commit vollständig mit dem Ziel
   # ab, das sich aus dem in der Oberfläche ausgewählten Branch ergibt.
   workflow_dispatch:

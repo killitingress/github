@@ -86,13 +86,10 @@ Unterschiede wichtig:
 
 | Anwendung | Aufgabe |
 |---|---|
-| M/Text Workbench mit EGit | Ressourcen bearbeiten, Änderungen prüfen, Feature-Branches verwenden, committen und pushen |
-| GitHub im Browser | Pull Requests bearbeiten, Commits und Workflow-Läufe prüfen, manuelle Läufe starten und Lieferinformationen ansehen |
-| Für Release-Tags vorgesehener Git-Client | Geschützten Branch aktualisieren, Release-Tag auf dem bestätigten Commit anlegen und diesen Tag gezielt pushen |
+| M/Text Workbench mit EGit | Ressourcen bearbeiten, Änderungen prüfen, Branches und Release-Tags verwenden, committen und pushen |
+| GitHub im Browser | Pull Requests bearbeiten, Commits und Workflow-Läufe prüfen, Release-Tags anlegen, manuelle Läufe starten und Lieferinformationen ansehen |
 
-Die genaue Bedienung zum Erstellen und Pushen eines Release-Tags wird nach der
-praktischen Abnahme des dafür vorgesehenen Git-Clients ergänzt. Eine
-Git-Kommandozeile ist für den beschriebenen Ablauf nicht vorgeschrieben.
+Eine Git-Kommandozeile ist für den beschriebenen Ablauf nicht vorgeschrieben.
 
 Die folgenden Git-Funktionen werden im Ablauf benötigt. Wie sie im
 verwendeten Client heißen, kann sich unterscheiden:
@@ -343,38 +340,46 @@ v261.100   FULL-Basis der Releaselinie R261
 v261.108   kumulatives DELTA gegen v261.100
 ```
 
-### Tag erstellen und pushen
+### Tag erstellen
+
+Zunächst wird der vorgesehene Stand bestimmt:
 
 1. Das Mandanten-Repository und darin `main` oder den passenden
-   `release/Rnnn`-Branch im Git-Client auswählen
-2. Den Branch wie unter
+   `release/Rnnn`-Branch auswählen
+2. Bei Verwendung der M/Text Workbench den Branch wie unter
    [Lokalen Branch vor der Arbeit aktualisieren](#lokalen-branch-vor-der-arbeit-aktualisieren)
    beschrieben aktualisieren
 3. In GitHub den Commit bestimmen, der in Abnahme geprüft wurde, und dessen
    vollständige Commit-SHA festhalten
-4. Kontrollieren, dass der lokale Branch auf genau diesen Commit zeigt und
-   dieser Commit den vorgesehenen Release-Stand enthält
-5. Den zentral vorgegebenen Tagnamen, beispielsweise `v261.108`, auf diesem
-   Commit anlegen
-6. Vor dem Push ein letztes Mal den Tagnamen und die vollständige Commit-SHA
-   kontrollieren
-7. Gezielt diesen Tag nach GitHub pushen
-8. In GitHub prüfen, dass der Tag auf die zuvor kontrollierte Commit-SHA zeigt
-9. Prüfen, dass der zentrale Release-Lauf in
-   `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`
-   gestartet wurde
+4. Kontrollieren, dass dieser Commit den vorgesehenen Release-Stand enthält
 
-Mit dem Erstellen und Pushen des Tags wird der Stand fachlich zur Lieferung
+Der Tag kann auf zwei Wegen erstellt werden:
+
+- In der M/Text Workbench den zentral vorgegebenen Tagnamen, beispielsweise
+  `v261.108`, auf dem kontrollierten Commit anlegen und gezielt diesen Tag nach
+  GitHub pushen.
+- In GitHub denselben Tagnamen anlegen und als Ziel den kontrollierten Commit
+  auswählen. Ein dabei angelegtes GitHub Release wird durch den zentralen Lauf
+  mit den Lieferinformationen aktualisiert.
+
+Anschließend:
+
+1. In GitHub prüfen, dass der Tag auf die zuvor kontrollierte Commit-SHA zeigt.
+2. Prüfen, dass der zentrale Release-Lauf in
+   `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`
+   gestartet wurde.
+
+Sobald der Tag in GitHub angelegt ist, ist der Stand fachlich zur Lieferung
 freigegeben.
 
-Solange der Tag noch nicht nach GitHub gepusht wurde, kann ein Fehler lokal
-korrigiert werden. Nach dem Push wird der Release-Tag nicht gelöscht oder auf
-einen anderen Commit verschoben. Eine Korrektur unter demselben Release-Tag ist
-dann nicht mehr möglich.
+Solange ein lokal erstellter Tag noch nicht nach GitHub gepusht wurde, kann er
+korrigiert werden. Sobald ein Release-Tag in GitHub besteht, wird er nicht
+gelöscht oder auf einen anderen Commit verschoben. Eine Korrektur unter
+demselben Release-Tag ist dann nicht mehr möglich.
 
-Wurde trotzdem ein falscher Tag oder ein Tag auf dem falschen Commit gepusht,
-wird ein noch laufender Release-Lauf nach Möglichkeit abgebrochen. Der Tag
-wird nicht selbst gelöscht oder verschoben. Tagname und Commit-SHA werden
+Wurde trotzdem ein falscher Tag oder ein Tag auf dem falschen Commit in GitHub
+angelegt, wird ein noch laufender Release-Lauf nach Möglichkeit abgebrochen. Der
+Tag wird nicht selbst gelöscht oder verschoben. Tagname und Commit-SHA werden
 festgehalten und der Fehler wird den Repository-Verantwortlichen gemeldet. Das
 weitere Vorgehen muss dann geklärt werden. Es wird nicht eigenständig ein
 abweichender Tagname gewählt, weil die Release-Version zentral vorgegeben ist.
@@ -440,22 +445,45 @@ gelöscht werden.
 Der Wechsel wird zum unternehmensweit vorgegebenen Hauptrelease durch die
 Repository-Verantwortlichen durchgeführt.
 
+### Ausgangsstand vorbereiten
+
 1. Prüfen, dass die neue Releaselinie in der zentralen Zuordnung eingerichtet
    ist.
-2. Prüfen, welcher Stand von `main` die bisherige Releaselinie abschließt.
-3. Falls weitere Pflege vorgesehen ist, aus diesem geschützten Stand den
-   Branch `release/Rnnn` erstellen.
-4. Den neuen Release-Branch nach den vorgegebenen Schutzregeln einrichten.
-5. Einen Feature-Branch der neuen Releaselinie aus `main` erstellen.
-6. In `.github/config.json` ausschließlich das Feld `releaselinie` auf die
+2. In der M/Text Workbench das Mandanten-Repository und `main` auswählen.
+3. Prüfen, dass keine lokalen Änderungen und keine Git-Operation offen sind.
+4. `main` mit dem GitHub-Stand aktualisieren.
+5. Kontrollieren, dass dieser Stand in Abnahme geprüft wurde und die bisherige
+   Releaselinie abschließt.
+
+Falls die bisherige Releaselinie weiter gepflegt wird:
+
+1. In der Git-Ansicht `release/Rnnn` auf Basis von `main` erstellen und
+   auschecken.
+2. `release/Rnnn` nach GitHub pushen.
+3. In GitHub kontrollieren, dass `release/Rnnn` und `main` auf denselben Commit
+   zeigen.
+4. Den automatisch gestarteten Synchronisationslauf kontrollieren.
+5. In GitHub kontrollieren, dass Änderungen an `release/Rnnn` einen Pull Request
+   und das Vier-Augenprinzip erfordern und Force-Push gesperrt ist.
+6. In der M/Text Workbench wieder `main` auswählen.
+
+Beim Erstellen des Release-Branches entsteht kein neuer Commit. Der neue Branch
+und `main` bezeichnen zunächst denselben Stand.
+
+### Releaselinie wechseln
+
+1. Einen Feature-Branch der neuen Releaselinie auf Basis von `main` erstellen.
+2. In `.github/config.json` ausschließlich das Feld `releaselinie` auf die
    neue führende Linie setzen, die Änderung committen und pushen.
-7. Prüfen, dass **Validate mandant configuration** erfolgreich war.
-8. Einen Pull Request auf `main` erstellen, prüfen und mit Squash Merge
+3. Prüfen, dass **Validate mandant configuration** und der Entwicklungslauf
+   erfolgreich waren.
+4. Einen Pull Request auf `main` erstellen, prüfen und mit Squash Merge
    zusammenführen.
-9. Den automatisch gestarteten Synchronisationslauf kontrollieren. Der
+5. Den automatisch gestarteten Synchronisationslauf kontrollieren. Der
    Squash-Commit wird vollständig nach Entwicklung und Abnahme übertragen.
-10. Den Stand in Entwicklung und Abnahme kontrollieren.
-11. Neue Feature-Branches für die neue führende Linie aus `main` erstellen.
+6. Den Stand in Entwicklung und Abnahme kontrollieren.
+7. Neue Feature-Branches für die neue führende Linie auf Basis von `main`
+   erstellen.
 
 Scheitert die Übertragung in die Abnahme, nachdem Entwicklung bereits
 erfolgreich war, bleibt der Stand in Entwicklung bestehen. Der fehlgeschlagene
@@ -475,7 +503,7 @@ bleibt der Default Branch.
 | Pull Request wurde bereits zusammengeführt | Einen neuen Feature-Branch anlegen und den Fehler über einen neuen Pull Request korrigieren. |
 | Änderung wird auf einer weiteren Releaselinie nicht benötigt | Den dortigen Feature-Branch oder Pull Request nicht weiterführen. Eine bereits erfolgte Übernahme über einen neuen korrigierenden Commit zurücknehmen. |
 | Release-Tag wurde lokal, aber noch nicht nach GitHub gepusht | Den lokalen Tag korrigieren und Tagnamen sowie Commit-SHA erneut prüfen. |
-| Release-Tag wurde irrtümlich nach GitHub gepusht | Einen laufenden Release-Lauf nach Möglichkeit abbrechen. Den Tag nicht selbst löschen oder verschieben, Tagname und Commit-SHA festhalten und den Fehler den Repository-Verantwortlichen melden. |
+| Release-Tag wurde irrtümlich in GitHub angelegt | Einen laufenden Release-Lauf nach Möglichkeit abbrechen. Den Tag nicht selbst löschen oder verschieben, Tagname und Commit-SHA festhalten und den Fehler den Repository-Verantwortlichen melden. |
 
 Force-Pushes auf geschützte Branches sind nicht zulässig.
 

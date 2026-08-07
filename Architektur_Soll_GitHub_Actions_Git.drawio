@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2026-08-05T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+<mxfile host="app.diagrams.net" modified="2026-08-07T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
   <diagram id="soll-github-actions" name="Soll-Ablauf GitHub Actions Git">
     <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1350" math="0" shadow="0">
       <root>
@@ -44,7 +44,10 @@
           <mxGeometry x="1595" y="183" width="330" height="140" as="geometry"/>
         </mxCell>
         <mxCell id="config-source" value="&lt;b&gt;.github/config.json&lt;/b&gt;&lt;br&gt;Änderung auf einem Branch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
-          <mxGeometry x="300" y="340" width="420" height="60" as="geometry"/>
+          <mxGeometry x="300" y="340" width="173" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="config-caller" value="&lt;b&gt;validate-config.yml&lt;/b&gt;&lt;br&gt;&lt;br&gt;Push-Trigger&lt;br&gt;Änderung an .github/config.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
+          <mxGeometry x="535" y="332" width="185" height="76" as="geometry"/>
         </mxCell>
         <mxCell id="config-validate" value="&lt;b&gt;reusable-validate-config.yml&lt;/b&gt;&lt;br&gt;frühes Feedback ohne Zielzugriff" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="795" y="340" width="285" height="60" as="geometry"/>
@@ -74,13 +77,16 @@
         <mxCell id="release-change-title" value="&lt;b&gt;Sonderpfad Releaselinienwechsel&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=12;fontColor=#666666" vertex="1" parent="1">
           <mxGeometry x="35" y="645" width="230" height="25" as="geometry"/>
         </mxCell>
-        <mxCell id="release-change-old-branch" value="Bei weiterer Pflege&lt;br&gt;&lt;b&gt;release/Rnnn&lt;/b&gt;&lt;br&gt;aus bisherigem Stand" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
-          <mxGeometry x="40" y="680" width="195" height="65" as="geometry"/>
+        <mxCell id="release-change-old-branch" value="&lt;b&gt;M/Text Workbench&lt;/b&gt;&lt;br&gt;&lt;b&gt;feature/Rnnn/releaselinienwechsel&lt;/b&gt;&lt;br&gt;releaselinie in .github/config.json ändern&lt;br&gt;&lt;br&gt;&lt;b&gt;release/Rnnn&lt;/b&gt;&lt;br&gt;aus main bei Bedarf anlegen / pushen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontFamily=Arial;fontSize=9;spacing=3" vertex="1" parent="1">
+          <mxGeometry x="35" y="675" width="220" height="80" as="geometry"/>
         </mxCell>
         <mxCell id="release-change-config" value="Eigener Pull Request nach &lt;b&gt;main&lt;/b&gt;&lt;br&gt;nur &lt;b&gt;.github/config.json: releaselinie&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#6c8ebf;dashed=1;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
-          <mxGeometry x="300" y="680" width="420" height="65" as="geometry"/>
+          <mxGeometry x="300" y="680" width="173" height="65" as="geometry"/>
         </mxCell>
-        <mxCell id="release-change-detect" value="&lt;b&gt;main-Push prüfen&lt;/b&gt;&lt;br&gt;bisherige und neue&lt;br&gt;Releaselinie vergleichen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
+        <mxCell id="release-change-main" value="&lt;b&gt;main&lt;/b&gt;&lt;br&gt;&lt;br&gt;Squash-Commit mit geänderter&lt;br&gt;releaselinie" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#6c8ebf;dashed=1;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
+          <mxGeometry x="535" y="680" width="185" height="65" as="geometry"/>
+        </mxCell>
+        <mxCell id="release-change-detect" value="&lt;b&gt;Releaselinienwechsel prüfen&lt;/b&gt;&lt;br&gt;bisherige und neue&lt;br&gt;Releaselinie vergleichen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;dashed=1;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
           <mxGeometry x="795" y="680" width="285" height="65" as="geometry"/>
         </mxCell>
         <mxCell id="release-change-full" value="&lt;b&gt;Vollstand&lt;/b&gt;&lt;br&gt;der neuen Releaselinie" style="shape=internalStorage;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
@@ -142,32 +148,34 @@
         <mxCell id="stage-maintenance" value="4. Workflow-Aktualisierung (betrieblicher Nebenablauf)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=16;fontStyle=1;fontColor=#666666" vertex="1" parent="1">
           <mxGeometry x="35" y="1095" width="520" height="30" as="geometry"/>
         </mxCell>
-        <mxCell id="maintenance-review" value="&lt;b&gt;Repository-Verantwortliche&lt;/b&gt;&lt;br&gt;&lt;br&gt;Review&lt;br&gt;Squash Merge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
+        <mxCell id="maintenance-no-mandant-step" value="&lt;b&gt;Mandanten&lt;/b&gt;&lt;br&gt;&lt;br&gt;kein Bedien- oder Prüfschritt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#b3b3b3;dashed=1;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="40" y="1160" width="195" height="100" as="geometry"/>
         </mxCell>
-        <mxCell id="maintenance-pr" value="&lt;b&gt;Technischer Branch und Pull Request&lt;/b&gt;&lt;br&gt;&lt;br&gt;je &lt;b&gt;main&lt;/b&gt; und vorhandenem &lt;b&gt;release/Rnnn&lt;/b&gt;&lt;br&gt;Änderung unter .github/workflows" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
+        <mxCell id="maintenance-target" value="&lt;b&gt;Geschützter Mandantenbranch&lt;/b&gt;&lt;br&gt;&lt;br&gt;&lt;b&gt;main&lt;/b&gt; und vorhandene &lt;b&gt;release/Rnnn&lt;/b&gt;&lt;br&gt;administrativer Rollout-Commit unter .github/workflows&lt;br&gt;keine M/Text-Synchronisation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="300" y="1150" width="420" height="120" as="geometry"/>
         </mxCell>
-        <mxCell id="maintenance-workflow" value="&lt;b&gt;update-mandant-workflows.yml&lt;/b&gt;&lt;br&gt;&lt;br&gt;manueller Start mit gewünschter SHA&lt;br&gt;Mandanten und Zielbranches prüfen&lt;br&gt;Pull Requests vorbereiten" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
+        <mxCell id="maintenance-workflow" value="&lt;b&gt;update-mandant-workflows.yml&lt;/b&gt;&lt;br&gt;&lt;br&gt;administrativer Start mit gewünschter SHA&lt;br&gt;Mandanten und Zielbranches prüfen&lt;br&gt;Workflow-Version direkt aktualisieren" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="795" y="1150" width="400" height="120" as="geometry"/>
         </mxCell>
 
         <mxCell id="e-dev-1" value="Push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="dev-user" target="dev-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-dev-2" value="Push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="dev-branch" target="dev-caller"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-dev-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="dev-branch" target="dev-caller"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-dev-3" value="workflow_call" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="dev-caller" target="dev-sync"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-dev-4" value="direkt aus Commit" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="dev-sync" target="dev-target"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-config" value="Push-Check" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="config-source" target="config-validate"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-config" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="config-source" target="config-caller"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-config-call" value="workflow_call" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="config-caller" target="config-validate"><mxGeometry relative="1" as="geometry"/></mxCell>
 
         <mxCell id="e-stage-1" value="Test erfolgreich" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=0.5;exitY=1;entryX=0.5;entryY=0" edge="1" parent="1" source="dev-target" target="acc-user">
           <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1760" y="485"/><mxPoint x="138" y="485"/></Array></mxGeometry>
         </mxCell>
         <mxCell id="e-acc-1" value="Squash Merge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="acc-user" target="acc-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-acc-2" value="Push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="acc-branch" target="acc-caller"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-acc-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="acc-branch" target="acc-caller"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-acc-3" value="workflow_call" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="acc-caller" target="acc-sync"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-acc-4" value="direkt aus Commit" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="acc-sync" target="acc-target"><mxGeometry relative="1" as="geometry"/></mxCell>
 
-        <mxCell id="e-release-change-1" value="falls benötigt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="release-change-old-branch" target="release-change-config"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-release-change-2" value="Squash Merge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="release-change-config" target="release-change-detect"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-release-change-1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="release-change-old-branch" target="release-change-config"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-release-change-2" value="Squash Merge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="release-change-config" target="release-change-main"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-release-change-main-push" value="Push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="release-change-main" target="release-change-detect"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-release-change-3" value="Wechsel erkannt" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="release-change-detect" target="release-change-full"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-release-change-4" value="nacheinander" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="release-change-full" target="release-change-targets"><mxGeometry relative="1" as="geometry"/></mxCell>
 
@@ -188,8 +196,7 @@
         </mxCell>
         <mxCell id="e-report-release" value="bereitstellen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=0;exitY=0.5;entryX=1;entryY=0.5" edge="1" parent="1" source="delivery-report-job" target="github-release"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-release-check" value="prüfen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=0;exitY=0.5;entryX=1;entryY=0.5" edge="1" parent="1" source="github-release" target="release-check"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-maintenance-pr" value="PR erstellen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=0;exitY=0.5;entryX=1;entryY=0.5" edge="1" parent="1" source="maintenance-workflow" target="maintenance-pr"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-maintenance-review" value="Review" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=0;exitY=0.5;entryX=1;entryY=0.5" edge="1" parent="1" source="maintenance-pr" target="maintenance-review"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-maintenance-update" value="direkt aktualisieren" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=0;exitY=0.5;entryX=1;entryY=0.5" edge="1" parent="1" source="maintenance-workflow" target="maintenance-target"><mxGeometry relative="1" as="geometry"/></mxCell>
       </root>
     </mxGraphModel>
   </diagram>

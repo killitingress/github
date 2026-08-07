@@ -451,7 +451,7 @@ mtext-actions/
 
 | Prozessschritt | Auslöser | Trigger-Workflow | Zentraler Workflow | Python-Skript | Ergebnis |
 |---|---|---|---|---|---|
-| Trigger-Workflows aktualisieren | Manueller Start in `mtext_actions` mit der gewünschten Commit-SHA | keiner | `update-mandant-workflows.yml` | `workflow_configuration.py` | Pull Requests mit der neuen `mtext_actions`-Version erstellt |
+| Trigger-Workflows aktualisieren | Manueller Start in `mtext_actions` mit der gewünschten Commit-SHA | keiner | `update-mandant-workflows.yml` | `workflow_configuration.py` | Geschützte Mandantenbranches verwenden die neue `mtext_actions`-Version |
 | Mandantenkonfiguration prüfen | Push mit einer Änderung an `.github/config.json` | `validate-config.yml` | `reusable-validate-config.yml` | `validate_config.py` | Konfiguration geprüft |
 | Entwicklung synchronisieren | Push auf `feature/Rnnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync_resources.py` | Projekte aus dem Commit nach M/Text-Entwicklung übertragen |
 | Abnahme synchronisieren | Push oder Merge auf `main` oder `release/Rnnn` sowie manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync_resources.py` | Projekte aus dem Commit nach M/Text-Abnahme übertragen |
@@ -495,14 +495,17 @@ GitHub Release des Mandanten-Repositories angezeigt.
 ### Aktualisierung der Trigger-Workflows
 
 Wenn die Mandanten-Repositories eine neue Version von `mtext_actions`
-verwenden sollen, wird `update-mandant-workflows.yml` manuell gestartet. Der
-Workflow trägt die gewünschte Version in die vorhandenen Trigger-Workflows
-ein und erstellt dafür Pull Requests.
+verwenden sollen, starten die zuständigen Admins
+`update-mandant-workflows.yml` manuell. Der Workflow trägt die gewünschte
+Version in die vorhandenen Trigger-Workflows ein und schreibt für jeden
+Zielbranch einen administrativen Rollout-Commit.
 
 Die Workflowdateien gehören zu den Branches der Mandanten-Repositories. Daher
-erstellt der Workflow für `main` und für jeden vorhandenen Release-Branch einen
-eigenen Pull Request. Die neue Version wird erst verwendet, nachdem der
-jeweilige Pull Request geprüft und zusammengeführt wurde.
+aktualisiert der Workflow `main` und jeden vorhandenen Release-Branch getrennt.
+Der technische Rollout-Zugriff darf dafür die Pull-Request-Pflicht der
+geschützten Zielbranches umgehen. Fachliche Änderungen verwenden weiterhin den
+Pull-Request-Ablauf. Reine Änderungen unter `.github/workflows` lösen keine
+M/Text-Synchronisation aus.
 
 ### Status und Fehlercodes
 
@@ -579,11 +582,11 @@ Das Feld `stage` eines Hostprofils enthält eine der CodePipeline-Stages `FKTE`,
 
 | Gegenstand | Regel |
 |---|---|
-| `main` | Geschützt, keine Löschung oder Umbenennung, Änderung über Pull Request im Vier-Augenprinzip |
-| `release/Rnnn` | Geschützt, Änderung über Pull Request im Vier-Augenprinzip, Erstellung aus geschütztem Branch oder Release-Tag |
+| `main` | Geschützt, keine Löschung oder Umbenennung, fachliche Änderung über Pull Request im Vier-Augenprinzip |
+| `release/Rnnn` | Geschützt, fachliche Änderung über Pull Request im Vier-Augenprinzip, Erstellung aus geschütztem Branch oder Release-Tag |
 | `feature/Rnnn/<Bezeichnung>` | Keine zusätzliche Schutzregel |
 | Release-Tags `v{Release-Version}` | Organisationsweit geschützte Tags nach dem Leitfaden |
-| Workflowdateien und Mandantenkonfiguration | Änderung über Pull Request und Review |
+| Workflowdateien und Mandantenkonfiguration | Mandantenkonfiguration und reguläre Workflowänderungen über Pull Request und Review. Freigegebene CI/CD-Versionen werden über den administrativen Rollout aktualisiert. |
 | GitHub Release | Der zentrale Workflow darf zum vorhandenen Tag ein GitHub Release im auslösenden Mandanten-Repository erstellen und die Informationsdateien anhängen |
 | Mainframe-Zugang | Repositoryvariablen und Repository-Secret in `mtext_actions` |
 
@@ -596,10 +599,12 @@ die Workflows die festgelegte CI/CD-Version und starten bei einem Release den
 zentralen Workflow.
 
 Für den Zugriff in Gegenrichtung liegt `WORKFLOW_CONFIGURATION_TOKEN` in
-`mtext_actions`. Es gilt für die zugeordneten Mandanten-Repositories und darf
-dort Inhalte sowie Pull Requests schreiben. Damit erstellt es sowohl die
-Aktualisierungs-Pull-Requests als auch die GitHub Releases mit den
-Lieferinformationen.
+`mtext_actions`. Es gilt für die zugeordneten Mandanten-Repositories und besitzt
+dort `Contents: read and write` sowie `Workflows: read and write`. Der
+technische Benutzer ist in den Schutzregeln als Ausnahme von der
+Pull-Request-Pflicht für den administrativen Workflow-Rollout hinterlegt. Das
+Token aktualisiert damit die Trigger-Workflows und erstellt die GitHub Releases
+mit den Lieferinformationen.
 
 ## 9. Mögliche Phase 2
 

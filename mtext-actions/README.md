@@ -46,11 +46,13 @@ In `mtext_actions` werden eingerichtet:
 | `MAINFRAME_FTP_HOST` | Repositoryvariable | FTP-Ziel |
 | `MAINFRAME_FTP_USER` | Repositoryvariable | zentraler technischer FTP-Benutzer |
 | `MAINFRAME_FTP_PASSWORD` | Repository-Secret | FTP-Passwort für den zentralen Übergabejob |
-| `WORKFLOW_CONFIGURATION_TOKEN` | Repository-Secret | Mandantenstände lesen, Aktualisierungsbranches und Pull Requests erstellen sowie Lieferinformationen veröffentlichen |
+| `WORKFLOW_CONFIGURATION_TOKEN` | Repository-Secret | Mandanten-Workflows administrativ ausrollen und Lieferinformationen veröffentlichen |
 
 `WORKFLOW_CONFIGURATION_TOKEN` gilt für die zugeordneten
 Mandanten-Repositories. Es benötigt dort `Contents: read and write` und
-`Pull requests: read and write`.
+`Workflows: read and write`. Der technische Benutzer ist in den Schutzregeln
+als Ausnahme von der Pull-Request-Pflicht für den administrativen Rollout
+hinterlegt.
 
 Jedes Mandanten-Repository erhält `MTEXT_ACTIONS_TOKEN` als Repository-Secret.
 Der Fine-grained PAT ist auf
@@ -63,22 +65,23 @@ GitHub Environments werden nicht verwendet.
 
 Der manuell gestartete Workflow **Update mandant workflows** erhält die
 vollständige Commit-SHA der gewünschten CI/CD-Version von `mtext_actions`. Er
-prüft, dass alle Runnerkennzeichen
+wird von den zuständigen Admins gestartet, prüft, dass alle Runnerkennzeichen
 festgelegt sind, und verarbeitet für jeden Mandanten:
 
 - `main`,
 - vorhandene `release/Rnnn`-Branches der aktiven Releaselinien.
 
 Der Lauf trägt diese Commit-SHA in den bestehenden Mandanten-Workflows ein und
-erstellt einen technischen Branch mit Pull Request. Er pusht nicht direkt auf
-einen geschützten Branch. Nicht vorhandene Release-Branches werden
-übersprungen. Feature-Branches sind keine Rollout-Ziele.
+pusht den Rollout-Commit direkt auf den jeweiligen Zielbranch. Nicht vorhandene
+Release-Branches werden übersprungen. Feature-Branches sind keine
+Rollout-Ziele. Der Rollout enthält ausschließlich Änderungen unter
+`.github/workflows` und startet keine M/Text-Synchronisation.
 
 ## Automatische Prüfung
 
-Jeder Pull Request startet den GitHub-Workflow **Central tests**. Er führt die
-Python-Tests auf dem dafür vorgesehenen Runner aus, ohne M/Text oder den
-Mainframe anzusprechen. Vor dem Zusammenführen muss der Testjob
+Jeder Pull Request in `mtext_actions` startet den GitHub-Workflow **Central
+tests**. Er führt die Python-Tests auf dem dafür vorgesehenen Runner aus, ohne
+M/Text oder den Mainframe anzusprechen. Vor dem Zusammenführen muss der Testjob
 **Test central CI/CD implementation** erfolgreich abgeschlossen sein.
 
 Die Anwendung benötigt Python ab Version 3.11 und verwendet für ihre

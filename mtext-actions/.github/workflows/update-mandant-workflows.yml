@@ -1,8 +1,8 @@
 name: Update mandant workflows
 
-# Dieser manuell gestartete Batch bereitet für main und bestehende
-# Release-Branches Pull Requests mit der freigegebenen CI/CD-Version vor.
-# Geschützte Zielbranches werden nicht direkt beschrieben.
+# Dieser manuell gestartete administrative Batch aktualisiert main und
+# bestehende Release-Branches auf die freigegebene CI/CD-Version. Der technische
+# Rollout-Zugriff darf dafür die Pull-Request-Pflicht der Zielbranches umgehen.
 'on':
   workflow_dispatch:
     inputs:
@@ -29,7 +29,7 @@ jobs:
       rollout_sha: ${{ steps.rollout.outputs.rollout_sha }}
       update_matrix: ${{ steps.rollout.outputs.update_matrix }}
     steps:
-      # Die CI/CD-Version wurde zuvor über einen Pull Request geprüft. Der Batch
+      # Die CI/CD-Version wurde zuvor im zentralen Repository geprüft. Der Batch
       # lädt genau diese SHA und erzeugt keinen zentralen Bootstrap-Commit.
       - name: Check out approved CI/CD version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -70,8 +70,8 @@ jobs:
     runs-on: ${{ vars.FI_RUNNER_LABEL }}
     timeout-minutes: 15
     strategy:
-      # Ein Mandantenfehler verhindert nicht die Vorbereitung der übrigen Pull
-      # Requests. Schreibzugriffe bleiben trotzdem je Zielbranch getrennt.
+      # Ein Fehler bei einem Matrixeintrag verhindert nicht die administrativen
+      # Rollouts der übrigen Zielbranches. Schreibzugriffe bleiben je Branch getrennt.
       fail-fast: false
       max-parallel: 7
       matrix: ${{ fromJSON(needs.prepare.outputs.update_matrix) }}
@@ -142,42 +142,17 @@ jobs:
           --mandant-root mandant
           --rollout-sha "$ROLLOUT_SHA"
 
-      # Jeder Ausgangsstand erhält einen eindeutigen technischen Branch. Der
-      # Batch benötigt dadurch keinen Force-Push und kann bestehende PRs erkennen.
-      - name: Push update branch
+      # Der Rollout-Commit ist ein direkter Nachfolger des zuvor gelesenen
+      # Zielstands. Ein paralleler Branchfortschritt lässt den Push ohne
+      # Force-Push fehlschlagen und muss durch einen neuen Lauf verarbeitet werden.
+      - name: Update protected mandant branch
         if: steps.target.outputs.exists == 'true'
-        id: pushed
         env:
           MANDANT_BRANCH: ${{ matrix.branch }}
-          ROLLOUT_SHA: ${{ needs.prepare.outputs.rollout_sha }}
           TARGET_SHA: ${{ steps.before.outputs.sha }}
         run: |
           updated_sha="$(git -C mandant rev-parse HEAD)"
           if [[ "$updated_sha" == "$TARGET_SHA" ]]; then
-            printf 'changed=false\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          branch_slug="${MANDANT_BRANCH//\//-}"
-          update_branch="mtext_actions/workflow-${branch_slug}-${ROLLOUT_SHA:0:12}-${TARGET_SHA:0:12}"
-          git -C mandant push origin "HEAD:refs/heads/$update_branch"
-          printf 'changed=true\n' >> "$GITHUB_OUTPUT"
-          printf 'branch=%s\n' "$update_branch" >> "$GITHUB_OUTPUT"
-
-      # Der Pull Request unterliegt denselben Reviews und Schutzregeln wie eine
-      # fachliche Änderung. Ein HTTP 422 ist bei einem bereits vorhandenen PR
-      # derselben technischen Branchkombination ein erfolgreicher Wiederanlauf.
-      - name: Open update pull request
-        if: steps.pushed.outputs.changed == 'true'
-        env:
-          GITHUB_API_URL: ${{ github.api_url }}
-          TARGET_REPOSITORY: ${{ matrix.repository }}
-          TARGET_BRANCH: ${{ matrix.branch }}
-          UPDATE_BRANCH: ${{ steps.pushed.outputs.branch }}
-          WORKFLOW_CONFIGURATION_TOKEN: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
-        run: >-
-          "${{ steps.runtime.outputs.python }}" automation/src/workflow_configuration.py
-          open-update-pull-request
-          --api-url "$GITHUB_API_URL"
-          --repository "$TARGET_REPOSITORY"
-          --target-branch "$TARGET_BRANCH"
-          --update-branch "$UPDATE_BRANCH"
+          git -C mandant push origin "HEAD:refs/heads/$MANDANT_BRANCH"

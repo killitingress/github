@@ -1,13 +1,12 @@
 """Bereitet den Rollout freigegebener CI/CD-Versionen in Mandanten-Repositories vor.
 
-Das Werkzeug wird vom Batch-Workflow `update-mandant-workflows` in fünf Schritten
+Das Werkzeug wird vom Batch-Workflow `update-mandant-workflows` in vier Schritten
 aufgerufen:
 
-- `verify-automation` prüft die bereits per Pull Request freigegebene Rollout-SHA.
+- `verify-automation` prüft die im zentralen Repository freigegebene Rollout-SHA.
 - `update-matrix` erzeugt die Rollout-Matrix für geschützte Mandantenbranches.
 - `check-target-branch` prüft, ob ein Matrixeintrag verarbeitet werden kann.
 - `prepare-mandant` bindet einen Mandantenbranch an die Rollout-SHA.
-- `open-update-pull-request` eröffnet den zugehörigen Pull Request.
 """
 
 from __future__ import annotations
@@ -82,28 +81,21 @@ def _github_request(
     api_url: str,
     path: str,
     token: str,
-    *,
-    method: str = "GET",
-    payload: dict[str, str] | None = None,
 ) -> tuple[int, dict[str, object] | list[object]]:
     """Ruft die GitHub-API ohne Shell auf und begrenzt ihre JSON-Antwort.
 
-    HTTP-Fehler werden als reguläre Statusantworten zurückgegeben, damit die
-    fachlichen Aufrufer erwartete 404- und 422-Fälle gezielt behandeln können.
-    Transportfehler und ungültige Antworten beenden dagegen den Rollout.
+    HTTP-Fehler werden als reguläre Statusantworten zurückgegeben, damit ein
+    fehlender Release-Branch gezielt behandelt werden kann. Transportfehler und
+    ungültige Antworten beenden dagegen den Rollout.
     """
 
-    body = json.dumps(payload, separators=(",", ":")).encode("utf-8") if payload is not None else None
     request = urllib.request.Request(
         f"{api_url.rstrip('/')}/{path.lstrip('/')}",
-        data=body,
         headers={
             "Accept": "application/vnd.github+json",
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
             "X-GitHub-Api-Version": "2022-11-28",
         },
-        method=method,
     )
     try:
         with urllib.request.urlopen(request, timeout=GITHUB_TIMEOUT) as response:
@@ -144,53 +136,6 @@ def check_target_branch(api_url: str, repository: str, branch: str, token: str) 
     if status == 404 and branch != "main":
         return False
     raise RuntimeError(f"Zielbranchprüfung ist mit HTTP {status} fehlgeschlagen")
-
-
-def open_update_pull_request(
-    api_url: str,
-    repository: str,
-    target_branch: str,
-    update_branch: str,
-    token: str,
-) -> None:
-    """Eröffnet den Pull Request für einen vorbereiteten Workflow-Branch.
-
-    Ein bereits vorhandener Pull Request derselben Branchkombination gilt als
-    erfolgreicher Wiederanlauf. Andere Validierungsantworten werden abgelehnt.
-    """
-
-    repository_path = urllib.parse.quote(repository, safe="/")
-    status, _ = _github_request(
-        api_url,
-        f"repos/{repository_path}/pulls",
-        token,
-        method="POST",
-        payload={
-            "title": "Freigegebene CI/CD-Version aktualisieren",
-            "head": update_branch,
-            "base": target_branch,
-            "body": "Aktualisiert die Mandanten-Workflows auf den freigegebenen Stand von mtext_actions.",
-        },
-    )
-    if status == 201:
-        return
-    if status == 422:
-        owner = repository.partition("/")[0]
-        query = urllib.parse.urlencode(
-            {
-                "state": "open",
-                "head": f"{owner}:{update_branch}",
-                "base": target_branch,
-            }
-        )
-        lookup_status, existing = _github_request(
-            api_url,
-            f"repos/{repository_path}/pulls?{query}",
-            token,
-        )
-        if lookup_status == 200 and isinstance(existing, list) and existing:
-            return
-    raise RuntimeError(f"Pull Request konnte nicht erstellt werden: HTTP {status}")
 
 
 def _mandant_changes(
@@ -317,7 +262,7 @@ def build_update_matrix(mandanten_path: Path, releaselinien_path: Path) -> dict[
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Definiert die fünf Kommandos des Workflow-Aktualisierungsprozesses.
+    """Definiert die vier Kommandos des Workflow-Aktualisierungsprozesses.
 
     Jedes Unterkommando entspricht der Grenze eines Workflow-Jobs und nimmt die
     von diesem Job benötigten Werte entgegen.
@@ -352,19 +297,11 @@ def build_parser() -> argparse.ArgumentParser:
     branch.add_argument("--repository", required=True)
     branch.add_argument("--branch", required=True)
 
-    pull_request = commands.add_parser(
-        "open-update-pull-request",
-        help="Pull Request für einen vorbereiteten Workflow-Branch eröffnen",
-    )
-    pull_request.add_argument("--api-url", required=True)
-    pull_request.add_argument("--repository", required=True)
-    pull_request.add_argument("--target-branch", required=True)
-    pull_request.add_argument("--update-branch", required=True)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Führt eines der fünf Rollout-Kommandos aus und gibt kompaktes JSON aus.
+    """Führt eines der vier Rollout-Kommandos aus und gibt kompaktes JSON aus.
 
     `verify-automation` und `update-matrix` laufen im zentralen Vorbereitungsjob.
     `prepare-mandant` läuft einmal pro Matrixeintrag im Mandanten-Updatejob.
@@ -375,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
     # Rollout-Kommando ausführen.
     try:
         if arguments.command == "verify-automation":
-            # Bereits per Pull Request freigegebenen zentralen Commit prüfen.
+            # Im zentralen Repository freigegebenen Commit prüfen.
             result = {"rollout_sha": verify_automation(AUTOMATION_ROOT, arguments.automation_sha)}
         elif arguments.command == "prepare-mandant":
             # Einen Mandantenbranch an Workflow- und Codereferenzen der Rollout-SHA binden.
@@ -393,16 +330,6 @@ def main(argv: list[str] | None = None) -> int:
                 arguments.branch,
                 os.environ["WORKFLOW_CONFIGURATION_TOKEN"],
             )
-        elif arguments.command == "open-update-pull-request":
-            # Pull Request für den vorbereiteten technischen Branch eröffnen.
-            open_update_pull_request(
-                arguments.api_url,
-                arguments.repository,
-                arguments.target_branch,
-                arguments.update_branch,
-                os.environ["WORKFLOW_CONFIGURATION_TOKEN"],
-            )
-            result = {"pull_request": "erstellt oder bereits vorhanden"}
         else:
             raise AssertionError(f"unbekanntes Kommando: {arguments.command}")
     except (DeliveryError, KeyError, OSError, RuntimeError, ValueError) as error:
