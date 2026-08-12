@@ -21,6 +21,21 @@ Ein Push mit einer Änderung an `.github/config.json` startet die zentrale
 Konfigurationsprüfung. Der Lauf überträgt keine Ressourcen und liest keine
 Mainframe-Secrets.
 
+## `check-resources.yml`
+
+Jeder Pull Request startet die zentrale technische Prüfung seiner
+hinzugefügten, geänderten und umbenannten Ressourcen. Welche Dateiendungen als
+JSON oder XML gelesen werden, legt `config/ressourcenformate.json` in
+`mtext_actions` fest. Über **Run workflow** kann für den gewählten Branch eine
+Vollprüfung gestartet werden.
+
+Ungültige JSON-Syntax und nicht wohlgeformtes XML erscheinen mit Datei und
+Fundstelle als Warnungen. Diese Befunde lassen den Lauf erfolgreich enden und
+verhindern den Merge nicht.
+
+Eine spätere XSD-Prüfung der Tonic-XMLs benötigt zunächst das verbindliche XSD
+und seine Zuordnung zu den Ressourcen.
+
 ## `sync-resources.yml`
 
 Automatische Auslöser:
@@ -28,18 +43,20 @@ Automatische Auslöser:
 | Branch | Ziel |
 |---|---|
 | `feature/Rnnn/<Bezeichnung>` | M/Text-Entwicklung der Releaselinie |
-| `release/Rnnn` | M/Text-Abnahme der Releaselinie |
-| `main` | M/Text-Abnahme der in `.github/config.json` genannten Releaselinie |
+| `release/Rnnn` | M/Text-Funktionstest der Releaselinie |
+| `main` | M/Text-Funktionstest der in `.github/config.json` genannten Releaselinie |
 
 Der manuelle Start erhält eine vollständige Commit-SHA. Er gleicht den Commit
 vollständig mit dem Ziel des ausgewählten Branches ab. Feature-Branches führen
-nach Entwicklung, `main` und Release-Branches nach Abnahme. Die Releaselinie
-stammt aus dem ausgewählten Branch und bei `main` aus der Mandantenkonfiguration
-des Commits. Normale Läufe verwenden den zuletzt von LTOMA angenommenen Commit
-als Vergleichsstand und übertragen die geänderten Ressourcen.
+zum Ziel M/Text-Entwicklung, `main` und Release-Branches zum Ziel
+M/Text-Funktionstest. Die Releaselinie stammt aus dem ausgewählten Branch und
+bei `main` aus der Mandantenkonfiguration des Commits. Normale Läufe verwenden
+den zuletzt von LTOMA angenommenen Commit als Vergleichsstand und übertragen
+die geänderten Ressourcen.
 
 Ändert ein Push nach `main` die konfigurierte Releaselinie, wird dieser erste
-Stand automatisch vollständig nach Entwicklung und Abnahme synchronisiert.
+Stand automatisch vollständig mit M/Text-Entwicklung und M/Text-Funktionstest
+synchronisiert.
 
 ## `release.yml`
 

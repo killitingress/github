@@ -32,11 +32,12 @@ geprüft und mit Squash Merge zusammengeführt.
 2. Einen Feature-Branch der vorgesehenen Releaselinie erstellen.
 3. M/Text-Ressourcen bearbeiten und committen.
 4. Den Feature-Branch pushen.
-5. Den automatischen Entwicklungslauf und anschließend die Änderung in
+5. Den automatischen Synchronisationslauf und anschließend die Änderung in
    M/Text-Entwicklung prüfen.
 6. Einen Pull Request auf `main` oder `release/Rnnn` erstellen.
 7. Nach Review mit Squash Merge zusammenführen.
-8. Den automatischen Abnahmelauf und den Stand in M/Text-Abnahme prüfen.
+8. Den automatischen Synchronisationslauf und den Stand in
+   M/Text-Funktionstest prüfen.
 
 ## FULL oder DELTA auslösen
 

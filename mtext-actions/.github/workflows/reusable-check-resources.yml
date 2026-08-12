@@ -1,6 +1,6 @@
-name: Wiederverwendbare Prüfung der Mandantenkonfiguration
+name: Wiederverwendbare JSON- und XML-Prüfung
 
-# Dieser Workflow prüft die Mandantenkonfiguration gegen die zentralen Releaselinien
+# Dieser Workflow prüft die JSON- und XML-Ressourcen eines Mandanten-Commits
 'on':
   workflow_call:
     inputs:
@@ -10,6 +10,11 @@ name: Wiederverwendbare Prüfung der Mandantenkonfiguration
       automation_ref:
         required: true
         type: string
+      changed_only:
+        description: Prüft nur die durch den Pull Request eingebrachten Ressourcen
+        required: false
+        default: false
+        type: boolean
     secrets:
       automation_token:
         required: true
@@ -18,21 +23,23 @@ permissions:
   contents: read
 
 jobs:
-  validate:
-    name: Prüft Mandantenkonfiguration
+  check:
+    name: Prüft JSON- und XML-Ressourcen
     runs-on: [self-hosted, linux]
     timeout-minutes: 20
     steps:
       # Lädt den zu prüfenden Mandanten-Commit in den Arbeitsbereich
-      - name: Check-Out Mandanten-Repository
+      - name: Check-Out Mandanten-Commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           path: source
+          # Lädt den Commit mit seinem ersten Elternteil für die Änderungsprüfung
+          fetch-depth: 2
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
 
-      # Lädt die freigegebene CI/CD-Version mit der Prüfungslogik
-      - name: Check-Out CI/CD-Version
+      # Lädt die freigegebene Ressourcenprüfung in den Arbeitsbereich
+      - name: Check-Out Ressourcenprüfung
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
@@ -46,7 +53,12 @@ jobs:
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
-      # Prüft Struktur und fachliche Zuordnungen der .github/config.json
-      - name: Mandantenkonfiguration prüfen
+      # Prüft JSON-Syntax und XML-Wohlgeformtheit und gibt Befunde als Warnungen aus
+      - name: Ausführung Ressourcenprüfung
+        env:
+          CHANGED_ONLY: ${{ inputs.changed_only && '--changed-only' || '' }}
         run: >-
-          "${{ steps.runtime.outputs.python }}" automation/src/validate_config.py
+          "${{ steps.runtime.outputs.python }}" automation/src/check_resources.py
+          --root source
+          --formats automation/config/ressourcenformate.json
+          $CHANGED_ONLY

@@ -32,8 +32,8 @@ class GitHubReleaseTests(unittest.TestCase):
             trigger_sha=git(self.repository, "rev-parse", "HEAD"),
         )
 
-    def test_creates_release_with_summary_and_information_file(self) -> None:
-        """Prüft Neuanlage, lesbare Zusammenfassung und den einzelnen Download."""
+    def test_release_lifecycle(self) -> None:
+        """Prüft Anlage, Rückmeldung und wiederholbare Aktualisierung eines Releases."""
 
         calls: list[dict[str, object]] = []
 
@@ -74,9 +74,8 @@ class GitHubReleaseTests(unittest.TestCase):
         self.assertEqual(len(uploads), 1)
         self.assertIn("_INFO_FI-LOMS_Basis-DELTA", uploads[0]["url"])
 
-    def test_updates_existing_release_and_replaces_own_asset(self) -> None:
-        """Prüft die wiederholbare Aktualisierung eines vorhandenen Releases."""
-
+        # Der zweite Lauf aktualisiert das vorhandene Release und ersetzt dabei
+        # die eigene Informationsdatei, ohne fremde Assets zu verändern.
         calls: list[dict[str, object]] = []
 
         def request(**arguments: object) -> object:

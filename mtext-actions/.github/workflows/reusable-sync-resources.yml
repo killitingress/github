@@ -1,7 +1,6 @@
-name: Reusable M/Text resource sync
+name: Wiederverwendbare M/Text-Ressourcensynchronisierung
 
-# Dieser wiederverwendbare Workflow prüft und paketiert einen unveränderlichen
-# Mandanten-Commit und übergibt dessen Ressourcen synchron an die festgelegte M/Text-Stufe.
+# Dieser Workflow synchronisiert die Ressourcen eines Mandanten-Commits mit M/Text
 'on':
   workflow_call:
     inputs:
@@ -20,15 +19,12 @@ permissions:
 
 jobs:
   sync:
-    name: Sync exact commit to M/Text
-    # Das Platzhalter-Label wird durch das offizielle runs-on-Kennzeichen des
-    # von der FI bereitgestellten Runners ersetzt.
-    runs-on: FI_RUNNER_LABEL_TO_BE_SET
+    name: Synchronisiert Mandanten-Commit mit M/Text
+    runs-on: [self-hosted, linux]
     timeout-minutes: 30
     steps:
-      # Lädt den vollständig aufgelösten Mandanten-Commit einschließlich seiner
-      # Historie, damit Branch-Zugehörigkeit und Vorgängerstände geprüft werden können.
-      - name: Check out mandant repository
+      # Lädt den Mandanten-Commit mit seiner Historie in den Arbeitsbereich
+      - name: Check-Out Mandanten-Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
@@ -36,9 +32,8 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
 
-      # Lädt genau die vom Aufrufer freigegebene CI/CD-Version, ohne
-      # Zugangsdaten in der Git-Konfiguration zu speichern.
-      - name: Check out selected CI/CD version
+      # Lädt die freigegebene CI/CD-Version in den Arbeitsbereich
+      - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
@@ -47,16 +42,13 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.automation_token }}
 
-      # Prüft den von der FI bereitgestellten Runner und stellt den Pfad zur vorgegebenen
-      # Python-Laufzeit als Ausgabe für die Synchronisation bereit.
-      - name: Prepare approved Python runtime
+      # Prüft den Runner und stellt den Pfad zur Python-Laufzeit als Ausgabe bereit
+      - name: Python-Runtime ermitteln
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
-      # Validiert Mandantenkonfiguration, Branch und Commit. Manuelle Starts
-      # führen einen Vollabgleich mit dem branchabhängigen Ziel aus. Ändert ein
-      # main-Push die Releaselinie, werden Entwicklung und Abnahme initial versorgt.
-      - name: Publish to serverSync and call adapter
+      # Prüft den Mandantenstand und synchronisiert die Ressourcen mit der M/Text-Stufe
+      - name: Ressourcen synchronisieren
         env:
           INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}
           MTEXT_PREVIOUS_COMMIT: ${{ github.event.before || '' }}

@@ -1,8 +1,6 @@
-name: Reusable release
+name: Wiederverwendbares Release
 
-# Dieser wiederverwendbare Workflow erzeugt aus einem Release-Tag ein FULL- oder
-# DELTA-Artefakt, übergibt es an den Mainframe und veröffentlicht anschließend
-# die lesbare Rückmeldung im Mandanten-Repository.
+# Dieser Workflow erstellt und veröffentlicht ein FULL- oder DELTA-Artefakt
 'on':
   workflow_call:
     inputs:
@@ -38,19 +36,16 @@ permissions:
   contents: read
 
 jobs:
-  # Dieser Job besitzt keinen Zugriff auf Bereitstellungsdaten und erzeugt ausschließlich Release-Dateien.
+  # Erstellt die Release-Dateien ohne Zugriff auf die Mainframe-Zugangsdaten
   build:
-    name: Build FULL or DELTA artifact
-    # Das Platzhalter-Label wird durch das offizielle runs-on-Kennzeichen des
-    # von der FI bereitgestellten Runners ersetzt.
-    runs-on: FI_RUNNER_LABEL_TO_BE_SET
+    name: Erstellt FULL- oder DELTA-Artefakt
+    runs-on: [self-hosted, linux]
     timeout-minutes: 30
     outputs:
       artifact_name: ${{ steps.metadata.outputs.artifact_name }}
     steps:
-      # Lädt den durch den Release-Tag bezeichneten Mandanten-Commit mit seiner
-      # Historie, damit Tag, Vorgänger-Release und Änderungsumfang geprüft werden können.
-      - name: Check out tagged mandant commit
+      # Lädt den getaggten Mandanten-Commit mit seiner Historie in den Arbeitsbereich
+      - name: Check-Out getaggter Mandanten-Commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
@@ -60,9 +55,8 @@ jobs:
           ref: refs/tags/${{ inputs.release_tag }}
           token: ${{ secrets.source_token }}
 
-      # Lädt die festgelegte CI/CD-Version mit der Build-Logik und speichert
-      # keine GitHub-Zugangsdaten in der Git-Konfiguration.
-      - name: Check out selected CI/CD version
+      # Lädt die festgelegte CI/CD-Version mit der Build-Logik
+      - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
@@ -70,15 +64,13 @@ jobs:
           path: automation
           persist-credentials: false
 
-      # Prüft den von der FI bereitgestellten Runner und stellt den Pfad zur vorgegebenen
-      # Python-Laufzeit als Ausgabe für den Build bereit.
-      - name: Prepare approved Python runtime
+      # Prüft den Runner und stellt den Pfad zur Python-Laufzeit als Ausgabe bereit
+      - name: Python-Runtime ermitteln
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
-      # Prüft Tag und Mandantenkonfiguration, ermittelt FULL oder DELTA und
-      # erzeugt Release-Dateien, Manifest und Prüfsummen im Verzeichnis dist.
-      - name: Build release and manifest
+      # Erstellt Release-Dateien, Manifest und Prüfsummen im Verzeichnis dist
+      - name: Release und Manifest erstellen
         env:
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
           INPUT_TRIGGER_SHA: ${{ inputs.trigger_sha }}
@@ -88,9 +80,8 @@ jobs:
           --tag "$INPUT_RELEASE_TAG"
           --trigger-sha "$INPUT_TRIGGER_SHA"
 
-      # Bildet aus Repository und Release-Tag einen eindeutigen Artefaktnamen und
-      # stellt ihn dem Upload sowie dem nachfolgenden Veröffentlichungsjob bereit.
-      - name: Define artifact identity
+      # Bildet den Artefaktnamen aus Repository und Release-Tag
+      - name: Artefaktnamen ermitteln
         id: metadata
         env:
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
@@ -99,9 +90,8 @@ jobs:
           repository_short="${SOURCE_REPOSITORY##*/}"
           printf 'artifact_name=%s-%s\n' "$repository_short" "$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
-      # Speichert den vollständigen dist-Inhalt ohne zusätzliche Komprimierung
-      # als Laufartefakt; fehlende Build-Ausgaben lassen den Job fehlschlagen.
-      - name: Store release artifact
+      # Speichert den Inhalt von dist als Laufartefakt
+      - name: Release-Artefakt speichern
         uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de
         with:
           name: ${{ steps.metadata.outputs.artifact_name }}
@@ -110,21 +100,18 @@ jobs:
           retention-days: ${{ inputs.retention_days }}
           compression-level: 0
 
-  # Erst dieser Job erhält das zentrale FTP-Secret und darf externe Systeme ansprechen.
+  # Übergibt das Artefakt mit den zentralen Mainframe-Zugangsdaten
   publish:
-    name: Verify and hand over artifact to Mainframe
+    name: Prüft und übergibt Artefakt an Mainframe
     needs: build
-    # Auch der Publish-Job verwendet ausschließlich den zentral
-    # festgelegten Runner der FI und keine Auswahl des Mandanten-Workflows.
-    runs-on: FI_RUNNER_LABEL_TO_BE_SET
+    runs-on: [self-hosted, linux]
     concurrency:
       group: ${{ inputs.serialize_publication && format('mainframe-{0}', inputs.source_repository) || format('mainframe-{0}-{1}', inputs.source_repository, github.run_id) }}
       cancel-in-progress: false
     timeout-minutes: 30
     steps:
-      # Lädt die festgelegte CI/CD-Version mit Übergabelogik und JCL-Vorlage,
-      # ohne GitHub-Zugangsdaten in der Git-Konfiguration zu speichern.
-      - name: Check out selected CI/CD version
+      # Lädt die festgelegte CI/CD-Version mit Übergabelogik und JCL-Vorlage
+      - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
@@ -132,23 +119,20 @@ jobs:
           path: automation
           persist-credentials: false
 
-      # Lädt ausschließlich das vom Build-Job dieses Workflow-Laufs benannte
-      # Release-Artefakt in das lokale Verzeichnis dist.
-      - name: Download exact release artifact
+      # Lädt das erstellte Release-Artefakt in das Verzeichnis dist
+      - name: Release-Artefakt herunterladen
         uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
         with:
           name: ${{ needs.build.outputs.artifact_name }}
           path: dist
 
-      # Prüft den von der FI bereitgestellten Runner und stellt den Pfad zur vorgegebenen
-      # Python-Laufzeit als Ausgabe für die Mainframe-Übergabe bereit.
-      - name: Prepare approved Python runtime
+      # Prüft den Runner und stellt den Pfad zur Python-Laufzeit als Ausgabe bereit
+      - name: Python-Runtime ermitteln
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
-      # Validiert Manifest und Prüfsummen erneut, überträgt das Artefakt per FTP,
-      # rendert die JCL in einem temporären Verzeichnis und reicht sie bei JES ein.
-      - name: Verify artifact, render JCL and submit FTP/JES
+      # Prüft das Artefakt, überträgt es per FTP und reicht die JCL bei JES ein
+      - name: Artefakt an Mainframe übergeben
         env:
           MAINFRAME_FTP_HOST: ${{ vars.MAINFRAME_FTP_HOST }}
           MAINFRAME_FTP_PASSWORD: ${{ secrets.mainframe_ftp_password }}
@@ -156,17 +140,15 @@ jobs:
         run: >-
           "${{ steps.runtime.outputs.python }}" automation/src/publish_mainframe.py
 
-  # Die Rückmeldung beginnt erst nach der erfolgreichen Mainframe-Übergabe.
-  # Ein Fehler in diesem Job kann deshalb wiederholt werden, ohne erneut zu übertragen.
+  # Veröffentlicht die Rückmeldung nach erfolgreicher Mainframe-Übergabe
   report:
-    name: Publish delivery report in mandant repository
+    name: Veröffentlicht Bereitstellungsbericht im Mandanten-Repository
     needs: [build, publish]
-    runs-on: FI_RUNNER_LABEL_TO_BE_SET
+    runs-on: [self-hosted, linux]
     timeout-minutes: 15
     steps:
-      # Lädt die zum Release gehörende CI/CD-Version ohne gespeicherte
-      # Zugangsdaten. Das Mandanten-Token erhält erst der Veröffentlichungsschritt.
-      - name: Check out selected CI/CD version
+      # Lädt die zum Release gehörende CI/CD-Version
+      - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
@@ -174,21 +156,20 @@ jobs:
           path: automation
           persist-credentials: false
 
-      # Verwendet dasselbe geprüfte Artefakt wie die Mainframe-Übergabe.
-      - name: Download exact release artifact
+      # Lädt das an den Mainframe übergebene Release-Artefakt
+      - name: Release-Artefakt herunterladen
         uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
         with:
           name: ${{ needs.build.outputs.artifact_name }}
           path: dist
 
-      # Stellt die auf dem FI-Runner vorgegebene Python-Laufzeit bereit.
-      - name: Prepare approved Python runtime
+      # Prüft den Runner und stellt den Pfad zur Python-Laufzeit als Ausgabe bereit
+      - name: Python-Runtime ermitteln
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
-      # Legt das GitHub Release für den vorhandenen Tag an. Bei einer Wiederholung
-      # werden Beschreibung und gleichnamige Informationsdateien aktualisiert.
-      - name: Publish GitHub release and information files
+      # Veröffentlicht das GitHub Release und die Informationsdateien
+      - name: GitHub Release veröffentlichen
         env:
           MANDANT_REPOSITORY_TOKEN: ${{ secrets.source_token }}
           RELEASE_TAG: ${{ inputs.release_tag }}

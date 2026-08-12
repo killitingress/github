@@ -1,0 +1,10 @@
+{
+  "dateiendungen": {
+    ".conf": "xml",
+    ".datamodel": "xml",
+    ".formio": "json",
+    ".json": "json",
+    ".model": "xml",
+    ".xml": "xml"
+  }
+}

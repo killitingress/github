@@ -1,8 +1,6 @@
-name: Central release
+name: Zentrales Release
 
-# Dieser Workflow läuft in mtext_actions und besitzt deshalb Zugriff auf die
-# zentralen Mainframe-Zugangsdaten. Er wird vom geprüften Mandanten-Dispatch
-# automatisch gestartet.
+# Dieser Workflow startet nach einem geprüften Mandantenaufruf das zentrale Release
 'on':
   workflow_dispatch:
     inputs:
@@ -27,10 +25,9 @@ permissions:
   contents: read
 
 jobs:
-  # Der zentrale Aufruf reicht ausschließlich geprüfte Eingaben und die beiden
-  # benötigten Repository-Secrets an den Releasevertrag weiter.
+  # Übergibt die geprüften Eingaben und benötigten Secrets an den Releaseablauf
   release:
-    name: Build and publish central release
+    name: Erstellt und veröffentlicht zentrales Release
     uses: ./.github/workflows/reusable-release.yml
     with:
       source_repository: ${{ inputs.source_repository }}

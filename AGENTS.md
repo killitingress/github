@@ -85,6 +85,18 @@
   unmittelbar lesbaren Code nicht bloß wiederholen und dieselbe Regel nicht an
   mehreren direkt aufeinanderfolgenden Stellen erneut erzählen.
 
+## YAML-Workflows
+
+- Anzeigenamen von Workflows, Jobs und Schritten werden auf Deutsch formuliert.
+  Sie sind kurz und benennen die ausgeführte Handlung oder das Ergebnis.
+  Unveränderliche technische Namen externer Komponenten bleiben erhalten.
+- Kommentare beschreiben den tatsächlichen Ablauf kurz und handlungsbezogen.
+  Technische Nebendetails, die aus dem YAML unmittelbar hervorgehen oder für
+  das Verständnis des Ablaufs nicht benötigt werden, entfallen.
+- Notwendige Sicherheitsgrenzen und betriebliche Regeln bleiben in den
+  Kommentaren erhalten. Sie werden an der Stelle beschrieben, an der sie den
+  Ablauf bestimmen.
+
 ## Fachsprache und Namen
 
 - Für fachliche Begriffe sind die in Dokumentation und Betrieb verwendeten

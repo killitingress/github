@@ -1,8 +1,6 @@
-name: Update mandant workflows
+name: Mandanten-Workflows aktualisieren
 
-# Dieser manuell gestartete administrative Batch aktualisiert main und
-# bestehende Release-Branches auf die freigegebene CI/CD-Version. Der technische
-# Rollout-Zugriff darf dafür die Pull-Request-Pflicht der Zielbranches umgehen.
+# Dieser Workflow aktualisiert main und bestehende Release-Branches auf die freigegebene CI/CD-Version
 'on':
   workflow_dispatch:
     inputs:
@@ -14,24 +12,22 @@ name: Update mandant workflows
 permissions:
   contents: read
 
-# Zwei Rollouts dürfen nicht gleichzeitig unterschiedliche Aktualisierungen
-# für dieselben Mandanten-Repositories vorbereiten.
+# Verhindert parallele Aktualisierungen derselben Mandanten-Repositories
 concurrency:
   group: mandanten-aktualisierung
   cancel-in-progress: false
 
 jobs:
   prepare:
-    name: Verify rollout and build matrix
-    runs-on: ${{ vars.FI_RUNNER_LABEL }}
+    name: Prüft Rollout und erstellt Matrix
+    runs-on: [self-hosted, linux]
     timeout-minutes: 10
     outputs:
       rollout_sha: ${{ steps.rollout.outputs.rollout_sha }}
       update_matrix: ${{ steps.rollout.outputs.update_matrix }}
     steps:
-      # Die CI/CD-Version wurde zuvor im zentralen Repository geprüft. Der Batch
-      # lädt genau diese SHA und erzeugt keinen zentralen Bootstrap-Commit.
-      - name: Check out approved CI/CD version
+      # Lädt die freigegebene CI/CD-Version in den Arbeitsbereich
+      - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 1
@@ -39,11 +35,13 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.automation_sha }}
 
-      - name: Prepare approved Python runtime
+      # Prüft den Runner und stellt den Pfad zur Python-Laufzeit als Ausgabe bereit
+      - name: Python-Runtime ermitteln
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
-      - name: Verify central rollout version
+      # Prüft die angegebene CI/CD-Version für den Rollout
+      - name: Rollout-Version prüfen
         env:
           AUTOMATION_SHA: ${{ inputs.automation_sha }}
         run: >-
@@ -51,9 +49,8 @@ jobs:
           verify-automation
           --automation-sha "$AUTOMATION_SHA"
 
-      # Die Matrix enthält main und mögliche Release-Branches. Ein späterer
-      # Schritt überspringt Release-Branches, die im Mandanten nicht bestehen.
-      - name: Build protected branch matrix
+      # Erstellt die Matrix aus main und den konfigurierten Release-Branches
+      - name: Branch-Matrix erstellen
         id: rollout
         env:
           AUTOMATION_SHA: ${{ inputs.automation_sha }}
@@ -65,13 +62,12 @@ jobs:
           printf 'update_matrix=%s\n' "$update_matrix" >> "$GITHUB_OUTPUT"
 
   update:
-    name: Prepare ${{ matrix.kuerzel }} ${{ matrix.branch }}
+    name: Aktualisiert ${{ matrix.kuerzel }} ${{ matrix.branch }}
     needs: prepare
-    runs-on: ${{ vars.FI_RUNNER_LABEL }}
+    runs-on: [self-hosted, linux]
     timeout-minutes: 15
     strategy:
-      # Ein Fehler bei einem Matrixeintrag verhindert nicht die administrativen
-      # Rollouts der übrigen Zielbranches. Schreibzugriffe bleiben je Branch getrennt.
+      # Verarbeitet die Zielbranches unabhängig voneinander
       fail-fast: false
       max-parallel: 7
       matrix: ${{ fromJSON(needs.prepare.outputs.update_matrix) }}
@@ -81,7 +77,8 @@ jobs:
       GIT_COMMITTER_NAME: mtext_actions Aktualisierung
       GIT_COMMITTER_EMAIL: mtext_actions@users.noreply.github.com
     steps:
-      - name: Check out central rollout version
+      # Lädt die zentrale Rollout-Version in den Arbeitsbereich
+      - name: Check-Out Rollout-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 1
@@ -89,13 +86,13 @@ jobs:
           persist-credentials: false
           ref: ${{ needs.prepare.outputs.rollout_sha }}
 
-      - name: Prepare approved Python runtime
+      # Prüft den Runner und stellt den Pfad zur Python-Laufzeit als Ausgabe bereit
+      - name: Python-Runtime ermitteln
         id: runtime
         run: automation/scripts/runner-preflight.sh
 
-      # Die API-Prüfung unterscheidet einen nicht vorhandenen Release-Branch von
-      # Berechtigungs- und Verbindungsfehlern des technischen Tokens.
-      - name: Check target branch
+      # Prüft über die GitHub-API, ob der Zielbranch vorhanden ist
+      - name: Zielbranch prüfen
         id: target
         env:
           GITHUB_API_URL: ${{ github.api_url }}
@@ -112,9 +109,8 @@ jobs:
           )"
           printf 'exists=%s\n' "$exists" >> "$GITHUB_OUTPUT"
 
-      # Der Checkout dient nur als Dateienbestand. Aus dem Mandanten-Repository
-      # wird in diesem privilegierten Job kein Programmcode ausgeführt.
-      - name: Check out protected mandant branch
+      # Lädt den geschützten Mandanten-Branch als Dateienbestand
+      - name: Check-Out Mandanten-Branch
         if: steps.target.outputs.exists == 'true'
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -125,14 +121,14 @@ jobs:
           repository: ${{ matrix.repository }}
           token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
 
-      - name: Remember target commit
+      # Merkt den aktuellen Commit des Zielbranches
+      - name: Ziel-Commit merken
         if: steps.target.outputs.exists == 'true'
         id: before
         run: printf 'sha=%s\n' "$(git -C mandant rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      # Workflowaufruf und Python-Checkout werden gemeinsam aktualisiert. Der
-      # Commit enthält ausschließlich Dateien unter .github/workflows.
-      - name: Prepare and verify mandant update
+      # Aktualisiert und prüft die Workflow-Dateien des Mandanten
+      - name: Mandantenaktualisierung vorbereiten
         if: steps.target.outputs.exists == 'true'
         env:
           ROLLOUT_SHA: ${{ needs.prepare.outputs.rollout_sha }}
@@ -142,10 +138,8 @@ jobs:
           --mandant-root mandant
           --rollout-sha "$ROLLOUT_SHA"
 
-      # Der Rollout-Commit ist ein direkter Nachfolger des zuvor gelesenen
-      # Zielstands. Ein paralleler Branchfortschritt lässt den Push ohne
-      # Force-Push fehlschlagen und muss durch einen neuen Lauf verarbeitet werden.
-      - name: Update protected mandant branch
+      # Überträgt die Aktualisierung ohne Force-Push auf den Zielbranch
+      - name: Mandanten-Branch aktualisieren
         if: steps.target.outputs.exists == 'true'
         env:
           MANDANT_BRANCH: ${{ matrix.branch }}

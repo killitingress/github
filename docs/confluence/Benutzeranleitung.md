@@ -17,7 +17,7 @@ Feature-Branch pushen
 Pull Request prüfen und mit Squash Merge zusammenführen
     │
     ▼
-zusammengeführten Stand in M/Text-Abnahme prüfen
+zusammengeführten Stand in der M/Text-Funktionstestumgebung prüfen
 ```
 
 Für Branches und Release-Tags gelten folgende Namen:
@@ -29,8 +29,8 @@ Für Branches und Release-Tags gelten folgende Namen:
 | Einzelne Änderung | `feature/Rnnn/<Bezeichnung>` | `feature/R261/issue-5678` |
 | Release-Tag | `v{Release-Version}` | `v261.108` |
 
-Entwicklung und Abnahme sind M/Text-Ziele. Es gibt dafür keine eigenen
-Git-Branches.
+M/Text-Entwicklung und M/Text-Funktionstest sind die beiden M/Text-Umgebungen.
+Es gibt dafür keine eigenen Git-Branches.
 
 ## 2. Voraussetzungen
 
@@ -148,9 +148,9 @@ Ein länger laufendes Feature wird erst zusammengeführt, wenn ein geschützter
 Zielbranch seine Releaselinie vertritt. Der Feature-Branch wird regelmäßig mit
 Änderungen des festgelegten Ausgangsbranches aktualisiert. Nach dem
 Linienwechsel wird er vor dem Pull Request mit dem aktuellen `main` abgeglichen
-und erneut in Entwicklung getestet.
+und erneut in M/Text-Entwicklung getestet.
 
-## 4. Feature entwickeln und in Entwicklung testen
+## 4. Feature entwickeln und in M/Text-Entwicklung testen
 
 ### Feature-Branch erstellen
 
@@ -183,13 +183,13 @@ Auf einem Feature-Branch dürfen mehrere Zwischen-Commits entstehen. Beim
 Squash Merge werden sie später zu einem Commit auf dem Zielbranch
 zusammengefasst.
 
-### Nach Entwicklung synchronisieren
+### Mit M/Text-Entwicklung synchronisieren
 
 1. Den Feature-Branch nach GitHub pushen.
 2. In GitHub prüfen, dass der Synchronisationslauf für den Branch gestartet
    wurde.
-3. Nach erfolgreichem Lauf die Änderung im Entwicklungsziel der Releaselinie
-   testen.
+3. Nach erfolgreichem Lauf die Änderung in der M/Text-Entwicklungsumgebung der
+   Releaselinie testen.
 4. Bei weiteren Korrekturen erneut committen und pushen.
 
 Jeder Push überträgt den neuen Zielstand automatisch. Ein erfolgreicher Lauf
@@ -223,11 +223,11 @@ Projektverzeichnisse ist im
 [Zielbild](./Zielbild_GitHub_Actions_Git.md) beschrieben. Für einen Wechsel der
 führenden Releaselinie gilt der Ablauf in Kapitel 9.
 
-## 5. Pull Request und Abnahme
+## 5. Pull Request und M/Text-Funktionstest
 
 ### Pull Request erstellen
 
-Wenn die Änderung in Entwicklung erfolgreich geprüft wurde:
+Wenn die Änderung in M/Text-Entwicklung erfolgreich geprüft wurde:
 
 1. Das Mandanten-Repository in GitHub öffnen.
 2. Einen Pull Request vom Feature-Branch auf den zugehörigen Zielbranch
@@ -271,7 +271,7 @@ Entsteht beim Aktualisieren oder bei einem Cherry-Pick ein Konflikt:
    die richtige Auflösung unklar, die Operation abbrechen und die Abweichung
    mit den Beteiligten klären.
 5. Nach Abschluss den Arbeitsstand und die Änderungen kontrollieren. Erst dann
-   den Feature-Branch pushen und bei Bedarf erneut in Entwicklung testen.
+   den Feature-Branch pushen und bei Bedarf erneut in M/Text-Entwicklung testen.
 
 ### Prüfen und zusammenführen
 
@@ -283,12 +283,14 @@ Entsteht beim Aktualisieren oder bei einem Cherry-Pick ein Konflikt:
 6. Der Feature-Branch wird nach dem Merge gelöscht.
 
 Der Merge erzeugt einen Commit auf dem geschützten Zielbranch. Dieser Push
-startet automatisch die Synchronisation nach M/Text-Abnahme.
+startet automatisch die Synchronisation mit der M/Text-Funktionstestumgebung.
 
-### In Abnahme prüfen
+### Stand in M/Text-Funktionstest prüfen
 
-1. In GitHub prüfen, dass der Abnahmelauf erfolgreich war.
-2. Den zusammengeführten Stand im Abnahmeziel der Releaselinie prüfen.
+1. In GitHub prüfen, dass der Synchronisationslauf für M/Text-Funktionstest
+   erfolgreich war.
+2. Den zusammengeführten Stand in der M/Text-Funktionstestumgebung der
+   Releaselinie prüfen.
 3. Einen festgestellten Fehler über einen neuen Feature-Branch korrigieren.
 
 Auf `main` oder `release/Rnnn` wird nicht direkt korrigiert.
@@ -329,7 +331,8 @@ Releaselinie.
 Vor dem Erstellen eines Release-Tags müssen folgende Bedingungen erfüllt sein:
 
 - Der vorgesehene Stand liegt auf `main` oder `release/Rnnn`
-- Die Abnahmesynchronisation dieses Stands war erfolgreich
+- Die Synchronisation dieses Stands mit der M/Text-Funktionstestumgebung war
+  erfolgreich
 - Die zentral vorgegebene Release-Version und damit der Tagname sind bekannt
 - Der Benutzer darf Release-Tags erstellen
 
@@ -349,8 +352,8 @@ Zunächst wird der vorgesehene Stand bestimmt:
 2. Bei Verwendung der M/Text Workbench den Branch wie unter
    [Lokalen Branch vor der Arbeit aktualisieren](#lokalen-branch-vor-der-arbeit-aktualisieren)
    beschrieben aktualisieren
-3. In GitHub den Commit bestimmen, der in Abnahme geprüft wurde, und dessen
-   vollständige Commit-SHA festhalten
+3. In GitHub den Commit bestimmen, der in M/Text-Funktionstest geprüft wurde,
+   und dessen vollständige Commit-SHA festhalten
 4. Kontrollieren, dass dieser Commit den vorgesehenen Release-Stand enthält
 
 Der Tag kann auf zwei Wegen erstellt werden:
@@ -415,9 +418,9 @@ Zielstufe bereit, die sich aus dem ausgewählten Branch ergibt:
 
 | Ausgewählter Branch | Zielstufe |
 |---|---|
-| `feature/Rnnn/<Bezeichnung>` | Entwicklung |
-| `main` | Abnahme der in diesem Commit konfigurierten Releaselinie |
-| `release/Rnnn` | Abnahme der Releaselinie |
+| `feature/Rnnn/<Bezeichnung>` | M/Text-Entwicklung |
+| `main` | M/Text-Funktionstest der in diesem Commit konfigurierten Releaselinie |
+| `release/Rnnn` | M/Text-Funktionstest der Releaselinie |
 
 1. Im Mandanten-Repository **Actions** öffnen.
 2. Den Workflow **Sync M/Text resources** auswählen.
@@ -433,11 +436,11 @@ Mandantenkonfiguration des Commits ermittelt. Der Lauf ersetzt die dem
 Mandanten zugeordneten Projektstände vollständig. Projektstände anderer
 Mandanten bleiben erhalten.
 
-Soll ausnahmsweise ein beliebiger Commit nach Entwicklung übertragen werden,
-wird ein kurzlebiger Feature-Branch der passenden Releaselinie auf diesem
-Commit erstellt und gepusht. Beispielsweise kann
+Soll ausnahmsweise ein beliebiger Commit nach M/Text-Entwicklung übertragen
+werden, wird ein kurzlebiger Feature-Branch der passenden Releaselinie auf
+diesem Commit erstellt und gepusht. Beispielsweise kann
 `feature/R271/wiederherstellung` verwendet werden. Der Push synchronisiert den
-Commit nach Entwicklung. Nach dem erfolgreichen Lauf kann der Hilfsbranch
+Commit nach M/Text-Entwicklung. Nach dem erfolgreichen Lauf kann der Hilfsbranch
 gelöscht werden.
 
 ## 9. Die führende Releaselinie wechseln
@@ -452,8 +455,8 @@ Repository-Verantwortlichen durchgeführt.
 2. In der M/Text Workbench das Mandanten-Repository und `main` auswählen.
 3. Prüfen, dass keine lokalen Änderungen und keine Git-Operation offen sind.
 4. `main` mit dem GitHub-Stand aktualisieren.
-5. Kontrollieren, dass dieser Stand in Abnahme geprüft wurde und die bisherige
-   Releaselinie abschließt.
+5. Kontrollieren, dass dieser Stand in M/Text-Funktionstest geprüft wurde und
+   die bisherige Releaselinie abschließt.
 
 Falls die bisherige Releaselinie weiter gepflegt wird:
 
@@ -475,20 +478,22 @@ und `main` bezeichnen zunächst denselben Stand.
 1. Einen Feature-Branch der neuen Releaselinie auf Basis von `main` erstellen.
 2. In `.github/config.json` ausschließlich das Feld `releaselinie` auf die
    neue führende Linie setzen, die Änderung committen und pushen.
-3. Prüfen, dass **Validate mandant configuration** und der Entwicklungslauf
-   erfolgreich waren.
+3. Prüfen, dass **Validate mandant configuration** und der Synchronisationslauf
+   für M/Text-Entwicklung erfolgreich waren.
 4. Einen Pull Request auf `main` erstellen, prüfen und mit Squash Merge
    zusammenführen.
 5. Den automatisch gestarteten Synchronisationslauf kontrollieren. Der
-   Squash-Commit wird vollständig nach Entwicklung und Abnahme übertragen.
-6. Den Stand in Entwicklung und Abnahme kontrollieren.
+   Squash-Commit wird vollständig mit M/Text-Entwicklung und
+   M/Text-Funktionstest synchronisiert.
+6. Den Stand in M/Text-Entwicklung und M/Text-Funktionstest kontrollieren.
 7. Neue Feature-Branches für die neue führende Linie auf Basis von `main`
    erstellen.
 
-Scheitert die Übertragung in die Abnahme, nachdem Entwicklung bereits
-erfolgreich war, bleibt der Stand in Entwicklung bestehen. Der fehlgeschlagene
-Lauf wird erneut ausgeführt. Dabei werden Entwicklung und Abnahme vollständig
-neu abgeglichen.
+Scheitert die Übertragung nach M/Text-Funktionstest, nachdem die Übertragung
+nach M/Text-Entwicklung bereits erfolgreich war, bleibt der Stand in
+M/Text-Entwicklung bestehen. Der fehlgeschlagene Lauf wird erneut ausgeführt.
+Dabei werden M/Text-Entwicklung und M/Text-Funktionstest vollständig neu
+abgeglichen.
 
 Die bisherige Linie wird anschließend über `release/Rnnn` gepflegt. `main`
 bleibt der Default Branch.
@@ -499,7 +504,7 @@ bleibt der Default Branch.
 |---|---|
 | Noch nicht committete lokale Änderung | In der Git-Ansicht die betroffenen Dateien zurücksetzen. Vorher prüfen, ob lokale M/Text-Ressourcen dadurch verloren gehen. |
 | Commit liegt nur im Feature-Branch | Einen korrigierenden Commit im selben Feature-Branch erstellen oder den lokalen Commit vor dem Push mit der freigegebenen Git-Funktion überarbeiten. |
-| Feature-Stand wurde in Entwicklung bereitgestellt | Den Feature-Branch korrigieren und erneut pushen. Der neue Zielstand wird in Entwicklung bereitgestellt. |
+| Feature-Stand wurde in M/Text-Entwicklung bereitgestellt | Den Feature-Branch korrigieren und erneut pushen. Der neue Zielstand wird in M/Text-Entwicklung bereitgestellt. |
 | Pull Request wurde bereits zusammengeführt | Einen neuen Feature-Branch anlegen und den Fehler über einen neuen Pull Request korrigieren. |
 | Änderung wird auf einer weiteren Releaselinie nicht benötigt | Den dortigen Feature-Branch oder Pull Request nicht weiterführen. Eine bereits erfolgte Übernahme über einen neuen korrigierenden Commit zurücknehmen. |
 | Release-Tag wurde lokal, aber noch nicht nach GitHub gepusht | Den lokalen Tag korrigieren und Tagnamen sowie Commit-SHA erneut prüfen. |
@@ -578,6 +583,6 @@ Support-Tickets kopiert.
 | Arbeitskopie aktualisieren | Fetch und Aktualisierung des ausgecheckten Branches |
 | Änderung committen | Lokal committen und Feature-Branch pushen |
 | Entwicklungsstand bereitstellen | Feature-Branch pushen |
-| Änderung nach Abnahme übernehmen | Pull Request prüfen und mit Squash Merge zusammenführen |
+| Änderung nach M/Text-Funktionstest übernehmen | Pull Request prüfen und mit Squash Merge zusammenführen |
 | Änderung auf weitere Releasepfade übertragen | Squash-Commit in einen Feature-Branch der weiteren Linie übernehmen |
 | SVN-Tag erzeugen | Geschützten Git-Tag `v{Release-Version}` auf einem Commit des geschützten Branches erstellen |

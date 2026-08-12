@@ -1,9 +1,8 @@
-name: Validate mandant configuration
+name: Mandantenkonfiguration prüfen
 
-# Dieser Workflow prüft jede geänderte Mandantenkonfiguration mit der zentralen
-# Validierungslogik, ohne Daten an M/Text oder den Mainframe zu übertragen.
+# Dieser Workflow prüft jede geänderte Mandantenkonfiguration
 'on':
-  # Der Check liefert bei jeder Änderung der Mandantenkonfiguration frühes Feedback.
+  # Änderungen an der Mandantenkonfiguration lösen die Prüfung aus
   push:
     branches:
       - '**'
@@ -18,14 +17,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Dieser Aufruf lässt den exakten Commit durch den Validierungsworkflow der
-  # freigegebenen CI/CD-Version prüfen.
+  # Ruft die Konfigurationsprüfung der freigegebenen CI/CD-Version auf
   validate:
-    name: Validate mandant configuration
+    name: Prüft Mandantenkonfiguration
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-validate-config.yml@0000000000000000000000000000000000000000
     with:
-      # Der CI/CD-Rollout ersetzt beide technischen Platzhalter gemeinsam durch
-      # die Commit-SHA der freigegebenen Version von mtext_actions.
+      # Der Rollout ersetzt beide Platzhalter durch die freigegebene Commit-SHA
       commit_sha: ${{ github.sha }}
       automation_ref: 0000000000000000000000000000000000000000
     secrets:

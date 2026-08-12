@@ -21,10 +21,15 @@ from .process import DeliveryError, Status
 AUTOMATION_ROOT = Path(__file__).resolve().parents[2]
 # Zuordnung vom Mandantenkürzel zum GitHub-Repository und Mainframe-Subsystem.
 MANDANTEN_ZUORDNUNG_PATH = AUTOMATION_ROOT / "config/mandanten.json"
-# Zuordnung der aktiven Releaselinien zu ETAPS-Linien und Hostprofilen.
+# Zuordnung der M/Text-Ziele und aktiven Releaselinien zu Präfixen,
+# Zahlenteilen der ETAPS-Linien und Hostprofilen.
 RELEASELINIEN_ZUORDNUNG_PATH = AUTOMATION_ROOT / "config/releaselinien.json"
 # Mandantenkonfiguration im ausgecheckten Repository.
 MANDANT_CONFIG_PATH = Path(".github/config.json")
+
+# Die Reihenfolge der M/Text-Ziele gilt beim vollständigen Abgleich nach einem
+# Releaselinienwechsel. Dieselben Ziele müssen zentral konfiguriert sein.
+MTEXT_ZIEL_REIHENFOLGE = ("Entwicklung", "Funktionstest")
 
 # CodePipeline-Umgebung - "P" = Produktion, "T" = Testumgebung
 ISPW_INSTANZEN = {"T", "P"}
@@ -70,9 +75,12 @@ class Configuration:
     # Dictionary von Hostprofilen zu Hostprofilen 
     hostprofile: dict[str, dict[str, str]]
     # Zentrale Zuordnung aller aktiven Linien aus `releaselinien.json`. Die
-    # Schlüssel sind Linien wie `R270`, die Werte nennen ETAPS-Linie und
-    # Hostprofil.
+    # Schlüssel sind Linien wie `R270`, die Werte nennen den Zahlenteil der
+    # ETAPS-Linie und das Hostprofil.
     releaselinien: dict[str, dict[str, str]]
+    # Zuordnung der fachlichen M/Text-Ziele zu den Präfixen ihrer technischen
+    # Umgebungskennungen.
+    mtext_ziel_prefixe: dict[str, str]
     # Tuple von Warnungen bei Abweichungen vom Referenzbestand
     warnungen: tuple[str, ...]
 
@@ -134,13 +142,25 @@ def load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
     return zuordnung
 
 
-def load_releaselinien_zuordnung(path: str | Path) -> dict[str, Any]:
-    """Lädt die Zuordnung der aktiven Releaselinien aus releaselinien.json."""
+def load_releaselinien_zuordnung(path: str | Path) -> tuple[dict[str, str], dict[str, Any]]:
+    """Lädt M/Text-Ziele und aktive Releaselinien aus releaselinien.json."""
 
-    releaselinien = _read_json(path)
+    document = _read_json(path)
+    if not isinstance(document, dict):
+        raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinien fehlen")
+    mtext_ziele = document.get("mtext_ziele")
+    if not isinstance(mtext_ziele, dict) or set(mtext_ziele) != set(MTEXT_ZIEL_REIHENFOLGE):
+        raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Ziele sind ungültig")
+    mtext_ziel_prefixe: dict[str, str] = {}
+    for zielstufe in MTEXT_ZIEL_REIHENFOLGE:
+        praefix = mtext_ziele[zielstufe]
+        if not isinstance(praefix, str) or not praefix:
+            raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Ziele sind ungültig")
+        mtext_ziel_prefixe[zielstufe] = praefix
+    releaselinien = document.get("releaselinien")
     if not isinstance(releaselinien, dict) or not releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinien fehlen")
-    return releaselinien
+    return mtext_ziel_prefixe, releaselinien
 
 
 def load_configuration(repository_root: str | Path, repository_name: str) -> Configuration:
@@ -153,7 +173,9 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
     # Zentrale Zuordnungen und Mandantenkonfiguration laden.
     mandant_configuration = _read_json(root / MANDANT_CONFIG_PATH)
     mandanten_zuordnung = load_mandanten_zuordnung(MANDANTEN_ZUORDNUNG_PATH)
-    releaselinien = load_releaselinien_zuordnung(RELEASELINIEN_ZUORDNUNG_PATH)
+    mtext_ziel_prefixe, releaselinien = load_releaselinien_zuordnung(
+        RELEASELINIEN_ZUORDNUNG_PATH
+    )
 
     try:
         mandant = mandant_configuration["mandant"]
@@ -214,6 +236,7 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
         projects=projects,
         hostprofile=hostprofile,
         releaselinien=releaselinien,
+        mtext_ziel_prefixe=mtext_ziel_prefixe,
         warnungen=_reference_warnings(kuerzel, projects),
     )
 

@@ -1,7 +1,7 @@
-name: Central tests
+name: Zentrale Testsuite
 
 # Dieser Workflow führt bei Pull Requests und Änderungen an main alle zentralen
-# Python-Tests aus, ohne M/Text oder den Mainframe anzusprechen.
+# Python-Tests aus
 'on':
   pull_request:
   push:
@@ -17,29 +17,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Das Platzhalter-Label wird vor dem Integrationslauf durch das offizielle
-  # runs-on-Kennzeichen des von der FI bereitgestellten Runners ersetzt.
   test:
-    name: Test central CI/CD implementation
-    runs-on: FI_RUNNER_LABEL_TO_BE_SET
+    name: Testet Zentrale CI/CD-Implementierung
+    runs-on: [self-hosted, linux]
     timeout-minutes: 20
     steps:
-      # Lädt die zu prüfende CI/CD-Version in den Arbeitsbereich und hinterlegt
-      # kein GitHub-Token in der lokalen Git-Konfiguration.
-      - name: Check out CI/CD version without persisted credentials
+      # Lädt die zu prüfende CI/CD-Version in den Arbeitsbereich
+      - name: Check-Out CI/CD Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
 
-      # Prüft den von der FI bereitgestellten Runner und stellt den Pfad zur vorgegebenen
-      # Python-Laufzeit als Ausgabe für die nachfolgenden Schritte bereit.
-      - name: Prepare approved Python runtime
+      # Prüft den Runner und stellt den Pfad zur Python-Laufzeit als Ausgabe für die nachfolgenden Schritte bereit
+      - name: Python-Runtime ermitteln
         id: runtime
-        run: scripts/runner-preflight.sh
+        run: bash scripts/runner-preflight.sh
 
-      # Startet die vollständige Unit-Test-Suite mit dem produktiven Quellcode
-      # im Python-Suchpfad; die Tests führen keine externen Übergaben aus.
-      - name: Run tests without external calls
+      # Startet die vollständige Unit-Test-Suite (mit dem produktiven Quellcode)
+      - name: Ausführung Unit-Tests
         env:
           PYTHONPATH: src
         run: >-

@@ -13,7 +13,12 @@ import json
 import os
 from pathlib import Path
 
-from lbs_delivery.config import Configuration, MANDANT_CONFIG_PATH, load_configuration
+from lbs_delivery.config import (
+    Configuration,
+    MANDANT_CONFIG_PATH,
+    MTEXT_ZIEL_REIHENFOLGE,
+    load_configuration,
+)
 from lbs_delivery.git import read_file, resolve_sync_branch
 from lbs_delivery.process import DeliveryError, Status, execute
 from lbs_delivery.sync import sync_resources
@@ -44,8 +49,8 @@ def sync_from_github_context(
     """Leitet die Synchronisationsziele aus dem GitHub-Ereignis ab.
 
     Manuelle Starts gleichen das Ziel ihres Branches vollständig ab. Bei einem
-    Wechsel der führenden Releaselinie werden Entwicklung und Abnahme
-    nacheinander verarbeitet.
+    Wechsel der führenden Releaselinie werden die M/Text-Ziele Entwicklung und
+    Funktionstest nacheinander verarbeitet.
     """
 
     releaselinie, zielstufe = resolve_sync_branch(source_branch, configuration.releaselinie)
@@ -68,7 +73,7 @@ def sync_from_github_context(
             ) from exc
         releasewechsel = bisherige_releaselinie != configuration.releaselinie
 
-    zielstufen = ("Entwicklung", "Abnahme") if releasewechsel else (zielstufe,)
+    zielstufen = MTEXT_ZIEL_REIHENFOLGE if releasewechsel else (zielstufe,)
     vollabgleich = event_name == "workflow_dispatch" or releasewechsel
     results: list[dict[str, object]] = []
     successful_stages: list[str] = []
@@ -84,7 +89,7 @@ def sync_from_github_context(
                 vollabgleich=vollabgleich,
             )
         except DeliveryError as exc:
-            message = f"Synchronisation nach {zielstufe} fehlgeschlagen."
+            message = f"Synchronisation mit dem M/Text-Ziel {zielstufe} fehlgeschlagen."
             if successful_stages:
                 message += f" Bereits erfolgreich: {', '.join(successful_stages)}."
             message += f" {exc.args[0]}"

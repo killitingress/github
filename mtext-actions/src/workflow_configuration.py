@@ -34,9 +34,6 @@ from lbs_delivery.process import DeliveryError
 
 # Die von Mandanten-Repositories eingebundenen wiederverwendbaren Workflows werden hier gepflegt.
 AUTOMATION_REPOSITORY = "FinanzInformatik/fi_lbs_entw_oms_mtext_actions"
-# Dieses Kennzeichen darf in einer freigegebenen CI/CD-Version nicht mehr
-# vorkommen, weil das Runnerangebot vor dem Rollout per Pull Request feststeht.
-RUNNER_PLACEHOLDER = "FI_RUNNER_LABEL_TO_BE_SET"
 # Reguläre Ausdrücke finden die technischen Workflow-Felder dieses Werkzeugs.
 # Erfasst die Revision eines wiederverwendbaren Workflows aus dem zentralen
 # CI/CD-Repository und erhält Kommentare sowie umgebendes YAML.
@@ -47,11 +44,6 @@ CENTRAL_USES_PATTERN = re.compile(
 # Erfasst den Wert `automation_ref` für den Checkout der Python-Implementierung
 # und erhält Leerraum sowie einen möglichen nachgestellten YAML-Kommentar.
 AUTOMATION_REF_PATTERN = re.compile(r"(?m)^(\s*automation_ref:\s*)([^\s#]+)(\s*(?:#.*)?)$")
-# Prüft ausschließlich ausführbare `runs-on`-Felder auf das noch nicht gesetzte
-# Runnerkennzeichen. Kommentare und Beschreibungen beeinflussen den Rollout nicht.
-RUNS_ON_PLACEHOLDER_PATTERN = re.compile(
-    rf"(?m)^\s*runs-on:\s*[^#\n]*\b{re.escape(RUNNER_PLACEHOLDER)}\b"
-)
 # GitHub-Antworten werden begrenzt, damit ein fehlerhafter oder vorgeschalteter
 # Dienst nicht beliebig viel Runner-Speicher belegen kann.
 GITHUB_RESPONSE_LIMIT = 1024 * 1024
@@ -192,9 +184,8 @@ def _commit(repository: Path, message: str) -> str:
 def verify_automation(automation_root: Path, automation_sha: str) -> str:
     """Prüft die freigegebene CI/CD-Version vor dem Mandanten-Rollout.
 
-    Der Checkout muss genau der angegebenen SHA entsprechen. Zentrale Workflows
-    dürfen außerdem keinen offenen Runner-Platzhalter mehr enthalten. Das
-    Runnerkennzeichen wird dadurch regulär per Pull Request festgelegt.
+    Der Checkout muss genau der angegebenen SHA entsprechen und zentrale
+    Workflowdateien enthalten.
     """
 
     checkout_sha = _git(automation_root, "rev-parse", "--verify", "HEAD^{commit}").stdout.strip()
@@ -203,8 +194,6 @@ def verify_automation(automation_root: Path, automation_sha: str) -> str:
     workflows = sorted((automation_root / ".github/workflows").glob("*.yml"))
     if not workflows:
         raise ValueError("keine zentralen Workflows gefunden")
-    if any(RUNS_ON_PLACEHOLDER_PATTERN.search(path.read_text(encoding="utf-8")) for path in workflows):
-        raise ValueError("Runner-Kennzeichen ist in der CI/CD-Version noch nicht festgelegt")
     return checkout_sha
 
 
@@ -245,7 +234,7 @@ def build_update_matrix(mandanten_path: Path, releaselinien_path: Path) -> dict[
 
     # Zentrale Zuordnungen laden.
     mandanten = load_mandanten_zuordnung(mandanten_path)
-    releaselinien = load_releaselinien_zuordnung(releaselinien_path)
+    _, releaselinien = load_releaselinien_zuordnung(releaselinien_path)
 
     # Matrix für main und die möglichen gepflegten Release-Branches aufbauen.
     branches = ["main", *(f"release/{releaselinie}" for releaselinie in sorted(releaselinien))]

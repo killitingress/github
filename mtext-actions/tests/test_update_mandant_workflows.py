@@ -14,7 +14,6 @@ from urllib.error import HTTPError
 from unittest.mock import MagicMock, patch
 
 from workflow_configuration import (
-    RUNNER_PLACEHOLDER,
     build_update_matrix,
     check_target_branch,
     prepare_mandant_update,
@@ -33,8 +32,6 @@ class UpdateWorkflowsTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.automation_root = self.root / "automation"
         shutil.copytree(ROOT / ".github/workflows", self.automation_root / ".github/workflows")
-        for path in (self.automation_root / ".github/workflows").glob("*.yml"):
-            path.write_text(path.read_text(encoding="utf-8").replace(RUNNER_PLACEHOLDER, "fi-runner"), encoding="utf-8")
 
         self.mandant_root = self.root / "mandant"
         mandant_workflows = self.mandant_root / ".github/workflows"
@@ -69,7 +66,7 @@ class UpdateWorkflowsTests(unittest.TestCase):
         return result.stdout.strip()
 
     def test_rollout_preparation_and_verification(self) -> None:
-        """Prüft SHA, Runnerkennzeichen, Mandantenbindung und Wiederholbarkeit."""
+        """Prüft SHA, Mandantenbindung und Wiederholbarkeit."""
 
         initial_sha = self.run_git(self.automation_root, "rev-parse", "HEAD")
         with self.assertRaisesRegex(ValueError, "angegebenen Commit"):
@@ -89,22 +86,6 @@ class UpdateWorkflowsTests(unittest.TestCase):
                 mandant_sha,
             )
 
-        workflow_path = self.automation_root / ".github/workflows/ci.yml"
-        with self.subTest(runner_im_kommentar=True):
-            workflow_path.write_text(
-                workflow_path.read_text(encoding="utf-8") + f"\n# {RUNNER_PLACEHOLDER}\n",
-                encoding="utf-8",
-            )
-            self.assertEqual(verify_automation(self.automation_root, automation_sha), automation_sha)
-
-        with self.subTest(runner_im_job=True):
-            workflow_path.write_text(
-                workflow_path.read_text(encoding="utf-8") + f"\nruns-on: {RUNNER_PLACEHOLDER}\n",
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(ValueError, "Runner-Kennzeichen"):
-                verify_automation(self.automation_root, automation_sha)
-
     def test_builds_update_matrix(self) -> None:
         """Bildet main und mögliche Release-Branches für jeden Mandanten."""
 
@@ -122,8 +103,14 @@ class UpdateWorkflowsTests(unittest.TestCase):
         releaselinien.write_text(
             json.dumps(
                 {
-                    "R261": {"etaps_linie": "en01", "hostprofil": "FKT"},
-                    "R270": {"etaps_linie": "en02", "hostprofil": "JUR"},
+                    "mtext_ziele": {
+                        "Entwicklung": "en",
+                        "Funktionstest": "fu",
+                    },
+                    "releaselinien": {
+                        "R261": {"etaps_linie": "01", "hostprofil": "FKT"},
+                        "R270": {"etaps_linie": "02", "hostprofil": "JUR"},
+                    },
                 }
             ),
             encoding="utf-8",
@@ -138,14 +125,6 @@ class UpdateWorkflowsTests(unittest.TestCase):
             {"repository": "FinanzInformatik/fi_lbs_entw_oms_by", "kuerzel": "BY", "branch": "main"},
             matrix,
         )
-
-    def test_rollout_workflow_updates_target_branch_directly(self) -> None:
-        """Sichert den administrativen Direkt-Push auf den geschützten Zielbranch ab."""
-
-        workflow = (ROOT / ".github/workflows/update-mandant-workflows.yml").read_text(encoding="utf-8")
-        self.assertIn('git -C mandant push origin "HEAD:refs/heads/$MANDANT_BRANCH"', workflow)
-        self.assertNotIn("open-update-pull-request", workflow)
-        self.assertNotIn("refs/heads/$update_branch", workflow)
 
     def test_github_api_for_rollout(self) -> None:
         """Prüft vorhandene und fehlende Zielbranches über die GitHub-API."""

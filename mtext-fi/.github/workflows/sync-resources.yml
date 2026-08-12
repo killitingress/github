@@ -1,19 +1,16 @@
-name: Sync M/Text resources
+name: M/Text-Ressourcen synchronisieren
 
-# Feature-Pushes versorgen Entwicklung. Merges auf geschützte Zielbranches
-# erscheinen als Push auf main oder release/Rnnn und versorgen Abnahme.
+# Dieser Workflow synchronisiert Mandantenressourcen mit der zugehörigen M/Text-Stufe
 'on':
   push:
     branches:
       - main
       - release/R[0-9][0-9][0-9]
       - feature/R[0-9][0-9][0-9]/**
-    # Der administrative CI/CD-Rollout ändert ausschließlich Trigger-Workflows
-    # und darf deshalb keine Ressourcensynchronisation nach M/Text auslösen.
+    # Änderungen an Workflow-Dateien lösen keine Ressourcensynchronisierung aus
     paths-ignore:
       - .github/workflows/**
-  # Der manuelle Start gleicht den angegebenen Commit vollständig mit dem Ziel
-  # ab, das sich aus dem in der Oberfläche ausgewählten Branch ergibt.
+    # Ein manueller Start gleicht den angegebenen Commit vollständig ab
   workflow_dispatch:
     inputs:
       commit_sha:
@@ -24,17 +21,13 @@ name: Sync M/Text resources
 permissions:
   contents: read
 
-# Zwei Läufe desselben Mandanten-Repositories dürfen dessen Projektstand unter
-# serverSync nicht gleichzeitig verändern. Projektverzeichnisse verschiedener
-# Mandanten überschneiden sich nicht und benötigen keine gemeinsame Sperre.
+# Verhindert parallele Synchronisierungen desselben Mandanten-Repositories
 concurrency:
   group: mtext-sync-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
-  # Der zentrale Ablauf erkennt den Releasewechsel am geänderten Feld
-  # `releaselinie` und versorgt diesen Stand vollständig in beiden Zielstufen.
-  # Andere Pushes und manuelle Vollabgleiche verwenden die Branchzuordnung.
+  # Ruft die Ressourcensynchronisierung der freigegebenen CI/CD-Version auf
   sync:
     name: Ressourcen synchronisieren
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000

@@ -20,10 +20,6 @@ from .git import changes, project_changes, require_ancestor, resolve
 from .process import DeliveryError, Status
 
 
-# Zuordnung der M/Text-Zielstufen zu den Endungen für ihr
-# serverSync-Verzeichnis und ihren Adapterhost.
-SYNC_STAGES = {"Entwicklung": ("E", "e"), "Abnahme": ("A", "a")}
-
 # Begrenzung der Antwortgröße des Adapters in Bytes.
 ADAPTER_RESPONSE_LIMIT = 1024 * 1024  # 1 MB
 
@@ -31,9 +27,9 @@ ADAPTER_RESPONSE_LIMIT = 1024 * 1024  # 1 MB
 # als für die FI üblich nötig.
 ADAPTER_TIMEOUT = 30.0
 
-# URL-Muster des vMtext-Synchronisationsadapters. ETAPS-Linie und Host-Suffix
-# stammen aus Releaselinien-Konfiguration bzw. SYNC_STAGES.
-ADAPTER_SYNC_URL = "https://{etaps_linie}{host_suffix}.ltoma.intern/vMtextAdapter/sync"
+# URL-Muster des vMtext-Synchronisationsadapters. Die technische Umgebung wird
+# aus Releaselinien-Konfiguration und Zielstufe gebildet.
+ADAPTER_SYNC_URL = "https://{umgebung}.ltoma.intern/vMtextAdapter/sync"
 
 # Dieses Unterverzeichnis hält je Mandant den Commit des von LTOMA angenommenen
 # serverSync-Stands fest. Es liegt außerhalb der M/Text-Projektverzeichnisse.
@@ -120,7 +116,7 @@ def sync_resources(
     """
 
     # Geplantes Ziel und Commit-Zugehörigkeit prüfen.
-    if zielstufe not in SYNC_STAGES:
+    if zielstufe not in configuration.mtext_ziel_prefixe:
         raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Zielstufe ist ungültig")
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
@@ -130,8 +126,8 @@ def sync_resources(
 
     # Zielpfad und letzter von LTOMA angenommener Mandantenstand bestimmen.
     etaps_linie = configuration.releaselinien[releaselinie]["etaps_linie"]
-    path_suffix, host_suffix = SYNC_STAGES[zielstufe]
-    target_root = Path(server_sync_root or f"/nfs/mtext/{etaps_linie}{path_suffix}/serverSync")
+    umgebung = f"{configuration.mtext_ziel_prefixe[zielstufe]}{etaps_linie}"
+    target_root = Path(server_sync_root or f"/nfs/mtext/{umgebung}/serverSync")
     marker_path = target_root / SYNC_MARKER_DIRECTORY / f"{configuration.kuerzel}.json"
     incremental_sync = marker_path.exists() and not vollabgleich
     operations: list[tuple[str, str]] = []
@@ -171,7 +167,7 @@ def sync_resources(
             raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "serverSync-Veröffentlichung fehlgeschlagen") from exc
 
     # Nach dem aktualisierten Projektstand den passenden Adapter aufrufen.
-    adapter_url = ADAPTER_SYNC_URL.format(etaps_linie=etaps_linie, host_suffix=host_suffix)
+    adapter_url = ADAPTER_SYNC_URL.format(umgebung=umgebung)
     status, body = call_adapter(adapter_url, timeout=ADAPTER_TIMEOUT)
 
     # Erst die erfolgreiche Annahme durch LTOMA schreibt den Vergleichsstand fort.

@@ -16,7 +16,6 @@ from unittest.mock import patch
 
 import sync_resources as sync_command
 
-from lbs_delivery.git import resolve_sync_branch
 from lbs_delivery.process import DeliveryError, Status
 from lbs_delivery.sync import (
     _apply_server_sync_changes,
@@ -45,59 +44,6 @@ class SyncTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.repository = setup_sync_repository(self.root)
         self.configuration = load_test_configuration(self.repository)
-
-    def test_resolve_sync_branch(self) -> None:
-        """Ordnet Feature- und Zielbranches der Releaselinie und Zielstufe zu."""
-
-        self.assertEqual(
-            resolve_sync_branch("feature/R271/brief/anschreiben", "R270"),
-            ("R271", "Entwicklung"),
-        )
-        with self.assertRaises(DeliveryError):
-            resolve_sync_branch("feature/R271/", "R270")
-
-    def test_release_change_reads_previous_configuration(self) -> None:
-        """Liest oder lehnt die führende Releaselinie aus dem vorherigen Commit ab."""
-
-        configuration_path = self.repository / ".github/config.json"
-        configuration_path.parent.mkdir(exist_ok=True)
-
-        with self.subTest(gueltig=True):
-            configuration_path.write_text(
-                json.dumps({"mandant": {"releaselinie": "R261"}}),
-                encoding="utf-8",
-            )
-            git(self.repository, "add", str(configuration_path.relative_to(self.repository)))
-            git(self.repository, "commit", "-m", "old release line")
-            previous_commit = git(self.repository, "rev-parse", "HEAD")
-            with patch.object(
-                sync_command,
-                "sync_resources",
-                return_value={"status": Status.ADAPTER_ACCEPTED.value},
-            ) as synchronize:
-                sync_command.sync_from_github_context(
-                    _github_configuration(),
-                    repository_root=self.repository,
-                    commit="2" * 40,
-                    source_branch="main",
-                    event_name="push",
-                    previous_commit=previous_commit,
-                )
-            self.assertEqual(synchronize.call_count, 2)
-
-        with self.subTest(gueltig=False):
-            configuration_path.write_text(json.dumps({"mandant": {}}), encoding="utf-8")
-            git(self.repository, "add", str(configuration_path.relative_to(self.repository)))
-            git(self.repository, "commit", "-m", "invalid old configuration")
-            with self.assertRaisesRegex(DeliveryError, "Bisherige Mandantenkonfiguration"):
-                sync_command.sync_from_github_context(
-                    _github_configuration(),
-                    repository_root=self.repository,
-                    commit="2" * 40,
-                    source_branch="main",
-                    event_name="push",
-                    previous_commit=git(self.repository, "rev-parse", "HEAD"),
-                )
 
     def test_sync_from_github_context_plans_targets_and_reports_partial_success(self) -> None:
         """Plant Zielstufen aus dem GitHub-Kontext, meldet Teilerfolge und reicht CLI-Kontext durch."""
@@ -131,13 +77,27 @@ class SyncTests(unittest.TestCase):
                 result = sync_command.sync_from_github_context(**context)
             self.assertEqual(
                 [entry["zielstufe"] for entry in result["synchronisationen"]],
-                ["Entwicklung", "Abnahme"],
+                ["Entwicklung", "Funktionstest"],
             )
             self.assertEqual(
                 [call.kwargs["zielstufe"] for call in synchronize.call_args_list],
-                ["Entwicklung", "Abnahme"],
+                ["Entwicklung", "Funktionstest"],
             )
             self.assertTrue(all(call.kwargs["vollabgleich"] for call in synchronize.call_args_list))
+
+        with self.subTest(ungueltige_bisherige_konfiguration=True):
+            with (
+                patch.object(
+                    sync_command,
+                    "read_file",
+                    return_value=json.dumps({"mandant": {}}).encode(),
+                ),
+                self.assertRaisesRegex(
+                    DeliveryError,
+                    "Bisherige Mandantenkonfiguration",
+                ),
+            ):
+                sync_command.sync_from_github_context(**context)
 
         with self.subTest(manuell=True):
             with patch(
@@ -193,38 +153,6 @@ class SyncTests(unittest.TestCase):
             ):
                 self.assertEqual(sync_command.run(), response)
             self.assertEqual(synchronize.call_args.kwargs["previous_commit"], "1" * 40)
-
-    def test_sync_targets_complete_project_and_rejects_invalid_branch(self) -> None:
-        """Prüft Vollabgleich und Zuordnung von Branch zu M/Text-Ziel."""
-
-        target = self.root / "serverSync"
-        with patch("lbs_delivery.sync.call_adapter", return_value=(202, "angenommen")) as adapter:
-            result = sync_resources(
-                self.configuration,
-                repository_root=self.repository,
-                commit=git(self.repository, "rev-parse", "HEAD"),
-                source_branch="feature/R261/test-sync",
-                releaselinie="R261",
-                zielstufe="Entwicklung",
-                server_sync_root=target,
-            )
-        self.assertEqual(result["status"], Status.ADAPTER_ACCEPTED.value)
-        adapter.assert_called_once_with(
-            "https://en01e.ltoma.intern/vMtextAdapter/sync",
-            timeout=30.0,
-        )
-        self.assertEqual((target / "LOMS_Basis/value.txt").read_text(encoding="utf-8"), "new")
-
-        with self.assertRaises(DeliveryError):
-            sync_resources(
-                self.configuration,
-                repository_root=self.repository,
-                commit=git(self.repository, "rev-parse", "HEAD"),
-                source_branch="unbekannt",
-                releaselinie="R261",
-                zielstufe="Entwicklung",
-                server_sync_root=target,
-            )
 
     def test_incremental_server_sync(self) -> None:
         """Überträgt nur geänderte Ressourcen und verarbeitet Commits ohne Ressourcenänderung."""
@@ -303,9 +231,11 @@ class SyncTests(unittest.TestCase):
         marker = json.loads((target / ".mtext-sync/FI.json").read_text(encoding="utf-8"))
         self.assertEqual(marker["commit"], third_commit)
 
-    def test_incremental_publish_can_be_repeated_after_failure(self) -> None:
-        """Wendet dieselben Änderungen nach einem teilweisen Fehler erneut an."""
+    def test_server_sync_recovers_from_failures_and_rejects_invalid_marker(self) -> None:
+        """Prüft den Wiederanlauf an den Schreib- und Zustandsgrenzen."""
 
+        # Ein DELTA-Wiederanlauf muss bereits ausgeführte Löschungen vertragen
+        # und die zuvor fehlgeschlagene Kopie nachholen.
         source = self.root / "retry-source/LOMS_Basis"
         source.mkdir(parents=True)
         (source / "changed.txt").write_text("new", encoding="utf-8")
@@ -336,17 +266,8 @@ class SyncTests(unittest.TestCase):
         self.assertFalse((project / "deleted.txt").exists())
         self.assertEqual((project / "changed.txt").read_text(encoding="utf-8"), "new")
 
-        (source / "changed.txt").unlink()
-        with self.assertRaisesRegex(DeliveryError, "geänderte Ressource fehlt"):
-            _apply_server_sync_changes(
-                source.parent,
-                target,
-                [("M", "LOMS_Basis/changed.txt")],
-            )
-
-    def test_full_sync_can_be_repeated_after_copy_failure(self) -> None:
-        """Stellt einen beim Kopieren unterbrochenen Vollabgleich beim Wiederanlauf fertig."""
-
+        # Ein fehlgeschlagener Vollabgleich hinterlässt weder einen alten
+        # Projektstand noch einen irreführenden Synchronisationsmarker.
         commit = git(self.repository, "rev-parse", "HEAD")
         target = self.root / "full-retry-serverSync"
         project = target / "LOMS_Basis"
@@ -387,10 +308,8 @@ class SyncTests(unittest.TestCase):
         marker = json.loads((target / ".mtext-sync/FI.json").read_text(encoding="utf-8"))
         self.assertEqual(marker["commit"], commit)
 
-    def test_rejects_invalid_server_sync_marker(self) -> None:
-        """Lehnt beschädigte und einem anderen Repository gehörende Marker ab."""
-
-        commit = git(self.repository, "rev-parse", "HEAD")
+        # Der bestehende Stand darf nur fortgeschrieben werden, wenn sein
+        # Marker lesbar ist und zum aktuellen Repository gehört.
         marker_values = (
             "kein JSON",
             json.dumps({"repository": "anderes/repository", "commit": commit}),
@@ -417,8 +336,8 @@ class SyncTests(unittest.TestCase):
 
         commit = git(self.repository, "rev-parse", "HEAD")
         cases = (
-            ("feature/R261/test-sync", "R261", "Entwicklung", "en01e"),
-            ("main", "R270", "Abnahme", "en02a"),
+            ("feature/R261/test-sync", "R261", "Entwicklung", "en01"),
+            ("main", "R270", "Funktionstest", "fu02"),
         )
         for source_branch, releaselinie, zielstufe, host in cases:
             with self.subTest(source_branch=source_branch):

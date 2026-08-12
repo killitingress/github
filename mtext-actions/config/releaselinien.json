@@ -1,5 +1,11 @@
 {
-  "R260": {"etaps_linie": "en03", "hostprofil": "JUR"},
-  "R261": {"etaps_linie": "en01", "hostprofil": "FKT"},
-  "R270": {"etaps_linie": "en02", "hostprofil": "JUR"}
+  "mtext_ziele": {
+    "Entwicklung": "en",
+    "Funktionstest": "fu"
+  },
+  "releaselinien": {
+    "R260": {"etaps_linie": "03", "hostprofil": "JUR"},
+    "R261": {"etaps_linie": "01", "hostprofil": "FKT"},
+    "R270": {"etaps_linie": "02", "hostprofil": "JUR"}
+  }
 }

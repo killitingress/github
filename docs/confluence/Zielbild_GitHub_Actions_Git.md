@@ -29,8 +29,8 @@ Das Branch-Modell folgt dem FI-Leitfaden:
 - Pull Requests werden mit Squash Merge zusammengeführt
 - Release-Tags folgen dem geschützten Muster `v{Release-Version}`
 
-*Entwicklung* und *Abnahme* sind keine Git-Branches. Sie bezeichnen die beiden
-M/Text-Ziele einer Releaselinie.
+*M/Text-Entwicklung* und *M/Text-Funktionstest* sind keine Git-Branches. Sie
+bezeichnen die beiden M/Text-Umgebungen einer Releaselinie.
 
 ```text
 feature/Rnnn/<Bezeichnung>
@@ -42,26 +42,27 @@ M/Text-Entwicklung der Releaselinie
 Pull Request nach main oder release/Rnnn
     │ Review und Squash Merge
     ▼
-M/Text-Abnahme der Releaselinie
+M/Text-Funktionstest der Releaselinie
     │ Release-Tag auf main oder release/Rnnn
     ▼
 zentraler Paketbau und Mainframe-Übergabe durch mtext_actions
 ```
 
-Bei einem Feature-Push werden die M/Text-Projekte automatisch nach Entwicklung
-synchronisiert. Ein Merge nach `main` oder `release/Rnnn` synchronisiert sie
-automatisch nach Abnahme. Ein Release-Tag startet automatisch den Paketbau und
-die Mainframe-Übergabe.
+Bei einem Feature-Push werden die M/Text-Projekte automatisch mit der
+M/Text-Entwicklungsumgebung synchronisiert. Ein Merge nach `main` oder
+`release/Rnnn` synchronisiert sie automatisch mit der
+M/Text-Funktionstestumgebung. Ein Release-Tag startet automatisch den Paketbau
+und die Mainframe-Übergabe.
 
 ### Entscheidungen und Nutzen
 
 | Entscheidung | Nutzen |
 |---|---|
-| Branches nach dem organisationsweiten Leitfaden | `main`, Release- und Feature-Branches reichen für Entwicklung und Wartung aus. Zusätzliche Prozess-Branches oder Cherry-Picks zwischen Entwicklung und Abnahme sind nicht nötig. |
+| Branches nach dem organisationsweiten Leitfaden | `main`, Release- und Feature-Branches reichen für Entwicklung und Wartung aus. Zusätzliche Prozess-Branches oder Cherry-Picks zwischen M/Text-Entwicklung und M/Text-Funktionstest sind nicht nötig. |
 | Feature-Push nach M/Text-Entwicklung | Eine Änderung kann vor dem Pull Request im passenden M/Text-Ziel geprüft werden. |
 | Pull Request mit Squash Merge | Jeder Pull Request wird als ein fachlicher Commit in den Zielbranch übernommen. Review und Arbeitscommits bleiben im Pull Request sichtbar. |
 | `serverSync` zwischen den Synchronisationen weiterverwenden | Bei einem Push werden neue, geänderte und gelöschte Ressourcen übertragen. Unveränderte Projekte müssen nicht erneut kopiert werden. |
-| Geschützter Release-Tag als Lieferauslöser | Der Tag verweist auf den in Abnahme geprüften Commit und kann später nicht verschoben werden. Er startet automatisch den Paketbau und die Mainframe-Übergabe. |
+| Geschützter Release-Tag als Lieferauslöser | Der Tag verweist auf den in M/Text-Funktionstest geprüften Commit und kann später nicht verschoben werden. Er startet automatisch den Paketbau und die Mainframe-Übergabe. |
 | Freigegebene CI/CD-Version | Alle Mandanten verwenden dieselbe geprüfte Version von `mtext_actions`. Die vollständige Commit-SHA zeigt, welche Version ausgeführt wurde. |
 | Zentrale Mainframe-Zugangsdaten | Mandanten-Repositories benötigen keine Mainframe-Zugangsdaten. |
 
@@ -133,11 +134,11 @@ bleiben dabei unverändert. Nach dem Merge steht `main` für die neue
 Releaselinie.
 
 GitHub Actions erkennt dabei die geänderte `releaselinie` und synchronisiert die
-M/Text-Projekte aus `main` automatisch nach Entwicklung und Abnahme der neuen
-Linie. Die Verantwortlichen des Repositories führen den Wechsel durch und
-kontrollieren beide Ziele. Für `mtext_actions` und `fi_lbs_entw_oms_fi` sind
-dies die FI-Fachverantwortlichen. Für die weiteren Mandanten-Repositories sind
-es die jeweiligen Mandantenverantwortlichen.
+M/Text-Projekte aus `main` automatisch mit M/Text-Entwicklung und
+M/Text-Funktionstest der neuen Linie. Die Verantwortlichen des Repositories
+führen den Wechsel durch und kontrollieren beide Ziele. Für `mtext_actions` und
+`fi_lbs_entw_oms_fi` sind dies die FI-Fachverantwortlichen. Für die weiteren
+Mandanten-Repositories sind es die jeweiligen Mandantenverantwortlichen.
 
 Release-Branches werden gelöscht, wenn keine Änderungen für die Linie mehr
 erwartet werden, bzw. in der Regel spätestens wenn es drei neuere Releases
@@ -149,23 +150,40 @@ Release-Tags ausgecheckt werden.
 ### Zielermittlung
 
 Jede Releaselinie ist einer technischen ETAPS-Linie zugeordnet. Zu jeder
-ETAPS-Linie gehören ein Entwicklungs- und ein Abnahmeziel (jeweils in Stage 0).
+ETAPS-Linie gehören eine M/Text-Entwicklungsumgebung und eine
+M/Text-Funktionstestumgebung, jeweils in Stage 0.
 
 Beispiel:
 
 ```text
-en01e.ltoms.intern   Entwicklung
-en01a.ltoms.intern   Abnahme
+en01.ltoms.intern   M/Text-Entwicklung
+fu01.ltoms.intern   M/Text-Funktionstest
 ```
+
+Die Zielpräfixe und Releaselinien sind gemeinsam versioniert.
+M/Text-Entwicklung verwendet das Präfix `en`, M/Text-Funktionstest das Präfix
+`fu`. Das Feld `etaps_linie` enthält den Zahlenteil der technischen Linie.
+Präfix und Zahlenteil bilden die Umgebungskennung, beispielsweise `en` und
+`01` die Kennung `en01`.
+
+M/Text ist unter `<Umgebungskennung>.ltoms.intern` erreichbar. Der
+Synchronisationsadapter derselben Umgebung wird unter
+`<Umgebungskennung>.ltoma.intern/vMtextAdapter/sync` aufgerufen.
 
 Die Zuordnung wird zentral in `mtext_actions/config/releaselinien.json`
 gepflegt. Die derzeit vorgesehene rollierende Zuordnung lautet:
 
 ```json
 {
-  "R260": {"etaps_linie": "en03", "hostprofil": "JUR"},
-  "R261": {"etaps_linie": "en01", "hostprofil": "FKT"},
-  "R270": {"etaps_linie": "en02", "hostprofil": "JUR"}
+  "mtext_ziele": {
+    "Entwicklung": "en",
+    "Funktionstest": "fu"
+  },
+  "releaselinien": {
+    "R260": {"etaps_linie": "03", "hostprofil": "JUR"},
+    "R261": {"etaps_linie": "01", "hostprofil": "FKT"},
+    "R270": {"etaps_linie": "02", "hostprofil": "JUR"}
+  }
 }
 ```
 
@@ -173,19 +191,20 @@ Für die Zielermittlung gelten folgende Regeln:
 
 | Git-Ereignis | Releaselinie | M/Text-Ziel |
 |---|---|---|
-| Push nach `feature/Rnnn/<Bezeichnung>` | `Rnnn` aus dem Feature-Branch | Entwicklung |
-| Merge nach `release/Rnnn` | `Rnnn` aus dem Release-Branch | Abnahme |
-| Merge nach `main` | `releaselinie` aus der Mandantenkonfiguration | Abnahme |
-| Wechsel der `releaselinie` auf `main` | neue `releaselinie` aus der Mandantenkonfiguration | Entwicklung und Abnahme |
-| Manueller Vollabgleich eines Feature-Branches | `Rnnn` aus dem Feature-Branch | Entwicklung |
-| Manueller Vollabgleich von `main` | `releaselinie` aus dem ausgewählten Commit | Abnahme |
-| Manueller Vollabgleich eines Release-Branches | `Rnnn` aus dem Release-Branch | Abnahme |
+| Push nach `feature/Rnnn/<Bezeichnung>` | `Rnnn` aus dem Feature-Branch | M/Text-Entwicklung |
+| Merge nach `release/Rnnn` | `Rnnn` aus dem Release-Branch | M/Text-Funktionstest |
+| Merge nach `main` | `releaselinie` aus der Mandantenkonfiguration | M/Text-Funktionstest |
+| Wechsel der `releaselinie` auf `main` | neue `releaselinie` aus der Mandantenkonfiguration | M/Text-Entwicklung und M/Text-Funktionstest |
+| Manueller Vollabgleich eines Feature-Branches | `Rnnn` aus dem Feature-Branch | M/Text-Entwicklung |
+| Manueller Vollabgleich von `main` | `releaselinie` aus dem ausgewählten Commit | M/Text-Funktionstest |
+| Manueller Vollabgleich eines Release-Branches | `Rnnn` aus dem Release-Branch | M/Text-Funktionstest |
 
 Ein Push auf einen Feature-Branch startet die Synchronisation automatisch. Der
 Entwickler kontrolliert dann in M/Text, ob die Änderung wie erwartet funktioniert.
 
 Beim Merge des Pull Requests gelangt der Squash-Commit in den geschützten
-Zielbranch. Dadurch startet automatisch die Synchronisation nach Abnahme.
+Zielbranch. Dadurch startet automatisch die Synchronisation mit der
+M/Text-Funktionstestumgebung.
 
 Ein manueller Vollabgleich kann mit einer vollständigen Commit-SHA gestartet
 werden. In GitHub Actions werden dafür der Branch und die Commit-SHA
@@ -369,6 +388,7 @@ fi_lbs_entw_oms_<kuerzel>/
   .github/
     config.json
     workflows/
+      check-resources.yml
       validate-config.yml
       sync-resources.yml
       release.yml
@@ -413,6 +433,7 @@ mtext-actions/
     workflows/
       ci.yml
       release.yml
+      reusable-check-resources.yml
       reusable-release-dispatch.yml
       reusable-release.yml
       reusable-sync-resources.yml
@@ -420,6 +441,7 @@ mtext-actions/
       update-mandant-workflows.yml
   config/
     mandanten.json
+    ressourcenformate.json
     releaselinien.json
   scripts/
     runner-preflight.sh
@@ -434,6 +456,7 @@ mtext-actions/
       release.py
       sync.py
     build_release.py
+    check_resources.py
     publish_github_release.py
     publish_mainframe.py
     sync_resources.py
@@ -453,26 +476,32 @@ mtext-actions/
 |---|---|---|---|---|---|
 | Trigger-Workflows aktualisieren | Manueller Start in `mtext_actions` mit der gewünschten Commit-SHA | keiner | `update-mandant-workflows.yml` | `workflow_configuration.py` | Geschützte Mandantenbranches verwenden die neue `mtext_actions`-Version |
 | Mandantenkonfiguration prüfen | Push mit einer Änderung an `.github/config.json` | `validate-config.yml` | `reusable-validate-config.yml` | `validate_config.py` | Konfiguration geprüft |
-| Entwicklung synchronisieren | Push auf `feature/Rnnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync_resources.py` | Projekte aus dem Commit nach M/Text-Entwicklung übertragen |
-| Abnahme synchronisieren | Push oder Merge auf `main` oder `release/Rnnn` sowie manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync_resources.py` | Projekte aus dem Commit nach M/Text-Abnahme übertragen |
+| JSON- und XML-Ressourcen prüfen | Pull Request oder manueller Start | `check-resources.yml` | `reusable-check-resources.yml` | `check_resources.py` | Geänderte konfigurierte Ressourcen oder gewählter Vollstand geprüft, Syntaxbefunde als nicht blockierende Warnungen angezeigt |
+| M/Text-Entwicklung synchronisieren | Push auf `feature/Rnnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync_resources.py` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
+| M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/Rnnn` sowie manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync_resources.py` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
 | Release bauen und übertragen | Push eines Tags `vnnn.nnn` | `release.yml` | `reusable-release-dispatch.yml` → `release.yml` → `reusable-release.yml` | `build_release.py`, `publish_mainframe.py`, danach `publish_github_release.py` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
 | `mtext_actions` testen | Pull Request oder Push auf `main` in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` | Zentrale Tests ausgeführt |
 
 ### Trigger-Workflows in den Mandanten-Repositories
 
-Die drei Trigger-Workflows reagieren auf Änderungen und starten die
+Die Trigger-Workflows reagieren auf Änderungen und starten die
 Verarbeitung in `mtext_actions`:
 
 | Datei | Auslöser | Aufgabe |
 |---|---|---|
+| `check-resources.yml` | Pull Request oder manueller Start | Geänderte konfigurierte Ressourcen oder den gewählten Vollstand prüfen und Befunde als Warnungen anzeigen |
 | `validate-config.yml` | Änderung an `.github/config.json` | Mandantenkonfiguration prüfen |
-| `sync-resources.yml` | Push auf einen Feature-, `main`- oder Release-Branch sowie manueller Start | Projekte nach M/Text-Entwicklung oder -Abnahme übertragen |
+| `sync-resources.yml` | Push auf einen Feature-, `main`- oder Release-Branch sowie manueller Start | Projekte nach M/Text-Entwicklung oder -Funktionstest übertragen |
 | `release.yml` | Release-Tag | Release-Erstellung starten |
+
+Syntaxbefunde aus `check-resources.yml` dienen als Hinweise und verhindern den
+Merge nicht.
 
 ### Zentrale Workflows
 
 | Datei | Auslöser | Aufgabe |
 |---|---|---|
+| `reusable-check-resources.yml` | Aufruf durch `check-resources.yml` | JSON- und XML-Ressourcen ohne Zugriff auf Zielsysteme prüfen |
 | `reusable-validate-config.yml` | Aufruf durch `validate-config.yml` | Mandantenkonfiguration prüfen |
 | `reusable-sync-resources.yml` | Aufruf durch `sync-resources.yml` | Projekte nach M/Text übertragen |
 | `reusable-release-dispatch.yml` | Aufruf durch `release.yml` im Mandanten-Repository | `release.yml` in `mtext_actions` starten |
@@ -572,8 +601,18 @@ Bei Feature- und Release-Branches steht die Releaselinie im Branchnamen. Bei
 ### Zentrale Zuordnungen
 
 `config/mandanten.json` ordnet Mandantenkürzel und Repository eindeutig
-einander zu. `config/releaselinien.json` ordnet jede aktive Releaselinie ihrer
-technischen ETAPS-Linie und einem Hostprofil zu.
+einander zu. `config/releaselinien.json` ordnet den M/Text-Zielen ihre Präfixe
+und jeder aktiven Releaselinie den Zahlenteil ihrer technischen ETAPS-Linie
+sowie ein Hostprofil zu.
+
+`config/ressourcenformate.json` ordnet Dateiendungen dem technischen Format
+`json` oder `xml` zu. Die Ressourcenprüfung wählt daraus den Parser. Die
+Zuordnung umfasst derzeit:
+
+| Format | Dateiendungen |
+|---|---|
+| JSON | `.json`, `.formio` |
+| XML | `.xml`, `.model`, `.datamodel`, `.conf` |
 
 Das Feld `stage` eines Hostprofils enthält eine der CodePipeline-Stages `FKTE`,
 `FKTF`, `JURJ`, `JURP`, `SVTS` oder `VPTV`.

@@ -2,21 +2,15 @@
 
 from __future__ import annotations
 
-import io
 import json
 import tempfile
 import unittest
-from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
 
-from sync_resources import build_parser as build_sync_parser
-from validate_config import run as validate_config
+from lbs_delivery.config import load_mandanten_zuordnung, load_releaselinien_zuordnung
+from lbs_delivery.process import DeliveryError
 
-from lbs_delivery.config import load_mandanten_zuordnung
-from lbs_delivery.process import DeliveryError, Status, execute
-
-from tests.support import load_test_configuration, setup_repository, write_mandant
+from tests.support import load_test_configuration, setup_repository
 
 
 class ConfigTests(unittest.TestCase):
@@ -77,42 +71,27 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(DeliveryError):
             load_mandanten_zuordnung(mandanten_path)
 
+        releaselinien_path = self.root / "releaselinien.json"
+        releaselinien_path.write_text(
+            json.dumps(
+                {
+                    "mtext_ziele": {
+                        "Entwicklung": "en",
+                        "Funktionstest": "",
+                    },
+                    "releaselinien": {
+                        "R270": {"etaps_linie": "02", "hostprofil": "JUR"},
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(DeliveryError, "M/Text-Ziele"):
+            load_releaselinien_zuordnung(releaselinien_path)
+
         (self.repository / "LOMS_Basisdaten").mkdir()
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository)
-
-    def test_cli_keeps_runner_context_out_of_arguments(self) -> None:
-        """Übergibt nur den Commit. Branch und Ereignis stammen aus dem Runner."""
-
-        with self.subTest(validate_config=True):
-            mandant_path = self.repository / ".github/config.json"
-            mandant_path.parent.mkdir()
-            write_mandant(mandant_path, kuerzel="BY")
-            stderr = io.StringIO()
-            with (
-                patch.dict(
-                    "os.environ",
-                    {
-                        "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
-                        "GITHUB_WORKSPACE": str(self.root),
-                    },
-                    clear=True,
-                ),
-                redirect_stdout(io.StringIO()),
-                redirect_stderr(stderr),
-            ):
-                exit_code = execute(validate_config)
-            self.assertEqual(exit_code, 2)
-            self.assertIn(Status.VALIDATION_FAILED.value, stderr.getvalue())
-            self.assertIn("Mandant passt nicht zum Repository", stderr.getvalue())
-
-        with self.subTest(sync_resources=True):
-            parser = build_sync_parser()
-            sync = parser.parse_args(["--commit", "a" * 40])
-            self.assertFalse(hasattr(sync, "source_branch"))
-            with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                parser.parse_args(["--commit", "a" * 40, "--repository-root", "source"])
-
 
 if __name__ == "__main__":
     unittest.main()

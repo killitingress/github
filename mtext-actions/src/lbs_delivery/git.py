@@ -116,16 +116,16 @@ def read_file(repository: str | Path, commit: str, path: str | Path) -> bytes:
 def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str, str]:
     """Ordnet einen zulässigen Quellbranch Releaselinie und M/Text-Zielstufe zu.
 
-    `main` und `release/Rnnn` führen zur Abnahme,
-    `feature/Rnnn/<Bezeichnung>` zur Entwicklung. Weitere Schrägstriche in der
-    Feature-Bezeichnung sind erlaubt.
+    `main` und `release/Rnnn` führen zum M/Text-Ziel Funktionstest,
+    `feature/Rnnn/<Bezeichnung>` zum M/Text-Ziel Entwicklung. Weitere
+    Schrägstriche in der Feature-Bezeichnung sind erlaubt.
     """
 
     if source_branch == "main":
-        return main_releaselinie, "Abnahme"
+        return main_releaselinie, "Funktionstest"
     release_match = RELEASE_BRANCH_RE.fullmatch(source_branch)
     if release_match is not None:
-        return release_match.group(1), "Abnahme"
+        return release_match.group(1), "Funktionstest"
     feature_match = FEATURE_BRANCH_RE.fullmatch(source_branch)
     if feature_match is not None:
         return feature_match.group(1), "Entwicklung"
