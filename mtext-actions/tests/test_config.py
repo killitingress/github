@@ -1,30 +1,22 @@
-"""Prüft den Konfigurationsvertrag des Repositories ohne externe Systeme."""
+"""Prüft Mandantenkonfiguration und Projektverzeichnisse."""
 
 from __future__ import annotations
 
 import json
-import tempfile
 import unittest
-from pathlib import Path
 
 from lbs_delivery.config import load_mandanten_zuordnung, load_releaselinien_zuordnung
 from lbs_delivery.process import DeliveryError
 
-from tests.support import load_test_configuration, setup_repository
+from tests.support import TempDirTestCase, load_test_configuration, setup_repository
 
 
-class ConfigTests(unittest.TestCase):
+class ConfigTests(TempDirTestCase):
     def setUp(self) -> None:
-        """Erzeugt ein gültiges Mandanten-Repository als Ausgangspunkt jedes Tests."""
-
-        self.temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        super().setUp()
         self.repository = setup_repository(self.root, branch="main")
 
     def test_warns_on_project_deviation(self) -> None:
-        """Meldet fehlende und zusätzliche Projekte als Warnung, nicht als Fehler."""
-
         (self.repository / "Fonts/value.txt").unlink()
         (self.repository / "Fonts").rmdir()
         (self.repository / "LOMS_Autonom").mkdir()
@@ -33,8 +25,6 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(any("zusätzlich" in warnung for warnung in configuration.warnungen))
 
     def test_derives_fragment_project_codes_for_by(self) -> None:
-        """Leitet BY-Fragmentcodes aus Verzeichnisnamen ab."""
-
         for project in ("Configuration", "Fonts", "LOMS_Framework", "LOMS_PKA"):
             (self.repository / project / "value.txt").unlink()
             (self.repository / project).rmdir()
@@ -49,8 +39,6 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(configuration.subsystem, "BYMT")
 
     def test_rejects_invalid_configuration(self) -> None:
-        """Lehnt widersprüchliche Identität, Zuordnung und Projektstruktur ab."""
-
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository, mandant={"kuerzel": "BY"})
         with self.assertRaises(DeliveryError):
@@ -75,13 +63,8 @@ class ConfigTests(unittest.TestCase):
         releaselinien_path.write_text(
             json.dumps(
                 {
-                    "mtext_ziele": {
-                        "Entwicklung": "en",
-                        "Funktionstest": "",
-                    },
-                    "releaselinien": {
-                        "R270": {"etaps_linie": "02", "hostprofil": "JUR"},
-                    },
+                    "mtext_ziele": {"Entwicklung": "en"},
+                    "releaselinien": {"R270": {"etaps_linie": "02", "hostprofil": "JUR"}},
                 }
             ),
             encoding="utf-8",
@@ -92,6 +75,7 @@ class ConfigTests(unittest.TestCase):
         (self.repository / "LOMS_Basisdaten").mkdir()
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository)
+
 
 if __name__ == "__main__":
     unittest.main()

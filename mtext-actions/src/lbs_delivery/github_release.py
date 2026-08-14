@@ -14,12 +14,11 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-from .manifest import load_and_verify
-from .process import DeliveryError, Status
+from .process import DeliveryError, NETWORK_TIMEOUT, Status
+from .release import FULL_SUFFIX
 
 
-# Diese Version bezeichnet den von GitHub Enterprise Server dokumentierten
-# REST-Vertrag für Releases und Release-Assets.
+# API-Version für das Anlegen von Releases und das Hochladen ihrer Dateien.
 GITHUB_API_VERSION = "2022-11-28"
 # GitHub empfiehlt diesen Medientyp für JSON-Antworten der REST-API.
 GITHUB_JSON_MEDIA_TYPE = "application/vnd.github+json"
@@ -35,14 +34,13 @@ def _github_request(
     content_type: str | None = None,
     missing_ok: bool = False,
 ) -> Any:
-    """Führt einen GitHub-REST-Aufruf aus und übersetzt Transportfehler.
+    """Sendet eine Anfrage an die GitHub-API und liest ihre JSON-Antwort.
 
-    JSON-Aufrufe und binäre Asset-Uploads verwenden dieselbe abgesicherte
-    HTTP-Grenze. Das Zugangstoken erscheint weder in URLs noch in Fehlertexten.
+    Die Funktion versendet JSON-Daten und Dateien. Wenn `missing_ok` gesetzt ist,
+    gibt sie bei HTTP 404 `None` zurück. Andere HTTP- und Verbindungsfehler
+    beenden die Veröffentlichung. Das Token wird im Authorization-Header
+    übertragen.
     """
-
-    if payload is not None and content is not None:
-        raise ValueError("payload und content dürfen nicht gemeinsam gesetzt sein")
 
     body = json.dumps(payload).encode("utf-8") if payload is not None else content
     headers = {
@@ -57,16 +55,24 @@ def _github_request(
 
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=NETWORK_TIMEOUT) as response:
             response_body = response.read()
     except urllib.error.HTTPError as exc:
+        # Fehlende Releases dürfen bei der ersten Anlage ohne Fehler fehlen.
         if missing_ok and exc.code == 404:
             return None
+        # GitHub liefert Fehlerdetails als JSON mit einem `message`-Feld.
+        detail = ""
         try:
             error_body = json.loads(exc.read().decode("utf-8"))
-            detail = error_body.get("message", "") if isinstance(error_body, dict) else ""
         except (UnicodeError, json.JSONDecodeError):
-            detail = ""
+            pass
+        else:
+            match error_body:
+                case {"message": str(message)}:
+                    detail = message
+                case _:
+                    pass
         suffix = f": {detail}" if detail else ""
         raise DeliveryError(
             Status.GITHUB_RELEASE_FAILED,
@@ -75,6 +81,7 @@ def _github_request(
     except (urllib.error.URLError, TimeoutError) as exc:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub ist nicht erreichbar") from exc
 
+    # DELETE und manche erfolgreiche Uploads antworten ohne JSON-Körper.
     if not response_body:
         return None
     try:
@@ -83,61 +90,14 @@ def _github_request(
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub-Antwort ist ungültig") from exc
 
 
-def _markdown_cell(value: object) -> str:
-    """Schützt einen Wert vor einer unbeabsichtigten Trennung der Markdown-Tabelle."""
-
-    return str(value).replace("|", "\\|").replace("\n", " ")
-
-
-def _release_body(
-    manifest: dict[str, Any], information_files: list[dict[str, Any]], *, server_url: str,
-) -> str:
-    """Erzeugt die lesbare GitHub-Beschreibung aus dem geprüften Manifest."""
-
-    repository = manifest["repository"]
-    release_tag = manifest["release_tag"]
-    previous_tag = manifest.get("previous_tag")
-    comparison = f"seit {previous_tag}" if previous_tag else "im Release"
-    download_root = (
-        f"{server_url.rstrip('/')}/{repository}/releases/download/"
-        f"{urllib.parse.quote(release_tag, safe='')}"
-    )
-
-    lines = [
-        "## Lieferung",
-        "",
-        f"- Mandant: `{manifest['mandant']}`",
-        f"- Release: `{release_tag}`",
-        f"- Lieferart: `{manifest['delivery_type']}`",
-        f"- Commit: `{manifest['target_sha']}`",
-        "",
-        "Die Pakete und die zugehörige JCL wurden von FTP und JES angenommen.",
-        "",
-        "## Projekte",
-        "",
-        f"| Projekt | Änderungen {comparison} | Einträge im Paket | Informationsdatei |",
-        "|---|---:|---:|---|",
-    ]
-    for information in information_files:
-        name = information["path"]
-        link = f"{download_root}/{urllib.parse.quote(name, safe='')}"
-        lines.append(
-            f"| {_markdown_cell(information['project'])} "
-            f"| {len(information['changes'])} "
-            f"| {len(information['archive_entries'])} "
-            f"| [{_markdown_cell(name)}]({link}) |"
-        )
-    return "\n".join(lines) + "\n"
-
-
 def publish_github_release(
     *,
-    manifest_path: str | Path,
     artifact_root: str | Path,
     api_url: str,
     server_url: str,
     repository: str,
     release_tag: str,
+    source_sha: str,
     token: str,
 ) -> dict[str, object]:
     """Legt das GitHub Release an und hängt die Informationsdateien an.
@@ -147,42 +107,44 @@ def publish_github_release(
     nach einem Fehler mit denselben Eingaben wiederholt werden.
     """
 
-    manifest, _packages = load_and_verify(manifest_path, artifact_root)
-    try:
-        if manifest["repository"] != repository or manifest["release_tag"] != release_tag:
-            raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub-Ziel passt nicht zum Manifest")
-        if not all(
-            isinstance(manifest[name], str)
-            for name in ("repository", "mandant", "release_tag", "delivery_type", "target_sha")
-        ):
-            raise TypeError
-        information_files = [
-            artifact for artifact in manifest["artifacts"]
-            if artifact.get("kind") == "information"
-        ]
-        if not information_files:
-            raise TypeError
-        for information in information_files:
-            if (
-                not isinstance(information.get("path"), str)
-                or not isinstance(information.get("project"), str)
-                or not isinstance(information.get("changes"), list)
-                or not isinstance(information.get("archive_entries"), list)
-            ):
-                raise TypeError
-    except (KeyError, TypeError) as exc:
-        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Manifest ist für das GitHub Release unvollständig") from exc
+    information_files = sorted(Path(artifact_root).glob("_INFO_*.txt"))
+    if not information_files:
+        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien fehlen")
+
+    # Release-Beschreibung mit Kurzüberblick und Download-Links zu den Lieferbelegen.
+    download_root = (
+        f"{server_url.rstrip('/')}/{repository}/releases/download/"
+        f"{urllib.parse.quote(release_tag, safe='')}"
+    )
+    lines = [
+        "## Lieferung",
+        "",
+        f"- Release: `{release_tag}`",
+        f"- Lieferart: `{'FULL' if release_tag.endswith(FULL_SUFFIX) else 'DELTA'}`",
+        f"- Commit: `{source_sha}`",
+        "",
+        "Die Pakete und die zugehörige JCL wurden von FTP und JES angenommen.",
+        "",
+        "## Informationsdateien",
+        "",
+    ]
+    for information in information_files:
+        name = information.name
+        link = f"{download_root}/{urllib.parse.quote(name, safe='')}"
+        lines.append(f"- [Herunterladen]({link}): `{name}`")
+    body = "\n".join(lines) + "\n"
 
     repository_path = urllib.parse.quote(repository, safe="/")
     release_path = urllib.parse.quote(release_tag, safe="")
     releases_url = f"{api_url.rstrip('/')}/repos/{repository_path}/releases"
+
+    # Vorhandenes Release laden oder bei der ersten Veröffentlichung anlegen.
     release = _github_request(
         method="GET",
         url=f"{releases_url}/tags/{release_path}",
         token=token,
         missing_ok=True,
     )
-    body = _release_body(manifest, information_files, server_url=server_url)
     release_values = {
         "tag_name": release_tag,
         "name": f"Release {release_tag}",
@@ -194,14 +156,11 @@ def publish_github_release(
     if release is None:
         release = _github_request(method="POST", url=releases_url, token=token, payload=release_values)
     else:
-        try:
-            release_id = release["id"]
-            assets = release.get("assets", [])
-            if not isinstance(release_id, int) or not isinstance(assets, list):
-                raise TypeError
-            existing_assets = assets
-        except (KeyError, TypeError) as exc:
-            raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Vorhandenes GitHub Release ist ungültig") from exc
+        match release:
+            case {"id": int(release_id), "assets": list(existing_assets)}:
+                pass
+            case _:
+                raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Vorhandenes GitHub Release ist ungültig")
         release = _github_request(
             method="PATCH",
             url=f"{releases_url}/{release_id}",
@@ -209,21 +168,23 @@ def publish_github_release(
             payload=release_values,
         )
 
-    try:
-        upload_url = release["upload_url"].split("{", 1)[0]
-        release_url = release["html_url"]
-        if not isinstance(upload_url, str) or not isinstance(release_url, str):
-            raise TypeError
-    except (KeyError, TypeError, AttributeError) as exc:
-        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub Release ist unvollständig") from exc
+    # Upload-URL und öffentliche Release-Adresse aus der API-Antwort übernehmen.
+    match release:
+        case {"upload_url": str(upload_url), "html_url": str(release_url)}:
+            upload_url = upload_url.split("{", 1)[0]
+        case _:
+            raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub Release ist unvollständig")
 
-    assets_by_name = {
-        asset.get("name"): asset.get("id")
-        for asset in existing_assets
-        if isinstance(asset, dict) and isinstance(asset.get("name"), str) and isinstance(asset.get("id"), int)
-    }
+    # Gleichnamige Informationsdateien aus einem früheren Lauf vor dem erneuten Upload entfernen.
+    assets_by_name: dict[str, int] = {}
+    for asset in existing_assets:
+        match asset:
+            case {"name": str(name), "id": int(asset_id)}:
+                assets_by_name[name] = asset_id
+            case _:
+                raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub-Asset ist ungültig")
     for information in information_files:
-        name = information["path"]
+        name = information.name
         asset_id = assets_by_name.get(name)
         if asset_id is not None:
             _github_request(
@@ -231,15 +192,11 @@ def publish_github_release(
                 url=f"{releases_url}/assets/{asset_id}",
                 token=token,
             )
-        try:
-            content = (Path(artifact_root) / name).read_bytes()
-        except OSError as exc:
-            raise DeliveryError(Status.GITHUB_RELEASE_FAILED, f"Informationsdatei fehlt: {name}") from exc
         _github_request(
             method="POST",
             url=f"{upload_url}?{urllib.parse.urlencode({'name': name})}",
             token=token,
-            content=content,
+            content=information.read_bytes(),
             content_type="text/plain; charset=utf-8",
         )
 

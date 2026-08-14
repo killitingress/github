@@ -11,12 +11,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from lbs_delivery.config import load_configuration
-from lbs_delivery.process import Status, execute
+from lbs_delivery import config, process
 
 
 def run() -> dict[str, object]:
-    """Lädt die Konfiguration des aufrufenden Repositories und gibt die Workflow-Übersicht zurück.
+    """Prüft die Mandantenkonfiguration und gibt ihre wichtigsten Angaben zurück.
 
     `load_configuration` prüft Mandantenidentität, M/Text-Ziele, Hostprofile,
     Releaselinien und die lieferbaren Projektverzeichnisse. Synchronisation und
@@ -24,9 +23,9 @@ def run() -> dict[str, object]:
     """
 
     workspace = Path(os.environ["GITHUB_WORKSPACE"])
-    configuration = load_configuration(workspace / "source", os.environ["GITHUB_REPOSITORY"])
+    configuration = config.load_configuration(workspace / "source", os.environ["GITHUB_REPOSITORY"])
     result: dict[str, object] = {
-        "status": Status.CONFIG_VALIDATED.value,
+        "status": process.Status.CONFIG_VALIDATED.value,
         "mandanten_kuerzel": configuration.kuerzel,
         "repository": configuration.repository,
         "releaselinie": configuration.releaselinie,
@@ -38,4 +37,4 @@ def run() -> dict[str, object]:
 
 
 if __name__ == "__main__":
-    raise SystemExit(execute(run))
+    raise SystemExit(process.execute(run))

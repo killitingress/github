@@ -1,23 +1,24 @@
 name: Zentrales Release
 
-# Dieser Workflow startet nach einem geprüften Mandantenaufruf das zentrale Release
+# Dieser Workflow baut und überträgt das Release des angegebenen
+# Mandanten-Repositories
 'on':
   workflow_dispatch:
     inputs:
       source_repository:
-        description: Vollständiger Name des Mandanten-Repositories
+        description: Mandanten-Repository, aus dem das Release erstellt wird
         required: true
         type: string
       release_tag:
-        description: Geschützter Release-Tag im Format vnnn.nnn
+        description: Release-Tag im Format vnnn.nnn
         required: true
         type: string
       trigger_sha:
-        description: Commit des auslösenden Tag-Ereignisses
+        description: Commit, auf den der Release-Tag zeigt
         required: true
         type: string
       automation_ref:
-        description: Vollständige SHA der freigegebenen CI/CD-Version
+        description: Commit-SHA in mtext_actions mit den Skripten für das Release
         required: true
         type: string
 
@@ -25,16 +26,146 @@ permissions:
   contents: read
 
 jobs:
-  # Übergibt die geprüften Eingaben und benötigten Secrets an den Releaseablauf
-  release:
-    name: Erstellt und veröffentlicht zentrales Release
-    uses: ./.github/workflows/reusable-release.yml
-    with:
-      source_repository: ${{ inputs.source_repository }}
-      release_tag: ${{ inputs.release_tag }}
-      trigger_sha: ${{ inputs.trigger_sha }}
-      automation_ref: ${{ inputs.automation_ref }}
-      serialize_publication: true
-    secrets:
-      source_token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
-      mainframe_ftp_password: ${{ secrets.MAINFRAME_FTP_PASSWORD }}
+  # Erstellt die Pakete mit ihrer JCL und den lesbaren Lieferbelegen
+  build:
+    name: FULL- oder DELTA-Artefakt erstellen
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 15
+    outputs:
+      artifact_name: ${{ steps.metadata.outputs.artifact_name }}
+    steps:
+      # Lädt den Commit des Release-Tags mit seiner Historie
+      - name: Check-Out Release-Tag
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+          repository: ${{ inputs.source_repository }}
+          ref: refs/tags/${{ inputs.release_tag }}
+          token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+
+      # Lädt die Skripte für die Release-Erstellung
+      - name: Check-Out CI/CD-Version
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+          ref: ${{ inputs.automation_ref }}
+          path: automation
+          persist-credentials: false
+
+      # Prüft Git und Python und stellt den Python-Pfad bereit
+      - name: Python-Runtime ermitteln
+        id: runtime
+        run: bash automation/scripts/runner-preflight.sh
+
+      # Schreibt alle Dateien für die Mainframe-Übergabe nach dist
+      - name: Release-Dateien erstellen
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+          INPUT_TRIGGER_SHA: ${{ inputs.trigger_sha }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+        run: >-
+          "${{ steps.runtime.outputs.python }}" automation/src/build_release.py
+          --tag "$INPUT_RELEASE_TAG"
+          --trigger-sha "$INPUT_TRIGGER_SHA"
+
+      # Ermittelt den Artefaktnamen aus Repository und Release-Tag
+      - name: Artefaktnamen ermitteln
+        id: metadata
+        env:
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+        run: |
+          repository_short="${SOURCE_REPOSITORY##*/}"
+          printf 'artifact_name=%s-%s\n' "$repository_short" "$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      # Speichert den Inhalt von dist als Laufartefakt
+      - name: Release-Artefakt speichern
+        uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de
+        with:
+          name: ${{ steps.metadata.outputs.artifact_name }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  # Die Mainframe-Zugangsdaten sind nur in diesem Job verfügbar
+  publish:
+    name: Release an Mainframe übergeben
+    needs: build
+    runs-on: [self-hosted, linux]
+    concurrency:
+      group: mainframe-${{ inputs.source_repository }}
+      cancel-in-progress: false
+    timeout-minutes: 15
+    steps:
+      # Lädt die Skripte für die Mainframe-Übergabe
+      - name: Check-Out CI/CD-Version
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+          ref: ${{ inputs.automation_ref }}
+          path: automation
+          persist-credentials: false
+
+      # Lädt das Release-Artefakt in das für diesen Job geleerte temporäre Verzeichnis
+      - name: Release-Artefakt herunterladen
+        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: ${{ runner.temp }}/release
+
+      # Prüft Git und Python und stellt den Python-Pfad bereit
+      - name: Python-Runtime ermitteln
+        id: runtime
+        run: bash automation/scripts/runner-preflight.sh
+
+      # Überträgt jedes Paket per FTP und reicht seine JCL bei JES ein
+      - name: Release an Mainframe übergeben
+        env:
+          MAINFRAME_FTP_HOST: ${{ vars.MAINFRAME_FTP_HOST }}
+          MAINFRAME_FTP_PASSWORD: ${{ secrets.MAINFRAME_FTP_PASSWORD }}
+          MAINFRAME_FTP_USER: ${{ vars.MAINFRAME_FTP_USER }}
+          RELEASE_DIRECTORY: ${{ runner.temp }}/release
+        run: >-
+          "${{ steps.runtime.outputs.python }}" automation/src/publish_mainframe.py
+
+  # Veröffentlicht das GitHub Release nach der Mainframe-Übergabe
+  report:
+    name: Bereitstellungsbericht im Mandanten-Repository veröffentlichen
+    needs: [build, publish]
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 15
+    steps:
+      # Lädt die zum Release gehörende CI/CD-Version
+      - name: Check-Out CI/CD-Version
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+          ref: ${{ inputs.automation_ref }}
+          path: automation
+          persist-credentials: false
+
+      # Lädt das Release-Artefakt in das für diesen Job geleerte temporäre Verzeichnis
+      - name: Release-Artefakt herunterladen
+        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: ${{ runner.temp }}/release
+
+      # Prüft Git und Python und stellt den Python-Pfad bereit
+      - name: Python-Runtime ermitteln
+        id: runtime
+        run: bash automation/scripts/runner-preflight.sh
+
+      # Veröffentlicht das GitHub Release und die Informationsdateien
+      - name: GitHub Release veröffentlichen
+        env:
+          MANDANT_REPOSITORY_TOKEN: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+          RELEASE_DIRECTORY: ${{ runner.temp }}/release
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          TRIGGER_SHA: ${{ inputs.trigger_sha }}
+        run: >-
+          "${{ steps.runtime.outputs.python }}" automation/src/publish_github_release.py

@@ -1,17 +1,20 @@
 name: Wiederverwendbare M/Text-Ressourcensynchronisierung
 
-# Dieser Workflow synchronisiert die Ressourcen eines Mandanten-Commits mit M/Text
+# Dieser Workflow synchronisiert Ressourcen mit M/Text
 'on':
   workflow_call:
     inputs:
       commit_sha:
+        description: Commit im Mandanten-Repository, dessen Ressourcen synchronisiert werden
         required: true
         type: string
       automation_ref:
+        description: CI/CD-Version, aus der dieser Workflow geladen wurde
         required: true
         type: string
     secrets:
       automation_token:
+        description: Token zum Laden der festgelegten CI/CD-Version
         required: true
 
 permissions:
@@ -19,11 +22,11 @@ permissions:
 
 jobs:
   sync:
-    name: Synchronisiert Mandanten-Commit mit M/Text
+    name: Ressourcen mit M/Text synchronisieren
     runs-on: [self-hosted, linux]
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
-      # Lädt den Mandanten-Commit mit seiner Historie in den Arbeitsbereich
+      # Lädt den angegebenen Commit mit seiner Historie
       - name: Check-Out Mandanten-Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -32,7 +35,7 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
 
-      # Lädt die freigegebene CI/CD-Version in den Arbeitsbereich
+      # Lädt die Skripte für die Synchronisierung
       - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -42,12 +45,12 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.automation_token }}
 
-      # Prüft den Runner und stellt den Pfad zur Python-Laufzeit als Ausgabe bereit
+      # Prüft Git und Python und stellt den Python-Pfad bereit
       - name: Python-Runtime ermitteln
         id: runtime
-        run: automation/scripts/runner-preflight.sh
+        run: bash automation/scripts/runner-preflight.sh
 
-      # Prüft den Mandantenstand und synchronisiert die Ressourcen mit der M/Text-Stufe
+      # Prüft den Commit und synchronisiert die Ressourcen mit der M/Text-Stufe
       - name: Ressourcen synchronisieren
         env:
           INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}

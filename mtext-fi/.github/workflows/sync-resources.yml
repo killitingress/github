@@ -1,6 +1,6 @@
 name: M/Text-Ressourcen synchronisieren
 
-# Dieser Workflow synchronisiert Mandantenressourcen mit der zugehörigen M/Text-Stufe
+# Dieser Workflow synchronisiert die Ressourcen mit der zugehörigen M/Text-Stufe
 'on':
   push:
     branches:
@@ -21,18 +21,20 @@ name: M/Text-Ressourcen synchronisieren
 permissions:
   contents: read
 
-# Verhindert parallele Synchronisierungen desselben Mandanten-Repositories
+# Synchronisierungen laufen nacheinander
 concurrency:
   group: mtext-sync-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
-  # Ruft die Ressourcensynchronisierung der freigegebenen CI/CD-Version auf
+  # Der zentrale Workflow führt die Synchronisierung aus
   sync:
-    name: Ressourcen synchronisieren
+    name: Ressourcen mit M/Text synchronisieren
+    timeout-minutes: 15
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
     with:
       commit_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.commit_sha || github.sha }}
+      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
       automation_ref: 0000000000000000000000000000000000000000
     secrets:
       automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

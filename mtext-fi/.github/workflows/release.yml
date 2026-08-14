@@ -1,6 +1,6 @@
 name: Zentrales Release starten
 
-# Dieser Workflow startet bei einem geschützten Release-Tag den zentralen Releaseablauf
+# Ein neuer Release-Tag startet den Release-Workflow in mtext_actions
 'on':
   push:
     tags:
@@ -9,20 +9,23 @@ name: Zentrales Release starten
 permissions:
   contents: read
 
+# Derselbe Release-Tag wird nicht gleichzeitig mehrfach verarbeitet
 concurrency:
   group: release-dispatch-${{ github.repository }}-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  # Ruft den Release-Start der festgelegten CI/CD-Version auf
+  # Übergibt Repository, Tag und Commit an den zentralen Workflow
   dispatch:
-    name: Startet Release in mtext_actions
+    name: Zentrales Release starten
+    timeout-minutes: 15
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-release-dispatch.yml@0000000000000000000000000000000000000000
     with:
       source_repository: ${{ github.repository }}
       target_repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
       release_tag: ${{ github.ref_name }}
       trigger_sha: ${{ github.sha }}
+      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
       automation_ref: 0000000000000000000000000000000000000000
     secrets:
       dispatch_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

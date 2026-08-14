@@ -1,7 +1,7 @@
 name: JSON- und XML-Ressourcenprüfung
 
-# Dieser Workflow prüft die konfigurierten Ressourcenformate eines Pull Requests
-# oder startet eine manuelle Vollprüfung des gewählten Branchstands
+# Bei Pull Requests prüft dieser Workflow die geänderten JSON- und
+# XML-Ressourcen. Bei einem manuellen Start prüft er den gesamten Branchstand
 'on':
   pull_request:
   workflow_dispatch:
@@ -15,13 +15,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Ruft die Ressourcenprüfung der freigegebenen CI/CD-Version auf
+  # Der zentrale Workflow führt die Prüfung aus
   check:
-    name: Prüft JSON- und XML-Ressourcen
+    name: JSON- und XML-Ressourcen prüfen
+    timeout-minutes: 15
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-check-resources.yml@0000000000000000000000000000000000000000
     with:
-      # Prüft beim Pull Request den Merge-Commit und beim manuellen Lauf den gewählten Branchstand
+      # Pull Requests prüfen den Merge-Commit, manuelle Starts den gewählten Branchstand
       commit_sha: ${{ github.sha }}
+      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
       automation_ref: 0000000000000000000000000000000000000000
       changed_only: ${{ github.event_name == 'pull_request' }}
     secrets:

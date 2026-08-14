@@ -5,7 +5,7 @@ Das Repository `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`, kurz
 Mandantenkonfiguration, M/Text-Synchronisation, Releasebau und
 Mainframe-Übergabe.
 
-## Git-Vertrag
+## Branches und Auslöser
 
 - `main` vertritt die führende Releaselinie eines Mandanten.
 - `release/Rnnn` vertritt eine parallel gepflegte Releaselinie.
@@ -18,7 +18,7 @@ Mainframe-Übergabe.
 - Ein Wechsel der auf `main` konfigurierten Releaselinie gleicht den ersten
   Stand automatisch vollständig mit M/Text-Entwicklung und
   M/Text-Funktionstest ab.
-- Tags wie `v261.100` und `v261.108` starten den zentralen Releaseweg.
+- Tags wie `v261.100` und `v261.108` starten den Release-Workflow.
 
 ## Aufbau
 
@@ -28,13 +28,12 @@ Mainframe-Übergabe.
 - `src/build_release.py`: Einstieg in den Releasebau
 - `src/publish_mainframe.py`: Einstieg in die Mainframe-Übergabe
 - `src/publish_github_release.py`: Rückmeldung im Mandanten-Repository
-- `src/workflow_configuration.py`: geprüfte Workflow-Aktualisierungen
+- `src/workflow_configuration.py`: Workflow-Aktualisierungen
 - `src/lbs_delivery/config.py`: Mandanten- und Releaselinienkonfiguration
 - `src/lbs_delivery/git.py`: Commit-, Branch-, Tag- und Diff-Abfragen
 - `src/lbs_delivery/sync.py`: dauerhafter `serverSync`-Stand und LTOMA-Aufruf
-- `src/lbs_delivery/release.py`: FULL, DELTA, Archive und Lieferbelege
-- `src/lbs_delivery/manifest.py`: Manifest und Artefaktprüfung
-- `src/lbs_delivery/mainframe.py`: JCL-Rendering und FTP-/JES-Übergabe
+- `src/lbs_delivery/release.py`: FULL, DELTA, Archive, JCL und Lieferbelege
+- `src/lbs_delivery/mainframe.py`: FTP-/JES-Übergabe
 - `src/lbs_delivery/github_release.py`: GitHub Release und Informationsdateien
 - `config/mandanten.json`: Mandantenkürzel, Repositories und Subsysteme
 - `config/ressourcenformate.json`: Dateiendungen und ihr technisches Format
@@ -69,24 +68,26 @@ GitHub Environments werden nicht verwendet.
 
 Der manuell gestartete Workflow **Mandanten-Workflows aktualisieren** erhält die
 vollständige Commit-SHA der gewünschten CI/CD-Version von `mtext_actions`. Er
-wird von den zuständigen Admins gestartet, prüft die freigegebene
+wird von den zuständigen Admins gestartet, prüft die angegebene
 CI/CD-Version und verarbeitet für jeden Mandanten:
 
 - `main`,
 - vorhandene `release/Rnnn`-Branches der aktiven Releaselinien.
 
-Der Lauf trägt diese Commit-SHA in den bestehenden Mandanten-Workflows ein und
-pusht den Rollout-Commit direkt auf den jeweiligen Zielbranch. Nicht vorhandene
-Release-Branches werden übersprungen. Feature-Branches sind keine
-Rollout-Ziele. Der Rollout enthält ausschließlich Änderungen unter
-`.github/workflows` und startet keine M/Text-Synchronisation.
+Der Lauf aktualisiert unter `.github/workflows` alle `.yml`- und `.yaml`-Dateien,
+die einen wiederverwendbaren Workflow aus `mtext_actions` aufrufen. Eigene
+Workflows ohne einen solchen Aufruf bleiben unverändert. Anschließend pusht der
+Lauf den Rollout-Commit direkt auf den jeweiligen Zielbranch. Nicht vorhandene
+Mandanten-Repositories und Branches werden mit einer Warnung übersprungen.
+Feature-Branches sind keine Rollout-Ziele. Der Rollout startet keine
+M/Text-Synchronisation.
 
 ## Automatische Prüfung
 
 Jeder Pull Request in `mtext_actions` und jede Änderung an `main` startet den
 GitHub-Workflow **Zentrale Testsuite**. Er führt die Python-Tests auf dem dafür
 vorgesehenen Runner aus, ohne M/Text oder den Mainframe anzusprechen. Vor dem
-Zusammenführen muss der Testjob **Testet Zentrale CI/CD-Implementierung**
+Zusammenführen muss der Testjob **Zentrale CI/CD-Implementierung testen**
 erfolgreich abgeschlossen sein.
 
 Die Anwendung benötigt Python ab Version 3.11 und verwendet für ihre

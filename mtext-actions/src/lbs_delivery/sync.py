@@ -1,4 +1,4 @@
-"""Synchronisiert einen geprüften Repositorystand mit den externen M/Text-Systemen.
+"""Synchronisiert einen Repositorystand mit den externen M/Text-Systemen.
 
 Der Ablauf kopiert einen vollständigen Projektstand oder einzelne Änderungen
 direkt aus dem Checkout nach serverSync. Anschließend ruft er den zur
@@ -17,18 +17,13 @@ from pathlib import Path
 
 from .config import Configuration
 from .git import changes, project_changes, require_ancestor, resolve
-from .process import DeliveryError, Status
+from .process import DeliveryError, NETWORK_TIMEOUT, Status
 
 
-# Begrenzung der Antwortgröße des Adapters in Bytes.
-ADAPTER_RESPONSE_LIMIT = 1024 * 1024  # 1 MB
+# Vom Adapter werden höchstens 1 MB Antworttext eingelesen.
+ADAPTER_RESPONSE_LIMIT = 1024 * 1024
 
-# Wartezeit pro Adapteraufruf. Der Wert soll den Workflow nicht länger blockieren
-# als für die FI üblich nötig.
-ADAPTER_TIMEOUT = 30.0
-
-# URL-Muster des vMtext-Synchronisationsadapters. Die technische Umgebung wird
-# aus Releaselinien-Konfiguration und Zielstufe gebildet.
+# URL-Muster des LTOMA Sync-Endpunktes.
 ADAPTER_SYNC_URL = "https://{umgebung}.ltoma.intern/vMtextAdapter/sync"
 
 # Dieses Unterverzeichnis hält je Mandant den Commit des von LTOMA angenommenen
@@ -36,12 +31,8 @@ ADAPTER_SYNC_URL = "https://{umgebung}.ltoma.intern/vMtextAdapter/sync"
 SYNC_MARKER_DIRECTORY = ".mtext-sync"
 
 
-def _apply_server_sync_changes(
-    source_root: str | Path,
-    target_root: str | Path,
-    operations: list[tuple[str, str]],
-) -> None:
-    """Wendet die vorbereiteten Dateiänderungen idempotent auf serverSync an.
+def _apply_server_sync_changes(source_root: str | Path, target_root: str | Path, operations: list[tuple[str, str]]) -> None:
+    """Wendet die vorbereiteten Dateiänderungen auf serverSync an.
 
     Der Vergleichsmarker wird erst nach dem Adapteraufruf fortgeschrieben. Nach
     einem Abbruch kann dieselbe Liste deshalb erneut angewendet werden.
@@ -75,11 +66,11 @@ def _apply_server_sync_changes(
         raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "serverSync-Veröffentlichung fehlgeschlagen") from exc
 
 
-def call_adapter(url: str, *, timeout: float) -> tuple[int, str]:
-    """Ruft die POST-Synchronisation auf und übersetzt Transportfehler.
+def call_adapter(url: str) -> tuple[int, str]:
+    """Fordert die Synchronisation beim M/Text-Adapter an.
 
-    Antworttexte werden begrenzt. Nur erfolgreiche HTTP-Statuscodes bestätigen,
-    dass LTOMA den unmittelbar ausgelösten Auftrag angenommen hat.
+    Die Antwort wird begrenzt eingelesen. Erst ein HTTP-Status von 200 bis 299
+    bestätigt, dass LTOMA den Auftrag angenommen hat.
     """
 
     request = urllib.request.Request(
@@ -89,14 +80,14 @@ def call_adapter(url: str, *, timeout: float) -> tuple[int, str]:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(request, timeout=NETWORK_TIMEOUT) as response:
             status = int(response.status)
             body = response.read(ADAPTER_RESPONSE_LIMIT).decode("utf-8", errors="replace")
     except urllib.error.HTTPError as exc:
         body = exc.read(ADAPTER_RESPONSE_LIMIT).decode("utf-8", errors="replace")
         raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {exc.code}: {body[:1000]}") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
-        raise DeliveryError(Status.ADAPTER_FAILED, "Adapter-Transport fehlgeschlagen") from exc
+        raise DeliveryError(Status.ADAPTER_FAILED, "Adapter ist nicht erreichbar") from exc
     if not 200 <= status < 300:
         raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {status}: {body[:1000]}")
     return status, body
@@ -134,14 +125,17 @@ def sync_resources(
     if incremental_sync:
         try:
             marker = json.loads(marker_path.read_text(encoding="utf-8"))
-            previous_commit = marker["commit"]
-            if marker["repository"] != configuration.repository or not isinstance(previous_commit, str):
-                raise ValueError
-        except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise DeliveryError(
                 Status.RESOURCE_TRANSFER_FAILED,
                 "serverSync-Synchronisationsstand ist ungültig",
             ) from exc
+        if marker["repository"] != configuration.repository:
+            raise DeliveryError(
+                Status.RESOURCE_TRANSFER_FAILED,
+                "serverSync-Synchronisationsstand ist ungültig",
+            )
+        previous_commit = marker["commit"]
         git_changes = changes(repository_root, previous_commit, commit)
         operations = [
             operation
@@ -168,7 +162,7 @@ def sync_resources(
 
     # Nach dem aktualisierten Projektstand den passenden Adapter aufrufen.
     adapter_url = ADAPTER_SYNC_URL.format(umgebung=umgebung)
-    status, body = call_adapter(adapter_url, timeout=ADAPTER_TIMEOUT)
+    status, body = call_adapter(adapter_url)
 
     # Erst die erfolgreiche Annahme durch LTOMA schreibt den Vergleichsstand fort.
     try:

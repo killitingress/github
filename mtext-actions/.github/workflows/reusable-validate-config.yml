@@ -1,17 +1,20 @@
 name: Wiederverwendbare Prüfung der Mandantenkonfiguration
 
-# Dieser Workflow prüft die Mandantenkonfiguration gegen die zentralen Releaselinien
+# Dieser Workflow prüft die Mandantenkonfiguration
 'on':
   workflow_call:
     inputs:
       commit_sha:
+        description: Commit im Mandanten-Repository mit der zu prüfenden Konfiguration
         required: true
         type: string
       automation_ref:
+        description: CI/CD-Version, aus der dieser Workflow geladen wurde
         required: true
         type: string
     secrets:
       automation_token:
+        description: Token zum Laden der festgelegten CI/CD-Version
         required: true
 
 permissions:
@@ -19,11 +22,11 @@ permissions:
 
 jobs:
   validate:
-    name: Prüft Mandantenkonfiguration
+    name: Mandantenkonfiguration prüfen
     runs-on: [self-hosted, linux]
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
-      # Lädt den zu prüfenden Mandanten-Commit in den Arbeitsbereich
+      # Lädt den zu prüfenden Commit in den Arbeitsbereich
       - name: Check-Out Mandanten-Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -31,7 +34,7 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
 
-      # Lädt die freigegebene CI/CD-Version mit der Prüfungslogik
+      # Lädt die Skripte für die Konfigurationsprüfung
       - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -41,10 +44,10 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.automation_token }}
 
-      # Prüft den Runner und stellt den Pfad zur Python-Laufzeit als Ausgabe bereit
+      # Prüft Git und Python und stellt den Python-Pfad bereit
       - name: Python-Runtime ermitteln
         id: runtime
-        run: automation/scripts/runner-preflight.sh
+        run: bash automation/scripts/runner-preflight.sh
 
       # Prüft Struktur und fachliche Zuordnungen der .github/config.json
       - name: Mandantenkonfiguration prüfen

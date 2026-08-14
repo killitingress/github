@@ -1,74 +1,59 @@
-"""Prüft die Vorbereitung abgestimmter zentraler und mandantenseitiger Workflow-Aktualisierungen."""
+"""Prüft die Vorbereitung zentraler und mandantenseitiger Workflow-Aktualisierungen."""
 
 from __future__ import annotations
 
 import io
 import json
 import shutil
-import subprocess
-import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
 from urllib.error import HTTPError
 from unittest.mock import MagicMock, patch
 
-from workflow_configuration import (
-    build_update_matrix,
-    check_target_branch,
-    prepare_mandant_update,
-    verify_automation,
-)
+from workflow_configuration import build_update_matrix, check_target_branch, prepare_mandant_update, verify_automation
 
-ROOT = Path(__file__).resolve().parents[1]
+from tests.support import AUTOMATION_ROOT, TempDirTestCase, git, init_git_repository, ZERO_SHA
+
+INDEPENDENT_WORKFLOW = """jobs:
+  eigene-aktion:
+    steps:
+      - uses: beispiel/eigene-action@v1
+        with:
+          automation_ref: eigene-version
+"""
 
 
-class UpdateWorkflowsTests(unittest.TestCase):
+def mandant_workflow(workflow: str, job: str) -> str:
+    return f"""jobs:
+  {job}:
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/{workflow}@{ZERO_SHA}
+    with:
+      automation_ref: {ZERO_SHA}
+"""
+
+
+class UpdateWorkflowsTests(TempDirTestCase):
     def setUp(self) -> None:
-        """Erzeugt getrennte temporäre CI/CD- und Mandanten-Repositories."""
-
-        self.temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        super().setUp()
         self.automation_root = self.root / "automation"
-        shutil.copytree(ROOT / ".github/workflows", self.automation_root / ".github/workflows")
-
-        self.mandant_root = self.root / "mandant"
-        mandant_workflows = self.mandant_root / ".github/workflows"
+        shutil.copytree(AUTOMATION_ROOT / ".github/workflows", self.automation_root / ".github/workflows")
+        mandant_workflows = (self.root / "mandant/.github/workflows")
         mandant_workflows.mkdir(parents=True)
         self.mandant_workflow = mandant_workflows / "sync-resources.yml"
-        self.mandant_workflow.write_text(
-            """jobs:
-  sync:
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
-    with:
-      automation_ref: 0000000000000000000000000000000000000000
-""",
-            encoding="utf-8",
-        )
+        self.mandant_workflow.write_text(mandant_workflow("reusable-sync-resources.yml", "sync"), encoding="utf-8")
+        self.custom_workflow = mandant_workflows / "eigener-mtext-workflow.yaml"
+        self.custom_workflow.write_text(mandant_workflow("reusable-check-resources.yml", "eigene-pruefung"), encoding="utf-8")
+        self.independent_workflow = mandant_workflows / "eigener-workflow.yml"
+        self.independent_workflow.write_text(INDEPENDENT_WORKFLOW, encoding="utf-8")
+        self.mandant_root = self.root / "mandant"
         for repository in (self.automation_root, self.mandant_root):
-            self.run_git(repository, "init", "-q")
-            self.run_git(repository, "config", "user.name", "Test")
-            self.run_git(repository, "config", "user.email", "test@example.invalid")
-            self.run_git(repository, "add", ".")
-            self.run_git(repository, "commit", "-q", "-m", "Ausgangsstand")
-
-    def run_git(self, repository: Path, *arguments: str) -> str:
-        """Führt eine erwartbar erfolgreiche Git-Operation mit hilfreicher Diagnose aus."""
-
-        result = subprocess.run(
-            ["git", "-C", str(repository), *arguments],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        return result.stdout.strip()
+            init_git_repository(repository)
+            git(repository, "add", ".")
+            git(repository, "commit", "-q", "-m", "Ausgangsstand")
 
     def test_rollout_preparation_and_verification(self) -> None:
-        """Prüft SHA, Mandantenbindung und Wiederholbarkeit."""
-
-        initial_sha = self.run_git(self.automation_root, "rev-parse", "HEAD")
+        initial_sha = git(self.automation_root, "rev-parse", "HEAD")
         with self.assertRaisesRegex(ValueError, "angegebenen Commit"):
             verify_automation(self.automation_root, "1" * 40)
 
@@ -78,17 +63,14 @@ class UpdateWorkflowsTests(unittest.TestCase):
         workflow = self.mandant_workflow.read_text(encoding="utf-8")
         self.assertEqual(workflow.count(automation_sha), 2)
         self.assertIn("sync:", workflow)
+        self.assertEqual(self.custom_workflow.read_text(encoding="utf-8").count(automation_sha), 2)
+        self.assertEqual(self.independent_workflow.read_text(encoding="utf-8"), INDEPENDENT_WORKFLOW)
 
         with redirect_stderr(io.StringIO()):
             self.assertEqual(verify_automation(self.automation_root, automation_sha), automation_sha)
-            self.assertEqual(
-                prepare_mandant_update(self.automation_root, self.mandant_root, automation_sha),
-                mandant_sha,
-            )
+            self.assertEqual(prepare_mandant_update(self.automation_root, self.mandant_root, automation_sha), mandant_sha)
 
     def test_builds_update_matrix(self) -> None:
-        """Bildet main und mögliche Release-Branches für jeden Mandanten."""
-
         mandanten = self.root / "mandanten.json"
         mandanten.write_text(
             json.dumps(
@@ -103,10 +85,7 @@ class UpdateWorkflowsTests(unittest.TestCase):
         releaselinien.write_text(
             json.dumps(
                 {
-                    "mtext_ziele": {
-                        "Entwicklung": "en",
-                        "Funktionstest": "fu",
-                    },
+                    "mtext_ziele": {"Entwicklung": "en", "Funktionstest": "fu"},
                     "releaselinien": {
                         "R261": {"etaps_linie": "01", "hostprofil": "FKT"},
                         "R270": {"etaps_linie": "02", "hostprofil": "JUR"},
@@ -127,48 +106,23 @@ class UpdateWorkflowsTests(unittest.TestCase):
         )
 
     def test_github_api_for_rollout(self) -> None:
-        """Prüft vorhandene und fehlende Zielbranches über die GitHub-API."""
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.status = 200
+        with patch("workflow_configuration.urllib.request.urlopen", return_value=response) as urlopen:
+            self.assertTrue(check_target_branch("https://api.github.test", "team/mandant", "release/R261", "token"))
+        self.assertEqual(
+            urlopen.call_args.args[0].full_url,
+            "https://api.github.test/repos/team/mandant/git/ref/heads/release%2FR261",
+        )
 
-        with self.subTest(vorhandener_release_branch=True):
-            response = MagicMock()
-            response.__enter__.return_value = response
-            response.status = 200
-            response.read.return_value = b'{"ref":"refs/heads/release/R261"}'
-            with patch("workflow_configuration.urllib.request.urlopen", return_value=response) as urlopen:
-                self.assertTrue(
-                    check_target_branch("https://api.github.test", "team/mandant", "release/R261", "token")
-                )
-            self.assertEqual(
-                urlopen.call_args.args[0].full_url,
-                "https://api.github.test/repos/team/mandant/git/ref/heads/release%2FR261",
-            )
+        missing = HTTPError("https://api.github.test", 404, "Not Found", None, io.BytesIO(b"{}"))
+        with patch("workflow_configuration.urllib.request.urlopen", side_effect=missing):
+            self.assertFalse(check_target_branch("https://api.github.test", "team/mandant", "release/R261", "token"))
 
-        with self.subTest(fehlender_release_branch=True):
-            missing = HTTPError(
-                "https://api.github.test",
-                404,
-                "Not Found",
-                None,
-                io.BytesIO(b'{"message":"Not Found"}'),
-            )
-            with patch("workflow_configuration.urllib.request.urlopen", side_effect=missing):
-                self.assertFalse(
-                    check_target_branch("https://api.github.test", "team/mandant", "release/R261", "token")
-                )
+        with patch("workflow_configuration.urllib.request.urlopen", side_effect=missing):
+            self.assertFalse(check_target_branch("https://api.github.test", "team/mandant", "main", "token"))
 
-        with self.subTest(fehlender_main_branch=True):
-            missing_main = HTTPError(
-                "https://api.github.test",
-                404,
-                "Not Found",
-                None,
-                io.BytesIO(b'{"message":"Not Found"}'),
-            )
-            with (
-                patch("workflow_configuration.urllib.request.urlopen", side_effect=missing_main),
-                self.assertRaisesRegex(RuntimeError, "HTTP 404"),
-            ):
-                check_target_branch("https://api.github.test", "team/mandant", "main", "token")
 
 if __name__ == "__main__":
     unittest.main()

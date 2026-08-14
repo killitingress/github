@@ -1,7 +1,7 @@
-"""Übersetzt Lieferergebnisse und Fehler in den Prozessvertrag der Workflows.
+"""Gibt die Ergebnisse der Kommandozeilenskripte für GitHub Actions aus.
 
-Die Kommandozeileneinstiege geben über dieses Modul bei Erfolg ein JSON-Ergebnis
-und bei Fehlern stabile Statusmeldungen mit den dokumentierten Exitcodes aus.
+Bei Erfolg erscheint ein JSON-Ergebnis auf stdout. Bei einem Fehler erscheinen
+Status und Meldung auf stderr und das Skript endet mit dem zugehörigen Exitcode.
 """
 
 from __future__ import annotations
@@ -15,13 +15,13 @@ from enum import Enum
 class Status(str, Enum):
     # Mandanten- und Releaselinienkonfiguration sind für die folgenden Schritte verwendbar.
     CONFIG_VALIDATED = "CONFIG_VALIDATED"
-    # Eingabedaten verletzen einen fachlichen oder technischen Prüfvertrag.
+    # Konfiguration oder Argumente sind ungültig.
     VALIDATION_FAILED = "VALIDATION_FAILED"
     # Checkout, Commit, Branch oder Tag sind nicht als Quelle verwendbar.
     SOURCE_FAILED = "SOURCE_FAILED"
-    # Ein Paket, Manifest oder eine lokale Lieferdatei ist nicht verwendbar.
+    # Ein Paket, eine JCL oder eine lokale Lieferdatei ist nicht verwendbar.
     PACKAGE_FAILED = "PACKAGE_FAILED"
-    # Die lokalen Lieferartefakte wurden erfolgreich vorbereitet.
+    # Pakete, JCL-Dateien und Informationsdateien wurden erstellt.
     ARTIFACT_READY = "ARTIFACT_READY"
     # Die Projekte konnten unter serverSync nicht aktualisiert werden.
     RESOURCE_TRANSFER_FAILED = "RESOURCE_TRANSFER_FAILED"
@@ -39,8 +39,8 @@ class Status(str, Enum):
     GITHUB_RELEASE_FAILED = "GITHUB_RELEASE_FAILED"
 
 
-# Stabile Exitcodes unterscheiden die dokumentierten Fehlerklassen, ohne dass
-# der Workflow dafür die lesbaren Fehlermeldungen auswerten muss.
+# Die Workflows unterscheiden Fehler anhand dieser Exitcodes und müssen dafür
+# nicht den Text der Fehlermeldung auswerten.
 _EXIT_CODES = {
     Status.VALIDATION_FAILED: 2,
     Status.SOURCE_FAILED: 3,
@@ -51,50 +51,40 @@ _EXIT_CODES = {
     Status.GITHUB_RELEASE_FAILED: 8,
 }
 
+# Externe FTP- und HTTP-Aufrufe werden nach so vielen Sekunden abgebrochen.
+NETWORK_TIMEOUT = 10.0
+
 
 class DeliveryError(RuntimeError):
-    """Verbindet einen stabilen Lieferstatus mit einer sicheren Meldung für den Betrieb.
-
-    Die Einstiegspunkte leiten aus dem Status den Exitcode ab. Der Fehlertext
-    bleibt zugleich für die Ausgabe im Workflow-Log geeignet.
-    """
+    """Enthält Status und Meldung eines erwarteten Fehlers im Workflow."""
 
     def __init__(self, status: Status, message: str) -> None:
-        """Erzeugt einen Fehler für den durch `status` bezeichneten Lieferschritt.
-
-        Die ursprüngliche Meldung bleibt der Inhalt der Exception. Reguläres
-        Exception-Verhalten und Workflow-Ausgabe verwenden damit dieselbe Quelle.
-        """
+        """Speichert den Status zusammen mit der auszugebenden Fehlermeldung."""
 
         super().__init__(message)
         self.status = status
 
     @property
     def exit_code(self) -> int:
-        """Gibt den dokumentierten Prozess-Exitcode dieser Fehlerklasse zurück.
+        """Gibt den zum Status gehörenden Exitcode zurück.
 
-        Statuswerte ohne eigene erwartete Fehlerklasse verwenden den allgemeinen
-        von null verschiedenen Exitcode.
+        Statuswerte ohne eigenen Eintrag verwenden Exitcode 1.
         """
 
         return _EXIT_CODES.get(self.status, 1)
 
     def __str__(self) -> str:
-        """Formatiert ein stabiles Statuspräfix mit der Meldung für den Betrieb.
-
-        Dadurch bleibt die Logausgabe maschinell erkennbar, ohne interne
-        Exception-Details offenzulegen.
-        """
+        """Setzt den Statuswert vor die Fehlermeldung."""
 
         return f"{self.status.value}: {super().__str__()}"
 
 
 def execute(operation: Callable[[], dict[str, object]]) -> int:
-    """Führt einen Lieferablauf aus und gibt sein Prozessergebnis für GitHub Actions aus.
+    """Führt einen Skriptschritt aus und schreibt sein Ergebnis nach stdout.
 
-    Bekannte fachliche und lokale Systemfehler werden zu knappen Meldungen und
-    stabilen Exitcodes. Erfolgreiche Ergebnisse erscheinen als JSON. Warnungen
-    bleiben auf stderr, damit stdout maschinell verarbeitet werden kann.
+    Lieferfehler, ungültig aufgebaute Eingaben und fehlgeschlagene
+    Dateioperationen werden auf stderr ausgegeben. Warnungen stehen ebenfalls
+    auf stderr, damit stdout bei Erfolg ausschließlich das JSON-Ergebnis enthält.
     """
 
     try:
@@ -104,6 +94,9 @@ def execute(operation: Callable[[], dict[str, object]]) -> int:
         return exc.exit_code
     except KeyError as exc:
         print(f"{Status.VALIDATION_FAILED.value}: fehlender Eingabewert: {exc.args[0]}", file=sys.stderr)
+        return 2
+    except (TypeError, AttributeError) as exc:
+        print(f"{Status.VALIDATION_FAILED.value}: ungültige Eingabestruktur: {exc}", file=sys.stderr)
         return 2
     except (OSError, UnicodeError) as exc:
         print(f"{Status.VALIDATION_FAILED.value}: lokale Dateioperation fehlgeschlagen: {exc}", file=sys.stderr)

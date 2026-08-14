@@ -117,17 +117,17 @@
         <mxCell id="release-workflow" value="&lt;b&gt;release.yml&lt;br&gt;in mtext_actions&lt;/b&gt;&lt;br&gt;&lt;br&gt;Tag und Quelle prüfen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="795" y="848" width="170" height="100" as="geometry"/>
         </mxCell>
-        <mxCell id="build-job" value="&lt;b&gt;Paketbau&lt;/b&gt;&lt;br&gt;&lt;br&gt;FULL oder DELTA&lt;br&gt;Manifest und Prüfsummen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
+        <mxCell id="build-job" value="&lt;b&gt;Paketbau&lt;/b&gt;&lt;br&gt;&lt;br&gt;FULL oder DELTA&lt;br&gt;JCL und Lieferbelege" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="995" y="833" width="170" height="130" as="geometry"/>
         </mxCell>
-        <mxCell id="artifact" value="&lt;b&gt;Release-Artefakt&lt;/b&gt;&lt;br&gt;&lt;br&gt;Pakete und Info-Dateien" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
+        <mxCell id="artifact" value="&lt;b&gt;Release-Artefakt&lt;/b&gt;&lt;br&gt;&lt;br&gt;Pakete, JCL und Info-Dateien" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="1195" y="839" width="170" height="118" as="geometry"/>
         </mxCell>
         <mxCell id="publish-job" value="&lt;b&gt;Mainframe-Übergabe&lt;/b&gt;&lt;br&gt;&lt;br&gt;FTP / JES" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="1395" y="843" width="150" height="110" as="geometry"/>
         </mxCell>
         <mxCell id="jcl-template" value="Versioniertes&lt;br&gt;JCL-Template" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#ffffff;strokeColor=#9673a6;strokeWidth=2;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
-          <mxGeometry x="1420" y="990" width="100" height="75" as="geometry"/>
+          <mxGeometry x="1030" y="990" width="100" height="75" as="geometry"/>
         </mxCell>
         <mxCell id="mainframe" value="&lt;b&gt;Mainframe IZE9 / CodePipeline&lt;/b&gt;&lt;br&gt;&lt;br&gt;Paket und JCL angenommen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="1595" y="833" width="330" height="130" as="geometry"/>
@@ -189,7 +189,7 @@
         <mxCell id="e-release-build" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="release-workflow" target="build-job"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-build-artifact" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="build-job" target="artifact"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-artifact-publish" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="artifact" target="publish-job"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-jcl-publish" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1" edge="1" parent="1" source="jcl-template" target="publish-job"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-jcl-build" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1" edge="1" parent="1" source="jcl-template" target="build-job"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-publish-mainframe" value="FTP / JES" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="publish-job" target="mainframe"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-publish-report" value="Übergabe erfolgreich" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=0.1;exitY=1;entryX=1;entryY=0.5" edge="1" parent="1" source="publish-job" target="delivery-report-job">
           <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1410" y="975"/><mxPoint x="1380" y="1022"/></Array></mxGeometry>

@@ -1,5 +1,5 @@
-"""Implementiert die gemeinsamen M/Text-Lieferabläufe der Workflow-Einstiegspunkte.
+"""Enthält die Funktionen für die M/Text-Lieferungen der GitHub-Workflows.
 
-Das Paket bündelt Konfigurationsprüfung, Git-Prüfungen, Artefaktbau,
-Ressourcensynchronisation und Mainframe-Übergabe unter einem Fehlervertrag.
+Hier liegen Konfigurations- und Git-Prüfungen, Paketbau,
+Ressourcensynchronisation sowie Mainframe- und GitHub-Übergabe.
 """

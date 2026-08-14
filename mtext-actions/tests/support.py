@@ -1,42 +1,54 @@
-"""Stellt gemeinsame Repository-Testaufbauten für die Akzeptanztests bereit.
-
-Die Funktionen erzeugen kleine echte Git-Historien und Konfigurationsdateien.
-Die Tests prüfen damit die produktiven Grenzen ohne Abhängigkeit von externen
-Systemen.
-"""
+"""Gemeinsame Repository-Aufbauten für die Akzeptanztests."""
 
 from __future__ import annotations
 
 import json
 import subprocess
+import tempfile
+import unittest
 from pathlib import Path
 
 from lbs_delivery.config import Configuration, MANDANT_CONFIG_PATH, load_configuration
 
-
-# Die Tests lesen zentrale Zuordnungen und Workflows aus demselben
-# CI/CD-Checkout wie die produktiven Module.
 AUTOMATION_ROOT = Path(__file__).resolve().parents[1]
+ZERO_SHA = "0" * 40
+
+
+class TempDirTestCase(unittest.TestCase):
+    """Stellt für jeden Test ein frisches temporäres Verzeichnis bereit."""
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
 
 
 def git(repository: Path, *arguments: str) -> str:
-    """Führt einen erwartbar erfolgreichen Git-Befehl in einem Test-Repository aus.
-
-    Die bereinigte Standardausgabe hält den Testaufbau knapp. Mit `check=True`
-    scheitert eine ungültige Testhistorie unmittelbar bei ihrer Erzeugung.
-    """
+    """Führt einen erwartbar erfolgreichen Git-Befehl aus."""
 
     result = subprocess.run(["git", "-C", str(repository), *arguments], check=True, stdout=subprocess.PIPE, text=True)
     return result.stdout.strip()
 
 
-def write_mandant(path: Path, **overrides: object) -> None:
-    """Schreibt die kleinste repräsentative Mandantenkonfiguration der FI.
+def init_git_repository(repository: Path, *, branch: str | None = None) -> None:
+    """Initialisiert ein Test-Repository mit lokaler Autorenkonfiguration."""
 
-    Einzelne Tests überschreiben Felder in derselben JSON-Struktur wie die
-    produktive Verarbeitung. Ungültige Varianten benötigen dadurch keine Kopie
-    der vollständigen Ausgangskonfiguration.
-    """
+    if branch:
+        git(repository, "init", "-b", branch)
+    else:
+        git(repository, "init", "-q")
+    git(repository, "config", "user.name", "Test")
+    git(repository, "config", "user.email", "test@example.invalid")
+
+
+def jcl_template() -> str:
+    """Liest die Mainframe-JCL-Vorlage aus dem CI/CD-Checkout."""
+
+    return (AUTOMATION_ROOT / "templates/mainframe-upload.jcl").read_text(encoding="ascii")
+
+
+def write_mandant(path: Path, **overrides: object) -> None:
+    """Schreibt eine minimale FI-Mandantenkonfiguration."""
 
     mandant: dict[str, object] = {
         "kuerzel": "FI",
@@ -52,37 +64,22 @@ def write_mandant(path: Path, **overrides: object) -> None:
 
 
 def init_repository(root: Path, *, branch: str) -> Path:
-    """Erzeugt ein leeres Mandanten-Repository für reproduzierbare Test-Commits.
-
-    Lokale Autorenangaben lösen den Testaufbau von der globalen Git-Konfiguration
-    eines Entwicklers oder CI-Runners.
-    """
+    """Erzeugt ein leeres Mandanten-Repository."""
 
     repository = root / "source"
     repository.mkdir()
-    git(repository, "init", "-b", branch)
-    git(repository, "config", "user.name", "Test")
-    git(repository, "config", "user.email", "test@example.invalid")
+    init_git_repository(repository, branch=branch)
     return repository
 
 
 def track_remote_branch(repository: Path, branch: str) -> None:
-    """Erzeugt die von der Quellprüfung erwartete Remote-Branch-Referenz.
-
-    Die Tests benötigen kein echtes Remote-Repository. Die produktive
-    Abstammungsprüfung verlangt jedoch gezielt die von GitHub Actions verwendete
-    `origin`-Referenz.
-    """
+    """Legt die von der Quellprüfung erwartete Remote-Branch-Referenz an."""
 
     git(repository, "update-ref", f"refs/remotes/origin/{branch}", "HEAD")
 
 
 def setup_repository(root: Path, *, branch: str) -> Path:
-    """Erzeugt ein Mandanten-Repository mit festgeschriebenem FI-Referenzbestand.
-
-    Es bildet den gültigen Ausgangspunkt der Konfigurationstests. Jeder Test kann
-    darauf eine einzelne gezielte Abweichung einführen.
-    """
+    """Erzeugt ein Mandanten-Repository mit FI-Referenzprojekten."""
 
     repository = init_repository(root, branch=branch)
     for project_name in ("Configuration", "Fonts", "LOMS_Framework", "LOMS_Basis", "LOMS_PKA"):
@@ -95,12 +92,7 @@ def setup_repository(root: Path, *, branch: str) -> Path:
 
 
 def setup_sync_repository(root: Path) -> Path:
-    """Erzeugt einen von der Synchronisationsprüfung akzeptierten Entwicklungsstand.
-
-    Der Aufbau enthält ein Projekt und einen passenden Remote-Branch. Die Tests
-    können sich dadurch auf die Aktualisierung von serverSync und den
-    Adapteraufruf konzentrieren.
-    """
+    """Erzeugt einen für die Synchronisation gültigen Entwicklungsstand."""
 
     repository = init_repository(root, branch="feature/R261/test-sync")
     project = repository / "LOMS_Basis"
@@ -113,11 +105,7 @@ def setup_sync_repository(root: Path) -> Path:
 
 
 def setup_release_repository(root: Path) -> Path:
-    """Erzeugt eine Releasehistorie mit FULL-, Vorgänger- und DELTA-Tags.
-
-    Hinzugefügte, geänderte, gelöschte und umbenannte Pfade liefern genügend
-    Historie für die Prüfung von Archivbau und lesbarem Lieferbeleg.
-    """
+    """Erzeugt eine Releasehistorie mit FULL-, Vorgänger- und DELTA-Tags."""
 
     repository = init_repository(root, branch="release/R261")
     project = repository / "LOMS_Basis"
@@ -148,12 +136,7 @@ def load_test_configuration(
     mandant: dict[str, object] | None = None,
     repository_name: str = "FinanzInformatik/fi_lbs_entw_oms_fi",
 ) -> Configuration:
-    """Schreibt lokale Mandantenangaben und lädt die produktive Konfiguration.
-
-    Die Tests erhalten dasselbe unveränderliche Modell wie die echten Workflows.
-    Darin enthalten sind auch die zentralen Mandanten- und
-    Releaselinienzuordnungen aus dem CI/CD-Checkout.
-    """
+    """Schreibt lokale Mandantenangaben und lädt die produktive Konfiguration."""
 
     path = repository / MANDANT_CONFIG_PATH
     path.parent.mkdir(exist_ok=True)

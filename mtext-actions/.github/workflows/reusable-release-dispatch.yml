@@ -1,61 +1,75 @@
-name: Wiederverwendbarer zentraler Release-Start
+name: Zentrales Release starten
 
-# Dieser Workflow startet den zentralen Releaseablauf in mtext_actions
+# Ein Release-Tag entsteht im Mandanten-Repository. Paketbau und Mainframe-
+# Übergabe laufen im zentralen Repository, weil dort die Mainframe-Zugangsdaten
+# liegen.
+# Dieser Workflow startet dort release.yml und übergibt den Tag, den zugehörigen
+# Commit und die angegebene CI/CD-Version.
 'on':
   workflow_call:
     inputs:
       source_repository:
+        description: Mandanten-Repository mit dem Release-Tag
         required: true
         type: string
       target_repository:
+        description: Repository mit dem zu startenden Workflow release.yml
         required: true
         type: string
       release_tag:
+        description: Release-Tag im Mandanten-Repository
         required: true
         type: string
       trigger_sha:
+        description: Commit, auf den der Release-Tag zeigt
         required: true
         type: string
       automation_ref:
+        description: CI/CD-Version, aus der dieser Workflow geladen wurde
         required: true
         type: string
     secrets:
       dispatch_token:
+        description: Token zum Starten des zentralen Release-Workflows
         required: true
 
 permissions:
   contents: read
 
 jobs:
-  # Übergibt Repository, Tag, Commit und CI/CD-Version über die GitHub-API
   dispatch:
-    name: Startet Release in mtext_actions
+    name: Zentrales Release starten
     runs-on: [self-hosted, linux]
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Release anfordern
+      # GitHub startet den Workflow im zentralen Repository über die API
+      - name: Zentralen Release-Workflow starten
         env:
           GITHUB_API_URL: ${{ github.api_url }}
-          MTEXT_ACTIONS_TOKEN: ${{ secrets.dispatch_token }}
+          DISPATCH_TOKEN: ${{ secrets.dispatch_token }}
           SOURCE_REPOSITORY: ${{ inputs.source_repository }}
           TARGET_REPOSITORY: ${{ inputs.target_repository }}
           RELEASE_TAG: ${{ inputs.release_tag }}
           TRIGGER_SHA: ${{ inputs.trigger_sha }}
           AUTOMATION_REF: ${{ inputs.automation_ref }}
+        # GitHub lädt release.yml aus main. Der gestartete Workflow lädt seine
+        # Skripte anschließend aus AUTOMATION_REF.
         run: |
-          payload="$(printf '{"ref":"main","inputs":{"source_repository":"%s","release_tag":"%s","trigger_sha":"%s","automation_ref":"%s"}}' \
-            "$SOURCE_REPOSITORY" "$RELEASE_TAG" "$TRIGGER_SHA" "$AUTOMATION_REF")"
-          status="$(curl --silent --show-error \
-            --output "$RUNNER_TEMP/mtext-release-dispatch-response" \
-            --write-out '%{http_code}' \
+          curl --fail --silent --show-error \
             --request POST \
             --header 'Accept: application/vnd.github+json' \
-            --header "Authorization: Bearer $MTEXT_ACTIONS_TOKEN" \
+            --header "Authorization: Bearer $DISPATCH_TOKEN" \
             --header 'Content-Type: application/json' \
             --header 'X-GitHub-Api-Version: 2022-11-28' \
-            --data "$payload" \
-            "$GITHUB_API_URL/repos/$TARGET_REPOSITORY/actions/workflows/release.yml/dispatches")"
-          if [[ "$status" != "204" ]]; then
-            echo "Release-Dispatch an mtext_actions ist mit HTTP $status fehlgeschlagen" >&2
-            exit 1
-          fi
+            --data @- \
+            "$GITHUB_API_URL/repos/$TARGET_REPOSITORY/actions/workflows/release.yml/dispatches" <<JSON
+          {
+            "ref": "main",
+            "inputs": {
+              "source_repository": "$SOURCE_REPOSITORY",
+              "release_tag": "$RELEASE_TAG",
+              "trigger_sha": "$TRIGGER_SHA",
+              "automation_ref": "$AUTOMATION_REF"
+            }
+          }
+          JSON

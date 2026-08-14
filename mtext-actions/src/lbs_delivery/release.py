@@ -1,52 +1,87 @@
 """Erzeugt reproduzierbare FULL- und kumulative DELTA-Lieferungen aus einem Release-Tag.
 
-Der Releasebau prüft die Git-Quelle, verpackt jedes konfigurierte Projekt,
-erstellt den lesbaren Lieferbeleg und schreibt ein Manifest mit Prüfsummen für
-die spätere Mainframe-Übergabe.
+Der Releasebau prüft die Git-Quelle und verpackt jedes konfigurierte Projekt.
+Zu jedem Paket entstehen die benötigte JCL und ein lesbarer Lieferbeleg.
 """
 
 from __future__ import annotations
 
 import gzip
+import re
 import shutil
 import tarfile
 import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 
-from .config import Configuration
+from .config import CODEPIPELINE_STAGES, ISPW_INSTANZEN, Configuration
+from . import git
 from .process import DeliveryError, Status
-from .git import (
-    GitChange,
-    RELEASE_TAG_RE,
-    changes,
-    project_changes,
-    previous_tag,
-    require_ancestor,
-    require_release_tag,
-    resolve,
-)
-from .manifest import sha256_file, write_manifest
 
 
 # Die Informationsdatei verlangt auch beim ersten Release eine Bezeichnung für
 # den Vorgängertag, obwohl dafür kein entsprechender Git-Tag vorhanden ist.
 LEGACY_PREVIOUS_TAG = "v001.100"
+
 # Ein Tag mit der Endung `.100` bezeichnet den vollständigen Ausgangsstand einer
 # Releaselinie und wählt deshalb den FULL- statt des kumulativen DELTA-Paketbaus.
 FULL_SUFFIX = ".100"
+
 # Der Dateiname des Lieferbelegs nennt Projekt, Lieferart und verglichene Tags,
 # damit der Betrieb ihn dem zugehörigen Paket zuordnen kann.
 INFORMATION_NAME = "_INFO_{mandant}-{project}-{delivery_type}-{tag}-{previous_tag}.txt"
+
+# Prüft ein Mainframe-Subsystem anhand des Zeichenvorrats und der Feldlänge,
+# die Vorlage und Zielsystem akzeptieren.
+_SUBSYSTEM_RE = re.compile(r"[A-Z0-9]{2,8}")
+
+# Prüft den erzeugten Dataset-Member nach den Namensregeln des Mainframes.
+_MEMBER_RE = re.compile(r"[A-Z0-9]{1,8}")
+
+# Prüft das CodePipeline-Assignment, bevor es in die JCL eingesetzt wird.
+_ASSIGNMENT_RE = re.compile(r"[A-Z0-9]{1,12}")
+
+
+def _render_jcl(
+    template: str, *, ispw: str, level: str, subsystem: str, assignment: str, member: str,
+) -> str:
+    """Prüft die Mainframe-Werte und setzt sie in die JCL-Vorlage ein."""
+
+    # Nur Werte einsetzen, die von der Vorlage und dem Mainframe akzeptiert werden.
+    if (
+        ispw not in ISPW_INSTANZEN
+        or level not in CODEPIPELINE_STAGES
+        or _SUBSYSTEM_RE.fullmatch(subsystem) is None
+        or _ASSIGNMENT_RE.fullmatch(assignment) is None
+        or _MEMBER_RE.fullmatch(member) is None
+    ):
+        raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Werte sind ungültig")
+
+    # Platzhalter in der Vorlage durch die geprüften Werte ersetzen.
+    values = {
+        "ISPW": ispw,
+        "LEVEL": level,
+        "SUBSYS": subsystem,
+        "ASSIGNMENT": assignment,
+        "MEMBER": member,
+    }
+    rendered = template
+    for name, value in values.items():
+        rendered = rendered.replace(f"@@{name}@@", value)
+
+    # Wenn noch @@-Platzhalter im resultierenden JCL stehen, ist die Vorlage wohl ungültig.
+    if "@@" in rendered:
+        raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Template ist ungültig")
+
+    return rendered
 
 
 def _normalize_tar_info(info: tarfile.TarInfo) -> tarfile.TarInfo:
     """Ersetzt Dateimetadaten aus dem Checkout durch feste Archivwerte.
 
     `tarfile` übernimmt sonst Änderungszeiten, Besitzer und Rechte vom
-    Runner-Dateisystem. Zwei Builds desselben Repositorystands wären dann nicht
-    bytegleich und die Prüfsummen im Manifest würden schwanken. Feste Werte
-    machen FULL- und DELTA-Pakete reproduzierbar.
+    Runner-Dateisystem. Feste Werte sorgen dafür, dass derselbe Repositorystand
+    bei jedem Lauf dasselbe Paket ergibt.
     """
 
     info.mtime = 0
@@ -110,8 +145,8 @@ def _delta_archive(
 
 def _build_project_packages(
     configuration: Configuration, *, repository_root: Path, output: Path, project: str, projektcode: str,
-    delivery_type: str, cumulative_changes: Iterable[GitChange],
-) -> tuple[list[tuple[Path, str]], list[str]]:
+    delivery_type: str, cumulative_changes: Iterable[git.GitChange],
+) -> tuple[list[Path], list[str]]:
     """Erzeugt die für ein konfiguriertes Projekt benötigten Paketdateien.
 
     FULL-Lieferungen enthalten das vollständige Projekt und ein leeres
@@ -129,11 +164,11 @@ def _build_project_packages(
         # Die Mainframe-Übergabe erwartet neben jedem FULL-Paket einen
         # DELTA-Member, auch wenn dieser keine Änderungen oder Löschungen enthält.
         _delta_archive(delta_path, repository_root, project, [], [], deletion_name)
-        return [(archive_path, "F"), (delta_path, "D")], archive_names
+        return [archive_path, delta_path], archive_names
 
     included: set[str] = set()
     deleted: set[str] = set()
-    for status, path in project_changes(cumulative_changes, project):
+    for status, path in git.project_changes(cumulative_changes, project):
         if status in {"A", "M", "T"}:
             included.add(path)
         elif status == "D":
@@ -141,7 +176,7 @@ def _build_project_packages(
     archive_names = _delta_archive(
         archive_path, repository_root, project, sorted(included), sorted(deleted), deletion_name,
     )
-    return [(archive_path, "D")], archive_names
+    return [archive_path], archive_names
 
 
 def _write_information(
@@ -180,21 +215,22 @@ def _write_information(
     )
 
 
+# Hauptfunktion des Moduls, wird von `build_release.py` aufgerufen.
 def build_release(
     configuration: Configuration,
-    *, repository_root: str | Path, output_directory: str | Path, tag: str, trigger_sha: str,
-) -> Path:
-    """Prüft die Releasequelle und erzeugt alle vorgesehenen Lieferartefakte.
+    *, repository_root: str | Path, output_directory: str | Path, jcl_template: str, tag: str,
+    trigger_sha: str,
+) -> None:
+    """Prüft den Release-Tag und erzeugt Pakete, JCL und Informationsdateien.
 
     Die Funktion bindet den Tag an einen geschützten Branch, wählt FULL- oder
-    DELTA-Verarbeitung und schreibt Projektpakete sowie Informationsdateien.
-    Größen und Prüfsummen werden im Manifest für die spätere Übergabe festgehalten.
+    DELTA-Verarbeitung und schreibt Projektpakete, JCL und Informationsdateien.
     """
 
     root = Path(repository_root)
 
     # Release-Tag, Releaselinie und optional auslösenden Commit prüfen.
-    tag_match = RELEASE_TAG_RE.fullmatch(tag)
+    tag_match = git.RELEASE_TAG_RE.fullmatch(tag)
     if tag_match is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
     releaselinie = f"R{tag_match.group(1)}"
@@ -205,20 +241,20 @@ def build_release(
         if configuration.releaselinie == releaselinie
         else (f"release/{releaselinie}",)
     )
-    target_sha = require_release_tag(root, tag, allowed_branches)
+    target_sha = git.require_release_commit(root, tag, allowed_branches)
     if trigger_sha and trigger_sha != target_sha:
         raise DeliveryError(Status.SOURCE_FAILED, "auslösender Commit stimmt nicht zum Tag")
 
     # FULL- oder DELTA-Lieferung und die zugehörigen Git-Vergleiche bestimmen.
     delivery_type = "FULL" if tag.endswith(FULL_SUFFIX) else "DELTA"
     base = f"v{tag_match.group(1)}{FULL_SUFFIX}" if delivery_type == "DELTA" else None
-    base_sha = resolve(root, f"refs/tags/{base}") if base else None
+    base_sha = git.resolve(root, f"refs/tags/{base}") if base else None
     if base_sha:
-        require_ancestor(root, base_sha, target_sha)
-    previous = previous_tag(root, tag)
-    previous_sha = resolve(root, f"refs/tags/{previous}") if previous else None
-    cumulative = changes(root, base_sha, target_sha) if base_sha else []
-    direct = changes(root, previous_sha, target_sha) if previous_sha else []
+        git.require_ancestor(root, base_sha, target_sha)
+    previous = git.previous_tag(root, tag)
+    previous_sha = git.resolve(root, f"refs/tags/{previous}") if previous else None
+    cumulative = git.changes(root, base_sha, target_sha) if base_sha else []
+    direct = git.changes(root, previous_sha, target_sha) if previous_sha else []
 
     # Neues Ausgabeverzeichnis anlegen.
     output = Path(output_directory)
@@ -227,11 +263,13 @@ def build_release(
     except OSError as exc:
         raise DeliveryError(Status.PACKAGE_FAILED, "Release-Ausgabeverzeichnis ist nicht neu") from exc
 
-    # Projektpakete, Lieferbelege und Artefaktmetadaten erzeugen.
-    artifacts: list[dict[str, object]] = []
+    # Das Hostprofil bestimmt die JCL-Werte für diese Releaselinie.
+    hostprofil = configuration.hostprofile[configuration.releaselinien[releaselinie]["hostprofil"]]
+
+    # Projektpakete, zugehörige JCL und Lieferbelege erzeugen.
     previous_label = previous or LEGACY_PREVIOUS_TAG
     for project, projektcode in configuration.projects.items():
-        direct_project_changes = list(project_changes(direct, project))
+        direct_project_changes = list(git.project_changes(direct, project))
         packages, archive_names = _build_project_packages(
             configuration,
             repository_root=root,
@@ -259,48 +297,16 @@ def build_release(
             git_changes=direct_project_changes,
             archive_names=archive_names,
         )
-        for package_path, package_code in packages:
-            artifacts.append(
-                {
-                    "kind": "package",
-                    "path": package_path.name,
-                    "project": project,
-                    "member": f"{configuration.kuerzel}{projektcode}{package_code}",
-                    "size": package_path.stat().st_size,
-                    "sha256": sha256_file(package_path),
-                }
+        for package_path in packages:
+            member = package_path.stem
+            package_path.with_suffix(".jcl").write_text(
+                _render_jcl(
+                    jcl_template,
+                    ispw=configuration.ispw,
+                    level=hostprofil["stage"],
+                    subsystem=configuration.subsystem,
+                    assignment=hostprofil["assignment"],
+                    member=member,
+                ),
+                encoding="ascii",
             )
-        artifacts.append(
-            {
-                "kind": "information",
-                "path": information_path.name,
-                "project": project,
-                "changes": [
-                    {"status": status, "path": changed_path}
-                    for status, changed_path in direct_project_changes
-                ],
-                "archive_entries": archive_names,
-                "size": information_path.stat().st_size,
-                "sha256": sha256_file(information_path),
-            }
-        )
-
-    # Manifest mit JCL-Werten und Prüfsummen aller Artefakte schreiben.
-    hostprofil = configuration.hostprofile[configuration.releaselinien[releaselinie]["hostprofil"]]
-    manifest = {
-        "repository": configuration.repository,
-        "mandant": configuration.kuerzel,
-        "release_tag": tag,
-        "delivery_type": delivery_type,
-        "base_tag": base,
-        "target_sha": target_sha,
-        "previous_tag": previous,
-        "artifacts": artifacts,
-        "jcl": {
-            "ISPW": configuration.ispw,
-            "LEVEL": hostprofil["stage"],
-            "SUBSYS": configuration.subsystem,
-            "ASSIGNMENT": hostprofil["assignment"],
-        },
-    }
-    return write_manifest(output / "manifest.json", manifest)

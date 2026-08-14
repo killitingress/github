@@ -1,4 +1,4 @@
-# CI/CD-Workflow-Vertrag des Mandanten-Repositories
+# CI/CD-Workflows des Mandanten-Repositories
 
 Die Workflowdateien enthalten die Git-Auslöser des Mandanten. Die
 CI/CD-Implementierung wird über eine vollständige Commit-SHA aus
@@ -10,7 +10,7 @@ CI/CD-Implementierung wird über eine vollständige Commit-SHA aus
 GitHub-Benutzers. Es ist auf das zentrale CI/CD-Repository begrenzt
 und besitzt:
 
-- `Contents: read` zum Laden der freigegebenen CI/CD-Version,
+- `Contents: read` zum Laden der angegebenen CI/CD-Version,
 - `Actions: write` zum Starten des zentralen Release-Workflows.
 
 Mainframe-Zugangsdaten liegen nicht im Mandanten-Repository.
@@ -61,7 +61,7 @@ synchronisiert.
 ## `release.yml`
 
 Ein Push eines Tags wie `v261.100` oder `v261.108` ruft den Dispatch-Workflow
-der freigegebenen CI/CD-Version auf. Dieser startet `release.yml` in
+der angegebenen CI/CD-Version auf. Dieser startet `release.yml` in
 `mtext_actions` mit Repository, Tag, auslösender Commit-SHA und der
 CI/CD-Version.
 
@@ -70,6 +70,7 @@ Mandantenlauf erhält keinen FTP-Zugang.
 
 ## Aktualisierung
 
-Der zentrale Aktualisierungsworkflow erstellt für `main` und vorhandene
-Release-Branches einen technischen Aktualisierungsbranch und einen Pull
-Request. Nach Review wird dieser mit Squash Merge zusammengeführt.
+Der zentrale Workflow **Mandanten-Workflows aktualisieren** aktualisiert die
+Verweise auf `mtext_actions` in `main` und den vorhandenen Release-Branches. Er
+schreibt die Änderung direkt in den jeweiligen Branch. Eigene Workflows ohne
+einen Aufruf von `mtext_actions` bleiben unverändert.

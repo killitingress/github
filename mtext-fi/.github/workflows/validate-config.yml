@@ -1,8 +1,7 @@
 name: Mandantenkonfiguration prüfen
 
-# Dieser Workflow prüft jede geänderte Mandantenkonfiguration
+# Änderungen an .github/config.json starten die Prüfung
 'on':
-  # Änderungen an der Mandantenkonfiguration lösen die Prüfung aus
   push:
     branches:
       - '**'
@@ -12,18 +11,20 @@ name: Mandantenkonfiguration prüfen
 permissions:
   contents: read
 
+# Ein neuer Commit ersetzt die laufende Prüfung desselben Branches
 concurrency:
   group: config-validation-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Ruft die Konfigurationsprüfung der freigegebenen CI/CD-Version auf
+  # Der zentrale Workflow führt die Prüfung aus
   validate:
-    name: Prüft Mandantenkonfiguration
+    name: Mandantenkonfiguration prüfen
+    timeout-minutes: 15
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-validate-config.yml@0000000000000000000000000000000000000000
     with:
-      # Der Rollout ersetzt beide Platzhalter durch die freigegebene Commit-SHA
       commit_sha: ${{ github.sha }}
+      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
       automation_ref: 0000000000000000000000000000000000000000
     secrets:
       automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

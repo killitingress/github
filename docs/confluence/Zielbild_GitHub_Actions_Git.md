@@ -311,18 +311,22 @@ Für den Inhalt der Elemente gilt:
 - Das bei einer FULL-Lieferung zusätzlich erzeugte D-Element enthält ein leeres
   Projektverzeichnis und eine leere Löschliste
 
-### Releaseartefakt und Manifest
+### Releaseartefakt
 
 Für jedes Projekt wird zusätzlich eine Informationsdatei erzeugt. Sie nennt
 die Änderungen seit dem vorherigen Release und den Inhalt des TAR-Archivs. Die
 Mandanten verwenden diese Angaben, um zu prüfen, ob die gewünschten Änderungen
 im Paket enthalten sind.
 
-Die erzeugten Pakete, Informationsdateien, das Manifest und die Prüfsummen
-werden bei der zentralen Workflow-Ausführung als GitHub-Artefakt gespeichert.
-Das Manifest beschreibt, was geliefert wurde und aus welchem Repository-Stand
-die Lieferung entstanden ist. Vor der nachfolgenden Mainframe-Übergabe werden
-die Pakete und Informationsdateien mit dem Manifest abgeglichen.
+Ein GitHub-Actions-Artefakt ist eine von GitHub zu einem Workflow-Lauf
+gespeicherte Sammlung von Dateien. Es dient dazu, Ergebnisse zwischen den
+getrennten Jobs eines Laufs weiterzugeben. Die Folgejobs laden es dafür unter
+seinem Artefaktnamen herunter.
+
+In diesem Ablauf enthält das Artefakt die erzeugten Pakete, die zugehörigen
+JCL-Dateien und die Informationsdateien. Es wird 30 Tage aufbewahrt. Der
+Übergabejob überträgt jedes Paket unter seinem Dateinamen als Mainframe-Member
+und reicht die gleichnamige JCL ein.
 
 Schlägt die Übergabe fehl, kann dasselbe Artefakt erneut übergeben werden. Die
 Pakete müssen dafür nicht neu gebaut werden.
@@ -345,21 +349,17 @@ entsprechend dem neuen Tagformat `v261.100` und `v261.108` statt `R261.100` und
 
 Nach der Mainframe-Übergabe erstellt der zentrale Workflow im
 Mandanten-Repository ein GitHub Release zum vorhandenen Release-Tag. Die
-Release-Beschreibung fasst die Änderungen und den Paketinhalt zusammen. Die
-Informationsdateien werden zusätzlich als Dateien an das GitHub Release
-angehängt. Damit können die Mandanten die Lieferung direkt in ihrem Repository
-prüfen und die vollständigen Angaben bei Bedarf herunterladen. Ein Zugriff auf
-`mtext_actions` oder das bisherige Verzeichnis `/nfs/mtext/trans` ist dafür
-nicht erforderlich.
+Release-Beschreibung nennt Release-Tag, Lieferart und Commit-SHA. Sie bestätigt
+die technische Übergabe und verweist auf die angehängten Informationsdateien.
+Darin stehen die Änderungen und der Paketinhalt für jedes Projekt.
 
 ### Mainframe-Übergabe
 
 Für die Mainframe-Übergabe wird das erzeugte FULL- oder DELTA-Paket zunächst
 unter seinem Membernamen in `IEA.LOMS.TONICZ` übertragen. Anschließend kopiert
-die JCL-Datei `templates/mainframe-upload.jcl` aus `mtext_actions` den Member
+die beim Paketbau aus `templates/mainframe-upload.jcl` erzeugte JCL den Member
 nach `IEA.ISPW<ISPW>.BOAS.<LEVEL>.TONICZ` und registriert ihn in CodePipeline.
 Dabei gelten `STRMNAME=BOAS`, `MTYPE=TONICZ` und `MNAME=<Membername>`.
-Änderungen an dieser JCL können vor dem Merge im Pull Request geprüft werden.
 
 Der Paketbau ist von der Mainframe-Übergabe getrennt. Übergaben desselben
 Mandanten werden nacheinander ausgeführt. Verschiedene Mandanten können
@@ -435,7 +435,6 @@ mtext-actions/
       release.yml
       reusable-check-resources.yml
       reusable-release-dispatch.yml
-      reusable-release.yml
       reusable-sync-resources.yml
       reusable-validate-config.yml
       update-mandant-workflows.yml
@@ -451,7 +450,6 @@ mtext-actions/
       git.py
       github_release.py
       mainframe.py
-      manifest.py
       process.py
       release.py
       sync.py
@@ -474,12 +472,12 @@ mtext-actions/
 
 | Prozessschritt | Auslöser | Trigger-Workflow | Zentraler Workflow | Python-Skript | Ergebnis |
 |---|---|---|---|---|---|
-| Trigger-Workflows aktualisieren | Manueller Start in `mtext_actions` mit der gewünschten Commit-SHA | keiner | `update-mandant-workflows.yml` | `workflow_configuration.py` | Geschützte Mandantenbranches verwenden die neue `mtext_actions`-Version |
+| Mandanten-Workflows aktualisieren | Manueller Start in `mtext_actions` mit der gewünschten Commit-SHA | keiner | `update-mandant-workflows.yml` | `workflow_configuration.py` | Verweise auf `mtext_actions` verwenden die neue Version |
 | Mandantenkonfiguration prüfen | Push mit einer Änderung an `.github/config.json` | `validate-config.yml` | `reusable-validate-config.yml` | `validate_config.py` | Konfiguration geprüft |
 | JSON- und XML-Ressourcen prüfen | Pull Request oder manueller Start | `check-resources.yml` | `reusable-check-resources.yml` | `check_resources.py` | Geänderte konfigurierte Ressourcen oder gewählter Vollstand geprüft, Syntaxbefunde als nicht blockierende Warnungen angezeigt |
 | M/Text-Entwicklung synchronisieren | Push auf `feature/Rnnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync_resources.py` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
 | M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/Rnnn` sowie manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync_resources.py` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
-| Release bauen und übertragen | Push eines Tags `vnnn.nnn` | `release.yml` | `reusable-release-dispatch.yml` → `release.yml` → `reusable-release.yml` | `build_release.py`, `publish_mainframe.py`, danach `publish_github_release.py` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
+| Release bauen und übertragen | Push eines Tags `vnnn.nnn` | `release.yml` | `reusable-release-dispatch.yml` → `release.yml` | `build_release.py`, `publish_mainframe.py`, danach `publish_github_release.py` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
 | `mtext_actions` testen | Pull Request oder Push auf `main` in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` | Zentrale Tests ausgeführt |
 
 ### Trigger-Workflows in den Mandanten-Repositories
@@ -505,10 +503,9 @@ Merge nicht.
 | `reusable-validate-config.yml` | Aufruf durch `validate-config.yml` | Mandantenkonfiguration prüfen |
 | `reusable-sync-resources.yml` | Aufruf durch `sync-resources.yml` | Projekte nach M/Text übertragen |
 | `reusable-release-dispatch.yml` | Aufruf durch `release.yml` im Mandanten-Repository | `release.yml` in `mtext_actions` starten |
-| `release.yml` | Start durch `reusable-release-dispatch.yml` | `reusable-release.yml` aufrufen |
-| `reusable-release.yml` | Aufruf durch `release.yml` in `mtext_actions` | FULL- und DELTA-Pakete erstellen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
+| `release.yml` | Start durch `reusable-release-dispatch.yml` | FULL- und DELTA-Pakete erstellen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
 | `ci.yml` | Pull Request oder Push auf `main` in `mtext_actions` | Tests ausführen |
-| `update-mandant-workflows.yml` | Manueller Start | Verweise auf `mtext_actions` in den Trigger-Workflows aktualisieren |
+| `update-mandant-workflows.yml` | Manueller Start | Verweise auf `mtext_actions` in den Mandanten-Workflows aktualisieren |
 
 ### Protokolle und Rückmeldung
 
@@ -521,16 +518,19 @@ Die Release-Erstellung läuft dagegen als eigener Workflow in `mtext_actions`.
 Ihr Ergebnis und die Informationen zum Paket werden deshalb nach Abschluss im
 GitHub Release des Mandanten-Repositories angezeigt.
 
-### Aktualisierung der Trigger-Workflows
+### Aktualisierung der Mandanten-Workflows
 
 Wenn die Mandanten-Repositories eine neue Version von `mtext_actions`
 verwenden sollen, starten die zuständigen Admins
-`update-mandant-workflows.yml` manuell. Der Workflow trägt die gewünschte
-Version in die vorhandenen Trigger-Workflows ein und schreibt für jeden
-Zielbranch einen administrativen Rollout-Commit.
+`update-mandant-workflows.yml` manuell. Der Workflow aktualisiert alle
+Workflowdateien, die einen wiederverwendbaren Workflow aus `mtext_actions`
+aufrufen. Eigene Workflows ohne einen solchen Aufruf bleiben unverändert. Für
+jeden Zielbranch schreibt er einen administrativen Rollout-Commit.
 
 Die Workflowdateien gehören zu den Branches der Mandanten-Repositories. Daher
 aktualisiert der Workflow `main` und jeden vorhandenen Release-Branch getrennt.
+Nicht vorhandene Mandanten-Repositories und Branches werden mit einer Warnung
+übersprungen.
 Der technische Rollout-Zugriff darf dafür die Pull-Request-Pflicht der
 geschützten Zielbranches umgehen. Fachliche Änderungen verwenden weiterhin den
 Pull-Request-Ablauf. Reine Änderungen unter `.github/workflows` lösen keine
@@ -550,8 +550,8 @@ mit dem zugehörigen Exitcode.
 | `RESOURCE_TRANSFER_FAILED` | Die Projekte konnten nicht unter `serverSync` bereitgestellt werden | `5` |
 | `ADAPTER_FAILED` | Der M/Text-Adapter war nicht erreichbar oder hat die Anfrage abgelehnt | `6` |
 | `ADAPTER_ACCEPTED` | Der M/Text-Adapter hat die Anfrage angenommen | – |
-| `PACKAGE_FAILED` | Paket, Lieferbeleg oder Manifest konnten nicht korrekt erstellt oder geprüft werden | `4` |
-| `ARTIFACT_READY` | Die Releasepakete wurden erstellt und geprüft | – |
+| `PACKAGE_FAILED` | Paket, JCL oder Lieferbeleg konnten nicht erstellt oder verwendet werden | `4` |
+| `ARTIFACT_READY` | Pakete, JCL und Lieferbelege wurden erstellt | – |
 | `MAINFRAME_TRANSFER_FAILED` | Die FTP- oder JES-Übergabe ist fehlgeschlagen | `7` |
 | `MAINFRAME_SUBMITTED` | Paket und JCL wurden per FTP und JES übergeben | – |
 | `GITHUB_RELEASE_FAILED` | Das GitHub Release oder seine Informationsdateien konnten nicht bereitgestellt werden | `8` |

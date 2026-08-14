@@ -2,8 +2,7 @@
 
 Das Skript ermittelt den ausgecheckten Mandantenstand im Arbeitsbereich von
 GitHub Actions, lädt seine Konfiguration und startet die Ressourcensynchronisation
-für den angegebenen Commit und den auslösenden Branch. Die Synchronisation prüft
-Branch und Commit vor der Übertragung.
+für den angegebenen Commit und den auslösenden Branch.
 """
 
 from __future__ import annotations
@@ -13,24 +12,15 @@ import json
 import os
 from pathlib import Path
 
-from lbs_delivery.config import (
-    Configuration,
-    MANDANT_CONFIG_PATH,
-    MTEXT_ZIEL_REIHENFOLGE,
-    load_configuration,
-)
-from lbs_delivery.git import read_file, resolve_sync_branch
-from lbs_delivery.process import DeliveryError, Status, execute
-from lbs_delivery.sync import sync_resources
+from lbs_delivery import config, git, process, sync
 
 
-# GitHub kennzeichnet den ersten Push eines Branches mit dieser leeren
-# Vorgänger-SHA. Ohne Vorgänger kann kein Releaselinienwechsel erkannt werden.
+# GitHub liefert für den ersten Push eines Branches diese Null-SHA als Vorgänger.
 EMPTY_PUSH_COMMIT = "0" * 40
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Fordert den unveränderlichen Commit für die Synchronisation an."""
+    """Fordert die Commit-SHA für die Synchronisation an."""
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--commit", required=True)
@@ -38,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def sync_from_github_context(
-    configuration: Configuration,
+    configuration: config.Configuration,
     *,
     repository_root: str | Path,
     commit: str,
@@ -46,40 +36,26 @@ def sync_from_github_context(
     event_name: str,
     previous_commit: str,
 ) -> dict[str, object]:
-    """Leitet die Synchronisationsziele aus dem GitHub-Ereignis ab.
+    """Leitet Zielstufen und Umfang aus Branch und GitHub-Ereignis ab."""
 
-    Manuelle Starts gleichen das Ziel ihres Branches vollständig ab. Bei einem
-    Wechsel der führenden Releaselinie werden die M/Text-Ziele Entwicklung und
-    Funktionstest nacheinander verarbeitet.
-    """
+    releaselinie, zielstufe = git.resolve_sync_branch(source_branch, configuration.releaselinie)
 
-    releaselinie, zielstufe = resolve_sync_branch(source_branch, configuration.releaselinie)
+    # Push nach `main` kann die Releaselinie wechseln. Der Vorgänger-Commit liefert den bisherigen Wert.
     releasewechsel = False
-    if (
-        event_name == "push"
-        and source_branch == "main"
-        and previous_commit
-        and previous_commit != EMPTY_PUSH_COMMIT
-    ):
-        try:
-            document = json.loads(read_file(repository_root, previous_commit, MANDANT_CONFIG_PATH))
-            bisherige_releaselinie = document["mandant"]["releaselinie"]
-            if not isinstance(bisherige_releaselinie, str) or not bisherige_releaselinie:
-                raise TypeError
-        except (UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
-            raise DeliveryError(
-                Status.VALIDATION_FAILED,
-                "Bisherige Mandantenkonfiguration ist ungültig",
-            ) from exc
-        releasewechsel = bisherige_releaselinie != configuration.releaselinie
+    if event_name == "push" and source_branch == "main" and previous_commit and previous_commit != EMPTY_PUSH_COMMIT:
+        document = json.loads(git.read_file(repository_root, previous_commit, config.MANDANT_CONFIG_PATH))
+        releasewechsel = document["mandant"]["releaselinie"] != configuration.releaselinie
 
-    zielstufen = MTEXT_ZIEL_REIHENFOLGE if releasewechsel else (zielstufe,)
+    # Releaselinienwechsel synchronisiert beide M/Text-Ziele vollständig.
+    # Ein manueller Start gleicht das Ziel seines Branches vollständig ab.
+    zielstufen = config.MTEXT_ZIEL_REIHENFOLGE if releasewechsel else (zielstufe,)
     vollabgleich = event_name == "workflow_dispatch" or releasewechsel
     results: list[dict[str, object]] = []
     successful_stages: list[str] = []
+
     for zielstufe in zielstufen:
         try:
-            result = sync_resources(
+            results.append({"zielstufe": zielstufe, **sync.sync_resources(
                 configuration,
                 repository_root=repository_root,
                 commit=commit,
@@ -87,39 +63,27 @@ def sync_from_github_context(
                 releaselinie=releaselinie,
                 zielstufe=zielstufe,
                 vollabgleich=vollabgleich,
-            )
-        except DeliveryError as exc:
-            message = f"Synchronisation mit dem M/Text-Ziel {zielstufe} fehlgeschlagen."
-            if successful_stages:
-                message += f" Bereits erfolgreich: {', '.join(successful_stages)}."
-            message += f" {exc.args[0]}"
-            raise DeliveryError(exc.status, message) from exc
-        results.append({"zielstufe": zielstufe, **result})
+            )})
+        except process.DeliveryError as exc:
+            detail = f" Bereits erfolgreich: {', '.join(successful_stages)}." if successful_stages else ""
+            raise process.DeliveryError(
+                exc.status,
+                f"Synchronisation mit dem M/Text-Ziel {zielstufe} fehlgeschlagen.{detail} {exc.args[0]}",
+            ) from exc
         successful_stages.append(zielstufe)
 
-    response: dict[str, object] = {
-        "status": Status.ADAPTER_ACCEPTED.value,
-        "synchronisationen": results,
-    }
-    if configuration.warnungen:
-        response["warnungen"] = list(configuration.warnungen)
-    return response
+    return {"status": process.Status.ADAPTER_ACCEPTED.value, "synchronisationen": results} | (
+        {"warnungen": list(configuration.warnungen)} if configuration.warnungen else {}
+    )
 
 
 def run() -> dict[str, object]:
-    """Startet die Ressourcensynchronisation aus dem GitHub-Ereigniskontext.
+    """Startet die Synchronisation mit den Angaben des GitHub-Laufs."""
 
-    Der Ereigniskontext legt Releaselinie und Zielstufe fest. Der
-    Synchronisationskern prüft den Commit und aktualisiert das Ziel direkt aus
-    dem Checkout.
-    """
-
-    # Argumente und den vertrauenswürdigen Ereigniskontext auslesen.
     arguments = build_parser().parse_args()
-    workspace = Path(os.environ["GITHUB_WORKSPACE"])
-    repository_root = workspace / "source"
-    configuration = load_configuration(repository_root, os.environ["GITHUB_REPOSITORY"])
-    # Der GitHub-Kontext legt Zielstufen, Vollabgleich und Reihenfolge fest.
+    repository_root = Path(os.environ["GITHUB_WORKSPACE"]) / "source"
+    configuration = config.load_configuration(repository_root, os.environ["GITHUB_REPOSITORY"])
+
     return sync_from_github_context(
         configuration,
         repository_root=repository_root,
@@ -131,4 +95,4 @@ def run() -> dict[str, object]:
 
 
 if __name__ == "__main__":
-    raise SystemExit(execute(run))
+    raise SystemExit(process.execute(run))

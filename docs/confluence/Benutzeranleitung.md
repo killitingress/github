@@ -394,14 +394,12 @@ beendet wurde. Der Lauf:
 
 1. lädt den getaggten Mandantenstand,
 2. bestimmt FULL oder DELTA,
-3. erstellt Pakete, Lieferbelege und Manifest,
-4. prüft Größen und Prüfsummen,
-5. übergibt Paket und JCL an den Mainframe,
-6. erstellt zum Tag ein GitHub Release im Mandanten-Repository.
+3. erstellt Pakete, JCL und Lieferbelege,
+4. übergibt Paket und JCL an den Mainframe,
+5. erstellt zum Tag ein GitHub Release im Mandanten-Repository.
 
-Im GitHub Release werden Mandant, Lieferart, Commit und die betroffenen
-Projekte zusammengefasst. Für jedes Projekt kann dort die Informationsdatei
-mit den erkannten Änderungen und dem Paketinhalt heruntergeladen werden.
+Das GitHub Release enthält die Informationsdateien mit den erkannten
+Änderungen und dem Paketinhalt.
 
 Bei einem `.100`-Tag enthält das Artefakt für jedes einbezogene Projekt ein
 vollständiges F-Paket und ein leeres D-Paket. Jeder weitere Tag derselben
@@ -548,8 +546,8 @@ unwiederbringlich entfernen kann.
 | `RESOURCE_TRANSFER_FAILED` | Ressourcen konnten nicht nach `serverSync` übertragen werden. | Fehlermeldung festhalten und die Repository-Verantwortlichen informieren. |
 | `ADAPTER_FAILED` | LTOMA war nicht erreichbar oder hat den Aufruf abgelehnt. | HTTP-Status und Antwort im Protokoll prüfen. Den Lauf erst nach Klärung der Ursache wiederholen. |
 | `ADAPTER_ACCEPTED` | LTOMA hat den Aufruf angenommen. | Die fachliche Wirkung anschließend in M/Text kontrollieren. |
-| `PACKAGE_FAILED` | Releasepaket, Lieferbeleg oder Manifest konnte nicht erstellt werden. | Erste Fehlermeldung, betroffenes Projekt und Releasebasis prüfen. |
-| `ARTIFACT_READY` | Das Releaseartefakt wurde vollständig erstellt und geprüft. | Den nachfolgenden Mainframe-Übergabejob kontrollieren. |
+| `PACKAGE_FAILED` | Releasepaket, JCL oder Lieferbeleg konnte nicht erstellt oder verwendet werden. | Erste Fehlermeldung, betroffenes Projekt und Releasebasis prüfen. |
+| `ARTIFACT_READY` | Pakete, JCL und Lieferbelege wurden erstellt. | Den nachfolgenden Mainframe-Übergabejob kontrollieren. |
 | `MAINFRAME_TRANSFER_FAILED` | FTP- oder JES-Übergabe ist fehlgeschlagen. | Übergabeprotokoll prüfen und vor einem Wiederanlauf klären, ob der vorherige Versuch angenommen wurde. |
 | `MAINFRAME_SUBMITTED` | Paket und JCL wurden technisch übergeben. | Den nachgelagerten Status auf dem Mainframe nach dem festgelegten Betriebsverfahren kontrollieren. |
 | `GITHUB_RELEASE_FAILED` | Die Lieferinformationen konnten im Mandanten-Repository nicht bereitgestellt werden. | Den fehlgeschlagenen Rückmeldungsjob wiederholen. Das Paket wird dabei nicht erneut übertragen. |

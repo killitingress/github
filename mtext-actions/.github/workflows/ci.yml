@@ -1,7 +1,7 @@
 name: Zentrale Testsuite
 
-# Dieser Workflow führt bei Pull Requests und Änderungen an main alle zentralen
-# Python-Tests aus
+# Dieser Workflow führt die zentralen Python-Tests bei Pull Requests und
+# Änderungen an main aus
 'on':
   pull_request:
   push:
@@ -11,30 +11,30 @@ name: Zentrale Testsuite
 permissions:
   contents: read
 
-# Neuere Commits ersetzen laufende Tests derselben Änderung.
+# Neuere Commits ersetzen laufende Tests derselben Änderung
 concurrency:
   group: central-tests-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
-    name: Testet Zentrale CI/CD-Implementierung
+    name: Zentrale CI/CD-Implementierung testen
     runs-on: [self-hosted, linux]
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       # Lädt die zu prüfende CI/CD-Version in den Arbeitsbereich
-      - name: Check-Out CI/CD Version
+      - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
 
-      # Prüft den Runner und stellt den Pfad zur Python-Laufzeit als Ausgabe für die nachfolgenden Schritte bereit
+      # Prüft Git und Python auf dem Runner und stellt den Python-Pfad bereit
       - name: Python-Runtime ermitteln
         id: runtime
         run: bash scripts/runner-preflight.sh
 
-      # Startet die vollständige Unit-Test-Suite (mit dem produktiven Quellcode)
-      - name: Ausführung Unit-Tests
+      # Führt alle Unit-Tests aus
+      - name: Unit-Tests ausführen
         env:
           PYTHONPATH: src
         run: >-

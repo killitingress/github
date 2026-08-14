@@ -1,22 +1,25 @@
 name: Wiederverwendbare JSON- und XML-Prüfung
 
-# Dieser Workflow prüft die JSON- und XML-Ressourcen eines Mandanten-Commits
+# Dieser Workflow prüft JSON- und XML-Ressourcen
 'on':
   workflow_call:
     inputs:
       commit_sha:
+        description: Commit im Mandanten-Repository, dessen Ressourcen geprüft werden
         required: true
         type: string
       automation_ref:
+        description: CI/CD-Version, aus der dieser Workflow geladen wurde
         required: true
         type: string
       changed_only:
-        description: Prüft nur die durch den Pull Request eingebrachten Ressourcen
+        description: Bei Pull Requests nur geänderte Ressourcen prüfen
         required: false
         default: false
         type: boolean
     secrets:
       automation_token:
+        description: Token zum Laden der festgelegten CI/CD-Version
         required: true
 
 permissions:
@@ -24,21 +27,21 @@ permissions:
 
 jobs:
   check:
-    name: Prüft JSON- und XML-Ressourcen
+    name: JSON- und XML-Ressourcen prüfen
     runs-on: [self-hosted, linux]
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
-      # Lädt den zu prüfenden Mandanten-Commit in den Arbeitsbereich
-      - name: Check-Out Mandanten-Commit
+      # Lädt den zu prüfenden Commit in den Arbeitsbereich
+      - name: Check-Out Mandanten-Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           path: source
-          # Lädt den Commit mit seinem ersten Elternteil für die Änderungsprüfung
+          # Lädt auch den vorherigen Commit für den Vergleich
           fetch-depth: 2
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
 
-      # Lädt die freigegebene Ressourcenprüfung in den Arbeitsbereich
+      # Lädt die festgelegte Version der Ressourcenprüfung
       - name: Check-Out Ressourcenprüfung
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -48,13 +51,13 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.automation_token }}
 
-      # Prüft den Runner und stellt den Pfad zur Python-Laufzeit als Ausgabe bereit
+      # Prüft Git und Python und stellt den Python-Pfad bereit
       - name: Python-Runtime ermitteln
         id: runtime
-        run: automation/scripts/runner-preflight.sh
+        run: bash automation/scripts/runner-preflight.sh
 
       # Prüft JSON-Syntax und XML-Wohlgeformtheit und gibt Befunde als Warnungen aus
-      - name: Ausführung Ressourcenprüfung
+      - name: Ressourcen prüfen
         env:
           CHANGED_ONLY: ${{ inputs.changed_only && '--changed-only' || '' }}
         run: >-
