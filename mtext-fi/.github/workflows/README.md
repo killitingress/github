@@ -60,13 +60,13 @@ synchronisiert.
 
 ## `release.yml`
 
-Ein Push eines Tags wie `v261.100` oder `v261.108` ruft den Dispatch-Workflow
-der angegebenen CI/CD-Version auf. Dieser startet `release.yml` in
-`mtext_actions` mit Repository, Tag, auslösender Commit-SHA und der
-CI/CD-Version.
+Ein Push eines Tags wie `v261.100`, `v261.108` oder `v261.108a` ruft den
+Dispatch-Workflow der angegebenen CI/CD-Version auf. Dieser startet
+`release.yml` in `mtext_actions` mit Repository, Tag, auslösender Commit-SHA
+und der CI/CD-Version.
 
 Paketbau und Mainframe-Übergabe laufen anschließend in `mtext_actions`. Der
-Mandantenlauf erhält keinen FTP-Zugang.
+Mandantenlauf erhält keinen FTPS-Zugang.
 
 ## Aktualisierung
 

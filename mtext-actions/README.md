@@ -18,7 +18,7 @@ Mainframe-Übergabe.
 - Ein Wechsel der auf `main` konfigurierten Releaselinie gleicht den ersten
   Stand automatisch vollständig mit M/Text-Entwicklung und
   M/Text-Funktionstest ab.
-- Tags wie `v261.100` und `v261.108` starten den Release-Workflow.
+- Tags wie `v261.100`, `v261.108` und `v261.108a` starten den Release-Workflow.
 
 ## Aufbau
 
@@ -32,8 +32,7 @@ Mainframe-Übergabe.
 - `src/lbs_delivery/config.py`: Mandanten- und Releaselinienkonfiguration
 - `src/lbs_delivery/git.py`: Commit-, Branch-, Tag- und Diff-Abfragen
 - `src/lbs_delivery/sync.py`: dauerhafter `serverSync`-Stand und LTOMA-Aufruf
-- `src/lbs_delivery/release.py`: FULL, DELTA, Archive, JCL und Lieferbelege
-- `src/lbs_delivery/mainframe.py`: FTP-/JES-Übergabe
+- `src/lbs_delivery/mainframe_release.py`: FULL, DELTA, Archive, JCL und FTPS-/JES-Übergabe
 - `src/lbs_delivery/github_release.py`: GitHub Release und Informationsdateien
 - `config/mandanten.json`: Mandantenkürzel, Repositories und Subsysteme
 - `config/ressourcenformate.json`: Dateiendungen und ihr technisches Format
@@ -46,9 +45,10 @@ In `mtext_actions` werden eingerichtet:
 
 | Name | Art | Verwendung |
 |---|---|---|
-| `MAINFRAME_FTP_HOST` | Repositoryvariable | FTP-Ziel |
-| `MAINFRAME_FTP_USER` | Repositoryvariable | zentraler technischer FTP-Benutzer |
-| `MAINFRAME_FTP_PASSWORD` | Repository-Secret | FTP-Passwort für den zentralen Übergabejob |
+| `MAINFRAME_FTPS_HOST` | Repositoryvariable | FTPS-Ziel |
+| `MAINFRAME_FTPS_PORT` | Repositoryvariable | Steuerungsport des expliziten FTPS-Zugangs |
+| `MAINFRAME_FTPS_USER` | Repositoryvariable | zentraler technischer FTPS-Benutzer |
+| `MAINFRAME_FTPS_PASSWORD` | Repository-Secret | FTPS-Passwort für den zentralen Übergabejob |
 | `WORKFLOW_CONFIGURATION_TOKEN` | Repository-Secret | Mandanten-Workflows administrativ ausrollen und Lieferinformationen veröffentlichen |
 
 `WORKFLOW_CONFIGURATION_TOKEN` gilt für die zugeordneten
@@ -90,8 +90,8 @@ vorgesehenen Runner aus, ohne M/Text oder den Mainframe anzusprechen. Vor dem
 Zusammenführen muss der Testjob **Zentrale CI/CD-Implementierung testen**
 erfolgreich abgeschlossen sein.
 
-Die Anwendung benötigt Python ab Version 3.11 und verwendet für ihre
-Produktivlogik die Standardbibliothek.
+Die Anwendung benötigt Python ab Version 3.11 sowie Git und `tar`. Der
+Python-Code verwendet für seine Produktivlogik die Standardbibliothek.
 
 ## Prüfung von JSON- und XML-Ressourcen
 

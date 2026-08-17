@@ -11,7 +11,7 @@ import argparse
 import os
 from pathlib import Path
 
-from lbs_delivery import config, process, release
+from lbs_delivery import config, mainframe_release, process
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,7 +35,7 @@ def run() -> dict[str, object]:
     source = workspace / "source"
     configuration = config.load_configuration(source, os.environ.get("SOURCE_REPOSITORY", os.environ["GITHUB_REPOSITORY"]))
 
-    release.build_release(
+    mainframe_release.build_release(
         configuration,
         repository_root=source,
         output_directory=workspace / "dist",

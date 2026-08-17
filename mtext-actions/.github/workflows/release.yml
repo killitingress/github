@@ -10,7 +10,7 @@ name: Zentrales Release
         required: true
         type: string
       release_tag:
-        description: Release-Tag im Format vnnn.nnn
+        description: Release-Tag im Format vnnn.nnn oder vnnn.nnnx
         required: true
         type: string
       trigger_sha:
@@ -121,12 +121,13 @@ jobs:
         id: runtime
         run: bash automation/scripts/runner-preflight.sh
 
-      # Überträgt jedes Paket per FTP und reicht seine JCL bei JES ein
+      # Überträgt jedes Paket per FTPS und reicht seine JCL bei JES ein
       - name: Release an Mainframe übergeben
         env:
-          MAINFRAME_FTP_HOST: ${{ vars.MAINFRAME_FTP_HOST }}
-          MAINFRAME_FTP_PASSWORD: ${{ secrets.MAINFRAME_FTP_PASSWORD }}
-          MAINFRAME_FTP_USER: ${{ vars.MAINFRAME_FTP_USER }}
+          MAINFRAME_FTPS_HOST: ${{ vars.MAINFRAME_FTPS_HOST }}
+          MAINFRAME_FTPS_PASSWORD: ${{ secrets.MAINFRAME_FTPS_PASSWORD }}
+          MAINFRAME_FTPS_PORT: ${{ vars.MAINFRAME_FTPS_PORT }}
+          MAINFRAME_FTPS_USER: ${{ vars.MAINFRAME_FTPS_USER }}
           RELEASE_DIRECTORY: ${{ runner.temp }}/release
         run: >-
           "${{ steps.runtime.outputs.python }}" automation/src/publish_mainframe.py

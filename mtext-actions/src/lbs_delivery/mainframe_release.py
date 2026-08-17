@@ -1,35 +1,44 @@
-"""Erzeugt reproduzierbare FULL- und kumulative DELTA-Lieferungen aus einem Release-Tag.
+"""Erzeugt und übergibt FULL- und DELTA-Lieferungen an den Mainframe.
 
 Der Releasebau prüft die Git-Quelle und verpackt jedes konfigurierte Projekt.
-Zu jedem Paket entstehen die benötigte JCL und ein lesbarer Lieferbeleg.
+Zu jedem Paket entstehen die benötigte JCL und ein lesbarer Lieferbeleg. Die
+Übergabe lädt die vorbereiteten Pakete per FTPS und reicht ihre JCL bei JES ein.
 """
 
 from __future__ import annotations
 
-import gzip
+import ftplib
+import os
 import re
 import shutil
-import tarfile
+import ssl
+import subprocess
 import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 
-from .config import CODEPIPELINE_STAGES, ISPW_INSTANZEN, Configuration
 from . import git
-from .process import DeliveryError, Status
+from .config import CODEPIPELINE_STAGES, ISPW_INSTANZEN, Configuration
+from .process import DeliveryError, NETWORK_TIMEOUT, Status
 
 
 # Die Informationsdatei verlangt auch beim ersten Release eine Bezeichnung für
 # den Vorgängertag, obwohl dafür kein entsprechender Git-Tag vorhanden ist.
 LEGACY_PREVIOUS_TAG = "v001.100"
 
-# Ein Tag mit der Endung `.100` bezeichnet den vollständigen Ausgangsstand einer
-# Releaselinie und wählt deshalb den FULL- statt des kumulativen DELTA-Paketbaus.
+# Die Release-Version `100` bezeichnet den vollständigen Ausgangsstand einer
+# Releaselinie. Das gilt auch für eine zugehörige Beta-Lieferung.
 FULL_SUFFIX = ".100"
 
 # Der Dateiname des Lieferbelegs nennt Projekt, Lieferart und verglichene Tags,
 # damit der Betrieb ihn dem zugehörigen Paket zuordnen kann.
 INFORMATION_NAME = "_INFO_{mandant}-{project}-{delivery_type}-{tag}-{previous_tag}.txt"
+
+# FULL- und DELTA-Pakete werden als Member in diesem Mainframe-Dataset abgelegt.
+MAINFRAME_DATASET = "IEA.LOMS.TONICZ"
+
+# Die erzeugte JCL wird an dieses JES-Ziel übergeben.
+MAINFRAME_JES_TARGET = "LIT9028A"
 
 # Prüft ein Mainframe-Subsystem anhand des Zeichenvorrats und der Feldlänge,
 # die Vorlage und Zielsystem akzeptieren.
@@ -40,6 +49,15 @@ _MEMBER_RE = re.compile(r"[A-Z0-9]{1,8}")
 
 # Prüft das CodePipeline-Assignment, bevor es in die JCL eingesetzt wird.
 _ASSIGNMENT_RE = re.compile(r"[A-Z0-9]{1,12}")
+
+
+def information_delivery_type(path: str | Path) -> str:
+    """Liest die Lieferart aus dem Namen einer erzeugten Informationsdatei."""
+
+    fields = Path(path).stem.rsplit("-", 3)
+    if len(fields) != 4 or not fields[0].startswith("_INFO_") or fields[1] not in {"FULL", "DELTA"}:
+        raise ValueError("Informationsdateiname ist ungültig")
+    return fields[1]
 
 
 def _render_jcl(
@@ -76,45 +94,31 @@ def _render_jcl(
     return rendered
 
 
-def _normalize_tar_info(info: tarfile.TarInfo) -> tarfile.TarInfo:
-    """Ersetzt Dateimetadaten aus dem Checkout durch feste Archivwerte.
+def _write_archive(archive_path: Path, source_directory: Path, entries: Iterable[str]) -> list[str]:
+    """Erzeugt ein TAR-Archiv und gibt seine ausführliche Inhaltsliste zurück.
 
-    `tarfile` übernimmt sonst Änderungszeiten, Besitzer und Rechte vom
-    Runner-Dateisystem. Feste Werte sorgen dafür, dass derselbe Repositorystand
-    bei jedem Lauf dasselbe Paket ergibt.
+    Erzeugung und Auflistung verwenden wie der bisherige Lieferweg das
+    Systemprogramm `tar`. Dadurch enthält der Lieferbeleg die Ausgabe von
+    `tar -tvzf` mit Rechten, Eigentümer, Größe und Zeitstempel.
     """
 
-    info.mtime = 0
-    info.uid = 0
-    info.gid = 0
-    info.uname = ""
-    info.gname = ""
-    info.mode = 0o755 if info.isdir() else 0o644
-    return info
-
-
-def _write_archive(archive_path: Path, entries: Iterable[tuple[Path, str]]) -> list[str]:
-    """Schreibt vorbereitete Einträge in ein reproduzierbares gzip-komprimiertes TAR-Archiv.
-
-    Der Aufrufer bestimmt die Reihenfolge der Einträge. TAR-Metadaten werden
-    über `_normalize_tar_info` und der gzip-Zeitstempel auf null gesetzt, damit
-    dieselben Dateiinhalte immer dieselben Bytes erzeugen. Die zurückgegebenen
-    Namen erscheinen anschließend im Lieferbeleg.
-    """
-
+    archive = archive_path.resolve()
     try:
-        with (
-            archive_path.open("wb") as raw,
-            gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as zipped,
-            tarfile.open(fileobj=zipped, mode="w", format=tarfile.GNU_FORMAT) as archive,
-        ):
-            for source, name in entries:
-                archive.add(source, arcname=name, recursive=True, filter=_normalize_tar_info)
-            names = archive.getnames()
-    except (OSError, tarfile.TarError) as exc:
+        subprocess.run(
+            ["tar", "-czf", str(archive), "--", *entries],
+            cwd=source_directory,
+            check=True,
+        )
+        listing = subprocess.run(
+            ["tar", "-tvzf", str(archive)],
+            check=True,
+            stdout=subprocess.PIPE,
+            encoding="utf-8",
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
         raise DeliveryError(Status.PACKAGE_FAILED, "Releasearchiv kann nicht erzeugt werden") from exc
 
-    return names
+    return listing.stdout.splitlines()
 
 
 def _delta_archive(
@@ -139,8 +143,8 @@ def _delta_archive(
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, destination)
         (staging / deletion_name).write_text("".join(f"{path}\n" for path in deleted), encoding="utf-8")
-        entries = [(item, item.name) for item in sorted(staging.iterdir())]
-        return _write_archive(archive_path, entries)
+        entries = [item.name for item in sorted(staging.iterdir())]
+        return _write_archive(archive_path, staging, entries)
 
 
 def _build_project_packages(
@@ -159,10 +163,11 @@ def _build_project_packages(
     archive_path = output / f"{package_prefix}{delivery_code}.tgz"
     deletion_name = f"{package_prefix}D.txt"
     if delivery_type == "FULL":
-        archive_names = _write_archive(archive_path, [(repository_root / project, f"./{project}")])
+        archive_names = _write_archive(archive_path, repository_root, [f"./{project}"])
         delta_path = output / f"{package_prefix}D.tgz"
-        # Die Mainframe-Übergabe erwartet neben jedem FULL-Paket einen
-        # DELTA-Member, auch wenn dieser keine Änderungen oder Löschungen enthält.
+        # Die nachgelagerte Verarbeitung wendet nach einem F-Element auch das
+        # gleichnamige D-Element an. Das leere Paket ersetzt dort ein D-Element
+        # aus einer früheren Lieferung, damit es den FULL-Stand nicht verändert.
         _delta_archive(delta_path, repository_root, project, [], [], deletion_name)
         return [archive_path, delta_path], archive_names
 
@@ -215,7 +220,68 @@ def _write_information(
     )
 
 
-# Hauptfunktion des Moduls, wird von `build_release.py` aufgerufen.
+def _submit_package(
+    package_path: str | Path, jcl_path: str | Path, member: str, *, host: str, port: int, user: str,
+    password: str,
+) -> None:
+    """Lädt ein Paket-Member per FTPS hoch und übergibt die gerenderte JCL an JES."""
+
+    session = ftplib.FTP_TLS(context=ssl.create_default_context())
+    try:
+        session.connect(host, port, timeout=NETWORK_TIMEOUT)
+        session.login(user, password)
+        session.prot_p()
+        # Passive Datenverbindungen werden vom Runner aufgebaut und benötigen
+        # deshalb keine eingehende Firewall-Freischaltung auf dem Runner.
+        session.set_pasv(True)
+
+        with Path(package_path).open("rb") as package:
+            session.storbinary(f"STOR '{MAINFRAME_DATASET}({member})'", package)
+
+        session.sendcmd("SITE FILETYPE=JES")
+
+        with Path(jcl_path).open("rb") as jcl:
+            session.storlines(f"STOR {MAINFRAME_JES_TARGET}", jcl)
+
+        session.quit()
+    except ftplib.all_errors as exc:
+        session.close()
+        raise DeliveryError(Status.MAINFRAME_TRANSFER_FAILED, "FTPS-/JES-Übergabe fehlgeschlagen") from exc
+
+
+def _publish_mainframe(*, artifact_root: str | Path) -> dict[str, object]:
+    """Übergibt alle vorbereiteten Pakete und JCL-Dateien an den Mainframe."""
+
+    root = Path(artifact_root)
+    packages = sorted(root.glob("*.tgz"))
+    if not packages or any(not package.with_suffix(".jcl").is_file() for package in packages):
+        raise DeliveryError(Status.PACKAGE_FAILED, "Releasepakete oder JCL fehlen")
+
+    host = os.environ["MAINFRAME_FTPS_HOST"]
+    user = os.environ["MAINFRAME_FTPS_USER"]
+    password = os.environ["MAINFRAME_FTPS_PASSWORD"]
+    try:
+        port = int(os.environ["MAINFRAME_FTPS_PORT"])
+    except ValueError as exc:
+        raise DeliveryError(Status.VALIDATION_FAILED, "FTPS-Port ist ungültig") from exc
+    if not 1 <= port <= 65_535:
+        raise DeliveryError(Status.VALIDATION_FAILED, "FTPS-Port ist ungültig")
+
+    for package in packages:
+        _submit_package(
+            package,
+            package.with_suffix(".jcl"),
+            package.stem,
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+        )
+
+    return {"status": Status.MAINFRAME_SUBMITTED.value}
+
+
+# Der Paketbau wird vom gleichnamigen Workflow-Einstieg aufgerufen.
 def build_release(
     configuration: Configuration,
     *, repository_root: str | Path, output_directory: str | Path, jcl_template: str, tag: str,
@@ -233,7 +299,7 @@ def build_release(
     tag_match = git.RELEASE_TAG_RE.fullmatch(tag)
     if tag_match is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
-    releaselinie = f"R{tag_match.group(1)}"
+    releaselinie = f"R{tag_match.group('releaselinie')}"
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
     allowed_branches = (
@@ -246,8 +312,8 @@ def build_release(
         raise DeliveryError(Status.SOURCE_FAILED, "auslösender Commit stimmt nicht zum Tag")
 
     # FULL- oder DELTA-Lieferung und die zugehörigen Git-Vergleiche bestimmen.
-    delivery_type = "FULL" if tag.endswith(FULL_SUFFIX) else "DELTA"
-    base = f"v{tag_match.group(1)}{FULL_SUFFIX}" if delivery_type == "DELTA" else None
+    delivery_type = "FULL" if tag_match.group("release") == "100" else "DELTA"
+    base = f"v{tag_match.group('releaselinie')}{FULL_SUFFIX}" if delivery_type == "DELTA" else None
     base_sha = git.resolve(root, f"refs/tags/{base}") if base else None
     if base_sha:
         git.require_ancestor(root, base_sha, target_sha)
@@ -259,7 +325,7 @@ def build_release(
     # Neues Ausgabeverzeichnis anlegen.
     output = Path(output_directory)
     try:
-        output.mkdir(parents=True, exist_ok=False)
+        output.mkdir(parents=True)
     except OSError as exc:
         raise DeliveryError(Status.PACKAGE_FAILED, "Release-Ausgabeverzeichnis ist nicht neu") from exc
 

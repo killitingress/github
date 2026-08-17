@@ -5,6 +5,7 @@ name: Zentrales Release starten
   push:
     tags:
       - v[0-9][0-9][0-9].[0-9][0-9][0-9]
+      - v[0-9][0-9][0-9].[0-9][0-9][0-9][a-zA-Z]
 
 permissions:
   contents: read

@@ -75,16 +75,15 @@ def call_adapter(url: str) -> tuple[int, str]:
 
     request = urllib.request.Request(
         url,
-        data=json.dumps({"mandant": "MAN", "institut": "INR"}, separators=(",", ":")).encode("utf-8"),
+        data=json.dumps({"mandant": "MAN", "institut": "INR"}, separators=(",", ":")).encode(),
         headers={"Content-Type": "application/json"},
-        method="POST",
     )
     try:
         with urllib.request.urlopen(request, timeout=NETWORK_TIMEOUT) as response:
-            status = int(response.status)
-            body = response.read(ADAPTER_RESPONSE_LIMIT).decode("utf-8", errors="replace")
+            status = response.status
+            body = response.read(ADAPTER_RESPONSE_LIMIT).decode(errors="replace")
     except urllib.error.HTTPError as exc:
-        body = exc.read(ADAPTER_RESPONSE_LIMIT).decode("utf-8", errors="replace")
+        body = exc.read(ADAPTER_RESPONSE_LIMIT).decode(errors="replace")
         raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {exc.code}: {body[:1000]}") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapter ist nicht erreichbar") from exc
@@ -139,7 +138,7 @@ def sync_resources(
         git_changes = changes(repository_root, previous_commit, commit)
         operations = [
             operation
-            for project in configuration.projects.keys()
+            for project in configuration.projects
             for operation in project_changes(git_changes, project)
         ]
 
@@ -156,7 +155,7 @@ def sync_resources(
                 destination = target_root / project
                 if destination.exists():
                     shutil.rmtree(destination)
-                shutil.copytree(source / project, destination, copy_function=shutil.copy2)
+                shutil.copytree(source / project, destination)
         except (OSError, shutil.Error) as exc:
             raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "serverSync-Veröffentlichung fehlgeschlagen") from exc
 

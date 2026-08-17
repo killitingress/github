@@ -29,9 +29,9 @@ class Status(str, Enum):
     ADAPTER_ACCEPTED = "ADAPTER_ACCEPTED"
     # Adapteraufruf oder HTTP-Antwort sind fehlgeschlagen.
     ADAPTER_FAILED = "ADAPTER_FAILED"
-    # FTP und JES haben Paket und JCL angenommen.
+    # FTPS und JES haben Paket und JCL angenommen.
     MAINFRAME_SUBMITTED = "MAINFRAME_SUBMITTED"
-    # FTP-Verbindung, Paketübertragung oder JES-Übergabe sind fehlgeschlagen.
+    # FTPS-Verbindung, Paketübertragung oder JES-Übergabe sind fehlgeschlagen.
     MAINFRAME_TRANSFER_FAILED = "MAINFRAME_TRANSFER_FAILED"
     # Zusammenfassung und Informationsdateien stehen im Mandanten-Repository bereit.
     GITHUB_RELEASE_PUBLISHED = "GITHUB_RELEASE_PUBLISHED"
@@ -51,7 +51,7 @@ _EXIT_CODES = {
     Status.GITHUB_RELEASE_FAILED: 8,
 }
 
-# Externe FTP- und HTTP-Aufrufe werden nach so vielen Sekunden abgebrochen.
+# Externe FTPS- und HTTP-Aufrufe werden nach so vielen Sekunden abgebrochen.
 NETWORK_TIMEOUT = 10.0
 
 

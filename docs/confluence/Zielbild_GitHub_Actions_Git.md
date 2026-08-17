@@ -27,7 +27,7 @@ Das Branch-Modell folgt dem FI-Leitfaden:
 - Änderungen an `main` und `release/Rnnn` erfolgen über Pull Requests im
   Vier-Augenprinzip
 - Pull Requests werden mit Squash Merge zusammengeführt
-- Release-Tags folgen dem geschützten Muster `v{Release-Version}`
+- Release-Tags folgen dem geschützten Muster `vnnn.nnn` oder `vnnn.nnnx`
 
 *M/Text-Entwicklung* und *M/Text-Funktionstest* sind keine Git-Branches. Sie
 bezeichnen die beiden M/Text-Umgebungen einer Releaselinie.
@@ -245,8 +245,8 @@ einfach wiederholt werden.
 Für Release-Tags gelten die organisationsweit eingerichteten Regeln des
 Leitfadens:
 
-- Der Name folgt `v{Release-Version}`, beispielsweise `v261.100` oder
-  `v261.108`
+- Der Name folgt `vnnn.nnn` oder `vnnn.nnnx`, beispielsweise `v261.100`,
+  `v261.108` oder `v261.108a`. `x` steht für einen Klein- oder Großbuchstaben
 - Die Release-Version enthält keinen Schrägstrich
 - Der Tag liegt auf einem Commit eines geschützten Branches
 - Ein Release-Tag wird nach der Erstellung nicht gelöscht
@@ -255,6 +255,13 @@ Der Release-Tag entspricht der zentral vorgegebenen Release-Version. Vor dem
 Push muss sorgfältig geprüft werden, dass der Tag auf dem vorgesehenen Commit
 liegt. Eine nachträgliche Korrektur unter demselben Release-Tag ist im
 vorgesehenen Verfahren nicht möglich.
+
+Ein Buchstabensuffix kennzeichnet den Stand einer Beta-Lieferung. Mehrere
+Beta-Lieferungen derselben Release-Version erhalten unterschiedliche Suffixe,
+beispielsweise `v261.108a` und `v261.108b`. Die Beta-Eigenschaft wird beim
+Erzeugen der Lieferung in CodePipeline angegeben. Paketbau und
+Mainframe-Übergabe verarbeiten den zugehörigen Release-Tag wie andere
+Lieferstände.
 
 ### Release automatisch bauen und übertragen
 
@@ -265,14 +272,28 @@ an den Mainframe.
 
 ### Lieferarten FULL und DELTA
 
-Ein Tag mit der Endung `.100`, beispielsweise `v261.100`, erzeugt für jedes
-einbezogene Projekt eine FULL-Lieferung. Sie besteht aus einem F-Element mit
-dem vollständigen Projektstand und einem zusätzlichen leeren D-Element.
+Die Release-Version `100`, beispielsweise bei `v261.100` oder `v261.100a`,
+erzeugt für jedes einbezogene Projekt eine FULL-Lieferung. Sie besteht aus
+einem F-Element mit dem vollständigen Projektstand und einem zusätzlichen
+leeren D-Element.
 
-Jeder weitere Release-Tag derselben Releaselinie erzeugt ein kumulatives DELTA
-gegen den `.100`-Tag. Das D-Element enthält alle seitdem neuen und geänderten
-Dateien sowie eine Löschliste. `v261.108` enthält damit alle Änderungen seit
-`v261.100`.
+Die nachgelagerte Ressourcen-Aktualisierung entpackt bei einer FULL-Lieferung
+zuerst das F-Element. Ist auch ein D-Element vorhanden, entpackt sie dieses
+anschließend und löscht die in dessen Löschliste aufgeführten Pfade. Das leere
+D-Element ersetzt bei der Übergabe das gleichnamige D-Element einer früheren
+Lieferung. Dadurch kann ein vorheriges DELTA den neuen FULL-Stand nicht wieder
+verändern.
+
+Jede andere Release-Version derselben Releaselinie erzeugt ein kumulatives
+DELTA gegen den regulären `.100`-Tag. Das D-Element enthält alle seitdem neuen
+und geänderten Dateien sowie eine Löschliste. `v261.108`, `v261.108a` und
+`v261.108b` enthalten damit jeweils alle Änderungen seit `v261.100`.
+
+Das Entpacken eines DELTAs entfernt keine Dateien, die im gelieferten Stand
+nicht mehr vorkommen. Die Löschliste nennt deshalb die seit `.100` gelöschten
+repositoryrelativen Dateipfade. Nach dem Entpacken entfernt die
+Ressourcen-Aktualisierung diese Dateien aus `serverSync`. Eine Umbenennung wird
+als Löschen des bisherigen und Hinzufügen des neuen Pfads behandelt.
 
 ### CodePipeline-Elemente
 
@@ -314,9 +335,12 @@ Für den Inhalt der Elemente gilt:
 ### Releaseartefakt
 
 Für jedes Projekt wird zusätzlich eine Informationsdatei erzeugt. Sie nennt
-die Änderungen seit dem vorherigen Release und den Inhalt des TAR-Archivs. Die
-Mandanten verwenden diese Angaben, um zu prüfen, ob die gewünschten Änderungen
-im Paket enthalten sind.
+die direkten Änderungen seit dem vorherigen Release-Tag und den Inhalt des
+TAR-Archivs. Beta- und reguläre Tags bilden dabei eine gemeinsame Folge.
+Beispielsweise wird `v261.108a` mit `v261.107`, `v261.108b` mit `v261.108a`
+und `v261.108` mit `v261.108b` verglichen. Das DELTA-Paket bleibt davon
+unabhängig kumulativ gegen `v261.100`. Die Mandanten verwenden diese Angaben,
+um zu prüfen, ob die gewünschten Änderungen im Paket enthalten sind.
 
 Ein GitHub-Actions-Artefakt ist eine von GitHub zu einem Workflow-Lauf
 gespeicherte Sammlung von Dateien. Es dient dazu, Ergebnisse zwischen den
@@ -341,11 +365,10 @@ GitHub-Artefakt die Ablage für die technische Übergabe.
 
 Die Paketnamen, Mainframe-Member und Pfade innerhalb der FULL- und
 DELTA-Archive bleiben gleich. Auch das leere D-Paket einer FULL-Lieferung und
-die Löschliste eines DELTAs bleiben erhalten. Die TAR-Metadaten werden jetzt
-vereinheitlicht, damit Wiederholungen nicht durch abweichende Zeitstempel
-unterschiedliche Pakete erzeugen. In den Namen der Lieferbelege stehen
-entsprechend dem neuen Tagformat `v261.100` und `v261.108` statt `R261.100` und
-`R261.108`.
+die Löschliste eines DELTAs bleiben erhalten. Die Archive werden mit dem
+Befehl `tar -czf` erzeugt. Die Lieferbelege enthalten wie bisher die
+ausführliche Inhaltsliste aus `tar -tvzf`. In ihren Namen stehen entsprechend
+dem neuen Tagformat `v261.100` und `v261.108` statt `R261.100` und `R261.108`.
 
 Nach der Mainframe-Übergabe erstellt der zentrale Workflow im
 Mandanten-Repository ein GitHub Release zum vorhandenen Release-Tag. Die
@@ -355,11 +378,15 @@ Darin stehen die Änderungen und der Paketinhalt für jedes Projekt.
 
 ### Mainframe-Übergabe
 
-Für die Mainframe-Übergabe wird das erzeugte FULL- oder DELTA-Paket zunächst
-unter seinem Membernamen in `IEA.LOMS.TONICZ` übertragen. Anschließend kopiert
-die beim Paketbau aus `templates/mainframe-upload.jcl` erzeugte JCL den Member
-nach `IEA.ISPW<ISPW>.BOAS.<LEVEL>.TONICZ` und registriert ihn in CodePipeline.
-Dabei gelten `STRMNAME=BOAS`, `MTYPE=TONICZ` und `MNAME=<Membername>`.
+Für die technische Vorbereitung wird angenommen, dass der Mainframe explizites
+FTPS anbietet. Die FTPS-Variante muss der Mainframe-Betrieb noch bestätigen.
+Unter dieser Annahme wird das erzeugte FULL- oder DELTA-Paket zunächst unter
+seinem Membernamen in `IEA.LOMS.TONICZ` übertragen. Der Client prüft das
+Mainframe-Zertifikat mit dem System-Vertrauensspeicher des Runners und schützt
+Steuerungs- und passive Datenverbindungen mit TLS. Anschließend kopiert die
+beim Paketbau aus `templates/mainframe-upload.jcl` erzeugte JCL den Member nach
+`IEA.ISPW<ISPW>.BOAS.<LEVEL>.TONICZ` und registriert ihn in CodePipeline. Dabei
+gelten `STRMNAME=BOAS`, `MTYPE=TONICZ` und `MNAME=<Membername>`.
 
 Der Paketbau ist von der Mainframe-Übergabe getrennt. Übergaben desselben
 Mandanten werden nacheinander ausgeführt. Verschiedene Mandanten können
@@ -371,11 +398,12 @@ Die Mainframe-Zugangsdaten liegen im Repository `mtext_actions`:
 
 | Name | Ablage |
 |---|---|
-| `MAINFRAME_FTP_HOST` | Repositoryvariable |
-| `MAINFRAME_FTP_USER` | Repositoryvariable |
-| `MAINFRAME_FTP_PASSWORD` | Repository-Secret |
+| `MAINFRAME_FTPS_HOST` | Repositoryvariable |
+| `MAINFRAME_FTPS_PORT` | Repositoryvariable |
+| `MAINFRAME_FTPS_USER` | Repositoryvariable |
+| `MAINFRAME_FTPS_PASSWORD` | Repository-Secret |
 
-Der technische FTP-Benutzer wird für die Übergaben aller Mandanten verwendet.
+Der technische FTPS-Benutzer wird für die Übergaben aller Mandanten verwendet.
 
 ## 5. Repositories
 
@@ -449,9 +477,8 @@ mtext-actions/
       config.py
       git.py
       github_release.py
-      mainframe.py
+      mainframe_release.py
       process.py
-      release.py
       sync.py
     build_release.py
     check_resources.py
@@ -477,7 +504,7 @@ mtext-actions/
 | JSON- und XML-Ressourcen prüfen | Pull Request oder manueller Start | `check-resources.yml` | `reusable-check-resources.yml` | `check_resources.py` | Geänderte konfigurierte Ressourcen oder gewählter Vollstand geprüft, Syntaxbefunde als nicht blockierende Warnungen angezeigt |
 | M/Text-Entwicklung synchronisieren | Push auf `feature/Rnnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync_resources.py` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
 | M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/Rnnn` sowie manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync_resources.py` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
-| Release bauen und übertragen | Push eines Tags `vnnn.nnn` | `release.yml` | `reusable-release-dispatch.yml` → `release.yml` | `build_release.py`, `publish_mainframe.py`, danach `publish_github_release.py` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
+| Release bauen und übertragen | Push eines Tags `vnnn.nnn` oder `vnnn.nnnx` | `release.yml` | `reusable-release-dispatch.yml` → `release.yml` | `build_release.py`, `publish_mainframe.py`, danach `publish_github_release.py` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
 | `mtext_actions` testen | Pull Request oder Push auf `main` in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` | Zentrale Tests ausgeführt |
 
 ### Trigger-Workflows in den Mandanten-Repositories
@@ -552,8 +579,8 @@ mit dem zugehörigen Exitcode.
 | `ADAPTER_ACCEPTED` | Der M/Text-Adapter hat die Anfrage angenommen | – |
 | `PACKAGE_FAILED` | Paket, JCL oder Lieferbeleg konnten nicht erstellt oder verwendet werden | `4` |
 | `ARTIFACT_READY` | Pakete, JCL und Lieferbelege wurden erstellt | – |
-| `MAINFRAME_TRANSFER_FAILED` | Die FTP- oder JES-Übergabe ist fehlgeschlagen | `7` |
-| `MAINFRAME_SUBMITTED` | Paket und JCL wurden per FTP und JES übergeben | – |
+| `MAINFRAME_TRANSFER_FAILED` | Die FTPS- oder JES-Übergabe ist fehlgeschlagen | `7` |
+| `MAINFRAME_SUBMITTED` | Paket und JCL wurden per FTPS und JES übergeben | – |
 | `GITHUB_RELEASE_FAILED` | Das GitHub Release oder seine Informationsdateien konnten nicht bereitgestellt werden | `8` |
 | `GITHUB_RELEASE_PUBLISHED` | Zusammenfassung und Informationsdateien stehen im Mandanten-Repository bereit | – |
 
@@ -624,7 +651,7 @@ Das Feld `stage` eines Hostprofils enthält eine der CodePipeline-Stages `FKTE`,
 | `main` | Geschützt, keine Löschung oder Umbenennung, fachliche Änderung über Pull Request im Vier-Augenprinzip |
 | `release/Rnnn` | Geschützt, fachliche Änderung über Pull Request im Vier-Augenprinzip, Erstellung aus geschütztem Branch oder Release-Tag |
 | `feature/Rnnn/<Bezeichnung>` | Keine zusätzliche Schutzregel |
-| Release-Tags `v{Release-Version}` | Organisationsweit geschützte Tags nach dem Leitfaden |
+| Release-Tags `vnnn.nnn` und `vnnn.nnnx` | Organisationsweit geschützte Tags nach dem Leitfaden |
 | Workflowdateien und Mandantenkonfiguration | Mandantenkonfiguration und reguläre Workflowänderungen über Pull Request und Review. Freigegebene CI/CD-Versionen werden über den administrativen Rollout aktualisiert. |
 | GitHub Release | Der zentrale Workflow darf zum vorhandenen Tag ein GitHub Release im auslösenden Mandanten-Repository erstellen und die Informationsdateien anhängen |
 | Mainframe-Zugang | Repositoryvariablen und Repository-Secret in `mtext_actions` |
@@ -653,8 +680,6 @@ folgende Erweiterungen bewertet werden:
 
 - den nachgelagerten fachlichen Status in M/Text und auf dem Mainframe abfragen
   und im Workflow anzeigen (Polling)
-- die FTP-/JES-Übergabe auf einen verschlüsselten Transport umstellen, sobald
-  das Zielsystem dafür einen verbindlichen Vertrag bereitstellt
 - Betriebsmetriken und kompakte Laufzusammenfassungen ergänzen, ohne
   mandantenübergreifende oder vertrauliche Details offenzulegen
 - zusätzliche E-Mail-Benachrichtigungen für relevante Workflow-Ergebnisse

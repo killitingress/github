@@ -46,10 +46,12 @@ auf einen Commit von `main` oder `release/Rnnn`:
 
 - `v261.100` erzeugt ein FULL,
 - ein weiterer Tag wie `v261.108` erzeugt ein kumulatives DELTA gegen
-  `v261.100`.
+  `v261.100`,
+- ein Tag mit einem Buchstabensuffix wie `v261.108a` kennzeichnet einen
+  Beta-Lieferstand und erzeugt dasselbe kumulative DELTA.
 
 Der Mandanten-Workflow startet automatisch den zentralen CI/CD-Releaseweg in
-`FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Das FTP-Passwort liegt nicht
+`FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Das FTPS-Passwort liegt nicht
 in diesem Repository.
 
 ## Mandantenkonfiguration

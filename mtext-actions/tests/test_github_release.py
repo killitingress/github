@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from lbs_delivery.github_release import publish_github_release
 from lbs_delivery.process import Status
-from lbs_delivery.release import build_release
+from lbs_delivery.mainframe_release import build_release
 
 from tests.support import TempDirTestCase, git, jcl_template, load_test_configuration, setup_release_repository
 

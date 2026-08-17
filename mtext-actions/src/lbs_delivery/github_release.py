@@ -1,6 +1,6 @@
 """Veröffentlicht die Rückmeldung zu einer Mainframe-Lieferung in GitHub.
 
-Nach der erfolgreichen FTP-/JES-Übergabe entsteht im Mandanten-Repository ein
+Nach der erfolgreichen FTPS-/JES-Übergabe entsteht im Mandanten-Repository ein
 GitHub Release. Seine Beschreibung fasst die Lieferung zusammen. Die beim
 Paketbau erzeugten Informationsdateien werden als Downloads angehängt.
 """
@@ -14,8 +14,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from .mainframe_release import information_delivery_type
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
-from .release import FULL_SUFFIX
 
 
 # API-Version für das Anlegen von Releases und das Hochladen ihrer Dateien.
@@ -42,7 +42,7 @@ def _github_request(
     übertragen.
     """
 
-    body = json.dumps(payload).encode("utf-8") if payload is not None else content
+    body = json.dumps(payload).encode() if payload is not None else content
     headers = {
         "Accept": GITHUB_JSON_MEDIA_TYPE,
         "Authorization": f"Bearer {token}",
@@ -64,7 +64,7 @@ def _github_request(
         # GitHub liefert Fehlerdetails als JSON mit einem `message`-Feld.
         detail = ""
         try:
-            error_body = json.loads(exc.read().decode("utf-8"))
+            error_body = json.loads(exc.read())
         except (UnicodeError, json.JSONDecodeError):
             pass
         else:
@@ -85,7 +85,7 @@ def _github_request(
     if not response_body:
         return None
     try:
-        return json.loads(response_body.decode("utf-8"))
+        return json.loads(response_body)
     except (UnicodeError, json.JSONDecodeError) as exc:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub-Antwort ist ungültig") from exc
 
@@ -110,6 +110,13 @@ def publish_github_release(
     information_files = sorted(Path(artifact_root).glob("_INFO_*.txt"))
     if not information_files:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien fehlen")
+    try:
+        delivery_types = {information_delivery_type(path) for path in information_files}
+    except ValueError as exc:
+        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateiname ist ungültig") from exc
+    if len(delivery_types) != 1:
+        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien haben verschiedene Lieferarten")
+    delivery_type = delivery_types.pop()
 
     # Release-Beschreibung mit Kurzüberblick und Download-Links zu den Lieferbelegen.
     download_root = (
@@ -120,10 +127,10 @@ def publish_github_release(
         "## Lieferung",
         "",
         f"- Release: `{release_tag}`",
-        f"- Lieferart: `{'FULL' if release_tag.endswith(FULL_SUFFIX) else 'DELTA'}`",
+        f"- Lieferart: `{delivery_type}`",
         f"- Commit: `{source_sha}`",
         "",
-        "Die Pakete und die zugehörige JCL wurden von FTP und JES angenommen.",
+        "Die Pakete und die zugehörige JCL wurden von FTPS und JES angenommen.",
         "",
         "## Informationsdateien",
         "",
@@ -134,7 +141,7 @@ def publish_github_release(
         lines.append(f"- [Herunterladen]({link}): `{name}`")
     body = "\n".join(lines) + "\n"
 
-    repository_path = urllib.parse.quote(repository, safe="/")
+    repository_path = urllib.parse.quote(repository)
     release_path = urllib.parse.quote(release_tag, safe="")
     releases_url = f"{api_url.rstrip('/')}/repos/{repository_path}/releases"
 

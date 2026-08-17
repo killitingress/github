@@ -17,9 +17,11 @@ from .process import DeliveryError, Status
 
 
 # Reguläre Ausdrücke prüfen die von Git und den Workflows gelieferten Namen.
-# Prüft einen vollständigen Release-Tag wie `v261.108` und erfasst beide
-# Zahlenteile für den chronologischen Vergleich.
-RELEASE_TAG_RE = re.compile(r"v([0-9]{3})\.([0-9]{3})")
+# Prüft einen vollständigen Release-Tag wie `v261.108` oder den Stand einer
+# Beta-Lieferung wie `v261.108a` und erfasst seine fachlichen Bestandteile.
+RELEASE_TAG_RE = re.compile(
+    r"v(?P<releaselinie>[0-9]{3})\.(?P<release>[0-9]{3})(?P<beta_suffix>[a-zA-Z]?)"
+)
 
 # Prüft einen geschützten Branch einer gepflegten Releaselinie und erfasst die
 # Releaselinie für die Auswahl des M/Text-Ziels.
@@ -49,7 +51,6 @@ def _git(repository: str | Path, *arguments: str, returncodes: tuple[int, ...] =
 
     result = subprocess.run(
         ["git", "-C", str(repository), *arguments],
-        check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
@@ -132,7 +133,7 @@ def require_release_commit(repository: str | Path, tag: str, branches: tuple[str
         "refs/remotes/origin",  # Remote-Tracking-Branches, keine Tags
     )
 
-    containing = set(output.decode("utf-8").splitlines())
+    containing = set(output.decode().splitlines())
 
     if not any(f"origin/{branch}" in containing for branch in branches):
         raise DeliveryError(Status.SOURCE_FAILED, "Release-Tag liegt auf keinem zulässigen Branch")
@@ -152,7 +153,7 @@ def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:
     # so wie wir es für DELTA-Pakete und serverSync benötigen.
     output = _git(repository, "diff", "--name-status", "-z", "--no-renames",
     base, target)
-    data = output.decode("utf-8").rstrip("\0")
+    data = output.decode().rstrip("\0")
     if not data:
         return []
 
@@ -171,16 +172,31 @@ def project_changes(git_changes: Iterable[GitChange], project: str) -> Iterator[
 
 
 def previous_tag(repository: str | Path, target_tag: str) -> str | None:
-    """Ermittelt den größten gültigen Release-Tag vor dem Zieltag.
+    """Ermittelt den vorherigen Release-Tag derselben Releaselinie.
 
-    Das feste Format `vnnn.nnn` erlaubt den direkten Vergleich der Tagnamen.
-    Tags anderer Releaselinien werden nicht berücksichtigt.
+    Buchstabensuffixe stehen in alphabetischer Reihenfolge vor dem zugehörigen
+    Tag ohne Suffix. Groß- und Kleinschreibung ändern diese Reihenfolge nicht.
     """
 
-    releaselinie = target_tag.split(".", 1)[0]
-    candidates = (
-        tag
-        for tag in _git(repository, "tag", "--list", f"{releaselinie}.*").decode("ascii").splitlines()
-        if RELEASE_TAG_RE.fullmatch(tag) is not None and tag < target_tag
+    target_match = RELEASE_TAG_RE.fullmatch(target_tag)
+    if target_match is None:
+        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
+
+    releaselinie = target_match.group("releaselinie")
+    target_suffix = target_match.group("beta_suffix")
+    target_order = (
+        int(target_match.group("release")),
+        not target_suffix,
+        target_suffix.lower(),
     )
-    return max(candidates, default=None)
+    candidates: list[tuple[tuple[int, bool, str], str]] = []
+    for tag in _git(repository, "tag", "--list", f"v{releaselinie}.*").decode("ascii").splitlines():
+        match = RELEASE_TAG_RE.fullmatch(tag)
+        if match is None:
+            continue
+        suffix = match.group("beta_suffix")
+        order = (int(match.group("release")), not suffix, suffix.lower())
+        if order < target_order:
+            candidates.append((order, tag))
+
+    return max(candidates)[1] if candidates else None

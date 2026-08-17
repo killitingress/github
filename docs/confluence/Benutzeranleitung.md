@@ -27,7 +27,7 @@ Für Branches und Release-Tags gelten folgende Namen:
 | Führende Releaselinie | `main` | `main` für R270 |
 | Parallel gepflegte Releaselinie | `release/Rnnn` | `release/R261` |
 | Einzelne Änderung | `feature/Rnnn/<Bezeichnung>` | `feature/R261/issue-5678` |
-| Release-Tag | `v{Release-Version}` | `v261.108` |
+| Release-Tag | `vnnn.nnn` oder `vnnn.nnnx` | `v261.108`, `v261.108a` |
 
 M/Text-Entwicklung und M/Text-Funktionstest sind die beiden M/Text-Umgebungen.
 Es gibt dafür keine eigenen Git-Branches.
@@ -341,7 +341,14 @@ Beispiele:
 ```text
 v261.100   FULL-Basis der Releaselinie R261
 v261.108   kumulatives DELTA gegen v261.100
+v261.108a  Beta-Lieferstand als kumulatives DELTA gegen v261.100
 ```
+
+Der optionale letzte Klein- oder Großbuchstabe kennzeichnet einen
+Beta-Lieferstand. Mehrere Beta-Lieferungen derselben Release-Version erhalten
+unterschiedliche Suffixe, beispielsweise `v261.108a` und `v261.108b`. Bei der
+späteren Erzeugung der Lieferung aus den CodePipeline-Elementen wird angegeben,
+dass es sich um eine Beta-Lieferung handelt.
 
 ### Tag erstellen
 
@@ -404,6 +411,11 @@ Das GitHub Release enthält die Informationsdateien mit den erkannten
 Bei einem `.100`-Tag enthält das Artefakt für jedes einbezogene Projekt ein
 vollständiges F-Paket und ein leeres D-Paket. Jeder weitere Tag derselben
 Releaselinie erzeugt ein kumulatives DELTA gegen den `.100`-Tag.
+
+Die Informationsdatei nennt daneben die direkten Änderungen seit dem
+vorherigen Release-Tag. `v261.108a` wird damit gegen `v261.107`, `v261.108b`
+gegen `v261.108a` und `v261.108` gegen `v261.108b` verglichen. Der Inhalt ihrer
+DELTA-Pakete wird weiterhin kumulativ gegen `v261.100` ermittelt.
 
 Bei einem fehlgeschlagenen technischen Übergabeversuch wird der
 Übergabejob erneut ausgeführt. Er verwendet das bereits gebaute Artefakt. Für
@@ -548,7 +560,7 @@ unwiederbringlich entfernen kann.
 | `ADAPTER_ACCEPTED` | LTOMA hat den Aufruf angenommen. | Die fachliche Wirkung anschließend in M/Text kontrollieren. |
 | `PACKAGE_FAILED` | Releasepaket, JCL oder Lieferbeleg konnte nicht erstellt oder verwendet werden. | Erste Fehlermeldung, betroffenes Projekt und Releasebasis prüfen. |
 | `ARTIFACT_READY` | Pakete, JCL und Lieferbelege wurden erstellt. | Den nachfolgenden Mainframe-Übergabejob kontrollieren. |
-| `MAINFRAME_TRANSFER_FAILED` | FTP- oder JES-Übergabe ist fehlgeschlagen. | Übergabeprotokoll prüfen und vor einem Wiederanlauf klären, ob der vorherige Versuch angenommen wurde. |
+| `MAINFRAME_TRANSFER_FAILED` | FTPS- oder JES-Übergabe ist fehlgeschlagen. | Übergabeprotokoll prüfen und vor einem Wiederanlauf klären, ob der vorherige Versuch angenommen wurde. |
 | `MAINFRAME_SUBMITTED` | Paket und JCL wurden technisch übergeben. | Den nachgelagerten Status auf dem Mainframe nach dem festgelegten Betriebsverfahren kontrollieren. |
 | `GITHUB_RELEASE_FAILED` | Die Lieferinformationen konnten im Mandanten-Repository nicht bereitgestellt werden. | Den fehlgeschlagenen Rückmeldungsjob wiederholen. Das Paket wird dabei nicht erneut übertragen. |
 | `GITHUB_RELEASE_PUBLISHED` | Zusammenfassung und Informationsdateien stehen beim Release-Tag bereit. | Die Zusammenfassung prüfen und bei Bedarf die Informationsdateien herunterladen. |
@@ -583,4 +595,4 @@ Support-Tickets kopiert.
 | Entwicklungsstand bereitstellen | Feature-Branch pushen |
 | Änderung nach M/Text-Funktionstest übernehmen | Pull Request prüfen und mit Squash Merge zusammenführen |
 | Änderung auf weitere Releasepfade übertragen | Squash-Commit in einen Feature-Branch der weiteren Linie übernehmen |
-| SVN-Tag erzeugen | Geschützten Git-Tag `v{Release-Version}` auf einem Commit des geschützten Branches erstellen |
+| SVN-Tag erzeugen | Geschützten Git-Tag `vnnn.nnn` oder `vnnn.nnnx` auf einem Commit des geschützten Branches erstellen |

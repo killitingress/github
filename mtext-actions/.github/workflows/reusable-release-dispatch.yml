@@ -1,4 +1,4 @@
-name: Zentrales Release starten
+name: Wiederverwendbarer Start des zentralen Releases
 
 # Ein Release-Tag entsteht im Mandanten-Repository. Paketbau und Mainframe-
 # Übergabe laufen im zentralen Repository, weil dort die Mainframe-Zugangsdaten

@@ -70,7 +70,7 @@ def _github_status(api_url: str, path: str, token: str) -> int:
 def check_target_branch(api_url: str, repository: str, branch: str, token: str) -> bool:
     """Prüft, ob ein Zielbranch der Rollout-Matrix vorhanden ist."""
 
-    repository_path = urllib.parse.quote(repository, safe="/")
+    repository_path = urllib.parse.quote(repository)
     branch_path = urllib.parse.quote(branch, safe="")
     status = _github_status(api_url, f"repos/{repository_path}/git/ref/heads/{branch_path}", token)
 
