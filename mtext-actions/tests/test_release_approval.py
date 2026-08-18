@@ -7,11 +7,11 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from lbs_delivery.mainframe_release import build_release
+from lbs_delivery.github import read_pull_request
 from lbs_delivery.process import DeliveryError, NETWORK_TIMEOUT
 from lbs_delivery.release_approval import (
     finalize_release_approval,
     prepare_release_approval,
-    read_pull_request,
 )
 
 from tests.support import TempDirTestCase, git, jcl_template, load_test_configuration, setup_release_repository
@@ -176,7 +176,7 @@ class ReleaseApprovalTests(TempDirTestCase):
         response.__enter__.return_value.read.return_value = json.dumps(
             {"merged": True, "merge_commit_sha": "1" * 40}
         ).encode()
-        with patch("lbs_delivery.github_api.urllib.request.urlopen", return_value=response) as urlopen:
+        with patch("lbs_delivery.github.urllib.request.urlopen", return_value=response) as urlopen:
             document = read_pull_request(
                 api_url="https://github.example/api/v3",
                 repository="FinanzInformatik/mandant",

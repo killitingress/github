@@ -559,7 +559,7 @@ unwiederbringlich entfernen kann.
 
 ### Lauf prüfen
 
-1. Für Konfigurationsprüfung und Synchronisation im Mandanten-Repository
+1. Für Ressourcenprüfung und Synchronisation im Mandanten-Repository
    **Actions** öffnen. Für einen Release den zentralen Lauf in
    `FinanzInformatik/fi_lbs_entw_oms_mtext_actions` öffnen.
 2. Den betroffenen Lauf auswählen.
@@ -571,6 +571,7 @@ unwiederbringlich entfernen kann.
 | Status oder Fehlerbild | Bedeutung | Nächste Prüfung |
 |---|---|---|
 | Workflow kann die festgelegte CI/CD-Version nicht laden | Zugriff oder technische Einrichtung ist unvollständig | Lauf und verwendete CI/CD-Version festhalten und die Repository-Verantwortlichen informieren. Die Workflowdateien nicht selbst ändern. |
+| `RESOURCE_CHECKED` | JSON- und XML-Ressourcen wurden geprüft. Befunde stehen als Warnungen im Laufprotokoll. | Warnungen mit Datei und Fundstelle prüfen. |
 | `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinie wurden geprüft. | Inhaltliche Änderung weiter prüfen. Der Status bestätigt keine fachliche Freigabe. |
 | `VALIDATION_FAILED` | Eingabe oder Konfiguration ist ungültig. | Erste Fehlermeldung sowie Branch, Tag und Mandantenkonfiguration prüfen. |
 | `RELEASE_APPROVAL_READY` | Der Nachweis für den Release-Freigabe-PR wurde auf dem Freigabe-Branch veröffentlicht. | Den Pull Request auf den Lieferbranch eröffnen und fachlich prüfen lassen. |

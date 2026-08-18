@@ -20,12 +20,12 @@ jobs:
   dispatch:
     name: Zentrales Release starten
     timeout-minutes: 15
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-release-dispatch.yml@0000000000000000000000000000000000000000
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-dispatch.yml@0000000000000000000000000000000000000000
     with:
-      source_repository: ${{ github.repository }}
       target_repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
-      release_tag: ${{ github.ref_name }}
-      trigger_sha: ${{ github.sha }}
+      workflow: release.yml
+      workflow_inputs: >-
+        {"source_repository":${{ toJSON(github.repository) }},"release_tag":${{ toJSON(github.ref_name) }},"trigger_sha":${{ toJSON(github.sha) }}}
       # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
       automation_ref: 0000000000000000000000000000000000000000
     secrets:

@@ -13,11 +13,13 @@ Vier-Augen-Prinzip erzwingen so die Schutzregeln des Lieferbranches.
 
 from __future__ import annotations
 
+import argparse
 import json
-import urllib.parse
+import os
+from dataclasses import dataclass
 from pathlib import Path
 
-from . import git, github_api
+from . import config, git, github
 from .config import Configuration, MANDANT_CONFIG_PATH, release_branches
 from .process import DeliveryError, Status
 from .project_package import package_stand, project_elements, release_scope
@@ -31,6 +33,18 @@ APPROVAL_ROOT = Path(".github/release-approvals")
 # Das Präfix unterscheidet sie von anderen Pull Requests, und der Abschluss
 # liest den Release-Tag wieder aus dem Namen.
 APPROVAL_BRANCH_PREFIX = "release-approval/"
+
+
+@dataclass(frozen=True)
+class PullRequestMerge:
+    """Beschreibt die für den Freigabeabschluss relevanten Pull-Request-Daten."""
+
+    # GitHub meldet diesen Commit als Ergebnis des Pull-Request-Merge.
+    merge_sha: str
+    # Der Pull Request muss in diesem Lieferbranch gelandet sein.
+    branch: str
+    # Dieser technische Branch enthält den Freigabenachweis.
+    approval_branch: str
 
 
 def approval_path(tag: str) -> Path:
@@ -88,31 +102,39 @@ def _read_document(content: bytes | str) -> dict[str, object]:
     return document
 
 
-def _require_unchanged_delivery(
-    configuration: Configuration,
-    repository_root: str | Path,
-    *,
-    approved_sha: str,
-    target_sha: str,
+def _regular_release_tag(tag: str, failure: Status, message: str) -> str:
+    """Liest die Releaselinie eines regulären Release-Tags."""
+
+    tag_match = git.RELEASE_TAG_RE.fullmatch(tag)
+    if tag_match is None or tag_match.group("beta_suffix"):
+        raise DeliveryError(failure, message)
+    return f"R{tag_match.group('releaselinie')}"
+
+
+def _require_release_branch(
+    configuration: Configuration, branch: str, releaselinie: str, failure: Status, message: str
 ) -> None:
-    """Fordert, dass nach dem freigegebenen Commit kein Lieferinhalt geändert wurde.
+    """Prüft die Zuordnung eines Lieferbranches zur Releaselinie."""
 
-    Zwischen dem geprüften Stand und dem getaggten Merge-Commit darf nur der
-    Nachweis unter `.github` hinzukommen. Eine Änderung an der
-    Mandantenkonfiguration oder an einem Projekt würde einen anderen
-    Lieferumfang ergeben als den, den die zweite Person geprüft hat.
-    """
-
-    changes = git.changes(repository_root, approved_sha, target_sha)
-    for relevant in (MANDANT_CONFIG_PATH.as_posix(), *configuration.projects):
-        if any(git.project_changes(changes, relevant)):
-            raise DeliveryError(Status.SOURCE_FAILED, "Lieferstand hat sich nach der Freigabe geändert")
+    if releaselinie not in configuration.releaselinien:
+        raise DeliveryError(failure, "Releaselinie ist unbekannt")
+    if branch not in release_branches(configuration, releaselinie):
+        raise DeliveryError(failure, message)
 
 
-def _canonical_document(document: dict[str, object]) -> str:
-    """Serialisiert einen Freigabenachweis für den Integritätsvergleich."""
+def _pull_request_merge(pull_request: dict[str, object]) -> PullRequestMerge:
+    """Liest die für den Freigabeabschluss erforderlichen GitHub-Daten."""
 
-    return json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    match pull_request:
+        case {
+            "merged": True,
+            "merge_commit_sha": str(merge_sha),
+            "base": {"ref": str(branch)},
+            "head": {"ref": str(approval_branch)},
+        }:
+            return PullRequestMerge(merge_sha, branch, approval_branch)
+        case _:
+            raise DeliveryError(Status.SOURCE_FAILED, "Pull Request ist nicht zusammengeführt")
 
 
 def _verify_approval_delivery(
@@ -128,12 +150,11 @@ def _verify_approval_delivery(
     """Prüft den Nachweis gegen den freigegebenen Lieferumfang am Ziel-Commit."""
 
     git.require_ancestor(repository_root, approved_sha, target_sha)
-    _require_unchanged_delivery(
-        configuration,
-        repository_root,
-        approved_sha=approved_sha,
-        target_sha=target_sha,
-    )
+    # Zwischen Freigabe und Tag darf nur der Nachweis unter .github hinzukommen.
+    changes = git.changes(repository_root, approved_sha, target_sha)
+    for relevant in (MANDANT_CONFIG_PATH.as_posix(), *configuration.projects):
+        if any(git.project_changes(changes, relevant)):
+            raise DeliveryError(Status.SOURCE_FAILED, "Lieferstand hat sich nach der Freigabe geändert")
     expected = _approval_document(
         configuration,
         repository_root,
@@ -141,28 +162,8 @@ def _verify_approval_delivery(
         branch=branch,
         target_sha=approved_sha,
     )
-    if _canonical_document(document) != _canonical_document(expected):
+    if document != expected:
         raise DeliveryError(Status.SOURCE_FAILED, "Release-Freigabe passt nicht zum Lieferumfang")
-
-
-def read_pull_request(
-    *,
-    api_url: str,
-    repository: str,
-    number: int,
-    token: str,
-) -> dict[str, object]:
-    """Liest den gemergten Pull Request als Sicherheitsgrenze von GitHub."""
-
-    document = github_api.request(
-        method="GET",
-        url=f"{api_url.rstrip('/')}/repos/{urllib.parse.quote(repository, safe='/')}/pulls/{number}",
-        token=token,
-        failure=Status.SOURCE_FAILED,
-    )
-    if not isinstance(document, dict):
-        raise DeliveryError(Status.SOURCE_FAILED, "GitHub-Antwort zum Pull Request ist ungültig")
-    return document
 
 
 def prepare_release_approval(
@@ -181,15 +182,8 @@ def prepare_release_approval(
     """
 
     root = Path(repository_root)
-    tag_match = git.RELEASE_TAG_RE.fullmatch(tag)
-    if tag_match is None or tag_match.group("beta_suffix"):
-        raise DeliveryError(Status.VALIDATION_FAILED, "Freigabe-PR benötigt einen regulären Release-Tag")
-
-    releaselinie = f"R{tag_match.group('releaselinie')}"
-    if releaselinie not in configuration.releaselinien:
-        raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
-    if branch not in release_branches(configuration, releaselinie):
-        raise DeliveryError(Status.SOURCE_FAILED, "Branch passt nicht zur Release-Version")
+    releaselinie = _regular_release_tag(tag, Status.VALIDATION_FAILED, "Freigabe-PR benötigt einen regulären Release-Tag")
+    _require_release_branch(configuration, branch, releaselinie, Status.SOURCE_FAILED, "Branch passt nicht zur Release-Version")
     if git.resolve(root, "HEAD") != source_sha:
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum ausgewählten Branchstand")
     if git.resolve(root, f"refs/remotes/origin/{branch}") != source_sha:
@@ -236,33 +230,19 @@ def finalize_release_approval(
 
     # Die GitHub-Daten müssen denselben Merge, Zielbranch und Freigabe-Branch
     # belegen, die der Mandanten-Workflow gemeldet hat.
-    match pull_request:
-        case {
-            "merged": True,
-            "merge_commit_sha": str(merged_commit),
-            "base": {"ref": str(base_branch)},
-            "head": {"ref": str(head_branch)},
-        }:
-            pass
-        case _:
-            raise DeliveryError(Status.SOURCE_FAILED, "Pull Request ist nicht zusammengeführt")
-    if merged_commit != merge_sha:
+    merge = _pull_request_merge(pull_request)
+    if merge.merge_sha != merge_sha:
         raise DeliveryError(Status.SOURCE_FAILED, "Pull Request nennt einen anderen Merge-Commit")
-    if base_branch != branch:
+    if merge.branch != branch:
         raise DeliveryError(Status.SOURCE_FAILED, "Pull Request wurde in einen anderen Branch zusammengeführt")
-    if head_branch != approval_branch:
+    if merge.approval_branch != approval_branch:
         raise DeliveryError(Status.SOURCE_FAILED, "Pull Request gehört zu einem anderen Freigabe-Branch")
 
     if not approval_branch.startswith(APPROVAL_BRANCH_PREFIX):
         raise DeliveryError(Status.SOURCE_FAILED, "Pull Request ist keine Release-Freigabe")
     tag = approval_branch.removeprefix(APPROVAL_BRANCH_PREFIX).split("/", 1)[0]
-    tag_match = git.RELEASE_TAG_RE.fullmatch(tag)
-    if tag_match is None or tag_match.group("beta_suffix"):
-        raise DeliveryError(Status.SOURCE_FAILED, "Freigabe-Branch enthält keinen regulären Release-Tag")
-
-    releaselinie = f"R{tag_match.group('releaselinie')}"
-    if branch not in release_branches(configuration, releaselinie):
-        raise DeliveryError(Status.SOURCE_FAILED, "Zielbranch passt nicht zur Release-Version")
+    releaselinie = _regular_release_tag(tag, Status.SOURCE_FAILED, "Freigabe-Branch enthält keinen regulären Release-Tag")
+    _require_release_branch(configuration, branch, releaselinie, Status.SOURCE_FAILED, "Zielbranch passt nicht zur Release-Version")
     if git.resolve(root, "HEAD") != merge_sha:
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Freigabe-Merge")
 
@@ -332,3 +312,42 @@ def require_release_approval(
         approved_sha=approved_sha,
         target_sha=target_sha,
     )
+
+
+def run_command(arguments: argparse.Namespace) -> dict[str, object]:
+    """Bereitet die Release-Freigabe vor oder prüft ihren Merge."""
+
+    source = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "source"
+    repository = os.environ["SOURCE_REPOSITORY"]
+    configuration = config.load_configuration(source, repository)
+    if arguments.approval_command == "prepare":
+        approval_branch, path = prepare_release_approval(
+            configuration,
+            repository_root=source,
+            tag=arguments.tag,
+            branch=arguments.branch,
+            source_sha=arguments.source_sha,
+            run_reference=arguments.run_reference,
+        )
+        return {
+            "status": Status.RELEASE_APPROVAL_READY.value,
+            "outputs": {
+                "approval_branch": approval_branch,
+                "approval_path": path.relative_to(source).as_posix(),
+            },
+        }
+
+    tag = finalize_release_approval(
+        configuration,
+        repository_root=source,
+        approval_branch=arguments.approval_branch,
+        branch=arguments.branch,
+        merge_sha=arguments.merge_sha,
+        pull_request=github.read_pull_request(
+            api_url=arguments.api_url,
+            repository=repository,
+            number=arguments.pull_request_number,
+            token=os.environ["WORKFLOW_CONFIGURATION_TOKEN"],
+        ),
+    )
+    return {"status": Status.RELEASE_APPROVAL_VALIDATED.value, "outputs": {"release_tag": tag}}

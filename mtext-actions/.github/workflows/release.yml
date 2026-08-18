@@ -31,8 +31,6 @@ jobs:
     name: FULL- oder DELTA-Artefakt erstellen
     runs-on: [self-hosted, linux]
     timeout-minutes: 15
-    outputs:
-      artifact_name: ${{ steps.metadata.outputs.artifact_name }}
     steps:
       # Lädt den Commit des Release-Tags mit seiner Historie
       - name: Check-Out Release-Tag
@@ -66,25 +64,15 @@ jobs:
           INPUT_TRIGGER_SHA: ${{ inputs.trigger_sha }}
           SOURCE_REPOSITORY: ${{ inputs.source_repository }}
         run: >-
-          "${{ steps.runtime.outputs.python }}" automation/src/build_release.py
+          "${{ steps.runtime.outputs.python }}" automation/src/mtext.py build-release
           --tag "$INPUT_RELEASE_TAG"
           --trigger-sha "$INPUT_TRIGGER_SHA"
-
-      # Ermittelt den Artefaktnamen aus Repository und Release-Tag
-      - name: Artefaktnamen ermitteln
-        id: metadata
-        env:
-          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
-          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
-        run: |
-          repository_short="${SOURCE_REPOSITORY##*/}"
-          printf 'artifact_name=%s-%s\n' "$repository_short" "$INPUT_RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
       # Speichert den Inhalt von dist als Laufartefakt
       - name: Release-Artefakt speichern
         uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de
         with:
-          name: ${{ steps.metadata.outputs.artifact_name }}
+          name: release
           path: dist/
           if-no-files-found: error
           retention-days: 30
@@ -113,7 +101,7 @@ jobs:
       - name: Release-Artefakt herunterladen
         uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
         with:
-          name: ${{ needs.build.outputs.artifact_name }}
+          name: release
           path: ${{ runner.temp }}/release
 
       # Prüft Git und Python und stellt den Python-Pfad bereit
@@ -130,7 +118,7 @@ jobs:
           MAINFRAME_FTPS_USER: ${{ vars.MAINFRAME_FTPS_USER }}
           RELEASE_DIRECTORY: ${{ runner.temp }}/release
         run: >-
-          "${{ steps.runtime.outputs.python }}" automation/src/publish_mainframe.py
+          "${{ steps.runtime.outputs.python }}" automation/src/mtext.py publish-mainframe
 
   # Veröffentlicht das GitHub Release nach der Mainframe-Übergabe
   report:
@@ -152,7 +140,7 @@ jobs:
       - name: Release-Artefakt herunterladen
         uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
         with:
-          name: ${{ needs.build.outputs.artifact_name }}
+          name: release
           path: ${{ runner.temp }}/release
 
       # Prüft Git und Python und stellt den Python-Pfad bereit
@@ -169,4 +157,4 @@ jobs:
           SOURCE_REPOSITORY: ${{ inputs.source_repository }}
           TRIGGER_SHA: ${{ inputs.trigger_sha }}
         run: >-
-          "${{ steps.runtime.outputs.python }}" automation/src/publish_github_release.py
+          "${{ steps.runtime.outputs.python }}" automation/src/mtext.py publish-github-release

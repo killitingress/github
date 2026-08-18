@@ -1,7 +1,7 @@
-name: JSON- und XML-Ressourcenprüfung
+name: Mandantenkonfiguration und Ressourcen prüfen
 
-# Bei Pull Requests prüft dieser Workflow die geänderten JSON- und
-# XML-Ressourcen. Bei einem manuellen Start prüft er den gesamten Branchstand
+# Bei Pull Requests prüft dieser Workflow Mandantenkonfiguration sowie die
+# geänderten JSON- und XML-Ressourcen. Ein manueller Start prüft den ganzen Stand.
 'on':
   pull_request:
   workflow_dispatch:
@@ -15,9 +15,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Der zentrale Workflow führt die Prüfung aus
+  # Der zentrale Workflow führt Konfigurations- und Ressourcenprüfung aus.
   check:
-    name: JSON- und XML-Ressourcen prüfen
+    name: Mandantenkonfiguration und Ressourcen prüfen
     timeout-minutes: 15
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-check-resources.yml@0000000000000000000000000000000000000000
     with:

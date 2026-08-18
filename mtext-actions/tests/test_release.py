@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from lbs_delivery.mainframe_release import _publish_mainframe, _submit_package, build_release
+from lbs_delivery.mainframe_release import _submit_package, build_release, publish_mainframe
 from lbs_delivery.process import DeliveryError, NETWORK_TIMEOUT, Status
 
 from tests.support import (
@@ -94,7 +94,7 @@ class ReleaseTests(TempDirTestCase):
             ),
             patch("lbs_delivery.mainframe_release._submit_package") as submit,
         ):
-            result = _publish_mainframe(artifact_root=first)
+            result = publish_mainframe(artifact_root=first)
         self.assertEqual(result["status"], Status.MAINFRAME_SUBMITTED.value)
         submit.assert_called_once_with(
             first / "FIBASISD.tgz",
@@ -111,7 +111,7 @@ class ReleaseTests(TempDirTestCase):
 
         (second / "FIBASISD.jcl").unlink()
         with self.assertRaisesRegex(DeliveryError, "Releasepakete oder JCL fehlen"):
-            _publish_mainframe(artifact_root=second)
+            publish_mainframe(artifact_root=second)
 
         git(self.repository, "checkout", "--detach", "v261.100")
         full = self.root / "full"

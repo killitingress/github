@@ -46,14 +46,10 @@ jobs:
         id: rollout
         env:
           AUTOMATION_SHA: ${{ inputs.automation_sha }}
-        run: |
-          update_matrix="$(
-            "${{ steps.runtime.outputs.python }}" automation/src/workflow_configuration.py \
-            prepare-rollout \
-            --automation-sha "$AUTOMATION_SHA"
-          )"
-          printf 'rollout_sha=%s\n' "$AUTOMATION_SHA" >> "$GITHUB_OUTPUT"
-          printf 'update_matrix=%s\n' "$update_matrix" >> "$GITHUB_OUTPUT"
+        run: >-
+          "${{ steps.runtime.outputs.python }}" automation/src/mtext.py
+          rollout prepare-rollout
+          --automation-sha "$AUTOMATION_SHA"
 
   update:
     name: ${{ matrix.kuerzel }} ${{ matrix.branch }} aktualisieren
@@ -93,15 +89,12 @@ jobs:
           TARGET_REPOSITORY: ${{ matrix.repository }}
           TARGET_BRANCH: ${{ matrix.branch }}
           WORKFLOW_CONFIGURATION_TOKEN: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
-        run: |
-          exists="$(
-            "${{ steps.runtime.outputs.python }}" automation/src/workflow_configuration.py \
-            check-target-branch \
-            --api-url "$GITHUB_API_URL" \
-            --repository "$TARGET_REPOSITORY" \
-            --branch "$TARGET_BRANCH"
-          )"
-          printf 'exists=%s\n' "$exists" >> "$GITHUB_OUTPUT"
+        run: >-
+          "${{ steps.runtime.outputs.python }}" automation/src/mtext.py
+          rollout check-target-branch
+          --api-url "$GITHUB_API_URL"
+          --repository "$TARGET_REPOSITORY"
+          --branch "$TARGET_BRANCH"
 
       # Lädt den Zielbranch mit Schreibzugriff für die anschließende Aktualisierung
       - name: Check-Out Mandanten-Branch
@@ -127,8 +120,8 @@ jobs:
         env:
           ROLLOUT_SHA: ${{ needs.prepare.outputs.rollout_sha }}
         run: >-
-          "${{ steps.runtime.outputs.python }}" automation/src/workflow_configuration.py
-          prepare-mandant
+          "${{ steps.runtime.outputs.python }}" automation/src/mtext.py
+          rollout prepare-mandant
           --mandant-root mandant
           --rollout-sha "$ROLLOUT_SHA"
 

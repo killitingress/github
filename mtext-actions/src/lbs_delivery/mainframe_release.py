@@ -8,13 +8,14 @@ ein.
 
 from __future__ import annotations
 
+import argparse
 import ftplib
 import os
 import re
 import ssl
 from pathlib import Path
 
-from . import git
+from . import config, git
 from .config import (
     CODEPIPELINE_STAGES,
     ISPW_INSTANZEN,
@@ -107,7 +108,7 @@ def _submit_package(
         raise DeliveryError(Status.MAINFRAME_TRANSFER_FAILED, "FTPS-/JES-Übergabe fehlgeschlagen") from exc
 
 
-def _publish_mainframe(*, artifact_root: str | Path) -> dict[str, object]:
+def publish_mainframe(*, artifact_root: str | Path) -> dict[str, object]:
     """Übergibt alle vorbereiteten Pakete und JCL-Dateien an den Mainframe."""
 
     root = Path(artifact_root)
@@ -214,3 +215,28 @@ def build_release(
                 ),
                 encoding="ascii",
             )
+
+
+def run_build_command(arguments: argparse.Namespace) -> dict[str, object]:
+    """Erzeugt Release-Dateien aus dem GitHub-Workflow-Kontext."""
+
+    workspace = Path(os.environ.get("GITHUB_WORKSPACE", "."))
+    source = workspace / "source"
+    configuration = config.load_configuration(source, os.environ["SOURCE_REPOSITORY"])
+    build_release(
+        configuration,
+        repository_root=source,
+        output_directory=workspace / "dist",
+        jcl_template=(config.AUTOMATION_ROOT / "templates/mainframe-upload.jcl").read_text(encoding="ascii"),
+        tag=arguments.tag,
+        trigger_sha=arguments.trigger_sha,
+    )
+    return {"status": Status.ARTIFACT_READY.value} | (
+        {"warnungen": list(configuration.warnungen)} if configuration.warnungen else {}
+    )
+
+
+def run_publish_command(_arguments: argparse.Namespace) -> dict[str, object]:
+    """Übergibt die vorbereiteten Release-Dateien an den Mainframe."""
+
+    return publish_mainframe(artifact_root=Path(os.environ["RELEASE_DIRECTORY"]))

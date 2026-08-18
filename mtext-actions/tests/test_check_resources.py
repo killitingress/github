@@ -9,7 +9,8 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-from check_resources import main
+from lbs_delivery.resource_check import run
+from lbs_delivery.process import DeliveryError
 
 from tests.support import AUTOMATION_ROOT, TempDirTestCase, git, init_git_repository
 
@@ -39,14 +40,12 @@ class CheckResourcesTests(TempDirTestCase):
         output = io.StringIO()
 
         with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": str(summary)}), redirect_stdout(output):
-            self.assertEqual(main(["--root", str(self.repository), "--formats", str(FORMATS_PATH)]), 0)
+            result = run(root=self.repository, formats_path=FORMATS_PATH, changed_only=False)
 
         command_output = output.getvalue()
         self.assertIn("::warning file=projekt/brief.conf,line=3,col=3", command_output)
         self.assertIn("::warning file=projekt/formular%3Aa%2Cb.formio,line=3,col=1", command_output)
-        self.assertIn('"status":"RESOURCE_CHECKED"', command_output)
-        self.assertIn('"files":4', command_output)
-        self.assertIn('"warnings":2', command_output)
+        self.assertEqual(result, {"status": "RESOURCE_CHECKED", "files": 4, "warnings": 2})
 
         summary_text = summary.read_text(encoding="utf-8")
         self.assertIn("Geprüfte Dateien: 4", summary_text)
@@ -66,16 +65,21 @@ class CheckResourcesTests(TempDirTestCase):
 
         output = io.StringIO()
         with redirect_stdout(output):
-            self.assertEqual(
-                main(["--root", str(self.repository), "--formats", str(FORMATS_PATH), "--changed-only"]),
-                0,
-            )
+            result = run(root=self.repository, formats_path=FORMATS_PATH, changed_only=True)
 
         command_output = output.getvalue()
         self.assertIn("::warning file=brief.datamodel", command_output)
         self.assertNotIn("bestehend.formio", command_output)
-        self.assertIn('"files":1', command_output)
-        self.assertIn('"warnings":1', command_output)
+        self.assertEqual(result, {"status": "RESOURCE_CHECKED", "files": 1, "warnings": 1})
+
+    def test_reports_resource_format_error(self) -> None:
+        """Erhält die fachliche Meldung einer ungültigen Formatzuordnung."""
+
+        formats = self.root / "formate.json"
+        formats.write_text('{"dateiendungen": {".json": "json", ".JSON": "json"}}', encoding="utf-8")
+
+        with self.assertRaisesRegex(DeliveryError, "Dateiendung mehrfach"):
+            run(root=self.repository, formats_path=formats, changed_only=False)
 
 
 if __name__ == "__main__":

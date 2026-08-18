@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from lbs_delivery.github_release import publish_github_release
+from lbs_delivery.github import publish_release
 from lbs_delivery.process import Status
 from lbs_delivery.mainframe_release import build_release
 
@@ -52,8 +52,8 @@ class GitHubReleaseTests(TempDirTestCase):
             calls.append(arguments)
             return handler(arguments)
 
-        with patch("lbs_delivery.github_api.request", side_effect=request):
-            result = publish_github_release(
+        with patch("lbs_delivery.github.request", side_effect=request):
+            result = publish_release(
                 artifact_root=self.dist,
                 repository=self.configuration.repository,
                 **PUBLISH_KWARGS,

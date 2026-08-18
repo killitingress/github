@@ -5,13 +5,16 @@ from __future__ import annotations
 import io
 import json
 import shutil
+import subprocess
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from urllib.error import HTTPError
 from unittest.mock import MagicMock, patch
 
-from workflow_configuration import build_update_matrix, check_target_branch, prepare_mandant_update, verify_automation
+from lbs_delivery.rollout import build_update_matrix, check_target_branch, prepare_mandant_update, verify_automation
+from lbs_delivery import git as delivery_git
+from lbs_delivery.process import DeliveryError, execute
 
 from tests.support import AUTOMATION_ROOT, TempDirTestCase, git, init_git_repository, ZERO_SHA
 
@@ -54,7 +57,7 @@ class UpdateWorkflowsTests(TempDirTestCase):
 
     def test_rollout_preparation_and_verification(self) -> None:
         initial_sha = git(self.automation_root, "rev-parse", "HEAD")
-        with self.assertRaisesRegex(ValueError, "angegebenen Commit"):
+        with self.assertRaisesRegex(DeliveryError, "angegebenen Commit"):
             verify_automation(self.automation_root, "1" * 40)
 
         with redirect_stderr(io.StringIO()):
@@ -108,8 +111,8 @@ class UpdateWorkflowsTests(TempDirTestCase):
     def test_github_api_for_rollout(self) -> None:
         response = MagicMock()
         response.__enter__.return_value = response
-        response.status = 200
-        with patch("workflow_configuration.urllib.request.urlopen", return_value=response) as urlopen:
+        response.read.return_value = b"{}"
+        with patch("lbs_delivery.github.urllib.request.urlopen", return_value=response) as urlopen:
             self.assertTrue(check_target_branch("https://api.github.test", "team/mandant", "release/R261", "token"))
         self.assertEqual(
             urlopen.call_args.args[0].full_url,
@@ -117,11 +120,27 @@ class UpdateWorkflowsTests(TempDirTestCase):
         )
 
         missing = HTTPError("https://api.github.test", 404, "Not Found", None, io.BytesIO(b"{}"))
-        with patch("workflow_configuration.urllib.request.urlopen", side_effect=missing):
+        with patch("lbs_delivery.github.urllib.request.urlopen", side_effect=missing):
             self.assertFalse(check_target_branch("https://api.github.test", "team/mandant", "release/R261", "token"))
 
-        with patch("workflow_configuration.urllib.request.urlopen", side_effect=missing):
+        with patch("lbs_delivery.github.urllib.request.urlopen", side_effect=missing):
             self.assertFalse(check_target_branch("https://api.github.test", "team/mandant", "main", "token"))
+
+    def test_git_error_includes_stderr(self) -> None:
+        """Gibt die Git-Meldung für die Diagnose eines Rollout-Fehlers weiter."""
+
+        result = subprocess.CompletedProcess(["git"], 1, stdout=b"", stderr="Branch ist geschützt".encode())
+        with patch("lbs_delivery.git.subprocess.run", return_value=result), self.assertRaisesRegex(DeliveryError, "Branch ist geschützt"):
+            delivery_git.run(self.mandant_root, "commit", "-m", "Test")
+
+    def test_process_writes_workflow_outputs(self) -> None:
+        """Schreibt Ausgaben zentral für nachfolgende Workflow-Schritte."""
+
+        output_path = self.root / "github-output"
+        with patch.dict("os.environ", {"GITHUB_OUTPUT": str(output_path)}), redirect_stdout(io.StringIO()) as stdout:
+            self.assertEqual(execute(lambda: {"status": "OK", "outputs": {"exists": "true"}}), 0)
+        self.assertEqual(output_path.read_text(encoding="utf-8"), "exists=true\n")
+        self.assertNotIn("outputs", stdout.getvalue())
 
 
 if __name__ == "__main__":

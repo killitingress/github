@@ -18,19 +18,13 @@ Mainframe-Zugangsdaten liegen nicht im Mandanten-Repository.
 Die zentral bereitgestellte Organisationsvariable `MTEXT_CIFS_ROOT` bezeichnet
 den auf dem Runner eingehängten CIFS-Basispfad für die Adapterübergabe.
 
-## `validate-config.yml`
-
-Ein Push mit einer Änderung an `.github/config.json` startet die zentrale
-Konfigurationsprüfung. Der Lauf überträgt keine Ressourcen und liest keine
-Mainframe-Secrets.
-
 ## `check-resources.yml`
 
-Jeder Pull Request startet die zentrale technische Prüfung seiner
-hinzugefügten, geänderten und umbenannten Ressourcen. Welche Dateiendungen als
-JSON oder XML gelesen werden, legt `config/ressourcenformate.json` in
-`mtext_actions` fest. Über **Run workflow** kann für den gewählten Branch eine
-Vollprüfung gestartet werden.
+Jeder Pull Request prüft Mandantenkonfiguration sowie hinzugefügte, geänderte
+und umbenannte Ressourcen. Welche Dateiendungen als JSON oder XML gelesen
+werden, legt `config/ressourcenformate.json` in `mtext_actions` fest. Über
+**Run workflow** kann für den gewählten Branch eine Vollprüfung gestartet
+werden.
 
 Ungültige JSON-Syntax und nicht wohlgeformtes XML erscheinen mit Datei und
 Fundstelle als Warnungen. Diese Befunde lassen den Lauf erfolgreich enden und

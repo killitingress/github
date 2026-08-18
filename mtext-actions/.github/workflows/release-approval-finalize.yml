@@ -80,7 +80,7 @@ jobs:
           PULL_REQUEST_NUMBER: ${{ inputs.pull_request_number }}
           GITHUB_API_URL: ${{ github.api_url }}
         run: >-
-          "$PYTHON" automation/src/release_approval.py finalize
+          "$PYTHON" automation/src/mtext.py release-approval finalize
           --approval-branch "$APPROVAL_BRANCH"
           --branch "$SOURCE_BRANCH"
           --merge-sha "$MERGE_SHA"

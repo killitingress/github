@@ -1,6 +1,6 @@
-name: Wiederverwendbare JSON- und XML-Prüfung
+name: Wiederverwendbare Konfigurations- und Ressourcenprüfung
 
-# Dieser Workflow prüft JSON- und XML-Ressourcen
+# Dieser Workflow prüft Mandantenkonfiguration sowie JSON- und XML-Ressourcen.
 'on':
   workflow_call:
     inputs:
@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   check:
-    name: JSON- und XML-Ressourcen prüfen
+    name: Mandantenkonfiguration und Ressourcen prüfen
     runs-on: [self-hosted, linux]
     timeout-minutes: 15
     steps:
@@ -41,8 +41,8 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
 
-      # Lädt die festgelegte Version der Ressourcenprüfung
-      - name: Check-Out Ressourcenprüfung
+      # Lädt die festgelegte Version der Prüfungen.
+      - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
@@ -51,17 +51,23 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.automation_token }}
 
-      # Prüft Git und Python und stellt den Python-Pfad bereit
+      # Prüft Git und Python und stellt den Python-Pfad bereit.
       - name: Python-Runtime ermitteln
         id: runtime
         run: bash automation/scripts/runner-preflight.sh
 
-      # Prüft JSON-Syntax und XML-Wohlgeformtheit und gibt Befunde als Warnungen aus
+      # Prüft die Mandantenkonfiguration ohne Ressourcen zu übertragen.
+      - name: Mandantenkonfiguration prüfen
+        run: >-
+          "${{ steps.runtime.outputs.python }}" automation/src/mtext.py
+          validate-config
+
+      # Prüft JSON-Syntax und XML-Wohlgeformtheit und gibt Befunde als Warnungen aus.
       - name: Ressourcen prüfen
         env:
           CHANGED_ONLY: ${{ inputs.changed_only && '--changed-only' || '' }}
         run: >-
-          "${{ steps.runtime.outputs.python }}" automation/src/check_resources.py
+          "${{ steps.runtime.outputs.python }}" automation/src/mtext.py check-resources
           --root source
           --formats automation/config/ressourcenformate.json
           $CHANGED_ONLY

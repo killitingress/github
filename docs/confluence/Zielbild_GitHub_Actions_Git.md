@@ -549,7 +549,6 @@ fi_lbs_entw_oms_<kuerzel>/
     workflows/
       check-resources.yml
       release-approval.yml
-      validate-config.yml
       sync-resources.yml
       release.yml
   <M/Text-Projekte>
@@ -596,11 +595,8 @@ mtext-actions/
       release-approval-prepare.yml
       release.yml
       reusable-check-resources.yml
-      reusable-release-approval-finalize.yml
-      reusable-release-approval-prepare.yml
-      reusable-release-dispatch.yml
+      reusable-dispatch.yml
       reusable-sync-resources.yml
-      reusable-validate-config.yml
       update-mandant-workflows.yml
   config/
     mandanten.json
@@ -612,21 +608,15 @@ mtext-actions/
     lbs_delivery/
       config.py
       git.py
-      github_api.py
-      github_release.py
+      github.py
       mainframe_release.py
       process.py
       project_package.py
       release_approval.py
+      resource_check.py
+      rollout.py
       sync.py
-    build_release.py
-    check_resources.py
-    publish_github_release.py
-    publish_mainframe.py
-    release_approval.py
-    sync_resources.py
-    validate_config.py
-    workflow_configuration.py
+    mtext.py
   templates/
     mainframe-upload.jcl
   tests/
@@ -639,13 +629,12 @@ mtext-actions/
 
 | Prozessschritt | Auslöser | Trigger-Workflow | Zentraler Workflow | Python-Skript | Ergebnis |
 |---|---|---|---|---|---|
-| Mandanten-Workflows aktualisieren | Manueller Start in `mtext_actions` mit der gewünschten Commit-SHA | keiner | `update-mandant-workflows.yml` | `workflow_configuration.py` | Verweise auf `mtext_actions` verwenden die neue Version |
-| Mandantenkonfiguration prüfen | Push mit einer Änderung an `.github/config.json` | `validate-config.yml` | `reusable-validate-config.yml` | `validate_config.py` | Konfiguration geprüft |
-| JSON- und XML-Ressourcen prüfen | Pull Request oder manueller Start | `check-resources.yml` | `reusable-check-resources.yml` | `check_resources.py` | Geänderte konfigurierte Ressourcen oder gewählter Vollstand geprüft, Syntaxbefunde als nicht blockierende Warnungen angezeigt |
-| M/Text-Entwicklung synchronisieren | Push auf `feature/Rnnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync_resources.py` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
-| M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/Rnnn` sowie manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `sync_resources.py` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
-| Reguläres Release freigeben | Manueller Start auf dem Lieferbranch, selbst eröffneter Freigabe-PR und dessen Merge | `release-approval.yml` | `reusable-release-approval-prepare.yml` → `release-approval-prepare.yml`, danach `reusable-release-approval-finalize.yml` → `release-approval-finalize.yml` | `release_approval.py` | Regulärer Release-Tag auf dem Merge-Commit der Freigabe erstellt |
-| Release bauen und übertragen | Push eines Tags `vnnn.nnn` oder `vnnn.nnnx` | `release.yml` | `reusable-release-dispatch.yml` → `release.yml` | `build_release.py`, `publish_mainframe.py`, danach `publish_github_release.py` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
+| Mandanten-Workflows aktualisieren | Manueller Start in `mtext_actions` mit der gewünschten Commit-SHA | keiner | `update-mandant-workflows.yml` | `mtext.py rollout` | Verweise auf `mtext_actions` verwenden die neue Version |
+| Mandantenkonfiguration und JSON- oder XML-Ressourcen prüfen | Pull Request oder manueller Start | `check-resources.yml` | `reusable-check-resources.yml` | `mtext.py validate-config` und `mtext.py check-resources` | Konfiguration geprüft, geänderte konfigurierte Ressourcen oder gewählter Vollstand geprüft und Syntaxbefunde als nicht blockierende Warnungen angezeigt |
+| M/Text-Entwicklung synchronisieren | Push auf `feature/Rnnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
+| M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/Rnnn` sowie manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
+| Reguläres Release freigeben | Manueller Start auf dem Lieferbranch, selbst eröffneter Freigabe-PR und dessen Merge | `release-approval.yml` | `reusable-dispatch.yml` → `release-approval-prepare.yml` oder `release-approval-finalize.yml` | `mtext.py release-approval` | Regulärer Release-Tag auf dem Merge-Commit der Freigabe erstellt |
+| Release bauen und übertragen | Push eines Tags `vnnn.nnn` oder `vnnn.nnnx` | `release.yml` | `reusable-dispatch.yml` → `release.yml` | `mtext.py build-release`, `publish-mainframe`, danach `publish-github-release` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
 | `mtext_actions` testen | Pull Request oder Push auf `main` in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` | Zentrale Tests ausgeführt |
 
 ### Trigger-Workflows in den Mandanten-Repositories
@@ -655,9 +644,8 @@ Verarbeitung in `mtext_actions`:
 
 | Datei | Auslöser | Aufgabe |
 |---|---|---|
-| `check-resources.yml` | Pull Request oder manueller Start | Geänderte konfigurierte Ressourcen oder den gewählten Vollstand prüfen und Befunde als Warnungen anzeigen |
+| `check-resources.yml` | Pull Request oder manueller Start | Mandantenkonfiguration und geänderte konfigurierte Ressourcen oder den gewählten Vollstand prüfen, Syntaxbefunde als Warnungen anzeigen |
 | `release-approval.yml` | Manueller Start oder Merge eines Release-Freigabe-PR | Freigabe-Branch vorbereiten oder den regulären Release-Tag auf dem Merge-Commit erstellen |
-| `validate-config.yml` | Änderung an `.github/config.json` | Mandantenkonfiguration prüfen |
 | `sync-resources.yml` | Push auf einen Feature-, `main`- oder Release-Branch sowie manueller Start | Projekte nach M/Text-Entwicklung oder -Funktionstest übertragen |
 | `release.yml` | Release-Tag | Release-Erstellung starten |
 
@@ -668,15 +656,12 @@ Merge nicht.
 
 | Datei | Auslöser | Aufgabe |
 |---|---|---|
-| `reusable-check-resources.yml` | Aufruf durch `check-resources.yml` | JSON- und XML-Ressourcen ohne Zugriff auf Zielsysteme prüfen |
-| `reusable-release-approval-prepare.yml` | Aufruf durch `release-approval.yml` beim manuellen Start | Den ausgewählten Branchstand an den zentralen Vorbereitungsworkflow melden |
-| `reusable-release-approval-finalize.yml` | Aufruf durch `release-approval.yml` nach dem Merge | Den zusammengeführten Freigabe-PR an den zentralen Abschlussworkflow melden |
-| `reusable-validate-config.yml` | Aufruf durch `validate-config.yml` | Mandantenkonfiguration prüfen |
+| `reusable-check-resources.yml` | Aufruf durch `check-resources.yml` | Mandantenkonfiguration sowie JSON- und XML-Ressourcen ohne Zugriff auf Zielsysteme prüfen |
+| `reusable-dispatch.yml` | Aufruf durch `release.yml` oder `release-approval.yml` | Benannten zentralen Workflow mit seinen Eingaben starten |
 | `reusable-sync-resources.yml` | Aufruf durch `sync-resources.yml` | Projekte nach M/Text übertragen |
-| `reusable-release-dispatch.yml` | Aufruf durch `release.yml` im Mandanten-Repository | `release.yml` in `mtext_actions` starten |
-| `release-approval-prepare.yml` | Start durch `reusable-release-approval-prepare.yml` | Freigabenachweis erzeugen und auf dem Freigabe-Branch veröffentlichen |
-| `release-approval-finalize.yml` | Start durch `reusable-release-approval-finalize.yml` | Nach geprüftem Merge den regulären Release-Tag erstellen |
-| `release.yml` | Start durch `reusable-release-dispatch.yml` | FULL- und DELTA-Pakete erstellen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
+| `release-approval-prepare.yml` | Start durch `reusable-dispatch.yml` | Freigabenachweis erzeugen und auf dem Freigabe-Branch veröffentlichen |
+| `release-approval-finalize.yml` | Start durch `reusable-dispatch.yml` | Nach geprüftem Merge den regulären Release-Tag erstellen |
+| `release.yml` | Start durch `reusable-dispatch.yml` | FULL- und DELTA-Pakete erstellen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
 | `ci.yml` | Pull Request oder Push auf `main` in `mtext_actions` | Tests ausführen |
 | `update-mandant-workflows.yml` | Manueller Start | Verweise auf `mtext_actions` in den Mandanten-Workflows aktualisieren |
 
@@ -717,6 +702,7 @@ mit dem zugehörigen Exitcode.
 
 | Status | Bedeutung | Exitcode bei Fehlern |
 |---|---|---|
+| `RESOURCE_CHECKED` | JSON- und XML-Ressourcen wurden geprüft, Befunde stehen als Warnungen bereit | – |
 | `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinienzuordnung wurden geprüft | – |
 | `VALIDATION_FAILED` | Eingaben oder Konfiguration sind ungültig | `2` |
 | `RELEASE_APPROVAL_READY` | Freigabenachweis für den Pull Request wurde erzeugt | – |

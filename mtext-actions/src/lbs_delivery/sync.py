@@ -8,6 +8,7 @@ M/Text-Synchronisation.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -17,8 +18,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from .config import Configuration
-from .git import changes, project_changes, require_ancestor, resolve
+from . import config, git
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
 from .project_package import build_project_package
 
@@ -32,6 +32,9 @@ ADAPTER_SYNC_URL = "https://{umgebung}.ltoma.intern/vMtextAdapter/sync"
 # Diese Umgebungsvariable bezeichnet den auf dem Runner eingehängten
 # CIFS-Basispfad für vollständige Übergabeaufträge.
 CIFS_ROOT_ENVIRONMENT = "MTEXT_CIFS_ROOT"
+
+# GitHub liefert für den ersten Push eines Branches diese Null-SHA als Vorgänger.
+EMPTY_PUSH_COMMIT = "0" * 40
 
 
 def call_adapter(url: str, payload: dict[str, object]) -> tuple[int, str]:
@@ -56,8 +59,30 @@ def call_adapter(url: str, payload: dict[str, object]) -> tuple[int, str]:
     return status, body
 
 
+def plan_sync(
+    configuration: config.Configuration,
+    *,
+    repository_root: str | Path,
+    source_branch: str,
+    event_name: str,
+    previous_commit: str,
+) -> tuple[str, tuple[str, ...], str | None]:
+    """Leitet Releaselinie, Zielstufen und Vergleichscommit aus dem GitHub-Ereignis ab."""
+
+    releaselinie, zielstufe = git.resolve_sync_branch(source_branch, configuration.releaselinie)
+    if event_name == "workflow_dispatch" or not previous_commit or previous_commit == EMPTY_PUSH_COMMIT:
+        return releaselinie, (zielstufe,), None
+    if event_name != "push" or source_branch != "main":
+        return releaselinie, (zielstufe,), previous_commit
+
+    document = json.loads(git.read_file(repository_root, previous_commit, config.MANDANT_CONFIG_PATH))
+    if document["mandant"]["releaselinie"] == configuration.releaselinie:
+        return releaselinie, (zielstufe,), previous_commit
+    return releaselinie, config.MTEXT_ZIEL_REIHENFOLGE, None
+
+
 def sync_resources(
-    configuration: Configuration,
+    configuration: config.Configuration,
     *,
     repository_root: str | Path,
     commit: str,
@@ -78,15 +103,15 @@ def sync_resources(
         raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Zielstufe ist ungültig")
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
-    if resolve(repository_root, "HEAD") != commit:
+    if git.resolve(repository_root, "HEAD") != commit:
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Commit")
-    require_ancestor(repository_root, commit, f"refs/remotes/origin/{source_branch}")
+    git.require_ancestor(repository_root, commit, f"refs/remotes/origin/{source_branch}")
 
-    git_changes = [] if previous_commit is None else changes(repository_root, previous_commit, commit)
+    git_changes = [] if previous_commit is None else git.changes(repository_root, previous_commit, commit)
     projects = [
         (project, project_code)
         for project, project_code in configuration.projects.items()
-        if previous_commit is None or any(project_changes(git_changes, project))
+        if previous_commit is None or any(git.project_changes(git_changes, project))
     ]
     if not projects:
         return {"status": Status.ADAPTER_ACCEPTED.value, "projekte": []}
@@ -159,3 +184,47 @@ def sync_resources(
         "pfad": str(request_path),
         "projekte": payload["projekte"],
     }
+
+
+def run_command(arguments: argparse.Namespace) -> dict[str, object]:
+    """Synchronisiert den Commit aus dem GitHub-Workflow-Kontext."""
+
+    source = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "source"
+    configuration = config.load_configuration(source, os.environ["GITHUB_REPOSITORY"])
+    source_branch = os.environ["GITHUB_REF_NAME"]
+    releaselinie, zielstufen, vergleichs_commit = plan_sync(
+        configuration,
+        repository_root=source,
+        source_branch=source_branch,
+        event_name=os.environ["GITHUB_EVENT_NAME"],
+        previous_commit=os.environ.get("MTEXT_PREVIOUS_COMMIT", ""),
+    )
+    results: list[dict[str, object]] = []
+    successful_stages: list[str] = []
+    for zielstufe in zielstufen:
+        try:
+            results.append(
+                {
+                    "zielstufe": zielstufe,
+                    **sync_resources(
+                        configuration,
+                        repository_root=source,
+                        commit=arguments.commit,
+                        previous_commit=vergleichs_commit,
+                        source_branch=source_branch,
+                        releaselinie=releaselinie,
+                        zielstufe=zielstufe,
+                    ),
+                }
+            )
+        except DeliveryError as exc:
+            detail = f" Bereits erfolgreich: {', '.join(successful_stages)}." if successful_stages else ""
+            raise DeliveryError(
+                exc.status,
+                f"Synchronisation mit dem M/Text-Ziel {zielstufe} fehlgeschlagen.{detail} {exc.args[0]}",
+            ) from exc
+        successful_stages.append(zielstufe)
+
+    return {"status": Status.ADAPTER_ACCEPTED.value, "synchronisationen": results} | (
+        {"warnungen": list(configuration.warnungen)} if configuration.warnungen else {}
+    )

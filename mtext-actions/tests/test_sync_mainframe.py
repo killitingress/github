@@ -10,7 +10,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import sync_resources as sync_command
+import mtext
+
+from lbs_delivery import sync as sync_command
 
 from lbs_delivery.process import DeliveryError, Status
 from lbs_delivery.sync import sync_resources
@@ -63,50 +65,59 @@ class SyncTests(TempDirTestCase):
 
         git(self.repository, "update-ref", f"refs/remotes/origin/{self.branch}", "HEAD")
 
-    def test_sync_from_github_context(self) -> None:
+    def test_run_command(self) -> None:
         """Prüft Vollabgleich, Ereignisvergleich und Fehlerkontext der Ablaufsteuerung."""
 
         configuration = SimpleNamespace(releaselinie="R270", warnungen=())
-        context = {"configuration": configuration, "repository_root": self.repository, **GITHUB_CONTEXT}
+        arguments = SimpleNamespace(commit=GITHUB_CONTEXT["commit"])
+        environment = {
+            "GITHUB_WORKSPACE": str(self.root),
+            "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
+            "GITHUB_REF_NAME": GITHUB_CONTEXT["source_branch"],
+            "GITHUB_EVENT_NAME": GITHUB_CONTEXT["event_name"],
+            "MTEXT_PREVIOUS_COMMIT": GITHUB_CONTEXT["previous_commit"],
+        }
 
         with (
+            patch.dict(os.environ, environment, clear=True),
+            patch.object(sync_command.config, "load_configuration", return_value=configuration),
             patch.object(sync_command.git, "read_file", return_value=PREVIOUS_CONFIG),
             patch.object(
-                sync_command.sync,
+                sync_command,
                 "sync_resources",
                 side_effect=({"status": Status.ADAPTER_ACCEPTED.value}, {"status": Status.ADAPTER_ACCEPTED.value}),
             ) as synchronize,
         ):
-            result = sync_command.sync_from_github_context(**context)
+            result = sync_command.run_command(arguments)
         self.assertEqual([entry["zielstufe"] for entry in result["synchronisationen"]], ["Entwicklung", "Funktionstest"])
         self.assertTrue(all(call.kwargs["previous_commit"] is None for call in synchronize.call_args_list))
 
-        with patch.object(sync_command.sync, "sync_resources", return_value={"status": Status.ADAPTER_ACCEPTED.value}) as synchronize:
-            sync_command.sync_from_github_context(
-                configuration,
-                repository_root=self.repository,
-                commit="2" * 40,
-                source_branch="feature/R271/test",
-                event_name="push",
-                previous_commit="1" * 40,
-            )
+        with (
+            patch.dict(os.environ, environment | {"GITHUB_REF_NAME": "feature/R271/test"}, clear=True),
+            patch.object(sync_command.config, "load_configuration", return_value=configuration),
+            patch.object(sync_command, "sync_resources", return_value={"status": Status.ADAPTER_ACCEPTED.value}) as synchronize,
+        ):
+            sync_command.run_command(arguments)
         self.assertEqual(synchronize.call_args.kwargs["previous_commit"], "1" * 40)
 
-        with patch.object(sync_command.sync, "sync_resources", return_value={"status": Status.ADAPTER_ACCEPTED.value}) as synchronize:
-            sync_command.sync_from_github_context(
-                configuration,
-                repository_root=self.repository,
-                commit="2" * 40,
-                source_branch="feature/R271/test",
-                event_name="push",
-                previous_commit=sync_command.EMPTY_PUSH_COMMIT,
-            )
+        with (
+            patch.dict(
+                os.environ,
+                environment | {"GITHUB_REF_NAME": "feature/R271/test", "MTEXT_PREVIOUS_COMMIT": sync_command.EMPTY_PUSH_COMMIT},
+                clear=True,
+            ),
+            patch.object(sync_command.config, "load_configuration", return_value=configuration),
+            patch.object(sync_command, "sync_resources", return_value={"status": Status.ADAPTER_ACCEPTED.value}) as synchronize,
+        ):
+            sync_command.run_command(arguments)
         self.assertIsNone(synchronize.call_args.kwargs["previous_commit"])
 
         with (
+            patch.dict(os.environ, environment, clear=True),
+            patch.object(sync_command.config, "load_configuration", return_value=configuration),
             patch.object(sync_command.git, "read_file", return_value=PREVIOUS_CONFIG),
             patch.object(
-                sync_command.sync,
+                sync_command,
                 "sync_resources",
                 side_effect=(
                     {"status": Status.ADAPTER_ACCEPTED.value},
@@ -115,7 +126,7 @@ class SyncTests(TempDirTestCase):
             ),
             self.assertRaisesRegex(DeliveryError, "Bereits erfolgreich: Entwicklung"),
         ):
-            sync_command.sync_from_github_context(**context)
+            sync_command.run_command(arguments)
 
     def test_delta_package_uses_only_event_changes(self) -> None:
         """Prüft D-Archiv, Löschliste, JSON und Adapterauftrag eines Pushs."""
@@ -247,12 +258,12 @@ class SyncTests(TempDirTestCase):
                 },
                 clear=True,
             ),
-            patch("sys.argv", ["sync_resources.py", "--commit", "2" * 40]),
-            patch.object(sync_command.config, "load_configuration", return_value=self.configuration),
-            patch.object(sync_command, "sync_from_github_context", return_value=response) as synchronize,
+            patch("sys.argv", ["mtext.py", "sync-resources", "--commit", "2" * 40]),
+            patch.object(mtext.config, "load_configuration", return_value=SimpleNamespace(warnungen=())),
+            patch.object(mtext.sync, "plan_sync", return_value=("R261", (), "1" * 40)) as plan,
         ):
-            self.assertEqual(sync_command.run(), response)
-        self.assertEqual(synchronize.call_args.kwargs["previous_commit"], "1" * 40)
+            self.assertEqual(mtext.run(), response)
+        self.assertEqual(plan.call_args.kwargs["previous_commit"], "1" * 40)
 
 
 if __name__ == "__main__":

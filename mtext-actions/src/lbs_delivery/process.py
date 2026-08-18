@@ -7,12 +7,16 @@ Status und Meldung auf stderr und das Skript endet mit dem zugehörigen Exitcode
 from __future__ import annotations
 
 import json
+import os
 import sys
 from collections.abc import Callable
 from enum import Enum
+from pathlib import Path
 
 
 class Status(str, Enum):
+    # JSON- und XML-Ressourcen wurden geprüft, Befunde stehen als Warnungen bereit.
+    RESOURCE_CHECKED = "RESOURCE_CHECKED"
     # Mandanten- und Releaselinienkonfiguration sind für die folgenden Schritte verwendbar.
     CONFIG_VALIDATED = "CONFIG_VALIDATED"
     # Konfiguration oder Argumente sind ungültig.
@@ -89,6 +93,8 @@ def execute(operation: Callable[[], dict[str, object]]) -> int:
     Lieferfehler, ungültig aufgebaute Eingaben und fehlgeschlagene
     Dateioperationen werden auf stderr ausgegeben. Warnungen stehen ebenfalls
     auf stderr, damit stdout bei Erfolg ausschließlich das JSON-Ergebnis enthält.
+    Als ``outputs`` gekennzeichnete Werte schreibt der Schritt nach
+    ``GITHUB_OUTPUT`` für nachfolgende Workflow-Schritte.
     """
 
     try:
@@ -105,6 +111,13 @@ def execute(operation: Callable[[], dict[str, object]]) -> int:
     except (OSError, UnicodeError) as exc:
         print(f"{Status.VALIDATION_FAILED.value}: lokale Dateioperation fehlgeschlagen: {exc}", file=sys.stderr)
         return 2
+
+    # Folgeschritte lesen Workflow-Ausgaben aus der von GitHub Actions vorgegebenen Datei.
+    outputs = result.pop("outputs", {})
+    if outputs and (output_path := os.environ.get("GITHUB_OUTPUT")):
+        with Path(output_path).open("a", encoding="utf-8") as stream:
+            for name, value in outputs.items():
+                stream.write(f"{name}={value}\n")
 
     for warnung in result.get("warnungen", []):
         print(f"WARNUNG: {warnung}", file=sys.stderr)

@@ -7,7 +7,9 @@ Paketbau, Synchronisation und Übergabe aus der Konfiguration benötigen.
 
 from __future__ import annotations
 
+import argparse
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -256,3 +258,18 @@ def _reference_warnings(kuerzel: str, projects: dict[str, str]) -> tuple[str, ..
         warnungen.append("Projekte sind gegenüber dem aktuellen Referenzstand zusätzlich: " + ", ".join(zusaetzlich))
 
     return tuple(warnungen)
+
+
+def run_validation(_arguments: argparse.Namespace) -> dict[str, object]:
+    """Prüft die Mandantenkonfiguration des Workflow-Arbeitsbereichs."""
+
+    source = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "source"
+    configuration = load_configuration(source, os.environ["GITHUB_REPOSITORY"])
+    return {
+        "status": Status.CONFIG_VALIDATED.value,
+        "mandanten_kuerzel": configuration.kuerzel,
+        "repository": configuration.repository,
+        "releaselinie": configuration.releaselinie,
+        "releaselinien": sorted(configuration.releaselinien),
+        "releasefreigabe": configuration.releasefreigabe,
+    } | ({"warnungen": list(configuration.warnungen)} if configuration.warnungen else {})

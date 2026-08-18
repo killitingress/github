@@ -84,7 +84,7 @@ jobs:
           SOURCE_SHA: ${{ inputs.source_sha }}
           RUN_REFERENCE: ${{ github.run_id }}-${{ github.run_attempt }}
         run: >-
-          "$PYTHON" automation/src/release_approval.py prepare
+          "$PYTHON" automation/src/mtext.py release-approval prepare
           --tag "$RELEASE_TAG"
           --branch "$SOURCE_BRANCH"
           --source-sha "$SOURCE_SHA"

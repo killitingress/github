@@ -25,22 +25,16 @@ Mainframe-Übergabe.
 
 ## Aufbau
 
-- `src/validate_config.py`: Prüfung der Mandantenkonfiguration
-- `src/check_resources.py`: warnende Syntaxprüfung für JSON- und XML-Ressourcen
-- `src/sync_resources.py`: Einstieg in die Ressourcensynchronisation
-- `src/release_approval.py`: Vorbereitung und Prüfung der Release-Freigabe
-- `src/build_release.py`: Einstieg in den Releasebau
-- `src/publish_mainframe.py`: Einstieg in die Mainframe-Übergabe
-- `src/publish_github_release.py`: Rückmeldung im Mandanten-Repository
-- `src/workflow_configuration.py`: Workflow-Aktualisierungen
+- `src/mtext.py`: Kommandozeileneinstieg für alle Workflow-Schritte
 - `src/lbs_delivery/config.py`: Mandanten- und Releaselinienkonfiguration
 - `src/lbs_delivery/git.py`: Commit-, Branch-, Tag- und Diff-Abfragen
+- `src/lbs_delivery/github.py`: GitHub-Anfragen, Pull Requests und Releases
 - `src/lbs_delivery/project_package.py`: gemeinsames Projektpaket für Sync und Release
 - `src/lbs_delivery/release_approval.py`: versionierter Freigabenachweis
+- `src/lbs_delivery/resource_check.py`: warnende JSON- und XML-Prüfung
+- `src/lbs_delivery/rollout.py`: Aktualisierung der Mandanten-Workflows
 - `src/lbs_delivery/sync.py`: CIFS-Übergabe und Adapterauftrag
 - `src/lbs_delivery/mainframe_release.py`: Releasebau, JCL und FTPS-/JES-Übergabe
-- `src/lbs_delivery/github_release.py`: GitHub Release und Informationsdateien
-- `src/lbs_delivery/github_api.py`: gemeinsame Anfragen an die GitHub-REST-API
 - `config/mandanten.json`: Mandantenkürzel, Repositories und Subsysteme
 - `config/ressourcenformate.json`: Dateiendungen und ihr technisches Format
 - `config/releaselinien.json`: M/Text-Zielpräfixe, aktive Releaselinien,
@@ -109,7 +103,8 @@ Python-Code verwendet für seine Produktivlogik die Standardbibliothek.
 ## Prüfung von JSON- und XML-Ressourcen
 
 Der wiederverwendbare Workflow `reusable-check-resources.yml` prüft bei einem
-Pull Request die dort hinzugefügten, geänderten und umbenannten Ressourcen.
+Pull Request Mandantenkonfiguration und hinzugefügte, geänderte sowie
+umbenannte Ressourcen in einem Workflow-Lauf.
 Eine manuell gestartete Prüfung umfasst den vollständigen Mandantenstand. Die
 zentrale Datei `config/ressourcenformate.json` ordnet jede berücksichtigte
 Dateiendung dem Format `json` oder `xml` zu. Damit werden auch XML-Ressourcen

@@ -42,7 +42,7 @@ class GitChange:
     path: str
 
 
-def _git(repository: str | Path, *arguments: str, returncodes: tuple[int, ...] = (0,)) -> bytes:
+def run(repository: str | Path, *arguments: str, returncodes: tuple[int, ...] = (0,)) -> bytes:
     """Führt einen Git-Befehl aus und gibt seine Standardausgabe zurück.
 
     Bei einem unerwarteten Rückgabecode wird der Schritt mit `SOURCE_FAILED`
@@ -56,7 +56,9 @@ def _git(repository: str | Path, *arguments: str, returncodes: tuple[int, ...] =
     )
 
     if result.returncode not in returncodes:
-        raise DeliveryError(Status.SOURCE_FAILED, "Git-Operation fehlgeschlagen")
+        detail = result.stderr.decode(errors="replace").strip()
+        message = f"Git-Operation fehlgeschlagen: {detail}" if detail else "Git-Operation fehlgeschlagen"
+        raise DeliveryError(Status.SOURCE_FAILED, message)
 
     return result.stdout
 
@@ -65,14 +67,14 @@ def resolve(repository: str | Path, reference: str) -> str:
     """Löst eine bekannte Referenz in eine vollständige Commit-SHA auf."""
 
     # `^{commit}` löst die Referenz bis zum Commit auf und lehnt Tree- und Blob-Objekte ab.
-    output = _git(repository, "rev-parse", "--verify", "--end-of-options", f"{reference}^{{commit}}")
+    output = run(repository, "rev-parse", "--verify", "--end-of-options", f"{reference}^{{commit}}")
     return output.decode("ascii").strip()
 
 
 def reference_exists(repository: str | Path, reference: str) -> bool:
     """Prüft, ob eine vollständige Git-Referenz vorhanden ist."""
 
-    output = _git(
+    output = run(
         repository,
         "show-ref",
         "--verify",
@@ -90,7 +92,7 @@ def require_ancestor(repository: str | Path, ancestor: str, descendant: str) -> 
     """
 
     # `--is-ancestor` liefert Exit 0 nur bei echter Abstammung
-    _git(repository, "merge-base", "--is-ancestor", ancestor, descendant)
+    run(repository, "merge-base", "--is-ancestor", ancestor, descendant)
 
 
 def read_file(repository: str | Path, commit: str, path: str | Path) -> bytes:
@@ -101,7 +103,7 @@ def read_file(repository: str | Path, commit: str, path: str | Path) -> bytes:
     """
 
     verified_commit = resolve(repository, commit)
-    return _git(repository, "show", f"{verified_commit}:{path}")
+    return run(repository, "show", f"{verified_commit}:{path}")
 
 
 def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str, str]:
@@ -137,7 +139,7 @@ def require_release_commit(repository: str | Path, tag: str, branches: tuple[str
     if resolve(repository, "HEAD") != target:
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Tag")
 
-    output = _git(
+    output = run(
         repository,
         "for-each-ref",  # nur die angegebenen Referenzen unter `refs/remotes/origin`
         "--format=%(refname:short)",  # Kurzname, zum Beispiel `origin/main`
@@ -162,9 +164,7 @@ def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:
     DELTA-Pakete und serverSync genau diese Dateioperationen benötigen.
     """
 
-    # `--no-renames` liefert Umbenennungen direkt als Löschung und Hinzufügung,
-    # so wie wir es für DELTA-Pakete und serverSync benötigen.
-    output = _git(
+    output = run(
         repository,
         "diff",
         "--name-status",
