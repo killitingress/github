@@ -1,7 +1,7 @@
 """Kommandozeileneinstieg für die Erstellung der Dateien eines Releases.
 
 Das Skript lädt die Mandantenkonfiguration aus dem ausgecheckten Repository und
-erstellt für den Release-Tag die Pakete, JCL-Dateien und Lieferbelege. Die
+erstellt für den Release-Tag die Pakete, JCL-Dateien und Informationsdateien. Die
 optionale Auslöser-SHA muss zum Commit des Tags passen.
 """
 
@@ -28,7 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run() -> dict[str, object]:
-    """Erzeugt Pakete, JCL-Dateien und Lieferbelege im Workflow-Arbeitsbereich."""
+    """Erzeugt Pakete, JCL-Dateien und Informationen im Workflow-Arbeitsbereich."""
 
     arguments = build_parser().parse_args()
     workspace = Path(os.environ["GITHUB_WORKSPACE"])

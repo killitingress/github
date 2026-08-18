@@ -1,0 +1,106 @@
+name: Zentrale Release-Freigabe abschließen
+
+# Dieser Workflow prüft den zusammengeführten Freigabe-Pull-Request und erzeugt
+# den regulären Release-Tag auf dessen Merge-Commit.
+'on':
+  workflow_dispatch:
+    inputs:
+      source_repository:
+        description: Mandanten-Repository
+        required: true
+        type: string
+      source_branch:
+        description: Lieferbranch
+        required: true
+        type: string
+      approval_branch:
+        description: Gemergter Freigabe-Branch
+        required: true
+        type: string
+      merge_sha:
+        description: Merge-Commit des Pull Requests
+        required: true
+        type: string
+      pull_request_number:
+        description: Nummer des Pull Requests
+        required: true
+        type: string
+      automation_ref:
+        description: Festgelegte CI/CD-Version
+        required: true
+        type: string
+
+# Der Lauf selbst benötigt keine Schreibrechte. Der Tag im Mandanten-Repository
+# entsteht ausschließlich mit dem hinterlegten WORKFLOW_CONFIGURATION_TOKEN.
+permissions:
+  contents: read
+
+jobs:
+  finalize:
+    name: Freigegebenen Release-Tag erstellen
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 15
+    steps:
+      # Lädt den von GitHub gemeldeten Merge-Commit mit seiner Historie, weil
+      # die Prüfung den Vergleich zum freigegebenen Commit benötigt.
+      - name: Check-Out Mandantenstand
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+          repository: ${{ inputs.source_repository }}
+          ref: ${{ inputs.merge_sha }}
+          token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+
+      # Lädt die Skripte, mit denen die Freigabe geprüft wird.
+      - name: Check-Out CI/CD-Version
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+          ref: ${{ inputs.automation_ref }}
+          path: automation
+          persist-credentials: false
+
+      - name: Python-Runtime ermitteln
+        id: runtime
+        run: bash automation/scripts/runner-preflight.sh
+
+      # GitHub-Daten und versionierter Nachweis müssen denselben Merge, Branch,
+      # Commit und Lieferumfang belegen.
+      - name: Zusammengeführte Freigabe prüfen
+        id: finalize
+        env:
+          PYTHON: ${{ steps.runtime.outputs.python }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          WORKFLOW_CONFIGURATION_TOKEN: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+          APPROVAL_BRANCH: ${{ inputs.approval_branch }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          MERGE_SHA: ${{ inputs.merge_sha }}
+          PULL_REQUEST_NUMBER: ${{ inputs.pull_request_number }}
+          GITHUB_API_URL: ${{ github.api_url }}
+        run: >-
+          "$PYTHON" automation/src/release_approval.py finalize
+          --approval-branch "$APPROVAL_BRANCH"
+          --branch "$SOURCE_BRANCH"
+          --merge-sha "$MERGE_SHA"
+          --pull-request-number "$PULL_REQUEST_NUMBER"
+          --api-url "$GITHUB_API_URL"
+
+      # Der Tag zeigt auf den Merge-Commit und enthält damit den Nachweis, den
+      # der Releasebau erneut prüft. Sein Push startet den Release-Workflow des
+      # Mandanten.
+      - name: Freigegebenen Release-Tag erstellen
+        env:
+          RELEASE_TAG: ${{ steps.finalize.outputs.release_tag }}
+          MERGE_SHA: ${{ inputs.merge_sha }}
+          WORKFLOW_CONFIGURATION_TOKEN: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+        run: |
+          git -C source tag "$RELEASE_TAG" "$MERGE_SHA"
+          # Der Checkout hält keine Zugangsdaten, der Push erhält sie deshalb
+          # nur für diesen Aufruf.
+          auth_header="$(printf 'x-access-token:%s' "$WORKFLOW_CONFIGURATION_TOKEN" | base64 | tr -d '\n')"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth_header"
+          git -C source push origin "refs/tags/$RELEASE_TAG"

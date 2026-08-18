@@ -54,6 +54,8 @@ jobs:
       - name: Ressourcen synchronisieren
         env:
           INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}
+          # Der Runner und der Adapter greifen auf denselben CIFS-Basispfad zu
+          MTEXT_CIFS_ROOT: ${{ vars.MTEXT_CIFS_ROOT }}
           MTEXT_PREVIOUS_COMMIT: ${{ github.event.before || '' }}
         run: >-
           "${{ steps.runtime.outputs.python }}"

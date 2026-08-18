@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 
 from lbs_delivery.config import Configuration, MANDANT_CONFIG_PATH, load_configuration
+from lbs_delivery.release_approval import _approval_document, approval_path
 
 AUTOMATION_ROOT = Path(__file__).resolve().parents[1]
 ZERO_SHA = "0" * 40
@@ -128,6 +129,45 @@ def setup_release_repository(root: Path) -> Path:
     git(repository, "tag", "v261.108")
     track_remote_branch(repository, "release/R261")
     return repository
+
+
+def approve_release_tag(
+    repository: Path,
+    configuration: Configuration,
+    tag: str,
+    *,
+    branch: str = "release/R261",
+) -> str:
+    """Bildet den Freigabeweg für den aktuellen Branchstand nach.
+
+    Der Nachweis wird auf dem Branch committet und trägt anschließend den
+    Release-Tag. Damit liegt er wie im Betrieb im getaggten Baum. Der Nachweis
+    entsteht mit der produktiven Funktion, weil diese Tests den Releasebau und
+    nicht die Freigabe prüfen.
+    """
+
+    approved_sha = git(repository, "rev-parse", "HEAD")
+    path = repository / approval_path(tag)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            _approval_document(
+                configuration,
+                repository,
+                tag=tag,
+                branch=branch,
+                target_sha=approved_sha,
+            ),
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    git(repository, "add", str(path.relative_to(repository)))
+    git(repository, "commit", "-m", f"Release {tag} zur Freigabe vorlegen")
+    merge_sha = git(repository, "rev-parse", "HEAD")
+    git(repository, "tag", "-f", tag, merge_sha)
+    track_remote_branch(repository, branch)
+    return merge_sha
 
 
 def load_test_configuration(

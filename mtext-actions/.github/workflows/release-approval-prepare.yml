@@ -1,0 +1,109 @@
+name: Zentrale Release-Freigabe vorbereiten
+
+# Dieser Workflow legt den Freigabenachweis im Mandanten-Repository ab und
+# veröffentlicht ihn auf einem technischen Branch. Den Pull Request eröffnet
+# der Antragsteller selbst, damit er dessen Autor ist und GitHub ihn den
+# eigenen Pull Request nicht genehmigen lässt.
+'on':
+  workflow_dispatch:
+    inputs:
+      source_repository:
+        description: Mandanten-Repository
+        required: true
+        type: string
+      source_branch:
+        description: Lieferbranch
+        required: true
+        type: string
+      source_sha:
+        description: Freizugebender Branchstand
+        required: true
+        type: string
+      release_tag:
+        description: Regulärer Release-Tag
+        required: true
+        type: string
+      automation_ref:
+        description: Festgelegte CI/CD-Version
+        required: true
+        type: string
+
+# Der Lauf selbst benötigt keine Schreibrechte. Der Branch im
+# Mandanten-Repository entsteht mit dem hinterlegten
+# WORKFLOW_CONFIGURATION_TOKEN.
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Freigabe-Branch erstellen
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 15
+    env:
+      GIT_AUTHOR_NAME: M/Text Release-Freigabe
+      GIT_AUTHOR_EMAIL: mtext-release@users.noreply.github.com
+      GIT_COMMITTER_NAME: M/Text Release-Freigabe
+      GIT_COMMITTER_EMAIL: mtext-release@users.noreply.github.com
+    steps:
+      # Lädt den freizugebenden Branchstand mit seiner Historie, weil der
+      # Nachweis den Vergleich zum FULL-Tag der Releaselinie enthält.
+      - name: Check-Out Mandantenstand
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+          repository: ${{ inputs.source_repository }}
+          ref: ${{ inputs.source_sha }}
+          token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+
+      # Lädt die Skripte, mit denen die Freigabe vorbereitet wird.
+      - name: Check-Out CI/CD-Version
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+          ref: ${{ inputs.automation_ref }}
+          path: automation
+          persist-credentials: false
+
+      - name: Python-Runtime ermitteln
+        id: runtime
+        run: bash automation/scripts/runner-preflight.sh
+
+      # Der erzeugte JSON-Nachweis ist die einzige Änderung des technischen
+      # Branches und zeigt im Pull Request den geprüften Lieferumfang. Das
+      # Skript benennt auch den Branch, weil der Abschluss den Release-Tag
+      # wieder aus diesem Namen liest.
+      - name: Freigabeanforderung erstellen
+        id: prepare
+        env:
+          PYTHON: ${{ steps.runtime.outputs.python }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RUN_REFERENCE: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: >-
+          "$PYTHON" automation/src/release_approval.py prepare
+          --tag "$RELEASE_TAG"
+          --branch "$SOURCE_BRANCH"
+          --source-sha "$SOURCE_SHA"
+          --run-reference "$RUN_REFERENCE"
+
+      - name: Freigabe-Branch veröffentlichen
+        env:
+          APPROVAL_BRANCH: ${{ steps.prepare.outputs.approval_branch }}
+          APPROVAL_PATH: ${{ steps.prepare.outputs.approval_path }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          WORKFLOW_CONFIGURATION_TOKEN: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+        run: |
+          git -C source switch -c "$APPROVAL_BRANCH"
+          git -C source add -- "$APPROVAL_PATH"
+          git -C source commit --no-gpg-sign -m "Release $RELEASE_TAG zur Freigabe vorlegen" -- "$APPROVAL_PATH"
+          # Der Checkout hält keine Zugangsdaten, der Push erhält sie deshalb
+          # nur für diesen Aufruf.
+          auth_header="$(printf 'x-access-token:%s' "$WORKFLOW_CONFIGURATION_TOKEN" | base64 | tr -d '\n')"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth_header"
+          git -C source push origin "HEAD:refs/heads/$APPROVAL_BRANCH"

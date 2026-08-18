@@ -2,92 +2,18 @@
 
 Nach der erfolgreichen FTPS-/JES-Übergabe entsteht im Mandanten-Repository ein
 GitHub Release. Seine Beschreibung fasst die Lieferung zusammen. Die beim
-Paketbau erzeugten Informationsdateien werden als Downloads angehängt.
+Paketbau erzeugten JSON-Informationsdateien werden als Downloads angehängt.
 """
 
 from __future__ import annotations
 
 import json
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any
 
-from .mainframe_release import information_delivery_type
-from .process import DeliveryError, NETWORK_TIMEOUT, Status
-
-
-# API-Version für das Anlegen von Releases und das Hochladen ihrer Dateien.
-GITHUB_API_VERSION = "2022-11-28"
-# GitHub empfiehlt diesen Medientyp für JSON-Antworten der REST-API.
-GITHUB_JSON_MEDIA_TYPE = "application/vnd.github+json"
-
-
-def _github_request(
-    *,
-    method: str,
-    url: str,
-    token: str,
-    payload: dict[str, object] | None = None,
-    content: bytes | None = None,
-    content_type: str | None = None,
-    missing_ok: bool = False,
-) -> Any:
-    """Sendet eine Anfrage an die GitHub-API und liest ihre JSON-Antwort.
-
-    Die Funktion versendet JSON-Daten und Dateien. Wenn `missing_ok` gesetzt ist,
-    gibt sie bei HTTP 404 `None` zurück. Andere HTTP- und Verbindungsfehler
-    beenden die Veröffentlichung. Das Token wird im Authorization-Header
-    übertragen.
-    """
-
-    body = json.dumps(payload).encode() if payload is not None else content
-    headers = {
-        "Accept": GITHUB_JSON_MEDIA_TYPE,
-        "Authorization": f"Bearer {token}",
-        "X-GitHub-Api-Version": GITHUB_API_VERSION,
-    }
-    if payload is not None:
-        headers["Content-Type"] = "application/json"
-    elif content_type is not None:
-        headers["Content-Type"] = content_type
-
-    request = urllib.request.Request(url, data=body, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(request, timeout=NETWORK_TIMEOUT) as response:
-            response_body = response.read()
-    except urllib.error.HTTPError as exc:
-        # Fehlende Releases dürfen bei der ersten Anlage ohne Fehler fehlen.
-        if missing_ok and exc.code == 404:
-            return None
-        # GitHub liefert Fehlerdetails als JSON mit einem `message`-Feld.
-        detail = ""
-        try:
-            error_body = json.loads(exc.read())
-        except (UnicodeError, json.JSONDecodeError):
-            pass
-        else:
-            match error_body:
-                case {"message": str(message)}:
-                    detail = message
-                case _:
-                    pass
-        suffix = f": {detail}" if detail else ""
-        raise DeliveryError(
-            Status.GITHUB_RELEASE_FAILED,
-            f"GitHub antwortet mit HTTP {exc.code}{suffix}",
-        ) from exc
-    except (urllib.error.URLError, TimeoutError) as exc:
-        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub ist nicht erreichbar") from exc
-
-    # DELETE und manche erfolgreiche Uploads antworten ohne JSON-Körper.
-    if not response_body:
-        return None
-    try:
-        return json.loads(response_body)
-    except (UnicodeError, json.JSONDecodeError) as exc:
-        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub-Antwort ist ungültig") from exc
+from . import github_api
+from .process import DeliveryError, Status
 
 
 def publish_github_release(
@@ -107,18 +33,22 @@ def publish_github_release(
     nach einem Fehler mit denselben Eingaben wiederholt werden.
     """
 
-    information_files = sorted(Path(artifact_root).glob("_INFO_*.txt"))
+    information_files = sorted(Path(artifact_root).glob("_INFO_*.json"))
     if not information_files:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien fehlen")
+
+    delivery_types: set[str] = set()
     try:
-        delivery_types = {information_delivery_type(path) for path in information_files}
-    except ValueError as exc:
-        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateiname ist ungültig") from exc
+        for information in information_files:
+            document = json.loads(information.read_text(encoding="utf-8"))
+            delivery_types.add("DELTA" if "von" in document["stand"] else "FULL")
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdatei ist ungültig") from exc
     if len(delivery_types) != 1:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien haben verschiedene Lieferarten")
     delivery_type = delivery_types.pop()
 
-    # Release-Beschreibung mit Kurzüberblick und Download-Links zu den Lieferbelegen.
+    # Release-Beschreibung mit Kurzüberblick und Download-Links zu den Informationen.
     download_root = (
         f"{server_url.rstrip('/')}/{repository}/releases/download/"
         f"{urllib.parse.quote(release_tag, safe='')}"
@@ -146,10 +76,11 @@ def publish_github_release(
     releases_url = f"{api_url.rstrip('/')}/repos/{repository_path}/releases"
 
     # Vorhandenes Release laden oder bei der ersten Veröffentlichung anlegen.
-    release = _github_request(
+    release = github_api.request(
         method="GET",
         url=f"{releases_url}/tags/{release_path}",
         token=token,
+        failure=Status.GITHUB_RELEASE_FAILED,
         missing_ok=True,
     )
     release_values = {
@@ -161,17 +92,24 @@ def publish_github_release(
     }
     existing_assets: list[dict[str, Any]] = []
     if release is None:
-        release = _github_request(method="POST", url=releases_url, token=token, payload=release_values)
+        release = github_api.request(
+            method="POST",
+            url=releases_url,
+            token=token,
+            failure=Status.GITHUB_RELEASE_FAILED,
+            payload=release_values,
+        )
     else:
         match release:
             case {"id": int(release_id), "assets": list(existing_assets)}:
                 pass
             case _:
                 raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Vorhandenes GitHub Release ist ungültig")
-        release = _github_request(
+        release = github_api.request(
             method="PATCH",
             url=f"{releases_url}/{release_id}",
             token=token,
+            failure=Status.GITHUB_RELEASE_FAILED,
             payload=release_values,
         )
 
@@ -194,17 +132,19 @@ def publish_github_release(
         name = information.name
         asset_id = assets_by_name.get(name)
         if asset_id is not None:
-            _github_request(
+            github_api.request(
                 method="DELETE",
                 url=f"{releases_url}/assets/{asset_id}",
                 token=token,
+                failure=Status.GITHUB_RELEASE_FAILED,
             )
-        _github_request(
+        github_api.request(
             method="POST",
             url=f"{upload_url}?{urllib.parse.urlencode({'name': name})}",
             token=token,
+            failure=Status.GITHUB_RELEASE_FAILED,
             content=information.read_bytes(),
-            content_type="text/plain; charset=utf-8",
+            content_type="application/json",
         )
 
     return {

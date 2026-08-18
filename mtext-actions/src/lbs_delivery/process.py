@@ -17,13 +17,17 @@ class Status(str, Enum):
     CONFIG_VALIDATED = "CONFIG_VALIDATED"
     # Konfiguration oder Argumente sind ungültig.
     VALIDATION_FAILED = "VALIDATION_FAILED"
+    # Der Pull Request kann mit dem erzeugten Freigabenachweis geöffnet werden.
+    RELEASE_APPROVAL_READY = "RELEASE_APPROVAL_READY"
+    # Der Merge und sein Freigabenachweis passen zum freizugebenden Commit.
+    RELEASE_APPROVAL_VALIDATED = "RELEASE_APPROVAL_VALIDATED"
     # Checkout, Commit, Branch oder Tag sind nicht als Quelle verwendbar.
     SOURCE_FAILED = "SOURCE_FAILED"
     # Ein Paket, eine JCL oder eine lokale Lieferdatei ist nicht verwendbar.
     PACKAGE_FAILED = "PACKAGE_FAILED"
     # Pakete, JCL-Dateien und Informationsdateien wurden erstellt.
     ARTIFACT_READY = "ARTIFACT_READY"
-    # Die Projekte konnten unter serverSync nicht aktualisiert werden.
+    # Projektpakete konnten nicht vollständig auf CIFS bereitgestellt werden.
     RESOURCE_TRANSFER_FAILED = "RESOURCE_TRANSFER_FAILED"
     # Der Adapter hat die Synchronisationsanfrage angenommen.
     ADAPTER_ACCEPTED = "ADAPTER_ACCEPTED"

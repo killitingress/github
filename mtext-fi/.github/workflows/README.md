@@ -15,6 +15,9 @@ und besitzt:
 
 Mainframe-Zugangsdaten liegen nicht im Mandanten-Repository.
 
+Die zentral bereitgestellte Organisationsvariable `MTEXT_CIFS_ROOT` bezeichnet
+den auf dem Runner eingehängten CIFS-Basispfad für die Adapterübergabe.
+
 ## `validate-config.yml`
 
 Ein Push mit einer Änderung an `.github/config.json` startet die zentrale
@@ -50,13 +53,28 @@ Der manuelle Start erhält eine vollständige Commit-SHA. Er gleicht den Commit
 vollständig mit dem Ziel des ausgewählten Branches ab. Feature-Branches führen
 zum Ziel M/Text-Entwicklung, `main` und Release-Branches zum Ziel
 M/Text-Funktionstest. Die Releaselinie stammt aus dem ausgewählten Branch und
-bei `main` aus der Mandantenkonfiguration des Commits. Normale Läufe verwenden
-den zuletzt von LTOMA angenommenen Commit als Vergleichsstand und übertragen
-die geänderten Ressourcen.
+bei `main` aus der Mandantenkonfiguration des Commits. Normale Push-Läufe
+verwenden den vorherigen und den neuen Commit des GitHub-Ereignisses und
+übergeben die dabei geänderten Projekte über CIFS an den Adapter.
 
 Ändert ein Push nach `main` die konfigurierte Releaselinie, wird dieser erste
 Stand automatisch vollständig mit M/Text-Entwicklung und M/Text-Funktionstest
 synchronisiert.
+
+## `release-approval.yml`
+
+Der manuelle Start verwendet den in GitHub ausgewählten Branch und erwartet
+die Release-Version aus dem Wartungstool. Er veröffentlicht den
+Freigabenachweis unter `.github/release-approvals` auf einem Branch mit dem
+Präfix `release-approval/`. Den Pull Request auf den Lieferbranch eröffnet die
+anfordernde Person selbst, damit sie ihn nicht selbst genehmigen kann. Nach
+Review und Merge erstellt der Workflow den regulären Release-Tag auf dem
+Merge-Commit des Pull Requests. Der getaggte Stand enthält damit den Nachweis,
+den der zentrale Releasebau erneut prüft.
+
+Beta-Tags und die konfigurierte Ausnahme `direkter_tag` werden weiterhin
+direkt erstellt. Ein direkt erstellter regulärer Tag wird bei der
+Standardkonfiguration vom zentralen Releasebau abgelehnt.
 
 ## `release.yml`
 

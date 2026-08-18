@@ -66,5 +66,5 @@ prinzipiell schon durch den neuen Lieferweg sichergestellt:
 
 1. Pull Request nach 4-Augenprinzip
 2. Squash Merge erzeugt Commit in geschütztem Zielbranch - kann nachträglich nicht mehr verändert werden
-3. Release-Tag auf dem freigegebenen Commit und Paketbau aus diesem Commit
+3. Release-Tag auf dem Merge-Commit der Freigabe und Paketbau aus diesem Commit
 4. GitHub Release mit Commit und Lieferinformationen

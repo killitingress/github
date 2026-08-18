@@ -46,10 +46,19 @@ def sync_from_github_context(
         document = json.loads(git.read_file(repository_root, previous_commit, config.MANDANT_CONFIG_PATH))
         releasewechsel = document["mandant"]["releaselinie"] != configuration.releaselinie
 
-    # Releaselinienwechsel synchronisiert beide M/Text-Ziele vollständig.
-    # Ein manueller Start gleicht das Ziel seines Branches vollständig ab.
+    # Releaselinienwechsel und manuelle Starts liefern den ausgewählten
+    # Gesamtstand. Ein Ereignis ohne Vorgänger hat ebenfalls keinen Vergleich.
     zielstufen = config.MTEXT_ZIEL_REIHENFOLGE if releasewechsel else (zielstufe,)
-    vollabgleich = event_name == "workflow_dispatch" or releasewechsel
+    vergleichs_commit = (
+        None
+        if (
+            event_name == "workflow_dispatch"
+            or releasewechsel
+            or not previous_commit
+            or previous_commit == EMPTY_PUSH_COMMIT
+        )
+        else previous_commit
+    )
     results: list[dict[str, object]] = []
     successful_stages: list[str] = []
 
@@ -59,10 +68,10 @@ def sync_from_github_context(
                 configuration,
                 repository_root=repository_root,
                 commit=commit,
+                previous_commit=vergleichs_commit,
                 source_branch=source_branch,
                 releaselinie=releaselinie,
                 zielstufe=zielstufe,
-                vollabgleich=vollabgleich,
             )})
         except process.DeliveryError as exc:
             detail = f" Bereits erfolgreich: {', '.join(successful_stages)}." if successful_stages else ""

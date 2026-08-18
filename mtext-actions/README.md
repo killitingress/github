@@ -18,22 +18,29 @@ Mainframe-Übergabe.
 - Ein Wechsel der auf `main` konfigurierten Releaselinie gleicht den ersten
   Stand automatisch vollständig mit M/Text-Entwicklung und
   M/Text-Funktionstest ab.
-- Tags wie `v261.100`, `v261.108` und `v261.108a` starten den Release-Workflow.
+- Reguläre Tags wie `v261.100` und `v261.108` entstehen standardmäßig nach dem
+  Merge eines Release-Freigabe-PRs.
+- Beta-Tags wie `v261.108a` können direkt erstellt werden.
+- Der Push eines zulässigen Tags startet den Release-Workflow.
 
 ## Aufbau
 
 - `src/validate_config.py`: Prüfung der Mandantenkonfiguration
 - `src/check_resources.py`: warnende Syntaxprüfung für JSON- und XML-Ressourcen
 - `src/sync_resources.py`: Einstieg in die Ressourcensynchronisation
+- `src/release_approval.py`: Vorbereitung und Prüfung der Release-Freigabe
 - `src/build_release.py`: Einstieg in den Releasebau
 - `src/publish_mainframe.py`: Einstieg in die Mainframe-Übergabe
 - `src/publish_github_release.py`: Rückmeldung im Mandanten-Repository
 - `src/workflow_configuration.py`: Workflow-Aktualisierungen
 - `src/lbs_delivery/config.py`: Mandanten- und Releaselinienkonfiguration
 - `src/lbs_delivery/git.py`: Commit-, Branch-, Tag- und Diff-Abfragen
-- `src/lbs_delivery/sync.py`: dauerhafter `serverSync`-Stand und LTOMA-Aufruf
-- `src/lbs_delivery/mainframe_release.py`: FULL, DELTA, Archive, JCL und FTPS-/JES-Übergabe
+- `src/lbs_delivery/project_package.py`: gemeinsames Projektpaket für Sync und Release
+- `src/lbs_delivery/release_approval.py`: versionierter Freigabenachweis
+- `src/lbs_delivery/sync.py`: CIFS-Übergabe und Adapterauftrag
+- `src/lbs_delivery/mainframe_release.py`: Releasebau, JCL und FTPS-/JES-Übergabe
 - `src/lbs_delivery/github_release.py`: GitHub Release und Informationsdateien
+- `src/lbs_delivery/github_api.py`: gemeinsame Anfragen an die GitHub-REST-API
 - `config/mandanten.json`: Mandantenkürzel, Repositories und Subsysteme
 - `config/ressourcenformate.json`: Dateiendungen und ihr technisches Format
 - `config/releaselinien.json`: M/Text-Zielpräfixe, aktive Releaselinien,
@@ -49,18 +56,24 @@ In `mtext_actions` werden eingerichtet:
 | `MAINFRAME_FTPS_PORT` | Repositoryvariable | Steuerungsport des expliziten FTPS-Zugangs |
 | `MAINFRAME_FTPS_USER` | Repositoryvariable | zentraler technischer FTPS-Benutzer |
 | `MAINFRAME_FTPS_PASSWORD` | Repository-Secret | FTPS-Passwort für den zentralen Übergabejob |
-| `WORKFLOW_CONFIGURATION_TOKEN` | Repository-Secret | Mandanten-Workflows administrativ ausrollen und Lieferinformationen veröffentlichen |
+| `WORKFLOW_CONFIGURATION_TOKEN` | Repository-Secret | Mandanten-Workflows ausrollen, Freigabe-Branches und Release-Tags erstellen sowie Lieferinformationen veröffentlichen |
 
 `WORKFLOW_CONFIGURATION_TOKEN` gilt für die zugeordneten
 Mandanten-Repositories. Es benötigt dort `Contents: read and write` und
-`Workflows: read and write`. Der technische Benutzer ist in den Schutzregeln
-als Ausnahme von der Pull-Request-Pflicht für den administrativen Rollout
-hinterlegt.
+`Workflows: read and write` sowie `Pull requests: read`. Der
+technische Benutzer ist in den Schutzregeln als Ausnahme von der
+Pull-Request-Pflicht für den administrativen Rollout hinterlegt. Die geltenden
+Tag-Regeln müssen die Erstellung regulärer Release-Tags durch diese Identität
+zulassen.
 
 Jedes Mandanten-Repository erhält `MTEXT_ACTIONS_TOKEN` als Repository-Secret.
 Der Fine-grained PAT ist auf
 `FinanzInformatik/fi_lbs_entw_oms_mtext_actions` begrenzt und besitzt dort
 `Contents: read` sowie `Actions: write`.
+
+Die Organisationsvariable `MTEXT_CIFS_ROOT` enthält den auf dem Runner
+eingehängten CIFS-Basispfad. Sie ist für die Mandanten-Repositories verfügbar,
+da deren Workflows die wiederverwendbare Synchronisation aufrufen.
 
 GitHub Environments werden nicht verwendet.
 

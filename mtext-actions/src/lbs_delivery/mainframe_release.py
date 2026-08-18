@@ -1,8 +1,9 @@
 """Erzeugt und übergibt FULL- und DELTA-Lieferungen an den Mainframe.
 
 Der Releasebau prüft die Git-Quelle und verpackt jedes konfigurierte Projekt.
-Zu jedem Paket entstehen die benötigte JCL und ein lesbarer Lieferbeleg. Die
-Übergabe lädt die vorbereiteten Pakete per FTPS und reicht ihre JCL bei JES ein.
+Zu jedem Paket entstehen die benötigte JCL und eine JSON-Informationsdatei.
+Die Übergabe lädt die vorbereiteten Pakete per FTPS und reicht ihre JCL bei JES
+ein.
 """
 
 from __future__ import annotations
@@ -10,29 +11,21 @@ from __future__ import annotations
 import ftplib
 import os
 import re
-import shutil
 import ssl
-import subprocess
-import tempfile
-from collections.abc import Iterable
 from pathlib import Path
 
 from . import git
-from .config import CODEPIPELINE_STAGES, ISPW_INSTANZEN, Configuration
+from .config import (
+    CODEPIPELINE_STAGES,
+    ISPW_INSTANZEN,
+    RELEASEFREIGABE_PULL_REQUEST,
+    Configuration,
+    release_branches,
+)
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
+from .project_package import build_project_package, release_scope
+from .release_approval import require_release_approval
 
-
-# Die Informationsdatei verlangt auch beim ersten Release eine Bezeichnung für
-# den Vorgängertag, obwohl dafür kein entsprechender Git-Tag vorhanden ist.
-LEGACY_PREVIOUS_TAG = "v001.100"
-
-# Die Release-Version `100` bezeichnet den vollständigen Ausgangsstand einer
-# Releaselinie. Das gilt auch für eine zugehörige Beta-Lieferung.
-FULL_SUFFIX = ".100"
-
-# Der Dateiname des Lieferbelegs nennt Projekt, Lieferart und verglichene Tags,
-# damit der Betrieb ihn dem zugehörigen Paket zuordnen kann.
-INFORMATION_NAME = "_INFO_{mandant}-{project}-{delivery_type}-{tag}-{previous_tag}.txt"
 
 # FULL- und DELTA-Pakete werden als Member in diesem Mainframe-Dataset abgelegt.
 MAINFRAME_DATASET = "IEA.LOMS.TONICZ"
@@ -49,15 +42,6 @@ _MEMBER_RE = re.compile(r"[A-Z0-9]{1,8}")
 
 # Prüft das CodePipeline-Assignment, bevor es in die JCL eingesetzt wird.
 _ASSIGNMENT_RE = re.compile(r"[A-Z0-9]{1,12}")
-
-
-def information_delivery_type(path: str | Path) -> str:
-    """Liest die Lieferart aus dem Namen einer erzeugten Informationsdatei."""
-
-    fields = Path(path).stem.rsplit("-", 3)
-    if len(fields) != 4 or not fields[0].startswith("_INFO_") or fields[1] not in {"FULL", "DELTA"}:
-        raise ValueError("Informationsdateiname ist ungültig")
-    return fields[1]
 
 
 def _render_jcl(
@@ -92,132 +76,6 @@ def _render_jcl(
         raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Template ist ungültig")
 
     return rendered
-
-
-def _write_archive(archive_path: Path, source_directory: Path, entries: Iterable[str]) -> list[str]:
-    """Erzeugt ein TAR-Archiv und gibt seine ausführliche Inhaltsliste zurück.
-
-    Erzeugung und Auflistung verwenden wie der bisherige Lieferweg das
-    Systemprogramm `tar`. Dadurch enthält der Lieferbeleg die Ausgabe von
-    `tar -tvzf` mit Rechten, Eigentümer, Größe und Zeitstempel.
-    """
-
-    archive = archive_path.resolve()
-    try:
-        subprocess.run(
-            ["tar", "-czf", str(archive), "--", *entries],
-            cwd=source_directory,
-            check=True,
-        )
-        listing = subprocess.run(
-            ["tar", "-tvzf", str(archive)],
-            check=True,
-            stdout=subprocess.PIPE,
-            encoding="utf-8",
-        )
-    except (OSError, subprocess.CalledProcessError) as exc:
-        raise DeliveryError(Status.PACKAGE_FAILED, "Releasearchiv kann nicht erzeugt werden") from exc
-
-    return listing.stdout.splitlines()
-
-
-def _delta_archive(
-    archive_path: Path, repository_root: Path, project: str, included: list[str], deleted: list[str],
-    deletion_name: str,
-) -> list[str]:
-    """Bereitet geänderte Dateien und Löschliste für ein DELTA-Archiv vor.
-
-    Ein temporärer Verzeichnisbaum bildet die repositoryrelativen Pfade ab.
-    Das erzeugte Archiv kann dadurch ohne nachträgliche Rekonstruktion der
-    Verzeichnisangaben eingespielt werden.
-    """
-
-    with tempfile.TemporaryDirectory() as temporary:
-        staging = Path(temporary)
-        (staging / project).mkdir(parents=True)
-        for relative in included:
-            source = repository_root / relative
-            if not source.is_file():
-                raise DeliveryError(Status.PACKAGE_FAILED, "DELTA-Datei fehlt")
-            destination = staging / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, destination)
-        (staging / deletion_name).write_text("".join(f"{path}\n" for path in deleted), encoding="utf-8")
-        entries = [item.name for item in sorted(staging.iterdir())]
-        return _write_archive(archive_path, staging, entries)
-
-
-def _build_project_packages(
-    configuration: Configuration, *, repository_root: Path, output: Path, project: str, projektcode: str,
-    delivery_type: str, cumulative_changes: Iterable[git.GitChange],
-) -> tuple[list[Path], list[str]]:
-    """Erzeugt die für ein konfiguriertes Projekt benötigten Paketdateien.
-
-    FULL-Lieferungen enthalten das vollständige Projekt und ein leeres
-    DELTA-Paket. DELTA-Lieferungen enthalten die geänderten Dateien und eine aus
-    dem kumulativen Git-Diff abgeleitete Löschliste.
-    """
-
-    package_prefix = f"{configuration.kuerzel}{projektcode}"
-    delivery_code = "F" if delivery_type == "FULL" else "D"
-    archive_path = output / f"{package_prefix}{delivery_code}.tgz"
-    deletion_name = f"{package_prefix}D.txt"
-    if delivery_type == "FULL":
-        archive_names = _write_archive(archive_path, repository_root, [f"./{project}"])
-        delta_path = output / f"{package_prefix}D.tgz"
-        # Die nachgelagerte Verarbeitung wendet nach einem F-Element auch das
-        # gleichnamige D-Element an. Das leere Paket ersetzt dort ein D-Element
-        # aus einer früheren Lieferung, damit es den FULL-Stand nicht verändert.
-        _delta_archive(delta_path, repository_root, project, [], [], deletion_name)
-        return [archive_path, delta_path], archive_names
-
-    included: set[str] = set()
-    deleted: set[str] = set()
-    for status, path in git.project_changes(cumulative_changes, project):
-        if status in {"A", "M", "T"}:
-            included.add(path)
-        elif status == "D":
-            deleted.add(path)
-    archive_names = _delta_archive(
-        archive_path, repository_root, project, sorted(included), sorted(deleted), deletion_name,
-    )
-    return [archive_path], archive_names
-
-
-def _write_information(
-    path: Path, *, mandant: str, project: str, delivery_type: str, tag: str, previous: str,
-    git_changes: Iterable[tuple[str, str]], archive_names: Iterable[str],
-) -> None:
-    """Schreibt den lesbaren Lieferbeleg zu einem Projektpaket.
-
-    Er dokumentiert die direkten Git-Änderungen seit dem vorigen Release und die
-    Einträge des Archivs. Der Paketinhalt kann dadurch geprüft werden, ohne das
-    Archiv zu entpacken.
-    """
-
-    diff_lines = "\n".join(
-        f"{status}       VORRELEASE/{changed_path}"
-        for status, changed_path in git_changes
-    )
-    archive_lines = "\n".join(archive_names)
-    path.write_text(
-        (
-            f"Subject: Bereitstellung {mandant} - {project} - {delivery_type} - Release {tag}\n"
-            "\n"
-            f"Folgende DIFFs wurden beim Vergleich zwischen {previous} und {tag} "
-            f"fuer Mandant {mandant} und das Projekt {project} in der Lieferung "
-            f"vom Typ {delivery_type} erkannt:\n"
-            "\n"
-            f"{diff_lines}\n"
-            "\n"
-            "\n"
-            f"Folgender Inhalt ist im TAR-Archiv fuer Mandant {mandant} und das "
-            f"Projekt {project} in der Lieferung vom Typ {delivery_type} enthalten:\n"
-            "\n"
-            f"{archive_lines}\n"
-        ),
-        encoding="utf-8",
-    )
 
 
 def _submit_package(
@@ -302,25 +160,24 @@ def build_release(
     releaselinie = f"R{tag_match.group('releaselinie')}"
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
-    allowed_branches = (
-        ("main", f"release/{releaselinie}")
-        if configuration.releaselinie == releaselinie
-        else (f"release/{releaselinie}",)
-    )
+    allowed_branches = release_branches(configuration, releaselinie)
     target_sha = git.require_release_commit(root, tag, allowed_branches)
     if trigger_sha and trigger_sha != target_sha:
         raise DeliveryError(Status.SOURCE_FAILED, "auslösender Commit stimmt nicht zum Tag")
 
-    # FULL- oder DELTA-Lieferung und die zugehörigen Git-Vergleiche bestimmen.
-    delivery_type = "FULL" if tag_match.group("release") == "100" else "DELTA"
-    base = f"v{tag_match.group('releaselinie')}{FULL_SUFFIX}" if delivery_type == "DELTA" else None
-    base_sha = git.resolve(root, f"refs/tags/{base}") if base else None
-    if base_sha:
-        git.require_ancestor(root, base_sha, target_sha)
-    previous = git.previous_tag(root, tag)
-    previous_sha = git.resolve(root, f"refs/tags/{previous}") if previous else None
-    cumulative = git.changes(root, base_sha, target_sha) if base_sha else []
-    direct = git.changes(root, previous_sha, target_sha) if previous_sha else []
+    # Reguläre Tags im Standardverfahren müssen den Freigabenachweis des
+    # zusammengeführten Pull Requests im getaggten Stand enthalten.
+    if configuration.releasefreigabe == RELEASEFREIGABE_PULL_REQUEST and not tag_match.group("beta_suffix"):
+        require_release_approval(
+            configuration,
+            repository_root=root,
+            tag=tag,
+            target_sha=target_sha,
+            branches=allowed_branches,
+        )
+
+    # FULL- oder DELTA-Lieferung und ihren tatsächlichen Paketvergleich bestimmen.
+    base, cumulative = release_scope(root, tag, target_sha)
 
     # Neues Ausgabeverzeichnis anlegen.
     output = Path(output_directory)
@@ -332,38 +189,19 @@ def build_release(
     # Das Hostprofil bestimmt die JCL-Werte für diese Releaselinie.
     hostprofil = configuration.hostprofile[configuration.releaselinien[releaselinie]["hostprofil"]]
 
-    # Projektpakete, zugehörige JCL und Lieferbelege erzeugen.
-    previous_label = previous or LEGACY_PREVIOUS_TAG
+    # Gemeinsame Projektpakete und die zugehörige Mainframe-JCL erzeugen.
     for project, projektcode in configuration.projects.items():
-        direct_project_changes = list(git.project_changes(direct, project))
-        packages, archive_names = _build_project_packages(
+        archives = build_project_package(
             configuration,
             repository_root=root,
-            output=output,
+            output_directory=output,
             project=project,
-            projektcode=projektcode,
-            delivery_type=delivery_type,
-            cumulative_changes=cumulative,
+            project_code=projektcode,
+            changes=cumulative,
+            base=base,
+            target=(tag, target_sha),
         )
-
-        information_path = output / INFORMATION_NAME.format(
-            mandant=configuration.kuerzel,
-            project=project,
-            delivery_type=delivery_type,
-            tag=tag,
-            previous_tag=previous_label,
-        )
-        _write_information(
-            information_path,
-            mandant=configuration.kuerzel,
-            project=project,
-            delivery_type=delivery_type,
-            tag=tag,
-            previous=previous_label,
-            git_changes=direct_project_changes,
-            archive_names=archive_names,
-        )
-        for package_path in packages:
+        for package_path in archives:
             member = package_path.stem
             package_path.with_suffix(".jcl").write_text(
                 _render_jcl(

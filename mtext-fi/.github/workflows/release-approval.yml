@@ -1,0 +1,54 @@
+name: Release vorbereiten
+
+# Der manuelle Start verwendet den in GitHub ausgewählten Lieferbranch und legt
+# den Freigabe-Branch an. Den Pull Request dazu eröffnet der Antragsteller
+# selbst. Nach dessen Merge wird der Release-Tag erstellt.
+'on':
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release aus dem Wartungstool, zum Beispiel v261.108
+        required: true
+        type: string
+  pull_request:
+    types:
+      - closed
+    paths:
+      - .github/release-approvals/*.json
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Release-Freigabe vorbereiten
+    if: github.event_name == 'workflow_dispatch'
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-release-approval-prepare.yml@0000000000000000000000000000000000000000
+    with:
+      source_repository: ${{ github.repository }}
+      source_branch: ${{ github.ref_name }}
+      source_sha: ${{ github.sha }}
+      release_tag: ${{ inputs.release_tag }}
+      target_repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
+      automation_ref: 0000000000000000000000000000000000000000
+    secrets:
+      dispatch_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}
+
+  finalize:
+    name: Freigegebenen Release-Tag erstellen
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'release-approval/')
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-release-approval-finalize.yml@0000000000000000000000000000000000000000
+    with:
+      source_repository: ${{ github.repository }}
+      source_branch: ${{ github.event.pull_request.base.ref }}
+      approval_branch: ${{ github.event.pull_request.head.ref }}
+      merge_sha: ${{ github.event.pull_request.merge_commit_sha }}
+      pull_request_number: ${{ format('{0}', github.event.pull_request.number) }}
+      target_repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
+      automation_ref: 0000000000000000000000000000000000000000
+    secrets:
+      dispatch_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

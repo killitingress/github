@@ -9,7 +9,14 @@ from lbs_delivery.github_release import publish_github_release
 from lbs_delivery.process import Status
 from lbs_delivery.mainframe_release import build_release
 
-from tests.support import TempDirTestCase, git, jcl_template, load_test_configuration, setup_release_repository
+from tests.support import (
+    TempDirTestCase,
+    approve_release_tag,
+    git,
+    jcl_template,
+    load_test_configuration,
+    setup_release_repository,
+)
 
 PUBLISH_KWARGS = {
     "api_url": "https://github.example/api/v3",
@@ -25,7 +32,10 @@ class GitHubReleaseTests(TempDirTestCase):
         super().setUp()
         self.repository = setup_release_repository(self.root)
         self.configuration = load_test_configuration(self.repository)
+        approve_release_tag(self.repository, self.configuration, "v261.108")
         self.dist = self.root / "dist"
+
+        git(self.repository, "checkout", "--detach", "v261.108")
         build_release(
             self.configuration,
             repository_root=self.repository,
@@ -42,7 +52,7 @@ class GitHubReleaseTests(TempDirTestCase):
             calls.append(arguments)
             return handler(arguments)
 
-        with patch("lbs_delivery.github_release._github_request", side_effect=request):
+        with patch("lbs_delivery.github_api.request", side_effect=request):
             result = publish_github_release(
                 artifact_root=self.dist,
                 repository=self.configuration.repository,
@@ -68,10 +78,11 @@ class GitHubReleaseTests(TempDirTestCase):
         body = next(call for call in calls if call.get("payload") is not None)["payload"]["body"]
         self.assertIn("## Lieferung", body)
         self.assertIn("LOMS_Basis", body)
-        self.assertIn("releases/download/v261.108/_INFO_FI-LOMS_Basis-DELTA", body)
+        self.assertIn("releases/download/v261.108/_INFO_FI-LOMS_Basis.json", body)
         uploads = [call for call in calls if call.get("content") is not None]
         self.assertEqual(len(uploads), 1)
-        self.assertIn("_INFO_FI-LOMS_Basis-DELTA", uploads[0]["url"])
+        self.assertIn("_INFO_FI-LOMS_Basis.json", uploads[0]["url"])
+        self.assertEqual(uploads[0]["content_type"], "application/json")
 
     def test_updates_existing_release_without_touching_foreign_assets(self) -> None:
         def handler(arguments: dict[str, object]) -> object:
@@ -81,7 +92,7 @@ class GitHubReleaseTests(TempDirTestCase):
                     "html_url": "https://github.example/FI/mandant/releases/tag/v261.108",
                     "upload_url": "https://uploads.github.example/repos/FI/mandant/releases/41/assets{?name,label}",
                     "assets": [
-                        {"id": 52, "name": "_INFO_FI-LOMS_Basis-DELTA-v261.108-v261.107.txt"},
+                        {"id": 52, "name": "_INFO_FI-LOMS_Basis.json"},
                         {"id": 53, "name": "fremde-datei.txt"},
                     ],
                 }

@@ -3,7 +3,7 @@
 Das Skript lädt die Mandantenkonfiguration aus dem ausgecheckten Repository und
 gleicht sie mit den zentralen Mandanten-, M/Text-Ziel- und
 Releaselinienzuordnungen ab. Das Ergebnis enthält Mandantenkürzel, Repository,
-Releaselinien und Warnungen.
+Releaselinien, den geltenden Freigabeweg und Warnungen.
 """
 
 from __future__ import annotations
@@ -30,6 +30,9 @@ def run() -> dict[str, object]:
         "repository": configuration.repository,
         "releaselinie": configuration.releaselinie,
         "releaselinien": sorted(configuration.releaselinien),
+        # Der Freigabeweg gehört ins Prüfergebnis, weil `direkter_tag` die
+        # sicherheitsrelevante Ausnahme vom Freigabe-Pull-Request ist.
+        "releasefreigabe": configuration.releasefreigabe,
     }
     if configuration.warnungen:
         result["warnungen"] = list(configuration.warnungen)

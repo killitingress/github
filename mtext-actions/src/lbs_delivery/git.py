@@ -69,6 +69,19 @@ def resolve(repository: str | Path, reference: str) -> str:
     return output.decode("ascii").strip()
 
 
+def reference_exists(repository: str | Path, reference: str) -> bool:
+    """Prüft, ob eine vollständige Git-Referenz vorhanden ist."""
+
+    output = _git(
+        repository,
+        "show-ref",
+        "--verify",
+        reference,
+        returncodes=(0, 128),
+    )
+    return bool(output)
+
+
 def require_ancestor(repository: str | Path, ancestor: str, descendant: str) -> None:
     """Fordert, dass ein Commit oder eine Referenz von einer anderen Referenz erreichbar ist.
 
@@ -151,8 +164,15 @@ def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:
 
     # `--no-renames` liefert Umbenennungen direkt als Löschung und Hinzufügung,
     # so wie wir es für DELTA-Pakete und serverSync benötigen.
-    output = _git(repository, "diff", "--name-status", "-z", "--no-renames",
-    base, target)
+    output = _git(
+        repository,
+        "diff",
+        "--name-status",
+        "-z",
+        "--no-renames",
+        base,
+        target,
+    )
     data = output.decode().rstrip("\0")
     if not data:
         return []
@@ -169,34 +189,3 @@ def project_changes(git_changes: Iterable[GitChange], project: str) -> Iterator[
     for change in git_changes:
         if change.path == project or change.path.startswith(prefix):
             yield change.status, change.path
-
-
-def previous_tag(repository: str | Path, target_tag: str) -> str | None:
-    """Ermittelt den vorherigen Release-Tag derselben Releaselinie.
-
-    Buchstabensuffixe stehen in alphabetischer Reihenfolge vor dem zugehörigen
-    Tag ohne Suffix. Groß- und Kleinschreibung ändern diese Reihenfolge nicht.
-    """
-
-    target_match = RELEASE_TAG_RE.fullmatch(target_tag)
-    if target_match is None:
-        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
-
-    releaselinie = target_match.group("releaselinie")
-    target_suffix = target_match.group("beta_suffix")
-    target_order = (
-        int(target_match.group("release")),
-        not target_suffix,
-        target_suffix.lower(),
-    )
-    candidates: list[tuple[tuple[int, bool, str], str]] = []
-    for tag in _git(repository, "tag", "--list", f"v{releaselinie}.*").decode("ascii").splitlines():
-        match = RELEASE_TAG_RE.fullmatch(tag)
-        if match is None:
-            continue
-        suffix = match.group("beta_suffix")
-        order = (int(match.group("release")), not suffix, suffix.lower())
-        if order < target_order:
-            candidates.append((order, tag))
-
-    return max(candidates)[1] if candidates else None

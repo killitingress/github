@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import tarfile
 import unittest
@@ -11,17 +13,31 @@ from unittest.mock import patch
 from lbs_delivery.mainframe_release import _publish_mainframe, _submit_package, build_release
 from lbs_delivery.process import DeliveryError, NETWORK_TIMEOUT, Status
 
-from tests.support import TempDirTestCase, git, jcl_template, load_test_configuration, setup_release_repository
+from tests.support import (
+    TempDirTestCase,
+    approve_release_tag,
+    git,
+    jcl_template,
+    load_test_configuration,
+    setup_release_repository,
+)
 
 
 class ReleaseTests(TempDirTestCase):
     def setUp(self) -> None:
-        """Bereitet eine Releasehistorie und die zugehörige Konfiguration vor."""
+        """Bereitet eine Releasehistorie und beide Freigabewege vor."""
 
         super().setUp()
         self.repository = setup_release_repository(self.root)
-        self.configuration = load_test_configuration(self.repository)
         self.template = jcl_template()
+
+        # Das DELTA durchläuft den Standardweg mit Freigabe-Pull-Request, das
+        # FULL die konfigurierte Ausnahme mit direkt erstelltem Tag.
+        self.configuration = load_test_configuration(self.repository)
+        self.direct = load_test_configuration(
+            self.repository, mandant={"releasefreigabe": "direkter_tag"}
+        )
+        approve_release_tag(self.repository, self.configuration, "v261.108")
 
     def build(self, output_directory: Path, *, tag: str, trigger_sha: str) -> None:
         """Erzeugt ein Releaseartefakt für den angegebenen Test-Tag."""
@@ -38,21 +54,25 @@ class ReleaseTests(TempDirTestCase):
     def test_release_files_and_mainframe_transfer(self) -> None:
         """Prüft Paketinhalt, JCL und die vorbereitete Mainframe-Übergabe."""
 
+        git(self.repository, "checkout", "--detach", "v261.108")
         target_sha = git(self.repository, "rev-parse", "HEAD")
         first = self.root / "first"
         second = self.root / "second"
         self.build(first, tag="v261.108", trigger_sha=target_sha)
         self.build(second, tag="v261.108", trigger_sha=target_sha)
 
-        information = next(first.glob("_INFO_*.txt")).read_text(encoding="utf-8")
-        for fragment in (
-            "D       VORRELEASE/LOMS_Basis/deleted.txt",
-            "A       VORRELEASE/LOMS_Basis/new.txt",
-            "D       VORRELEASE/LOMS_Basis/rename-old.txt",
-            "A       VORRELEASE/LOMS_Basis/rename-new.txt",
-            "LOMS_Basis/new.txt",
-        ):
-            self.assertIn(fragment, information)
+        information = json.loads(next(first.glob("_INFO_*.json")).read_text(encoding="utf-8"))
+        self.assertEqual(information["projekt"], "LOMS_Basis")
+        self.assertEqual(information["stand"]["von"]["referenz"], "v261.100")
+        self.assertEqual(information["stand"]["bis"]["referenz"], "v261.108")
+        self.assertIn(["D", "deleted.txt"], information["elemente"])
+        self.assertIn(["A", "new.txt"], information["elemente"])
+        self.assertIn(["D", "rename-old.txt"], information["elemente"])
+        self.assertIn(["A", "rename-new.txt"], information["elemente"])
+        self.assertEqual(
+            information["sha256"]["D"],
+            hashlib.sha256((first / "FIBASISD.tgz").read_bytes()).hexdigest(),
+        )
 
         with tarfile.open(first / "FIBASISD.tgz", "r:gz") as archive:
             names = archive.getnames()
@@ -95,8 +115,19 @@ class ReleaseTests(TempDirTestCase):
 
         git(self.repository, "checkout", "--detach", "v261.100")
         full = self.root / "full"
-        self.build(full, tag="v261.100", trigger_sha=git(self.repository, "rev-parse", "HEAD"))
+        build_release(
+            self.direct,
+            repository_root=self.repository,
+            output_directory=full,
+            jcl_template=self.template,
+            tag="v261.100",
+            trigger_sha=git(self.repository, "rev-parse", "HEAD"),
+        )
         self.assertEqual(sorted(package.stem for package in full.glob("*.tgz")), ["FIBASISD", "FIBASISF"])
+        full_information = json.loads(next(full.glob("_INFO_*.json")).read_text(encoding="utf-8"))
+        self.assertNotIn("von", full_information["stand"])
+        self.assertEqual(set(full_information["sha256"]), {"F", "D"})
+        self.assertTrue(all(element[0] == "A" for element in full_information["elemente"]))
 
         git(self.repository, "update-ref", "-d", "refs/remotes/origin/release/R261")
         git(self.repository, "update-ref", "refs/remotes/origin/main", target_sha)

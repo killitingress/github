@@ -26,7 +26,7 @@ permissions:
   contents: read
 
 jobs:
-  # Erstellt die Pakete mit ihrer JCL und den lesbaren Lieferbelegen
+  # Erstellt die Pakete mit ihrer JCL und den JSON-Informationsdateien
   build:
     name: FULL- oder DELTA-Artefakt erstellen
     runs-on: [self-hosted, linux]
