@@ -150,7 +150,7 @@ def _build_release(
     if tag_match is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
 
-    releaselinie = f"R{tag_match.group('releaselinie')}"
+    releaselinie = tag_match.group("releaselinie")
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
 

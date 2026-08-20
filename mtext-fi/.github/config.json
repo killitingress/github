@@ -1,7 +1,7 @@
 {
   "mandant": {
     "kuerzel": "FI",
-    "releaselinie": "R270",
+    "releaselinie": "270",
     "ispw": "P",
     "letztes_release": null,
     "excluded_projects": [

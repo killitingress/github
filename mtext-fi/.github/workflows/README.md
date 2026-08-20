@@ -30,8 +30,8 @@ erscheinen als Warnungen und blockieren den Merge nicht.
 
 | Branch | Ziel |
 |---|---|
-| `feature/Rnnn/<Bezeichnung>` | M/Text-Entwicklung der Releaselinie |
-| `release/Rnnn` | M/Text-Funktionstest der Releaselinie |
+| `feature/nnn/<Bezeichnung>` | M/Text-Entwicklung der Releaselinie |
+| `release/nnn` | M/Text-Funktionstest der Releaselinie |
 | `main` | M/Text-Funktionstest der in `.github/config.json` genannten Releaselinie |
 
 Ein Push übergibt die geänderten Projekte über CIFS an den Adapter. Der

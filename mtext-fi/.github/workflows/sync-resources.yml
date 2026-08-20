@@ -5,8 +5,8 @@ name: M/Text-Ressourcen synchronisieren
   push:
     branches:
       - main
-      - release/R[0-9][0-9][0-9]
-      - feature/R[0-9][0-9][0-9]/**
+      - release/[0-9][0-9][0-9]
+      - feature/[0-9][0-9][0-9]/**
     # Änderungen an Workflow-Dateien lösen keine Ressourcensynchronisierung aus
     paths-ignore:
       - .github/workflows/**

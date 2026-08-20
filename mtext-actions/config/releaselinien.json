@@ -4,8 +4,8 @@
     "Funktionstest": "fu"
   },
   "releaselinien": {
-    "R260": {"etaps_linie": "03", "hostprofil": "JUR"},
-    "R261": {"etaps_linie": "01", "hostprofil": "FKT"},
-    "R270": {"etaps_linie": "02", "hostprofil": "JUR"}
+    "260": {"etaps_linie": "03", "hostprofil": "JUR"},
+    "261": {"etaps_linie": "01", "hostprofil": "FKT"},
+    "270": {"etaps_linie": "02", "hostprofil": "JUR"}
   }
 }

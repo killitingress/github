@@ -21,10 +21,10 @@ den Mainframe (IZE9) durch.
 Wir orientieren uns am FI-Leitfaden zu Branches und Tags in Git:
 
 - `main` ist der geschützte, dauerhafte Branch der führenden Releaselinie;uu
-- `release/Rnnn` enthält eine parallel gepflegte Releaselinie (z.B.
-  `release/R261)
-- Jede Änderung entsteht in einem Branch `feature/Rnnn/<Bezeichnung>`
-- Änderungen an `main` und `release/Rnnn` erfolgen ausschließlich über Pull Requests
+- `release/nnn` enthält eine parallel gepflegte Releaselinie (z.B.
+  `release/261`)
+- Jede Änderung entsteht in einem Branch `feature/nnn/<Bezeichnung>`
+- Änderungen an `main` und `release/nnn` erfolgen ausschließlich über Pull Requests
 - Pull Requests werden nach Freigabe im 4-Augenprinzip mit Squash Merge zusammengeführt
 - Release-Tags folgen dem Muster `vnnn.nnn` (oder `vnnn.nnnx` für
   Beta-Lieferungen)
@@ -55,13 +55,13 @@ neuer Commit.
 Wird ein Feature-Branch nach GitHub gepusht werden seine M/Text-Projekte
 automatisch mit der M/Text-Entwicklungsumgebung synchronisiert, damit das
 Feature vom Entwickler dort vorab getestet werden kann. Ein Merge nach `main`
-oder `release/Rnnn` synchronisiert in der Folge automatisch die entsprechende
+oder `release/nnn` synchronisiert in der Folge automatisch die entsprechende
 M/Text-Funktionstestumgebung. Dort soll das Feature dann von der LBS getestet
 und fachlich freigegeben werden. Danach kann der Feature-Branch wieder gelöscht
 werden.
 
 Ein Release wird später aus einem fachlich freigegebenen Branch (`main` oder
-`release/Rnnn`) vorbereitet. Der Release-Freigabeprozess hält Release-Version
+`release/nnn`) vorbereitet. Der Release-Freigabeprozess hält Release-Version
 und Lieferumfang fest. Eine zweite Person prüft und genehmigt den zugehörigen
 Pull Request. Nach dessen Merge erzeugt der Workflow den Release-Tag und
 startet Paketbau sowie Mainframe-Übergabe.
@@ -69,13 +69,13 @@ startet Paketbau sowie Mainframe-Übergabe.
 #### Änderungsablauf
 
 ```text
-Entwicklung in lokalem Feature-Branch (feature/Rnnn/<Bezeichnung>)
+Entwicklung in lokalem Feature-Branch (feature/nnn/<Bezeichnung>)
     │ Push
     ▼
 Synchronisierung mit M/Text-Entwicklung
     │ Entwicklung testen
     ▼
-Pull Request nach main (oder release/Rnnn)
+Pull Request nach main (oder release/nnn)
     │ Review und Merge
     ▼
 Synchronisierung mit M/Text-Funktionstest
@@ -87,10 +87,10 @@ Branchstand ist für ein Release bereit
 #### Release-Ablauf
 
 ```text
-Gewählter Branchstand auf main (oder release/Rnnn)
+Gewählter Branchstand auf main (oder release/nnn)
     │ Release-Freigabe starten
     ▼
-Pull Request vom technischen Freigabe-Branch nach main (oder release/Rnnn)
+Pull Request vom technischen Freigabe-Branch nach main (oder release/nnn)
     │ Review und Merge
     ▼
 Release-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
@@ -117,25 +117,25 @@ Release-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
 | Branch | Zweck | Schutz und Lebensdauer |
 |---|---|---|
 | `main` | Führende Releaselinie und Ausgangspunkt der regulären Weiterentwicklung | Dauerhaft, Default Branch, geschützt, Änderung über Pull Request |
-| `release/Rnnn` | Parallel gepflegte Releaselinie, insbesondere für Wartung und Fehlerkorrekturen | Geschützt, Änderung über Pull Request, nach Ende der Pflege löschbar |
-| `feature/Rnnn/<Bezeichnung>` | Eine fachlich zusammengehörige Änderung für die genannte Releaselinie | Temporär, nach dem Merge löschbar |
+| `release/nnn` | Parallel gepflegte Releaselinie, insbesondere für Wartung und Fehlerkorrekturen | Geschützt, Änderung über Pull Request, nach Ende der Pflege löschbar |
+| `feature/nnn/<Bezeichnung>` | Eine fachlich zusammengehörige Änderung für die genannte Releaselinie | Temporär, nach dem Merge löschbar |
 | `release-approval/<Release-Tag>/<Lauf>` | Technischer Branch für den Release-Freigabe-PR | Der Freigabeworkflow erstellt ihn mit der neuen Release-Version, nach dem Merge ist er löschbar |
 
 Beispiele für Feature-Branches sind:
 
 ```text
-feature/R261/issue-5678
-feature/R270/neuer-brief
+feature/261/issue-5678
+feature/270/neuer-brief
 ```
 
 Der Bezeichnungsteil eines Feature-Branches darf weitere Pfadsegmente
-enthalten, beispielsweise `feature/R270/briefe/anschreiben`.
+enthalten, beispielsweise `feature/270/briefe/anschreiben`.
 
 Ein Feature-Branch beginnt auf dem geschützten Branch, in dem seine
 Releaselinie gepflegt wird:
 
 - Für die führende (aktive) Releaselinie ist `main` der Zielbranch
-- Für eine parallel gepflegte Linie ist `release/Rnnn` der Zielbranch
+- Für eine parallel gepflegte Linie ist `release/nnn` der Zielbranch
 - Ein Feature für eine spätere Releaselinie bleibt bis zum Linienwechsel im
   Feature-Branch und kann dort entwickelt und in M/Text-Entwicklung getestet
   werden
@@ -173,7 +173,7 @@ Zeitpunkt ist, wird im Feld `releaselinie` der Mandantenkonfiguration
 (`.github/config.json`) festgehalten.
 
 Vor dem Wechsel wird aus einem geeigneten `main`-Commit ein Branch
-`release/Rnnn` für die bisherige Releaselinie erstellt. Danach wird in einem
+`release/nnn` für die bisherige Releaselinie erstellt. Danach wird in einem
 eigenen Pull Request auf `main` die `releaselinie` hochgezählt. GitHub
 Actions erkennt die Änderung und synchronisiert automatisch mit
 M/Text-Entwicklung und M/Text-Funktionstest der neuen Linie, so dass in den
@@ -219,9 +219,9 @@ gepflegt. Die derzeit vorgesehene rollierende Zuordnung lautet:
     "Funktionstest": "fu"
   },
   "releaselinien": {
-    "R260": {"etaps_linie": "03", "hostprofil": "JUR"},
-    "R261": {"etaps_linie": "01", "hostprofil": "FKT"},
-    "R270": {"etaps_linie": "02", "hostprofil": "JUR"}
+    "260": {"etaps_linie": "03", "hostprofil": "JUR"},
+    "261": {"etaps_linie": "01", "hostprofil": "FKT"},
+    "270": {"etaps_linie": "02", "hostprofil": "JUR"}
   }
 }
 ```
@@ -329,7 +329,7 @@ Release-Tags folgen dem Muster `vnnn.nnn` oder `vnnn.nnnx`, beispielsweise
 kennzeichnet eine Beta-Lieferung.
 
 Für eine Lieferung startet der Antragsteller den Vorbereitungsworkflow auf
-`main` (oder `release/Rnnn`). Der Workflow übernimmt die
+`main` (oder `release/nnn`). Der Workflow übernimmt die
 Release-Version (die via Wartungstool festgelegt wurde) und legt den
 technischen Freigabe-Branch `release-approval/<Release-Tag>/<Lauf>` an. Dabei
 wird das Feld `letztes_release` der Mandantenkonfiguration geändert und eine
@@ -338,7 +338,7 @@ Projekten und Lieferumfang enthält und als Basis für die nachfolgende Prüfung
 durch eine zweite Person herangezogen wird.
 
 Der Antragsteller eröffnet den Pull Request des Freigabe-Branches nach `main`
-(der `release/Rnnn`). Eine zweite Person prüft den Stand und den Lieferumfang.
+(der `release/nnn`). Eine zweite Person prüft den Stand und den Lieferumfang.
 Nach erfolgreicher Vorprüfung und dem Merge wird der Release-Tag auf dem
 Merge-Commit erstellt und die Lieferung gestartet. Der Release-Tag kann später
 nicht mehr geändert oder gelöscht werden per FI-Tag-Rulesets. Ein fälschlicher
@@ -532,8 +532,8 @@ mtext-actions/
 |---|---|---|---|---|---|
 | Mandanten-Workflows aktualisieren | Manueller Start in `mtext_actions` mit der gewünschten Commit-SHA | keiner | `update-mandant-workflows.yml` | `mtext.py rollout` | Verweise auf `mtext_actions` verwenden die neue Version |
 | Mandantenkonfiguration und JSON- oder XML-Ressourcen prüfen | Pull Request oder manueller Start | `check-resources.yml` | `reusable-check-resources.yml` | `mtext.py validate-config` und `mtext.py check-resources` | Konfiguration geprüft, geänderte konfigurierte Ressourcen oder gewählter Vollstand geprüft und Syntaxbefunde als nicht blockierende Warnungen angezeigt |
-| M/Text-Entwicklung synchronisieren | Push auf `feature/Rnnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
-| M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/Rnnn` sowie manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
+| M/Text-Entwicklung synchronisieren | Push auf `feature/nnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
+| M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/nnn` sowie manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
 | Release freigeben | Manueller Start auf dem Lieferbranch, selbst eröffneter Freigabe-PR und dessen Merge | `release-approval.yml` | `reusable-release-approval-check.yml` sowie `reusable-dispatch.yml` → `release-approval.yml` | `mtext.py release-approval` | Vorprüfung im Pull Request angezeigt und Release-Tag auf dem Merge-Commit erstellt |
 | Release bauen und übertragen | Push eines Tags `vnnn.nnn` oder `vnnn.nnnx` | `release-approval.yml` | `reusable-dispatch.yml` → `release.yml` | `mtext.py build-release`, `publish-mainframe`, danach `publish-github-release` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
 | `mtext_actions` testen | Pull Request oder Push auf `main` in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` | Zentrale Tests ausgeführt |
@@ -651,7 +651,7 @@ Beispiel:
 {
   "mandant": {
     "kuerzel": "FI",
-    "releaselinie": "R270",
+    "releaselinie": "270",
     "ispw": "P",
     "letztes_release": null,
     "excluded_projects": ["LOMS_Testdaten"],
@@ -698,8 +698,8 @@ Das Feld `stage` eines Hostprofils enthält eine der CodePipeline-Stages `FKTE`,
 | Gegenstand | Regel |
 |---|---|
 | `main` | Geschützt, keine Löschung oder Umbenennung, fachliche Änderung über Pull Request im Vier-Augenprinzip, erforderlicher Statuscheck **Release vorprüfen** |
-| `release/Rnnn` | Geschützt, fachliche Änderung über Pull Request im Vier-Augenprinzip, erforderlicher Statuscheck **Release vorprüfen**, Erstellung aus geschütztem Branch oder Release-Tag |
-| `feature/Rnnn/<Bezeichnung>` | Keine zusätzliche Schutzregel |
+| `release/nnn` | Geschützt, fachliche Änderung über Pull Request im Vier-Augenprinzip, erforderlicher Statuscheck **Release vorprüfen**, Erstellung aus geschütztem Branch oder Release-Tag |
+| `feature/nnn/<Bezeichnung>` | Keine zusätzliche Schutzregel |
 | Release-Tags ohne Buchstabensuffix `vnnn.nnn` | Der technische Freigabeworkflow erstellt den Tag nach Review und Merge des Freigabe-Pull-Requests. |
 | Beta-Tags `vnnn.nnnx` | Dürfen lokal oder in GitHub auf einem Commit des passenden geschützten Branches erstellt werden. |
 | Workflowdateien und Mandantenkonfiguration | Mandantenkonfiguration und reguläre Workflowänderungen über Pull Request und Review. Freigegebene CI/CD-Versionen werden über den administrativen Rollout aktualisiert. |

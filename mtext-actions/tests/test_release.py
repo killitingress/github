@@ -129,7 +129,7 @@ class ReleaseTests(TempDirTestCase):
         self.assertEqual(set(full_information["sha256"]), {"F", "D"})
         self.assertTrue(all(element[0] == "A" for element in full_information["elemente"]))
 
-        git(self.repository, "update-ref", "-d", "refs/remotes/origin/release/R261")
+        git(self.repository, "update-ref", "-d", "refs/remotes/origin/release/261")
         git(self.repository, "update-ref", "refs/remotes/origin/main", target_sha)
         with self.assertRaises(DeliveryError):
             self.build(self.root / "wrong-main-line", tag="v261.108", trigger_sha=target_sha)

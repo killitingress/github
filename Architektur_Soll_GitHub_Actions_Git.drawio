@@ -31,7 +31,7 @@
         <mxCell id="dev-user" value="&lt;b&gt;M/Text Workbench&lt;/b&gt;&lt;br&gt;Feature-Branch erstellen&lt;br&gt;Ressource ändern und committen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="65" y="205" width="160" height="95" as="geometry"/>
         </mxCell>
-        <mxCell id="dev-branch" value="&lt;b&gt;feature/Rnnn/Bezeichnung&lt;/b&gt;&lt;br&gt;Commit-SHA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
+        <mxCell id="dev-branch" value="&lt;b&gt;feature/nnn/Bezeichnung&lt;/b&gt;&lt;br&gt;Commit-SHA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="300" y="205" width="173" height="95" as="geometry"/>
         </mxCell>
         <mxCell id="dev-caller" value="&lt;b&gt;sync-resources.yml&lt;/b&gt;&lt;br&gt;Push-Trigger&lt;br&gt;Ziel: M/Text-Entwicklung" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
@@ -62,10 +62,10 @@
         <mxCell id="acc-user" value="&lt;b&gt;Pull Request&lt;/b&gt;&lt;br&gt;Review&lt;br&gt;Squash Merge" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="40" y="503" width="195" height="120" as="geometry"/>
         </mxCell>
-        <mxCell id="acc-branch" value="&lt;b&gt;main oder&lt;br&gt;release/Rnnn&lt;/b&gt;&lt;br&gt;geschützter Branch&lt;br&gt;ein Squash-Commit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
+        <mxCell id="acc-branch" value="&lt;b&gt;main oder&lt;br&gt;release/nnn&lt;/b&gt;&lt;br&gt;geschützter Branch&lt;br&gt;ein Squash-Commit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="310" y="510" width="163" height="105" as="geometry"/>
         </mxCell>
-        <mxCell id="acc-caller" value="&lt;b&gt;sync-resources.yml&lt;/b&gt;&lt;br&gt;Push-Trigger&lt;br&gt;main oder release/Rnnn" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
+        <mxCell id="acc-caller" value="&lt;b&gt;sync-resources.yml&lt;/b&gt;&lt;br&gt;Push-Trigger&lt;br&gt;main oder release/nnn" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="555" y="505" width="165" height="115" as="geometry"/>
         </mxCell>
         <mxCell id="acc-sync" value="&lt;b&gt;reusable-sync-resources.yml&lt;/b&gt;&lt;br&gt;Config, Branch und SHA prüfen&lt;br&gt;Releaselinienwechsel erkennen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
@@ -77,7 +77,7 @@
         <mxCell id="release-change-title" value="&lt;b&gt;Sonderpfad Releaselinienwechsel&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=12;fontColor=#666666" vertex="1" parent="1">
           <mxGeometry x="35" y="645" width="230" height="25" as="geometry"/>
         </mxCell>
-        <mxCell id="release-change-old-branch" value="&lt;b&gt;M/Text Workbench&lt;/b&gt;&lt;br&gt;&lt;b&gt;feature/Rnnn/releaselinienwechsel&lt;/b&gt;&lt;br&gt;releaselinie in .github/config.json ändern&lt;br&gt;&lt;b&gt;release/Rnnn&lt;/b&gt;&lt;br&gt;aus main bei Bedarf anlegen / pushen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontFamily=Arial;fontSize=9;spacing=3" vertex="1" parent="1">
+        <mxCell id="release-change-old-branch" value="&lt;b&gt;M/Text Workbench&lt;/b&gt;&lt;br&gt;&lt;b&gt;feature/nnn/releaselinienwechsel&lt;/b&gt;&lt;br&gt;releaselinie in .github/config.json ändern&lt;br&gt;&lt;b&gt;release/nnn&lt;/b&gt;&lt;br&gt;aus main bei Bedarf anlegen / pushen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontFamily=Arial;fontSize=9;spacing=3" vertex="1" parent="1">
           <mxGeometry x="35" y="675" width="220" height="80" as="geometry"/>
         </mxCell>
         <mxCell id="release-change-config" value="Eigener Pull Request nach &lt;b&gt;main&lt;/b&gt;&lt;br&gt;nur &lt;b&gt;.github/config.json: releaselinie&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#6c8ebf;dashed=1;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
@@ -178,7 +178,7 @@
         <mxCell id="maintenance-no-mandant-step" value="&lt;b&gt;Mandanten&lt;/b&gt;&lt;br&gt;kein Bedien- oder Prüfschritt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#b3b3b3;dashed=1;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="40" y="1685" width="195" height="100" as="geometry"/>
         </mxCell>
-        <mxCell id="maintenance-target" value="&lt;b&gt;Geschützter Mandantenbranch&lt;/b&gt;&lt;br&gt;&lt;b&gt;main&lt;/b&gt; und vorhandene &lt;b&gt;release/Rnnn&lt;/b&gt;&lt;br&gt;administrativer Rollout-Commit unter .github/workflows&lt;br&gt;keine M/Text-Synchronisation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
+        <mxCell id="maintenance-target" value="&lt;b&gt;Geschützter Mandantenbranch&lt;/b&gt;&lt;br&gt;&lt;b&gt;main&lt;/b&gt; und vorhandene &lt;b&gt;release/nnn&lt;/b&gt;&lt;br&gt;administrativer Rollout-Commit unter .github/workflows&lt;br&gt;keine M/Text-Synchronisation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="300" y="1675" width="420" height="120" as="geometry"/>
         </mxCell>
         <mxCell id="maintenance-workflow" value="&lt;b&gt;update-mandant-workflows.yml&lt;/b&gt;&lt;br&gt;administrativer Start mit gewünschter SHA&lt;br&gt;Mandanten und Zielbranches prüfen&lt;br&gt;Workflow-Version direkt aktualisieren" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">

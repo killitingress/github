@@ -30,7 +30,7 @@ class ReleaseApprovalTests(TempDirTestCase):
         self.configuration = load_test_configuration(self.repository)
         git(self.repository, "add", ".github/config.json")
         git(self.repository, "commit", "-m", "Mandantenkonfiguration")
-        git(self.repository, "update-ref", "refs/remotes/origin/release/R261", "HEAD")
+        git(self.repository, "update-ref", "refs/remotes/origin/release/261", "HEAD")
         self.source_sha = git(self.repository, "rev-parse", "HEAD")
 
     def prepare(self) -> tuple[str, str]:
@@ -40,7 +40,7 @@ class ReleaseApprovalTests(TempDirTestCase):
             self.configuration,
             repository_root=self.repository,
             tag="v261.108",
-            branch="release/R261",
+            branch="release/261",
             source_sha=self.source_sha,
             run_reference="123-1",
         )
@@ -55,7 +55,7 @@ class ReleaseApprovalTests(TempDirTestCase):
         return {
             "merged": True,
             "merge_commit_sha": merge_sha,
-            "base": {"ref": "release/R261"},
+            "base": {"ref": "release/261"},
             "head": {"ref": approval_branch},
         }
 
@@ -66,7 +66,7 @@ class ReleaseApprovalTests(TempDirTestCase):
             self.configuration,
             repository_root=self.repository,
             tag="v261.108",
-            branch="release/R261",
+            branch="release/261",
             source_sha=self.source_sha,
             run_reference="123-1",
         )
@@ -79,7 +79,7 @@ class ReleaseApprovalTests(TempDirTestCase):
                 self.configuration,
                 repository_root=self.repository,
                 tag="v261.108a",
-                branch="release/R261",
+                branch="release/261",
                 source_sha=self.source_sha,
                 run_reference="123-1",
             )
@@ -93,7 +93,7 @@ class ReleaseApprovalTests(TempDirTestCase):
             configuration,
             repository_root=self.repository,
             approval_branch=approval_branch,
-            branch="release/R261",
+            branch="release/261",
             target_sha=target_sha,
         )
         self.assertIn("## Release-Vorprüfung", summary)
@@ -113,7 +113,7 @@ class ReleaseApprovalTests(TempDirTestCase):
                 replace(configuration, letztes_release="v261.107"),
                 repository_root=self.repository,
                 approval_branch=approval_branch,
-                branch="release/R261",
+                branch="release/261",
                 target_sha=target_sha,
             )
 
@@ -123,7 +123,7 @@ class ReleaseApprovalTests(TempDirTestCase):
                 configuration,
                 repository_root=self.repository,
                 approval_branch=approval_branch,
-                branch="release/R261",
+                branch="release/261",
                 target_sha=target_sha,
             )
         git(self.repository, "tag", "-d", "v261.108")
@@ -134,7 +134,7 @@ class ReleaseApprovalTests(TempDirTestCase):
                 configuration,
                 repository_root=self.repository,
                 approval_branch=approval_branch,
-                branch="release/R261",
+                branch="release/261",
                 target_sha=target_sha,
             )
 
@@ -148,7 +148,7 @@ class ReleaseApprovalTests(TempDirTestCase):
             configuration,
             repository_root=self.repository,
             approval_branch=approval_branch,
-            branch="release/R261",
+            branch="release/261",
             merge_sha=merge_sha,
             pull_request=pull_request,
         )
@@ -160,7 +160,7 @@ class ReleaseApprovalTests(TempDirTestCase):
                 configuration,
                 repository_root=self.repository,
                 approval_branch=approval_branch,
-                branch="release/R261",
+                branch="release/261",
                 merge_sha=merge_sha,
                 pull_request=pull_request,
             )
@@ -177,7 +177,7 @@ class ReleaseApprovalTests(TempDirTestCase):
                 configuration,
                 repository_root=self.repository,
                 approval_branch=approval_branch,
-                branch="release/R261",
+                branch="release/261",
                 merge_sha=merge_sha,
                 pull_request=pull_request,
             )
@@ -188,7 +188,7 @@ class ReleaseApprovalTests(TempDirTestCase):
                 configuration,
                 repository_root=self.repository,
                 approval_branch=approval_branch,
-                branch="release/R261",
+                branch="release/261",
                 merge_sha=merge_sha,
                 pull_request=self.merged_pull_request(approval_branch, merge_sha),
             )

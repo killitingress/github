@@ -36,7 +36,7 @@ class ConfigTests(TempDirTestCase):
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository, repository_name="FinanzInformatik/fi_lbs_entw_oms_unbekannt")
         with self.assertRaises(DeliveryError):
-            load_test_configuration(self.repository, mandant={"releaselinie": "R999"})
+            load_test_configuration(self.repository, mandant={"releaselinie": "999"})
 
         mandanten_path = self.root / "mandanten.json"
         mandanten_path.write_text(
@@ -56,7 +56,7 @@ class ConfigTests(TempDirTestCase):
             json.dumps(
                 {
                     "mtext_ziele": {"Entwicklung": "en"},
-                    "releaselinien": {"R270": {"etaps_linie": "02", "hostprofil": "JUR"}},
+                    "releaselinien": {"270": {"etaps_linie": "02", "hostprofil": "JUR"}},
                 }
             ),
             encoding="utf-8",

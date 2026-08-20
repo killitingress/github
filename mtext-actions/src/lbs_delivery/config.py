@@ -86,7 +86,7 @@ class Configuration:
     # In `.github/config.json` benannte Hostprofile mit CodePipeline-Stage und Assignment.
     hostprofile: dict[str, dict[str, str]]
     # Zentrale Zuordnung aller aktiven Linien aus `releaselinien.json`. Die
-    # Schlüssel sind Linien wie `R270`, die Werte nennen den Zahlenteil der
+    # Schlüssel sind Linien wie `270`, die Werte nennen den Zahlenteil der
     # ETAPS-Linie und das Hostprofil.
     releaselinien: dict[str, dict[str, str]]
     # Präfix der M/Text-Umgebung für Entwicklung und Funktionstest.

@@ -85,8 +85,8 @@ class UpdateWorkflowsTests(TempDirTestCase):
                 {
                     "mtext_ziele": {"Entwicklung": "en", "Funktionstest": "fu"},
                     "releaselinien": {
-                        "R261": {"etaps_linie": "01", "hostprofil": "FKT"},
-                        "R270": {"etaps_linie": "02", "hostprofil": "JUR"},
+                        "261": {"etaps_linie": "01", "hostprofil": "FKT"},
+                        "270": {"etaps_linie": "02", "hostprofil": "JUR"},
                     },
                 }
             ),
@@ -95,7 +95,7 @@ class UpdateWorkflowsTests(TempDirTestCase):
         matrix = _build_update_matrix(mandanten, releaselinien)["include"]
         self.assertEqual(len(matrix), 6)
         self.assertIn(
-            {"repository": "FinanzInformatik/fi_lbs_entw_oms_fi", "kuerzel": "FI", "branch": "release/R261"},
+            {"repository": "FinanzInformatik/fi_lbs_entw_oms_fi", "kuerzel": "FI", "branch": "release/261"},
             matrix,
         )
         self.assertIn(

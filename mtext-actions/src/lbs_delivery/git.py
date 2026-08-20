@@ -25,11 +25,11 @@ RELEASE_TAG_RE = re.compile(
 
 # Prüft einen geschützten Branch einer gepflegten Releaselinie und erfasst die
 # Releaselinie für die Auswahl des M/Text-Ziels.
-_RELEASE_BRANCH_RE = re.compile(r"release/(R[0-9]{3})")
+_RELEASE_BRANCH_RE = re.compile(r"release/([0-9]{3})")
 
 # Prüft einen Feature-Branch einschließlich hierarchischer Bezeichnung und
 # erfasst die Releaselinie für die Entwicklungssynchronisation.
-_FEATURE_BRANCH_RE = re.compile(r"feature/(R[0-9]{3})/(.+)")
+_FEATURE_BRANCH_RE = re.compile(r"feature/([0-9]{3})/(.+)")
 
 
 @dataclass(frozen=True)
@@ -120,8 +120,8 @@ def read_file(repository: str | Path, commit: str, path: str | Path) -> bytes:
 def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str, str]:
     """Ordnet einen zulässigen Quellbranch Releaselinie und M/Text-Zielstufe zu.
 
-    `main` und `release/Rnnn` führen zum M/Text-Ziel Funktionstest,
-    `feature/Rnnn/<Bezeichnung>` zum M/Text-Ziel Entwicklung. Weitere
+    `main` und `release/nnn` führen zum M/Text-Ziel Funktionstest,
+    `feature/nnn/<Bezeichnung>` zum M/Text-Ziel Entwicklung. Weitere
     Schrägstriche in der Feature-Bezeichnung sind erlaubt.
     """
 

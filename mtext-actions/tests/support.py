@@ -52,7 +52,7 @@ def write_mandant(path: Path, **overrides: object) -> None:
 
     mandant: dict[str, object] = {
         "kuerzel": "FI",
-        "releaselinie": "R270",
+        "releaselinie": "270",
         "ispw": "P",
         "hostprofile": {
             "FKT": {"assignment": "LOMS000066", "stage": "FKTE"},
@@ -94,20 +94,20 @@ def setup_repository(root: Path, *, branch: str) -> Path:
 def setup_sync_repository(root: Path) -> Path:
     """Erzeugt einen für die Synchronisation gültigen Entwicklungsstand."""
 
-    repository = init_repository(root, branch="feature/R261/test-sync")
+    repository = init_repository(root, branch="feature/261/test-sync")
     project = repository / "LOMS_Basis"
     project.mkdir()
     (project / "value.txt").write_text("new", encoding="utf-8")
     git(repository, "add", ".")
     git(repository, "commit", "-m", "sync")
-    track_remote_branch(repository, "feature/R261/test-sync")
+    track_remote_branch(repository, "feature/261/test-sync")
     return repository
 
 
 def setup_release_repository(root: Path) -> Path:
     """Erzeugt eine Releasehistorie mit FULL-, Vorgänger- und DELTA-Tags."""
 
-    repository = init_repository(root, branch="release/R261")
+    repository = init_repository(root, branch="release/261")
     project = repository / "LOMS_Basis"
     project.mkdir()
     (project / "baseline.txt").write_text("base\n", encoding="utf-8")
@@ -126,7 +126,7 @@ def setup_release_repository(root: Path) -> Path:
     git(repository, "add", "-A")
     git(repository, "commit", "-m", "delta")
     git(repository, "tag", "v261.108")
-    track_remote_branch(repository, "release/R261")
+    track_remote_branch(repository, "release/261")
     return repository
 
 

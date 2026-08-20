@@ -44,7 +44,7 @@ GitHub Environments werden nicht verwendet.
 ## Mandanten-Workflows aktualisieren
 
 Der manuell gestartete Workflow erhält die Commit-SHA der gewünschten
-CI/CD-Version. Er aktualisiert in `main` und den vorhandenen `release/Rnnn`
+CI/CD-Version. Er aktualisiert in `main` und den vorhandenen `release/nnn`
 jedes Mandanten die Workflowdateien, die einen wiederverwendbaren Workflow aus
 `mtext_actions` aufrufen, und pusht den Commit direkt. Nicht vorhandene
 Repositories und Branches werden mit einer Warnung übersprungen.

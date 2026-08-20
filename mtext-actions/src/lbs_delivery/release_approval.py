@@ -31,7 +31,7 @@ def _regular_release_tag(tag: str, failure: Status, message: str) -> str:
     tag_match = git.RELEASE_TAG_RE.fullmatch(tag)
     if tag_match is None or tag_match.group("beta_suffix"):
         raise DeliveryError(failure, message)
-    return f"R{tag_match.group('releaselinie')}"
+    return tag_match.group("releaselinie")
 
 
 def _require_release_branch(

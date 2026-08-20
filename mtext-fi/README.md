@@ -20,10 +20,10 @@ Synchronisation und Releasepaketen ausgeschlossen.
 | Branch | Verwendung |
 |---|---|
 | `main` | führende Releaselinie aus `.github/config.json` |
-| `release/Rnnn` | parallel gepflegte Releaselinie |
-| `feature/Rnnn/<Bezeichnung>` | einzelne fachliche Änderung |
+| `release/nnn` | parallel gepflegte Releaselinie |
+| `feature/nnn/<Bezeichnung>` | einzelne fachliche Änderung |
 
-`main` und `release/Rnnn` sind geschützt. Änderungen werden über Pull Requests
+`main` und `release/nnn` sind geschützt. Änderungen werden über Pull Requests
 geprüft und mit Squash Merge zusammengeführt.
 
 ## Änderung bearbeiten
@@ -34,7 +34,7 @@ geprüft und mit Squash Merge zusammengeführt.
 4. Den Feature-Branch pushen.
 5. Den automatischen Synchronisationslauf und anschließend die Änderung in
    M/Text-Entwicklung prüfen.
-6. Einen Pull Request auf `main` oder `release/Rnnn` erstellen.
+6. Einen Pull Request auf `main` oder `release/nnn` erstellen.
 7. Nach Review mit Squash Merge zusammenführen.
 8. Den automatischen Synchronisationslauf und den Stand in
    M/Text-Funktionstest prüfen.

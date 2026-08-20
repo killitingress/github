@@ -26,7 +26,7 @@ GITHUB_CONTEXT = {
 }
 
 # Der Vorgängerstand einer Konfigurationsänderung führt noch die alte Releaselinie.
-PREVIOUS_CONFIG = json.dumps({"mandant": {"releaselinie": "R261"}}).encode()
+PREVIOUS_CONFIG = json.dumps({"mandant": {"releaselinie": "261"}}).encode()
 
 
 class SyncTests(TempDirTestCase):
@@ -38,7 +38,7 @@ class SyncTests(TempDirTestCase):
         super().setUp()
         self.repository = setup_sync_repository(self.root)
         self.configuration = load_test_configuration(self.repository)
-        self.branch = "feature/R261/test-sync"
+        self.branch = "feature/261/test-sync"
         self.handoff_root = self.root / "cifs"
         self.handoff_root.mkdir()
 
@@ -51,7 +51,7 @@ class SyncTests(TempDirTestCase):
             commit=commit,
             previous_commit=previous_commit,
             source_branch=self.branch,
-            releaselinie="R261",
+            releaselinie="261",
             zielstufe="Entwicklung",
             handoff_root=self.handoff_root,
             **kwargs,
@@ -65,7 +65,7 @@ class SyncTests(TempDirTestCase):
     def test_run_command(self) -> None:
         """Prüft Vollabgleich, Ereignisvergleich und Fehlerkontext der Ablaufsteuerung."""
 
-        configuration = SimpleNamespace(releaselinie="R270", warnungen=())
+        configuration = SimpleNamespace(releaselinie="270", warnungen=())
         arguments = SimpleNamespace(commit=GITHUB_CONTEXT["commit"])
         environment = {
             "GITHUB_WORKSPACE": str(self.root),
@@ -90,7 +90,7 @@ class SyncTests(TempDirTestCase):
         self.assertTrue(all(call.kwargs["previous_commit"] is None for call in synchronize.call_args_list))
 
         with (
-            patch.dict(os.environ, environment | {"GITHUB_REF_NAME": "feature/R271/test"}, clear=True),
+            patch.dict(os.environ, environment | {"GITHUB_REF_NAME": "feature/271/test"}, clear=True),
             patch.object(sync_command.config, "load_configuration", return_value=configuration),
             patch.object(sync_command, "_sync_resources", return_value={"status": Status.ADAPTER_ACCEPTED.value}) as synchronize,
         ):
@@ -100,7 +100,7 @@ class SyncTests(TempDirTestCase):
         with (
             patch.dict(
                 os.environ,
-                environment | {"GITHUB_REF_NAME": "feature/R271/test", "MTEXT_PREVIOUS_COMMIT": sync_command._EMPTY_PUSH_COMMIT},
+                environment | {"GITHUB_REF_NAME": "feature/271/test", "MTEXT_PREVIOUS_COMMIT": sync_command._EMPTY_PUSH_COMMIT},
                 clear=True,
             ),
             patch.object(sync_command.config, "load_configuration", return_value=configuration),

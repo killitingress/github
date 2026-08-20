@@ -30,11 +30,11 @@ muss dazu im 4-Augenprinzip geprüft und freigegeben werden. Danach werden die
 Wird ein Feature-Branch nach GitHub gepusht, werden seine M/Text-Projekte
 automatisch mit der M/Text-Entwicklungsumgebung synchronisiert, damit der
 Entwickler das Feature dort testen kann. Ein Merge nach `main` oder
-`release/Rnnn` synchronisiert automatisch die M/Text-Funktionstestumgebung.
+`release/nnn` synchronisiert automatisch die M/Text-Funktionstestumgebung.
 Dort soll das Feature von der LBS getestet und fachlich freigegeben werden.
 
 Ein Release wird aus einem fachlich freigegebenen Branch `main` oder
-`release/Rnnn` vorbereitet. Der Release-Freigabeprozess hält Release-Version
+`release/nnn` vorbereitet. Der Release-Freigabeprozess hält Release-Version
 und Lieferumfang fest. Eine zweite Person prüft und genehmigt den zugehörigen
 Pull Request. Nach dessen Merge erzeugt der Workflow den Release-Tag und
 startet Paketbau sowie Mainframe-Übergabe.
@@ -42,13 +42,13 @@ startet Paketbau sowie Mainframe-Übergabe.
 ### Änderungsablauf
 
 ```text
-Entwicklung in lokalem Feature-Branch (feature/Rnnn/<Bezeichnung>)
+Entwicklung in lokalem Feature-Branch (feature/nnn/<Bezeichnung>)
     │ Push
     ▼
 Synchronisierung mit M/Text-Entwicklung
     │ Entwicklung testen
     ▼
-Pull Request nach main (oder release/Rnnn)
+Pull Request nach main (oder release/nnn)
     │ Review und Merge
     ▼
 Synchronisierung mit M/Text-Funktionstest
@@ -60,10 +60,10 @@ Branchstand ist für ein Release bereit
 ### Release-Ablauf
 
 ```text
-Gewählter Branchstand auf main (oder release/Rnnn)
+Gewählter Branchstand auf main (oder release/nnn)
     │ Release-Freigabe starten
     ▼
-Pull Request vom technischen Freigabe-Branch nach main (oder release/Rnnn)
+Pull Request vom technischen Freigabe-Branch nach main (oder release/nnn)
     │ Review und Merge
     ▼
 Release-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
@@ -73,9 +73,9 @@ Für Branches und Release-Tags gelten folgende Namen:
 
 | Gegenstand | Namensschema | Beispiel |
 |---|---|---|
-| Führende Releaselinie | `main` | `main` für R270 |
-| Parallel gepflegte Releaselinie | `release/Rnnn` | `release/R261` |
-| Einzelne Änderung | `feature/Rnnn/<Bezeichnung>` | `feature/R261/issue-5678` |
+| Führende Releaselinie | `main` | `main` für 270 |
+| Parallel gepflegte Releaselinie | `release/nnn` | `release/261` |
+| Einzelne Änderung | `feature/nnn/<Bezeichnung>` | `feature/261/issue-5678` |
 | Release-Tag | `vnnn.nnn` oder `vnnn.nnnx` | `v261.108`, `v261.108a` |
 
 M/Text-Entwicklung und M/Text-Funktionstest sind die beiden M/Text-Umgebungen.
@@ -99,9 +99,9 @@ Projektbaum, Releaselinie und lokale Änderungen eindeutig zugeordnet.
 Beispiel:
 
 ```text
-Arbeitsbereich R270  → Klon mit main oder feature/R270/...
-Arbeitsbereich R261  → Klon mit release/R261 oder feature/R261/...
-Arbeitsbereich R271  → Klon mit feature/R271/...
+Arbeitsbereich 270  → Klon mit main oder feature/270/...
+Arbeitsbereich 261  → Klon mit release/261 oder feature/261/...
+Arbeitsbereich 271  → Klon mit feature/271/...
 ```
 
 ### Wichtige Git-Grundlagen
@@ -177,7 +177,7 @@ Pull-Request-Ziel zu diesem Zeitpunkt noch fehlen:
 | Änderung | Ausgangsbranch | Pull-Request-Ziel |
 |---|---|---|
 | Führende Releaselinie | `main` | `main` |
-| Ältere, weiterhin gepflegte Releaselinie | `release/Rnnn` | `release/Rnnn` |
+| Ältere, weiterhin gepflegte Releaselinie | `release/nnn` | `release/nnn` |
 | Spätere Releaselinie ohne geschützten Zielbranch | Nach fachlicher Festlegung | Noch nicht vorhanden |
 
 Der Name des Feature-Branches enthält dieselbe Releaselinie wie die Änderung.
@@ -186,9 +186,9 @@ Der Name des Feature-Branches enthält dieselbe Releaselinie wie die Änderung.
 
 | Fall | Ausgangsbranch | Feature-Branch | Pull-Request-Ziel |
 |---|---|---|---|
-| Feature für die führende R270 | `main` | `feature/R270/neuer-brief` | `main` |
-| Fehlerkorrektur für die gepflegte R261 | `release/R261` | `feature/R261/issue-5678` | `release/R261` |
-| Länger laufendes Feature für R271 | Nach fachlicher Festlegung | `feature/R271/grosses-feature` | Nach dem Linienwechsel `main` |
+| Feature für die führende 270 | `main` | `feature/270/neuer-brief` | `main` |
+| Fehlerkorrektur für die gepflegte 261 | `release/261` | `feature/261/issue-5678` | `release/261` |
+| Länger laufendes Feature für 271 | Nach fachlicher Festlegung | `feature/271/grosses-feature` | Nach dem Linienwechsel `main` |
 
 Ein länger laufendes Feature wird erst zusammengeführt, wenn ein geschützter
 Zielbranch seine Releaselinie vertritt. Der Feature-Branch wird regelmäßig mit
@@ -204,16 +204,16 @@ und erneut in M/Text-Entwicklung getestet.
 2. Prüfen, dass keine unbeabsichtigten lokalen Änderungen und keine noch
    offene Git-Operation vorhanden sind.
 3. Den Ausgangsbranch auf den aktuellen GitHub-Stand bringen.
-4. Einen neuen Branch `feature/Rnnn/<Bezeichnung>` erstellen.
+4. Einen neuen Branch `feature/nnn/<Bezeichnung>` erstellen.
 5. Den Feature-Branch auschecken.
 
 Die Bezeichnung soll die fachliche Änderung erkennen lassen. Geeignete Namen
 sind beispielsweise:
 
 ```text
-feature/R270/neuer-brief
-feature/R261/issue-5678
-feature/R270/adresse-korrigieren
+feature/270/neuer-brief
+feature/261/issue-5678
+feature/270/adresse-korrigieren
 ```
 
 ### Änderungen committen
@@ -285,8 +285,8 @@ Wenn die Änderung in M/Text-Entwicklung erfolgreich geprüft wurde:
 Beispiele:
 
 ```text
-feature/R270/neuer-brief  → main
-feature/R261/issue-5678   → release/R261
+feature/270/neuer-brief  → main
+feature/261/issue-5678   → release/261
 ```
 
 ### Feature-Branch aktualisieren
@@ -338,7 +338,7 @@ startet automatisch die Synchronisation mit der M/Text-Funktionstestumgebung.
    Releaselinie prüfen.
 3. Einen festgestellten Fehler über einen neuen Feature-Branch korrigieren.
 
-Auf `main` oder `release/Rnnn` wird nicht direkt korrigiert.
+Auf `main` oder `release/nnn` wird nicht direkt korrigiert.
 
 ## 6. Änderung auf eine weitere Releaselinie übernehmen
 
@@ -357,10 +357,10 @@ der Squash-Commit der bereits zusammengeführten Änderung übernommen.
 Beispiel:
 
 ```text
-Fehler zuerst in release/R261 behoben
+Fehler zuerst in release/261 behoben
     │ Squash-Commit übernehmen
     ▼
-feature/R270/issue-5678
+feature/270/issue-5678
     │ Pull Request
     ▼
 main
@@ -375,7 +375,7 @@ Releaselinie.
 
 Vor dem Vorbereiten eines Releases müssen folgende Bedingungen erfüllt sein:
 
-- Der aktuelle Stand von `main` oder `release/Rnnn` soll geliefert werden
+- Der aktuelle Stand von `main` oder `release/nnn` soll geliefert werden
 - Die Synchronisation dieses Branchstands mit der M/Text-Funktionstestumgebung war
   erfolgreich
 - Die im Wartungstool vergebene Release-Version ist bekannt
@@ -383,7 +383,7 @@ Vor dem Vorbereiten eines Releases müssen folgende Bedingungen erfüllt sein:
 Beispiele:
 
 ```text
-v261.100   FULL-Basis der Releaselinie R261
+v261.100   FULL-Basis der Releaselinie 261
 v261.108   kumulatives DELTA gegen v261.100
 v261.108a  Beta-Lieferstand als kumulatives DELTA gegen v261.100
 ```
@@ -402,7 +402,7 @@ Freigabeworkflow erstellt:
 1. Im Mandanten-Repository **Actions** und den Workflow
    **Release freigeben und starten** öffnen.
 2. **Run workflow** wählen.
-3. `main` oder den passenden `release/Rnnn` als Branch auswählen.
+3. `main` oder den passenden `release/nnn` als Branch auswählen.
 4. Die im Wartungstool vergebene Release-Version eingeben.
 5. Den Workflow starten und seinen Abschluss abwarten.
 6. Im Repository unter **Branches** den neuen Branch
@@ -434,7 +434,7 @@ zentralen Release-Lauf.
 
 Ein Beta-Tag mit Buchstabensuffix kann ohne Freigabe-PR erstellt werden:
 
-1. Den aktuellen Stand von `main` oder dem passenden `release/Rnnn` prüfen.
+1. Den aktuellen Stand von `main` oder dem passenden `release/nnn` prüfen.
 2. Den vorgegebenen Beta-Tagnamen, beispielsweise `v261.108a`, auf diesem
    Commit anlegen.
 3. Den Tag nach GitHub pushen.
@@ -476,9 +476,9 @@ Zielstufe bereit, die sich aus dem ausgewählten Branch ergibt:
 
 | Ausgewählter Branch | Zielstufe |
 |---|---|
-| `feature/Rnnn/<Bezeichnung>` | M/Text-Entwicklung |
+| `feature/nnn/<Bezeichnung>` | M/Text-Entwicklung |
 | `main` | M/Text-Funktionstest der in diesem Commit konfigurierten Releaselinie |
-| `release/Rnnn` | M/Text-Funktionstest der Releaselinie |
+| `release/nnn` | M/Text-Funktionstest der Releaselinie |
 
 1. Im Mandanten-Repository **Actions** öffnen.
 2. Den Workflow **M/Text-Ressourcen synchronisieren** auswählen.
@@ -497,7 +497,7 @@ Mandanten bleiben erhalten.
 Soll ausnahmsweise ein beliebiger Commit nach M/Text-Entwicklung übertragen
 werden, wird ein kurzlebiger Feature-Branch der passenden Releaselinie auf
 diesem Commit erstellt und gepusht. Beispielsweise kann
-`feature/R271/wiederherstellung` verwendet werden. Der Push synchronisiert den
+`feature/271/wiederherstellung` verwendet werden. Der Push synchronisiert den
 Commit nach M/Text-Entwicklung. Nach dem erfolgreichen Lauf kann der Hilfsbranch
 gelöscht werden.
 
@@ -518,13 +518,13 @@ Repository-Verantwortlichen durchgeführt.
 
 Falls die bisherige Releaselinie weiter gepflegt wird:
 
-1. In der Git-Ansicht `release/Rnnn` auf Basis von `main` erstellen und
+1. In der Git-Ansicht `release/nnn` auf Basis von `main` erstellen und
    auschecken.
-2. `release/Rnnn` nach GitHub pushen.
-3. In GitHub kontrollieren, dass `release/Rnnn` und `main` auf denselben Commit
+2. `release/nnn` nach GitHub pushen.
+3. In GitHub kontrollieren, dass `release/nnn` und `main` auf denselben Commit
    zeigen.
 4. Den automatisch gestarteten Synchronisationslauf kontrollieren.
-5. In GitHub kontrollieren, dass Änderungen an `release/Rnnn` einen Pull Request
+5. In GitHub kontrollieren, dass Änderungen an `release/nnn` einen Pull Request
    und das Vier-Augenprinzip erfordern und Force-Push gesperrt ist.
 6. In der M/Text Workbench wieder `main` auswählen.
 
@@ -553,7 +553,7 @@ M/Text-Entwicklung bestehen. Der fehlgeschlagene Lauf wird erneut ausgeführt.
 Dabei werden M/Text-Entwicklung und M/Text-Funktionstest vollständig neu
 abgeglichen.
 
-Die bisherige Linie wird anschließend über `release/Rnnn` gepflegt. `main`
+Die bisherige Linie wird anschließend über `release/nnn` gepflegt. `main`
 bleibt der Default Branch.
 
 ## 10. Änderungen zurücknehmen
