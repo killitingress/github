@@ -46,7 +46,7 @@ ISPW_INSTANZEN = {"T", "P"}
 CODEPIPELINE_STAGES = {"FKTE", "FKTF", "JURJ", "JURP", "SVTS", "VPTV"}
 
 # Erwartete Projektverzeichnisse je Mandant. Abweichungen werden als Warnung gemeldet.
-PROJEKTREFERENZ = {
+_PROJEKTREFERENZ = {
     "FI": {"Configuration", "Fonts", "LOMS_Framework", "LOMS_Basis", "LOMS_PKA"},
     "IT": {"LOMS_Autonom"},
     "BY": {"LOMS_Basis[BY]", "LOMS_Autonom[BY]"},
@@ -132,6 +132,7 @@ def load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
     zuordnung: dict[str, MandantStamm] = {}
     repositories: set[str] = set()
 
+    # Jede Zuordnung braucht ein eindeutiges Repository und Subsystem.
     for kuerzel, values in mandanten.items():
         repository = values["repository"]
         subsystem = values["subsystem"]
@@ -179,6 +180,7 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
     if releaselinie not in releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "führende Releaselinie ist ungültig")
 
+    # Mandantenidentität und Hostprofile prüfen.
     mandant_stammdaten = mandanten_zuordnung.get(kuerzel)
     if mandant_stammdaten is None or repository_name != mandant_stammdaten.repository:
         raise DeliveryError(Status.VALIDATION_FAILED, "Mandant passt nicht zum Repository")
@@ -192,6 +194,7 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
         if profile["stage"] not in CODEPIPELINE_STAGES or not profile.get("assignment"):
             raise DeliveryError(Status.VALIDATION_FAILED, "Hostprofil ist ungültig")
 
+    # Lieferbare Projekte ermitteln und Releaselinien abgleichen.
     projects = _scan_projects(root, kuerzel, tuple(excluded_projects))
     for values in releaselinien.values():
         if values["hostprofil"] not in hostprofile:
@@ -231,7 +234,7 @@ def _scan_projects(root: Path, kuerzel: str, excluded_projects: tuple[str, ...])
 def _reference_warnings(kuerzel: str, projects: dict[str, str]) -> tuple[str, ...]:
     """Meldet fehlende und zusätzliche Projekte gegenüber der hinterlegten Liste."""
 
-    referenz = PROJEKTREFERENZ.get(kuerzel)
+    referenz = _PROJEKTREFERENZ.get(kuerzel)
     if referenz is None:
         return (f"Mandant besitzt keinen aktuellen Projekt-Referenzstand: {kuerzel}",)
 

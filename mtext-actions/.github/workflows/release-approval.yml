@@ -1,0 +1,192 @@
+name: Zentrale Release-Freigabe
+
+# Bereitet den technischen Freigabe-Branch vor oder erstellt nach dem Merge den
+# Release-Tag. Den Pull Request eröffnet der Antragsteller selbst.
+'on':
+  workflow_dispatch: # Aufruf hier per GitHub-API durch reusable-dispatch.yml
+    inputs:
+      phase:
+        description: prepare oder finalize
+        required: true
+        type: choice
+        options:
+          - prepare
+          - finalize
+      source_repository:
+        description: aktuelles Mandanten-Repository
+        required: true
+        type: string
+      source_branch:
+        description: Lieferbranch des Pull Requests
+        required: true
+        type: string
+      source_sha:
+        description: Freizugebender Branchstand (prepare)
+        required: false
+        type: string
+        default: ""
+      release_tag:
+        description: Release-Tag (prepare)
+        required: false
+        type: string
+        default: ""
+      approval_branch:
+        description: Head-Branch release-approval/... (finalize)
+        required: false
+        type: string
+        default: ""
+      merge_sha:
+        description: Merge-Commit des Pull Requests (finalize)
+        required: false
+        type: string
+        default: ""
+      pull_request_number:
+        description: Nummer des Pull Requests (finalize)
+        required: false
+        type: string
+        default: ""
+
+# Der Lauf selbst benötigt keine Schreibrechte. Branch und Tag im
+# Mandanten-Repository entstehen mit dem hinterlegten WORKFLOW_CONFIGURATION_TOKEN.
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Freigabe-Branch erstellen
+    if: inputs.phase == 'prepare'
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 15
+    env:
+      GIT_AUTHOR_NAME: M/Text Release-Freigabe
+      GIT_AUTHOR_EMAIL: mtext-release@users.noreply.github.com
+      GIT_COMMITTER_NAME: M/Text Release-Freigabe
+      GIT_COMMITTER_EMAIL: mtext-release@users.noreply.github.com
+    steps:
+      # Lädt den freizugebenden Branchstand mit seiner Historie, weil die
+      # Vorbereitung vorhandene Release-Tags prüft.
+      - name: Check-Out Mandantenstand
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+          repository: ${{ inputs.source_repository }}
+          ref: ${{ inputs.source_sha }}
+          token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+
+      - name: Check-Out CI/CD-Version
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+          ref: ${{ github.workflow_sha }}
+          path: automation
+          persist-credentials: false
+
+      - name: Python-Runtime ermitteln
+        id: runtime
+        run: bash automation/scripts/runner-preflight.sh
+
+      # Die aktualisierte Mandantenkonfiguration macht die Release-Version im
+      # Pull Request sichtbar. Der Branchname trägt sie zusätzlich zum Abschluss.
+      - name: Release-Version eintragen
+        id: prepare
+        env:
+          PYTHON: ${{ steps.runtime.outputs.python }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RUN_REFERENCE: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: >-
+          "$PYTHON" automation/src/mtext.py release-approval prepare
+          --tag "$RELEASE_TAG"
+          --branch "$SOURCE_BRANCH"
+          --source-sha "$SOURCE_SHA"
+          --run-reference "$RUN_REFERENCE"
+
+      - name: Freigabe-Branch veröffentlichen
+        env:
+          APPROVAL_BRANCH: ${{ steps.prepare.outputs.approval_branch }}
+          APPROVAL_PATH: ${{ steps.prepare.outputs.approval_path }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          WORKFLOW_CONFIGURATION_TOKEN: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+        run: |
+          git -C source switch -c "$APPROVAL_BRANCH"
+          git -C source add -- "$APPROVAL_PATH"
+          git -C source commit --no-gpg-sign -m "Release $RELEASE_TAG zur Freigabe vorlegen" -- "$APPROVAL_PATH"
+          # Der Checkout hält keine Zugangsdaten, der Push erhält sie deshalb
+          # nur für diesen Aufruf.
+          auth_header="$(printf 'x-access-token:%s' "$WORKFLOW_CONFIGURATION_TOKEN" | base64 | tr -d '\n')"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth_header"
+          git -C source push origin "HEAD:refs/heads/$APPROVAL_BRANCH"
+
+  finalize:
+    name: Freigegebenen Release-Tag erstellen
+    if: inputs.phase == 'finalize'
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 15
+    steps:
+      # Lädt den von GitHub gemeldeten Merge-Commit mit seiner Historie und der
+      # darin freigegebenen Release-Version.
+      - name: Check-Out Mandantenstand
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+          repository: ${{ inputs.source_repository }}
+          ref: ${{ inputs.merge_sha }}
+          token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+
+      - name: Check-Out CI/CD-Version
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+          ref: ${{ github.workflow_sha }}
+          path: automation
+          persist-credentials: false
+
+      - name: Python-Runtime ermitteln
+        id: runtime
+        run: bash automation/scripts/runner-preflight.sh
+
+      # GitHub-Daten, Zielbranch und eingetragene Release-Version müssen zum
+      # zusammengeführten Freigabe-Pull-Request gehören.
+      - name: Zusammengeführte Freigabe prüfen
+        id: finalize
+        env:
+          PYTHON: ${{ steps.runtime.outputs.python }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          WORKFLOW_CONFIGURATION_TOKEN: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+          APPROVAL_BRANCH: ${{ inputs.approval_branch }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          MERGE_SHA: ${{ inputs.merge_sha }}
+          PULL_REQUEST_NUMBER: ${{ inputs.pull_request_number }}
+          GITHUB_API_URL: ${{ github.api_url }}
+        run: >-
+          "$PYTHON" automation/src/mtext.py release-approval finalize
+          --approval-branch "$APPROVAL_BRANCH"
+          --branch "$SOURCE_BRANCH"
+          --merge-sha "$MERGE_SHA"
+          --pull-request-number "$PULL_REQUEST_NUMBER"
+          --api-url "$GITHUB_API_URL"
+
+      # Der Tag zeigt auf den Merge-Commit mit der freigegebenen Release-Version.
+      # Sein Push startet den Release-Workflow des Mandanten.
+      - name: Freigegebenen Release-Tag erstellen
+        env:
+          RELEASE_TAG: ${{ steps.finalize.outputs.release_tag }}
+          MERGE_SHA: ${{ inputs.merge_sha }}
+          WORKFLOW_CONFIGURATION_TOKEN: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+        run: |
+          git -C source tag "$RELEASE_TAG" "$MERGE_SHA"
+          # Der Checkout hält keine Zugangsdaten, der Push erhält sie deshalb
+          # nur für diesen Aufruf.
+          auth_header="$(printf 'x-access-token:%s' "$WORKFLOW_CONFIGURATION_TOKEN" | base64 | tr -d '\n')"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth_header"
+          git -C source push origin "refs/tags/$RELEASE_TAG"

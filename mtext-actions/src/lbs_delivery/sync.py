@@ -24,22 +24,23 @@ from .project_package import build_project_package
 
 
 # Vom Adapter werden höchstens 1 MB Antworttext eingelesen.
-ADAPTER_RESPONSE_LIMIT = 1024 * 1024
+_ADAPTER_RESPONSE_LIMIT = 1024 * 1024
 
 # URL-Muster des LTOMA-Sync-Endpunktes.
-ADAPTER_SYNC_URL = "https://{umgebung}.ltoma.intern/vMtextAdapter/sync"
+_ADAPTER_SYNC_URL = "https://{umgebung}.ltoma.intern/vMtextAdapter/sync"
 
 # Diese Umgebungsvariable bezeichnet den auf dem Runner eingehängten
 # CIFS-Basispfad für vollständige Übergabeaufträge.
-CIFS_ROOT_ENVIRONMENT = "MTEXT_CIFS_ROOT"
+_CIFS_ROOT_ENVIRONMENT = "MTEXT_CIFS_ROOT"
 
 # GitHub liefert für den ersten Push eines Branches diese Null-SHA als Vorgänger.
-EMPTY_PUSH_COMMIT = "0" * 40
+_EMPTY_PUSH_COMMIT = "0" * 40
 
 
-def call_adapter(url: str, payload: dict[str, object]) -> tuple[int, str]:
+def _call_adapter(url: str, payload: dict[str, object]) -> tuple[int, str]:
     """Meldet dem Adapter ein vollständig bereitgestelltes CIFS-Verzeichnis."""
 
+    # Antwort begrenzt einlesen. Nur HTTP 200–299 bestätigt die Annahme durch LTOMA.
     request = urllib.request.Request(
         url,
         data=json.dumps(payload, separators=(",", ":")).encode(),
@@ -48,9 +49,9 @@ def call_adapter(url: str, payload: dict[str, object]) -> tuple[int, str]:
     try:
         with urllib.request.urlopen(request, timeout=NETWORK_TIMEOUT) as response:
             status = response.status
-            body = response.read(ADAPTER_RESPONSE_LIMIT).decode(errors="replace")
+            body = response.read(_ADAPTER_RESPONSE_LIMIT).decode(errors="replace")
     except urllib.error.HTTPError as exc:
-        body = exc.read(ADAPTER_RESPONSE_LIMIT).decode(errors="replace")
+        body = exc.read(_ADAPTER_RESPONSE_LIMIT).decode(errors="replace")
         raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {exc.code}: {body[:1000]}") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapter ist nicht erreichbar") from exc
@@ -59,7 +60,7 @@ def call_adapter(url: str, payload: dict[str, object]) -> tuple[int, str]:
     return status, body
 
 
-def plan_sync(
+def _plan_sync(
     configuration: config.Configuration,
     *,
     repository_root: str | Path,
@@ -69,19 +70,23 @@ def plan_sync(
 ) -> tuple[str, tuple[str, ...], str | None]:
     """Leitet Releaselinie, Zielstufen und Vergleichscommit aus dem GitHub-Ereignis ab."""
 
+    # Branch liefert Releaselinie und die zugehörige M/Text-Zielstufe.
     releaselinie, zielstufe = git.resolve_sync_branch(source_branch, configuration.releaselinie)
-    if event_name == "workflow_dispatch" or not previous_commit or previous_commit == EMPTY_PUSH_COMMIT:
+
+    # Manueller Lauf oder Push ohne Vorgänger: FULL ohne Vergleichscommit.
+    if event_name == "workflow_dispatch" or not previous_commit or previous_commit == _EMPTY_PUSH_COMMIT:
         return releaselinie, (zielstufe,), None
     if event_name != "push" or source_branch != "main":
         return releaselinie, (zielstufe,), previous_commit
 
+    # Push auf main mit Releaselinienwechsel: alle Zielstufen als FULL abgleichen.
     document = json.loads(git.read_file(repository_root, previous_commit, config.MANDANT_CONFIG_PATH))
     if document["mandant"]["releaselinie"] == configuration.releaselinie:
         return releaselinie, (zielstufe,), previous_commit
     return releaselinie, config.MTEXT_ZIEL_REIHENFOLGE, None
 
 
-def sync_resources(
+def _sync_resources(
     configuration: config.Configuration,
     *,
     repository_root: str | Path,
@@ -99,6 +104,7 @@ def sync_resources(
     Projekt ein FULL.
     """
 
+    # Geplantes Ziel und Commit-Zugehörigkeit prüfen.
     if zielstufe not in configuration.mtext_ziel_prefixe:
         raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Zielstufe ist ungültig")
     if releaselinie not in configuration.releaselinien:
@@ -107,6 +113,7 @@ def sync_resources(
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Commit")
     git.require_ancestor(repository_root, commit, f"refs/remotes/origin/{source_branch}")
 
+    # Betroffene Projekte und den CIFS-Übergabepfad bestimmen.
     git_changes = [] if previous_commit is None else git.changes(repository_root, previous_commit, commit)
     projects = [
         (project, project_code)
@@ -117,15 +124,15 @@ def sync_resources(
         return {"status": Status.ADAPTER_ACCEPTED.value, "projekte": []}
 
     if handoff_root is None:
-        configured_root = os.environ.get(CIFS_ROOT_ENVIRONMENT)
-        if not configured_root:
+        handoff_root = os.environ.get(_CIFS_ROOT_ENVIRONMENT)
+        if not handoff_root:
             raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "CIFS-Übergabepfad ist nicht konfiguriert")
-        handoff_root = configured_root
 
     root = Path(handoff_root)
     if not root.is_dir():
         raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "CIFS-Übergabepfad ist nicht erreichbar")
 
+    # M/Text-Umgebung aus Zielstufe und ETAPS-Linie ableiten.
     etaps_linie = configuration.releaselinien[releaselinie]["etaps_linie"]
     umgebung = f"{configuration.mtext_ziel_prefixe[zielstufe]}{etaps_linie}"
     environment_root = root / umgebung
@@ -150,6 +157,9 @@ def sync_resources(
     request_name = f"{configuration.kuerzel}-{commit[:12]}-{uuid.uuid4().hex}"
     request_path = environment_root / request_name
 
+    # Projektpakete in das CIFS-Übergabeverzeichnis schreiben. Bei einem Fehler
+    # wird das Verzeichnis entfernt, damit derselbe Auftrag erneut bereitgestellt
+    # werden kann.
     try:
         request_path.mkdir(parents=True)
         for project, project_code in projects:
@@ -169,13 +179,14 @@ def sync_resources(
             raise
         raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "CIFS-Übergabe ist fehlgeschlagen") from exc
 
-    adapter_url = ADAPTER_SYNC_URL.format(umgebung=umgebung)
+    # Nach dem bereitgestellten Verzeichnis den passenden Adapter aufrufen.
+    adapter_url = _ADAPTER_SYNC_URL.format(umgebung=umgebung)
     payload = {
         "auftrag": auftrag,
         **auftrag_document,
         "pfad": str(request_path),
     }
-    status, body = call_adapter(adapter_url, payload)
+    status, body = _call_adapter(adapter_url, payload)
 
     return {
         "status": Status.ADAPTER_ACCEPTED.value,
@@ -192,21 +203,25 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
     source = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "source"
     configuration = config.load_configuration(source, os.environ["GITHUB_REPOSITORY"])
     source_branch = os.environ["GITHUB_REF_NAME"]
-    releaselinie, zielstufen, vergleichs_commit = plan_sync(
+
+    # Releaselinie, Zielstufen und Vergleichscommit aus dem GitHub-Ereignis ableiten.
+    releaselinie, zielstufen, vergleichs_commit = _plan_sync(
         configuration,
         repository_root=source,
         source_branch=source_branch,
         event_name=os.environ["GITHUB_EVENT_NAME"],
         previous_commit=os.environ.get("MTEXT_PREVIOUS_COMMIT", ""),
     )
+
+    # Jede Zielstufe nacheinander synchronisieren. Ein Abbruch nennt die bereits
+    # erfolgreichen Stufen, damit der Betrieb den Stand nachvollziehen kann.
     results: list[dict[str, object]] = []
-    successful_stages: list[str] = []
     for zielstufe in zielstufen:
         try:
             results.append(
                 {
                     "zielstufe": zielstufe,
-                    **sync_resources(
+                    **_sync_resources(
                         configuration,
                         repository_root=source,
                         commit=arguments.commit,
@@ -218,12 +233,12 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
                 }
             )
         except DeliveryError as exc:
-            detail = f" Bereits erfolgreich: {', '.join(successful_stages)}." if successful_stages else ""
+            done = [entry["zielstufe"] for entry in results]
+            detail = f" Bereits erfolgreich: {', '.join(done)}." if done else ""
             raise DeliveryError(
                 exc.status,
                 f"Synchronisation mit dem M/Text-Ziel {zielstufe} fehlgeschlagen.{detail} {exc.args[0]}",
             ) from exc
-        successful_stages.append(zielstufe)
 
     return {"status": Status.ADAPTER_ACCEPTED.value, "synchronisationen": results} | (
         {"warnungen": list(configuration.warnungen)} if configuration.warnungen else {}

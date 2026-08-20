@@ -19,62 +19,31 @@ from .process import DeliveryError, Status
 
 
 # Die von Mandanten-Repositories eingebundenen wiederverwendbaren Workflows werden hier gepflegt.
-AUTOMATION_REPOSITORY = "FinanzInformatik/fi_lbs_entw_oms_mtext_actions"
+_AUTOMATION_REPOSITORY = "FinanzInformatik/fi_lbs_entw_oms_mtext_actions"
 
 # Reguläre Ausdrücke finden die technischen Workflow-Felder dieses Werkzeugs.
 # Erfasst die Revision eines wiederverwendbaren Workflows aus dem zentralen CI/CD-Repository.
-CENTRAL_USES_PATTERN = re.compile(
-    rf"(?m)^(\s*uses:\s+{re.escape(AUTOMATION_REPOSITORY)}"
+_CENTRAL_USES_PATTERN = re.compile(
+    rf"(?m)^(\s*uses:\s+{re.escape(_AUTOMATION_REPOSITORY)}"
     r"/\.github/workflows/[^\s@]+@)([^\s#]+)(\s*(?:#.*)?)$"
 )
 
 # Erfasst den Wert automation_ref für den Checkout der Python-Implementierung.
-AUTOMATION_REF_PATTERN = re.compile(r"(?m)^(\s*automation_ref:\s*)([^\s#]+)(\s*(?:#.*)?)$")
-
-
-def check_target_branch(api_url: str, repository: str, branch: str, token: str) -> bool:
-    """Prüft, ob ein Zielbranch der Rollout-Matrix vorhanden ist."""
-
-    repository_path = urllib.parse.quote(repository)
-    branch_path = urllib.parse.quote(branch, safe="")
-    return (
-        github.request(
-            method="GET",
-            url=f"{api_url.rstrip('/')}/repos/{repository_path}/git/ref/heads/{branch_path}",
-            token=token,
-            failure=Status.SOURCE_FAILED,
-            missing_ok=True,
-        )
-        is not None
-    )
+_AUTOMATION_REF_PATTERN = re.compile(r"(?m)^(\s*automation_ref:\s*)([^\s#]+)(\s*(?:#.*)?)$")
 
 
 def _workflow_update(path: Path, automation_sha: str) -> str | None:
     """Ermittelt den an die Rollout-SHA gebundenen Inhalt einer Workflow-Datei."""
 
     original = path.read_text(encoding="utf-8")
-    workflow_references = list(CENTRAL_USES_PATTERN.finditer(original))
-    if not workflow_references:
+    # Dateien ohne zentralen Workflow-Aufruf gehören nicht zum Rollout.
+    if _CENTRAL_USES_PATTERN.search(original) is None:
         return None
-    code_references = list(AUTOMATION_REF_PATTERN.finditer(original))
-    if len(workflow_references) != len(code_references):
-        raise DeliveryError(Status.VALIDATION_FAILED, f"CI/CD-Version ist in {path} unvollständig gebunden")
-    rendered = AUTOMATION_REF_PATTERN.sub(
+    rendered = _AUTOMATION_REF_PATTERN.sub(
         rf"\g<1>{automation_sha}\g<3>",
-        CENTRAL_USES_PATTERN.sub(rf"\g<1>{automation_sha}\g<3>", original),
+        _CENTRAL_USES_PATTERN.sub(rf"\g<1>{automation_sha}\g<3>", original),
     )
     return rendered if rendered != original else None
-
-
-def _pending_workflow_updates(mandant_root: Path, automation_sha: str) -> dict[Path, str]:
-    """Ermittelt Mandanten-Workflows, die noch nicht an die Rollout-SHA gebunden sind."""
-
-    workflow_root = mandant_root / ".github/workflows"
-    return {
-        path: update
-        for path in sorted((*workflow_root.glob("*.yml"), *workflow_root.glob("*.yaml")))
-        if (update := _workflow_update(path, automation_sha)) is not None
-    }
 
 
 def _commit(repository: Path, message: str) -> str:
@@ -84,13 +53,13 @@ def _commit(repository: Path, message: str) -> str:
         git.run(repository, "diff", "--check", "--", ".github/workflows")
         print(git.run(repository, "diff", "--", ".github/workflows").decode(), file=sys.stderr)
         git.run(repository, "commit", "--no-gpg-sign", "--only", "-m", message, "--", ".github/workflows")
-    return git.run(repository, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
+    return git.resolve(repository, "HEAD")
 
 
-def verify_automation(automation_root: Path, automation_sha: str) -> str:
+def _verify_automation(automation_root: Path, automation_sha: str) -> str:
     """Prüft die angegebene CI/CD-Version vor dem Mandanten-Rollout."""
 
-    checkout_sha = git.run(automation_root, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
+    checkout_sha = git.resolve(automation_root, "HEAD")
     if checkout_sha != automation_sha:
         raise DeliveryError(Status.SOURCE_FAILED, "zentraler Checkout entspricht nicht dem angegebenen Commit")
     if not list((automation_root / ".github/workflows").glob("*.yml")):
@@ -98,11 +67,16 @@ def verify_automation(automation_root: Path, automation_sha: str) -> str:
     return checkout_sha
 
 
-def prepare_mandant_update(automation_root: Path, mandant_root: Path, rollout_sha: str) -> str:
+def _prepare_mandant_update(automation_root: Path, mandant_root: Path, rollout_sha: str) -> str:
     """Trägt die Rollout-SHA in die zentralen Verweise eines Mandantenbranches ein."""
 
-    verify_automation(automation_root, rollout_sha)
-    pending = _pending_workflow_updates(mandant_root, rollout_sha)
+    _verify_automation(automation_root, rollout_sha)
+    workflow_root = mandant_root / ".github/workflows"
+    pending = {
+        path: update
+        for path in sorted((*workflow_root.glob("*.yml"), *workflow_root.glob("*.yaml")))
+        if (update := _workflow_update(path, rollout_sha)) is not None
+    }
     for path, text in pending.items():
         path.write_text(text, encoding="utf-8")
     # Die bereits geänderten Dateien müssen nach dem Schreiben vollständig gebunden sein.
@@ -111,9 +85,10 @@ def prepare_mandant_update(automation_root: Path, mandant_root: Path, rollout_sh
     return _commit(mandant_root, "Zentrale CI/CD-Version aktualisieren [skip ci]")
 
 
-def build_update_matrix(mandanten_path: Path, releaselinien_path: Path) -> dict[str, list[dict[str, str]]]:
+def _build_update_matrix(mandanten_path: Path, releaselinien_path: Path) -> dict[str, list[dict[str, str]]]:
     """Erstellt die Workflow-Matrix für geschützte Mandantenbranches."""
 
+    # Jeder Mandant erhält `main` und einen Branch je aktiver Releaselinie.
     mandanten = config.load_mandanten_zuordnung(mandanten_path)
     _, releaselinien = config.load_releaselinien_zuordnung(releaselinien_path)
     branches = ["main", *(f"release/{releaselinie}" for releaselinie in sorted(releaselinien))]
@@ -129,22 +104,35 @@ def build_update_matrix(mandanten_path: Path, releaselinien_path: Path) -> dict[
 def run_command(arguments: argparse.Namespace) -> dict[str, object]:
     """Führt das gewählte Kommando der Mandanten-Aktualisierung aus."""
 
+    # Gewünschte Revision prüfen und die Mandanten-Matrix erzeugen.
     if arguments.rollout_command == "prepare-rollout":
-        verify_automation(config.AUTOMATION_ROOT, arguments.automation_sha)
-        matrix = build_update_matrix(config.MANDANTEN_ZUORDNUNG_PATH, config.RELEASELINIEN_ZUORDNUNG_PATH)
+        _verify_automation(config.AUTOMATION_ROOT, arguments.automation_sha)
+        matrix = _build_update_matrix(config.MANDANTEN_ZUORDNUNG_PATH, config.RELEASELINIEN_ZUORDNUNG_PATH)
         return {
             "outputs": {
                 "rollout_sha": arguments.automation_sha,
                 "update_matrix": json.dumps(matrix, separators=(",", ":")),
             },
         }
-    if arguments.rollout_command == "prepare-mandant":
-        return {"mandant_sha": prepare_mandant_update(config.AUTOMATION_ROOT, arguments.mandant_root, arguments.rollout_sha)}
 
-    exists = check_target_branch(
-        arguments.api_url,
-        arguments.repository,
-        arguments.branch,
-        os.environ["WORKFLOW_CONFIGURATION_TOKEN"],
+    # Workflow-Aufrufe eines Mandanten auf die Rollout-SHA umstellen.
+    if arguments.rollout_command == "prepare-mandant":
+        return {"mandant_sha": _prepare_mandant_update(config.AUTOMATION_ROOT, arguments.mandant_root, arguments.rollout_sha)}
+
+    # Zielbranch der Rollout-Matrix auf Vorhandensein prüfen. Fehlender Branch
+    # ist kein Fehler, sondern `exists=false`.
+    repository_path = urllib.parse.quote(arguments.repository)
+    branch_path = urllib.parse.quote(arguments.branch, safe="")
+    exists = (
+        github.request(
+            method="GET",
+            url=(
+                f"{arguments.api_url.rstrip('/')}/repos/{repository_path}/git/ref/heads/{branch_path}"
+            ),
+            token=os.environ["WORKFLOW_CONFIGURATION_TOKEN"],
+            failure=Status.SOURCE_FAILED,
+            missing_ok=True,
+        )
+        is not None
     )
     return {"outputs": {"exists": str(exists).lower()}}

@@ -25,11 +25,11 @@ RELEASE_TAG_RE = re.compile(
 
 # Prüft einen geschützten Branch einer gepflegten Releaselinie und erfasst die
 # Releaselinie für die Auswahl des M/Text-Ziels.
-RELEASE_BRANCH_RE = re.compile(r"release/(R[0-9]{3})")
+_RELEASE_BRANCH_RE = re.compile(r"release/(R[0-9]{3})")
 
 # Prüft einen Feature-Branch einschließlich hierarchischer Bezeichnung und
 # erfasst die Releaselinie für die Entwicklungssynchronisation.
-FEATURE_BRANCH_RE = re.compile(r"feature/(R[0-9]{3})/(.+)")
+_FEATURE_BRANCH_RE = re.compile(r"feature/(R[0-9]{3})/(.+)")
 
 
 @dataclass(frozen=True)
@@ -50,7 +50,7 @@ def run(repository: str | Path, *arguments: str, returncodes: tuple[int, ...] = 
     """
 
     result = subprocess.run(
-        ["git", "-C", str(repository), *arguments],
+        ["git", "-C", str(repository), *arguments],  # -C: Befehl im Repository ausführen
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
@@ -67,7 +67,13 @@ def resolve(repository: str | Path, reference: str) -> str:
     """Löst eine bekannte Referenz in eine Commit-SHA auf."""
 
     # `^{commit}` löst die Referenz bis zum Commit auf und lehnt Tree- und Blob-Objekte ab.
-    output = run(repository, "rev-parse", "--verify", "--end-of-options", f"{reference}^{{commit}}")
+    output = run(
+        repository,
+        "rev-parse",
+        "--verify",  # fehlende Referenzen als Fehler melden
+        "--end-of-options",  # Referenz nicht als Option lesen
+        f"{reference}^{{commit}}",
+    )
     return output.decode("ascii").strip()
 
 
@@ -77,9 +83,9 @@ def reference_exists(repository: str | Path, reference: str) -> bool:
     output = run(
         repository,
         "show-ref",
-        "--verify",
+        "--verify",  # nur die angegebene vollständige Referenz prüfen
         reference,
-        returncodes=(0, 128),
+        returncodes=(0, 128),  # 128: Referenz fehlt
     )
     return bool(output)
 
@@ -91,8 +97,14 @@ def require_ancestor(repository: str | Path, ancestor: str, descendant: str) -> 
     oder ob ein Basistag vor dem Release-Tag liegt.
     """
 
-    # `--is-ancestor` liefert Exit 0 nur bei echter Abstammung
-    run(repository, "merge-base", "--is-ancestor", ancestor, descendant)
+    # `--is-ancestor` liefert Exit 0 nur bei echter Abstammung.
+    run(
+        repository,
+        "merge-base",
+        "--is-ancestor",
+        ancestor,
+        descendant,
+    )
 
 
 def read_file(repository: str | Path, commit: str, path: str | Path) -> bytes:
@@ -102,8 +114,7 @@ def read_file(repository: str | Path, commit: str, path: str | Path) -> bytes:
     Mandantenkonfiguration ohne zweiten Checkout gelesen.
     """
 
-    verified_commit = resolve(repository, commit)
-    return run(repository, "show", f"{verified_commit}:{path}")
+    return run(repository, "show", f"{resolve(repository, commit)}:{path}")  # Dateiinhalt aus dem Commit
 
 
 def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str, str]:
@@ -114,14 +125,17 @@ def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str
     Schrägstriche in der Feature-Bezeichnung sind erlaubt.
     """
 
+    # `main` führt die in der Mandantenkonfiguration hinterlegte Releaselinie.
     if source_branch == "main":
         return main_releaselinie, MTEXT_ZIEL_FUNKTIONSTEST
 
-    release_match = RELEASE_BRANCH_RE.fullmatch(source_branch)
+    # Geschützter Lieferbranch einer gepflegten Releaselinie.
+    release_match = _RELEASE_BRANCH_RE.fullmatch(source_branch)
     if release_match is not None:
         return release_match.group(1), MTEXT_ZIEL_FUNKTIONSTEST
 
-    feature_match = FEATURE_BRANCH_RE.fullmatch(source_branch)
+    # Feature-Branch synchronisiert in die Entwicklungsumgebung derselben Linie.
+    feature_match = _FEATURE_BRANCH_RE.fullmatch(source_branch)
     if feature_match is not None:
         return feature_match.group(1), MTEXT_ZIEL_ENTWICKLUNG
 
@@ -135,15 +149,17 @@ def require_release_commit(repository: str | Path, tag: str, branches: tuple[str
     einem der angegebenen Remote-Branches liegen.
     """
 
+    # Checkout und Tag müssen denselben Commit zeigen.
     target = resolve(repository, f"refs/tags/{tag}")
     if resolve(repository, "HEAD") != target:
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Tag")
 
+    # Der Tag-Commit muss auf einem der zulässigen Remote-Lieferbranches liegen.
     output = run(
         repository,
         "for-each-ref",  # nur die angegebenen Referenzen unter `refs/remotes/origin`
         "--format=%(refname:short)",  # Kurzname, zum Beispiel `origin/main`
-        "--contains",  # nur Branches, deren Historie den Tag-Commit bereits enthält
+        "--contains",  # nur Branches, deren Historie den Tag-Commit enthält
         target,
         "refs/remotes/origin",  # Remote-Tracking-Branches, keine Tags
     )
@@ -164,11 +180,13 @@ def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:
     DELTA-Pakete und serverSync genau diese Dateioperationen benötigen.
     """
 
+    # `--no-renames` liefert Umbenennungen als Löschung und Hinzufügung,
+    # so wie DELTA-Pakete und die Synchronisation sie benötigen.
     output = run(
         repository,
         "diff",
-        "--name-status",
-        "-z",
+        "--name-status",  # Statusbuchstabe und Pfad je Änderung
+        "-z",  # NUL-Trennung statt Quotierung der Pfade
         "--no-renames",
         base,
         target,

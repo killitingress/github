@@ -5,44 +5,17 @@ Das Repository `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`, kurz
 Mandantenkonfiguration, M/Text-Synchronisation, Releasebau und
 Mainframe-Übergabe.
 
-## Branches und Auslöser
-
-- `main` vertritt die führende Releaselinie eines Mandanten.
-- `release/Rnnn` vertritt eine parallel gepflegte Releaselinie.
-- `feature/Rnnn/<Bezeichnung>` enthält eine einzelne Änderung.
-- Feature-Pushes synchronisieren mit der Umgebung M/Text-Entwicklung.
-- Merges nach `main` oder `release/Rnnn` synchronisieren mit der Umgebung
-  M/Text-Funktionstest.
-- Manuelle Läufe gleichen einen Commit vollständig mit dem Ziel seines Branches
-  ab.
-- Ein Wechsel der auf `main` konfigurierten Releaselinie gleicht den ersten
-  Stand automatisch vollständig mit M/Text-Entwicklung und
-  M/Text-Funktionstest ab.
-- Reguläre Tags wie `v261.100` und `v261.108` entstehen standardmäßig nach dem
-  Merge eines Release-Freigabe-PRs.
-- Beta-Tags wie `v261.108a` können direkt erstellt werden.
-- Der Push eines zulässigen Tags startet den Release-Workflow.
-
 ## Aufbau
 
-- `src/mtext.py`: Kommandozeileneinstieg für alle Workflow-Schritte
-- `src/lbs_delivery/config.py`: Mandanten- und Releaselinienkonfiguration
-- `src/lbs_delivery/git.py`: Commit-, Branch-, Tag- und Diff-Abfragen
-- `src/lbs_delivery/github.py`: GitHub-Anfragen, Pull Requests und Releases
-- `src/lbs_delivery/project_package.py`: gemeinsames Projektpaket für Sync und Release
-- `src/lbs_delivery/release_approval.py`: Freigabe-Branch, PR-Vorprüfung und Tag-Erstellung
-- `src/lbs_delivery/resource_check.py`: warnende JSON- und XML-Prüfung
-- `src/lbs_delivery/rollout.py`: Aktualisierung der Mandanten-Workflows
-- `src/lbs_delivery/sync.py`: CIFS-Übergabe und Adapterauftrag
-- `src/lbs_delivery/mainframe_release.py`: Releasebau, JCL und FTPS-/JES-Übergabe
+- `src/mtext.py`: Kommandozeileneinstieg für die Workflow-Schritte
+- `src/lbs_delivery/`: Implementierung der einzelnen Arbeitsschritte
 - `config/mandanten.json`: Mandantenkürzel, Repositories und Subsysteme
-- `config/ressourcenformate.json`: Dateiendungen und ihr technisches Format
 - `config/releaselinien.json`: M/Text-Zielpräfixe, aktive Releaselinien,
   ETAPS-Linien und Hostprofile
+- `config/ressourcenformate.json`: Dateiendungen und ihr technisches Format
+- `templates/mainframe-upload.jcl`: JCL-Vorlage für die Mainframe-Übergabe
 
 ## GitHub-Konfiguration
-
-In `mtext_actions` werden eingerichtet:
 
 | Name | Art | Verwendung |
 |---|---|---|
@@ -53,67 +26,36 @@ In `mtext_actions` werden eingerichtet:
 | `WORKFLOW_CONFIGURATION_TOKEN` | Repository-Secret | Mandanten-Workflows ausrollen, Freigabe-Branches und Release-Tags erstellen sowie Lieferinformationen veröffentlichen |
 
 `WORKFLOW_CONFIGURATION_TOKEN` gilt für die zugeordneten
-Mandanten-Repositories. Es benötigt dort `Contents: read and write` und
-`Workflows: read and write` sowie `Pull requests: read`. Der
-technische Benutzer ist in den Schutzregeln als Ausnahme von der
-Pull-Request-Pflicht für den administrativen Rollout hinterlegt. Die geltenden
-Die organisationsweit vorgegebenen Tag-Regeln gelten auch für diesen Zugriff.
+Mandanten-Repositories. Es benötigt dort `Contents: read and write`,
+`Workflows: read and write` und `Pull requests: read`. Der technische Benutzer
+ist in den Schutzregeln als Ausnahme von der Pull-Request-Pflicht für den
+administrativen Rollout hinterlegt. Die organisationsweit vorgegebenen
+Tag-Regeln gelten auch für diesen Zugriff.
 
 Jedes Mandanten-Repository erhält `MTEXT_ACTIONS_TOKEN` als Repository-Secret.
-Der Fine-grained PAT ist auf
-`FinanzInformatik/fi_lbs_entw_oms_mtext_actions` begrenzt und besitzt dort
+Der Fine-grained PAT ist auf `mtext_actions` begrenzt und besitzt dort
 `Contents: read` sowie `Actions: write`.
 
 Die Organisationsvariable `MTEXT_CIFS_ROOT` enthält den auf dem Runner
-eingehängten CIFS-Basispfad. Sie ist für die Mandanten-Repositories verfügbar,
-da deren Workflows die wiederverwendbare Synchronisation aufrufen.
+eingehängten CIFS-Basispfad für die Adapterübergabe.
 
 GitHub Environments werden nicht verwendet.
 
-## Workflow-Aktualisierungen
+## Mandanten-Workflows aktualisieren
 
-Der manuell gestartete Workflow **Mandanten-Workflows aktualisieren** erhält die
-Commit-SHA der gewünschten CI/CD-Version von `mtext_actions`. Er
-wird von den zuständigen Admins gestartet, prüft die angegebene
-CI/CD-Version und verarbeitet für jeden Mandanten:
-
-- `main`,
-- vorhandene `release/Rnnn`-Branches der aktiven Releaselinien.
-
-Der Lauf aktualisiert unter `.github/workflows` alle `.yml`- und `.yaml`-Dateien,
-die einen wiederverwendbaren Workflow aus `mtext_actions` aufrufen. Eigene
-Workflows ohne einen solchen Aufruf bleiben unverändert. Anschließend pusht der
-Lauf den Rollout-Commit direkt auf den jeweiligen Zielbranch. Nicht vorhandene
-Mandanten-Repositories und Branches werden mit einer Warnung übersprungen.
-Feature-Branches sind keine Rollout-Ziele. Der Rollout startet keine
+Der manuell gestartete Workflow erhält die Commit-SHA der gewünschten
+CI/CD-Version. Er aktualisiert in `main` und den vorhandenen `release/Rnnn`
+jedes Mandanten die Workflowdateien, die einen wiederverwendbaren Workflow aus
+`mtext_actions` aufrufen, und pusht den Commit direkt. Nicht vorhandene
+Repositories und Branches werden mit einer Warnung übersprungen.
+Feature-Branches sind keine Ziele. Der Rollout startet keine
 M/Text-Synchronisation.
 
-## Automatische Prüfung
+## Tests
 
-Jeder Pull Request in `mtext_actions` und jede Änderung an `main` startet den
-GitHub-Workflow **Zentrale Testsuite**. Er führt die Python-Tests auf dem dafür
-vorgesehenen Runner aus, ohne M/Text oder den Mainframe anzusprechen. Vor dem
-Zusammenführen muss der Testjob **Zentrale CI/CD-Implementierung testen**
-erfolgreich abgeschlossen sein.
+Jeder Pull Request und jede Änderung an `main` startet die **Zentrale
+Testsuite**. Der Job **Zentrale CI/CD-Implementierung testen** muss vor dem
+Merge erfolgreich sein. Die Tests sprechen weder M/Text noch den Mainframe an.
 
-Die Anwendung benötigt Python ab Version 3.11 sowie Git und `tar`. Der
-Python-Code verwendet für seine Produktivlogik die Standardbibliothek.
-
-## Prüfung von JSON- und XML-Ressourcen
-
-Der wiederverwendbare Workflow `reusable-check-resources.yml` prüft bei einem
-Pull Request Mandantenkonfiguration und hinzugefügte, geänderte sowie
-umbenannte Ressourcen in einem Workflow-Lauf.
-Eine manuell gestartete Prüfung umfasst den vollständigen Mandantenstand. Die
-zentrale Datei `config/ressourcenformate.json` ordnet jede berücksichtigte
-Dateiendung dem Format `json` oder `xml` zu. Damit werden auch XML-Ressourcen
-mit Endungen wie `.model`, `.datamodel` oder `.conf` und Form.io-Dateien mit der
-Endung `.formio` vom passenden Parser geprüft.
-
-JSON-Ressourcen müssen gültige JSON-Syntax besitzen, XML-Ressourcen müssen
-wohlgeformt sein. Befunde erscheinen mit Datei und Fundstelle als Warnungen und
-lassen den Prüfschritt erfolgreich enden.
-
-Eine Prüfung der Tonic-XMLs gegen ein XSD wird ergänzt, sobald das verbindliche
-XSD, seine Dateizuordnung und das dafür auf dem Runner freigegebene Werkzeug
-feststehen.
+Benötigt werden Python ab Version 3.11, Git und `tar`. Die Produktivlogik
+nutzt die Standardbibliothek.

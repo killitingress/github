@@ -17,10 +17,6 @@ name: Zentrales Release
         description: Commit, auf den der Release-Tag zeigt
         required: true
         type: string
-      automation_ref:
-        description: Commit-SHA in mtext_actions mit den Skripten für das Release
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -43,12 +39,12 @@ jobs:
           ref: refs/tags/${{ inputs.release_tag }}
           token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
 
-      # Lädt die Skripte für die Release-Erstellung
+      # Lädt die Implementierung aus demselben Commit wie diesen Workflow
       - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
-          ref: ${{ inputs.automation_ref }}
+          ref: ${{ github.workflow_sha }}
           path: automation
           persist-credentials: false
 
@@ -88,12 +84,12 @@ jobs:
       cancel-in-progress: false
     timeout-minutes: 15
     steps:
-      # Lädt die Skripte für die Mainframe-Übergabe
+      # Lädt die Implementierung aus demselben Commit wie diesen Workflow
       - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
-          ref: ${{ inputs.automation_ref }}
+          ref: ${{ github.workflow_sha }}
           path: automation
           persist-credentials: false
 
@@ -127,12 +123,12 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 15
     steps:
-      # Lädt die zum Release gehörende CI/CD-Version
+      # Lädt die Implementierung aus demselben Commit wie diesen Workflow
       - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
-          ref: ${{ inputs.automation_ref }}
+          ref: ${{ github.workflow_sha }}
           path: automation
           persist-credentials: false
 

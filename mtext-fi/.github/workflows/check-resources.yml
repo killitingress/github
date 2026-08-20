@@ -1,10 +1,15 @@
 name: Mandantenkonfiguration und Ressourcen prüfen
 
-# Bei Pull Requests prüft dieser Workflow Mandantenkonfiguration sowie die
-# geänderten JSON- und XML-Ressourcen. Ein manueller Start prüft den ganzen Stand.
+# Bei Pull Requests prüft dieser Workflow die Mandantenkonfiguration und die
+# geänderten Ressourcen. Manuell kann die Ressourcenprüfung abgewählt werden.
 'on':
   pull_request:
   workflow_dispatch:
+    inputs:
+      check_resources:
+        description: JSON- und XML-Ressourcen prüfen
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -15,7 +20,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Der zentrale Workflow führt Konfigurations- und Ressourcenprüfung aus.
   check:
     name: Mandantenkonfiguration und Ressourcen prüfen
     timeout-minutes: 15
@@ -25,6 +29,7 @@ jobs:
       commit_sha: ${{ github.sha }}
       # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
       automation_ref: 0000000000000000000000000000000000000000
+      check_resources: ${{ github.event_name != 'workflow_dispatch' || inputs.check_resources }}
       changed_only: ${{ github.event_name == 'pull_request' }}
     secrets:
       automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

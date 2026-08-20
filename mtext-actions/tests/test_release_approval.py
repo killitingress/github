@@ -7,12 +7,12 @@ import unittest
 from dataclasses import replace
 
 from lbs_delivery.config import load_configuration
-from lbs_delivery.mainframe_release import build_release
+from lbs_delivery.mainframe_release import _build_release
 from lbs_delivery.process import DeliveryError
 from lbs_delivery.release_approval import (
-    check_release_approval,
-    finalize_release_approval,
-    prepare_release_approval,
+    _check_release_approval,
+    _finalize_release_approval,
+    _prepare_release_approval,
 )
 
 from tests.support import TempDirTestCase, git, jcl_template, load_test_configuration, setup_release_repository
@@ -36,7 +36,7 @@ class ReleaseApprovalTests(TempDirTestCase):
     def prepare(self) -> tuple[str, str]:
         """Aktualisiert und committet die Release-Version im Test-Repository."""
 
-        approval_branch, path = prepare_release_approval(
+        approval_branch, path = _prepare_release_approval(
             self.configuration,
             repository_root=self.repository,
             tag="v261.108",
@@ -62,7 +62,7 @@ class ReleaseApprovalTests(TempDirTestCase):
     def test_prepares_release_version(self) -> None:
         """Schreibt die gewählte Version als einzige fachliche Freigabeangabe."""
 
-        approval_branch, path = prepare_release_approval(
+        approval_branch, path = _prepare_release_approval(
             self.configuration,
             repository_root=self.repository,
             tag="v261.108",
@@ -75,7 +75,7 @@ class ReleaseApprovalTests(TempDirTestCase):
         self.assertEqual(document["mandant"]["letztes_release"], "v261.108")
 
         with self.assertRaisesRegex(DeliveryError, "ohne Buchstabensuffix"):
-            prepare_release_approval(
+            _prepare_release_approval(
                 self.configuration,
                 repository_root=self.repository,
                 tag="v261.108a",
@@ -89,7 +89,7 @@ class ReleaseApprovalTests(TempDirTestCase):
 
         approval_branch, target_sha = self.prepare()
         configuration = load_configuration(self.repository, self.configuration.repository)
-        summary = check_release_approval(
+        summary = _check_release_approval(
             configuration,
             repository_root=self.repository,
             approval_branch=approval_branch,
@@ -109,7 +109,7 @@ class ReleaseApprovalTests(TempDirTestCase):
         configuration = load_configuration(self.repository, self.configuration.repository)
 
         with self.assertRaisesRegex(DeliveryError, "andere Release-Version"):
-            check_release_approval(
+            _check_release_approval(
                 replace(configuration, letztes_release="v261.107"),
                 repository_root=self.repository,
                 approval_branch=approval_branch,
@@ -119,7 +119,7 @@ class ReleaseApprovalTests(TempDirTestCase):
 
         git(self.repository, "tag", "v261.108", target_sha)
         with self.assertRaisesRegex(DeliveryError, "bereits vorhanden"):
-            check_release_approval(
+            _check_release_approval(
                 configuration,
                 repository_root=self.repository,
                 approval_branch=approval_branch,
@@ -130,7 +130,7 @@ class ReleaseApprovalTests(TempDirTestCase):
 
         git(self.repository, "checkout", "--detach", self.source_sha)
         with self.assertRaisesRegex(DeliveryError, "Checkout stimmt nicht"):
-            check_release_approval(
+            _check_release_approval(
                 configuration,
                 repository_root=self.repository,
                 approval_branch=approval_branch,
@@ -144,7 +144,7 @@ class ReleaseApprovalTests(TempDirTestCase):
         approval_branch, merge_sha = self.prepare()
         configuration = load_configuration(self.repository, self.configuration.repository)
         pull_request = self.merged_pull_request(approval_branch, merge_sha)
-        tag = finalize_release_approval(
+        tag = _finalize_release_approval(
             configuration,
             repository_root=self.repository,
             approval_branch=approval_branch,
@@ -156,7 +156,7 @@ class ReleaseApprovalTests(TempDirTestCase):
 
         pull_request["merged"] = False
         with self.assertRaisesRegex(DeliveryError, "nicht zusammengeführt"):
-            finalize_release_approval(
+            _finalize_release_approval(
                 configuration,
                 repository_root=self.repository,
                 approval_branch=approval_branch,
@@ -173,7 +173,7 @@ class ReleaseApprovalTests(TempDirTestCase):
         pull_request = self.merged_pull_request(approval_branch, merge_sha)
         pull_request["base"] = {"ref": "main"}
         with self.assertRaisesRegex(DeliveryError, "anderen Branch zusammengeführt"):
-            finalize_release_approval(
+            _finalize_release_approval(
                 configuration,
                 repository_root=self.repository,
                 approval_branch=approval_branch,
@@ -184,7 +184,7 @@ class ReleaseApprovalTests(TempDirTestCase):
 
         configuration = load_test_configuration(self.repository, mandant={"letztes_release": "v261.107"})
         with self.assertRaisesRegex(DeliveryError, "andere Release-Version"):
-            finalize_release_approval(
+            _finalize_release_approval(
                 configuration,
                 repository_root=self.repository,
                 approval_branch=approval_branch,
@@ -199,7 +199,7 @@ class ReleaseApprovalTests(TempDirTestCase):
         git(self.repository, "tag", "v261.108", self.source_sha)
         git(self.repository, "checkout", "--detach", "v261.108")
         with self.assertRaisesRegex(DeliveryError, "andere freigegebene Release-Version"):
-            build_release(
+            _build_release(
                 self.configuration,
                 repository_root=self.repository,
                 output_directory=self.root / "rejected-release",
@@ -209,7 +209,7 @@ class ReleaseApprovalTests(TempDirTestCase):
             )
 
         configuration = replace(self.configuration, letztes_release="v261.108")
-        build_release(
+        _build_release(
             configuration,
             repository_root=self.repository,
             output_directory=self.root / "release",

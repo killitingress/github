@@ -21,20 +21,20 @@ from .config import Configuration
 from .process import DeliveryError, Status
 
 
-# Der gemeinsame Dateiname ordnet die Informationsdatei ohne Transportdetails
-# eindeutig einem Mandanten und Projekt zu.
-INFORMATION_NAME = "_INFO_{kuerzel}-{project}.json"
+# Der gemeinsame Dateiname ordnet die Informationsdatei eindeutig einem
+# Mandanten und Projekt zu.
+_INFORMATION_NAME = "_INFO_{kuerzel}-{project}.json"
 
 # Beim Prüfsummenvergleich werden Archive blockweise gelesen, damit auch große
 # FULL-Pakete keinen entsprechend großen Arbeitsspeicher benötigen.
-HASH_BLOCK_SIZE = 1024 * 1024
+_HASH_BLOCK_SIZE = 1024 * 1024
 
 # Die Release-Version `100` bezeichnet die FULL-Lieferung einer Releaselinie.
 # Jedes weitere Release der Linie liefert die Änderungen gegenüber diesem Stand.
-FULL_RELEASE = "100"
-FULL_SUFFIX = f".{FULL_RELEASE}"
+_FULL_RELEASE = "100"
 
 
+# Bezugsstand und projektbezogene Elementliste für FULL- und DELTA-Lieferungen.
 def release_scope(
     repository_root: str | Path,
     tag: str,
@@ -51,26 +51,15 @@ def release_scope(
     if tag_match is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
 
-    if tag_match.group("release") == FULL_RELEASE:
+    # FULL hat keinen Bezugsstand und keinen Git-Vergleich.
+    if tag_match.group("release") == _FULL_RELEASE:
         return None, []
 
-    base_reference = f"v{tag_match.group('releaselinie')}{FULL_SUFFIX}"
+    # DELTA vergleicht kumulativ mit dem FULL-Tag derselben Releaselinie.
+    base_reference = f"v{tag_match.group('releaselinie')}.{_FULL_RELEASE}"
     base_sha = git.resolve(repository_root, f"refs/tags/{base_reference}")
     git.require_ancestor(repository_root, base_sha, target_sha)
     return (base_reference, base_sha), git.changes(repository_root, base_sha, target_sha)
-
-
-def package_stand(
-    *, base: tuple[str, str] | None, target: tuple[str, str]
-) -> dict[str, object]:
-    """Erstellt den gemeinsamen Bezugs- und Zielstand der Lieferinformationen."""
-
-    stand: dict[str, object] = {
-        "bis": {"referenz": target[0], "commit": target[1]},
-    }
-    if base is not None:
-        stand["von"] = {"referenz": base[0], "commit": base[1]}
-    return stand
 
 
 def project_elements(
@@ -88,6 +77,7 @@ def project_elements(
     """
 
     root = Path(repository_root)
+    # FULL: alle Projektdateien als hinzugefügt melden.
     if base is None:
         return [
             ["A", path.relative_to(root / project).as_posix()]
@@ -95,12 +85,14 @@ def project_elements(
             if path.is_file()
         ]
 
+    # DELTA: Status und Pfade aus dem bereits bestimmten Git-Vergleich übernehmen.
     return [
         [status, Path(path).relative_to(project).as_posix()]
         for status, path in git.project_changes(changes, project)
     ]
 
 
+# F- und D-Archive sowie ihre Prüfsummen erzeugen.
 def _write_archive(archive_path: Path, source_directory: Path, entries: Iterable[str]) -> None:
     """Erzeugt ein gzip-komprimiertes TAR-Archiv mit den angegebenen Einträgen."""
 
@@ -120,8 +112,7 @@ def _write_delta_archive(
     archive_path: Path,
     repository_root: Path,
     project: str,
-    project_code: str,
-    kuerzel: str,
+    deletion_list: str,
     elements: list[list[str]],
 ) -> None:
     """Erzeugt ein D-Archiv aus der gemeinsamen Elementliste.
@@ -135,6 +126,7 @@ def _write_delta_archive(
         deleted: list[str] = []
 
         try:
+            # Geänderte Dateien nach Staging kopieren, Löschungen nur sammeln.
             (staging / project).mkdir(parents=True)
             for status, relative in elements:
                 repository_relative = Path(project, relative)
@@ -148,8 +140,8 @@ def _write_delta_archive(
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source, destination)
 
-            deletion_name = f"{kuerzel}{project_code}D.txt"
-            (staging / deletion_name).write_text(
+            # Löschliste und Archivinhalt im Staging bereitstellen.
+            (staging / deletion_list).write_text(
                 "".join(f"{path}\n" for path in deleted),
                 encoding="utf-8",
             )
@@ -166,13 +158,14 @@ def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     try:
         with path.open("rb") as package:
-            while block := package.read(HASH_BLOCK_SIZE):
+            while block := package.read(_HASH_BLOCK_SIZE):
                 digest.update(block)
     except OSError as exc:
         raise DeliveryError(Status.PACKAGE_FAILED, "Projektarchiv kann nicht geprüft werden") from exc
     return digest.hexdigest()
 
 
+# Öffentliche Paketerzeugung für Sync und Release.
 def build_project_package(
     configuration: Configuration,
     *,
@@ -198,30 +191,35 @@ def build_project_package(
     except OSError as exc:
         raise DeliveryError(Status.PACKAGE_FAILED, "Paketausgabeverzeichnis kann nicht erstellt werden") from exc
 
+    # Gemeinsame Elementliste für Archiv, Löschliste und Informationsdatei.
     elements = project_elements(root, project, base=base, changes=changes)
 
     prefix = f"{configuration.kuerzel}{project_code}"
     archives: list[Path] = []
+    # FULL erhält zusätzlich das vollständige F-Archiv.
     if base is None:
         full_archive = output / f"{prefix}F.tgz"
         _write_archive(full_archive, root, [f"./{project}"])
         archives.append(full_archive)
 
+    # D-Archiv entsteht immer. Bei FULL bleibt die Änderungsmenge leer.
     delta_archive = output / f"{prefix}D.tgz"
     _write_delta_archive(
         delta_archive,
         root,
         project,
-        project_code,
-        configuration.kuerzel,
+        f"{prefix}D.txt",
         [] if base is None else elements,
     )
     archives.append(delta_archive)
 
-    stand = package_stand(base=base, target=target)
+    # Stand, Prüfsummen und Elementliste in der Informationsdatei ablegen.
+    stand: dict[str, object] = {"bis": {"referenz": target[0], "commit": target[1]}}
+    if base is not None:
+        stand["von"] = {"referenz": base[0], "commit": base[1]}
 
     checksums = {archive.stem[-1]: _sha256(archive) for archive in archives}
-    information = output / INFORMATION_NAME.format(kuerzel=configuration.kuerzel, project=project)
+    information = output / _INFORMATION_NAME.format(kuerzel=configuration.kuerzel, project=project)
     try:
         information.write_text(
             json.dumps(

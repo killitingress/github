@@ -9,7 +9,7 @@ import unittest
 from contextlib import redirect_stderr
 
 from lbs_delivery.process import DeliveryError
-from lbs_delivery.rollout import build_update_matrix, prepare_mandant_update, verify_automation
+from lbs_delivery.rollout import _build_update_matrix, _prepare_mandant_update, _verify_automation
 
 from tests.support import AUTOMATION_ROOT, TempDirTestCase, git, init_git_repository, ZERO_SHA
 
@@ -53,11 +53,11 @@ class UpdateWorkflowsTests(TempDirTestCase):
     def test_rollout_preparation_and_verification(self) -> None:
         initial_sha = git(self.automation_root, "rev-parse", "HEAD")
         with self.assertRaisesRegex(DeliveryError, "angegebenen Commit"):
-            verify_automation(self.automation_root, "1" * 40)
+            _verify_automation(self.automation_root, "1" * 40)
 
         with redirect_stderr(io.StringIO()):
-            automation_sha = verify_automation(self.automation_root, initial_sha)
-            mandant_sha = prepare_mandant_update(self.automation_root, self.mandant_root, automation_sha)
+            automation_sha = _verify_automation(self.automation_root, initial_sha)
+            mandant_sha = _prepare_mandant_update(self.automation_root, self.mandant_root, automation_sha)
         workflow = self.mandant_workflow.read_text(encoding="utf-8")
         self.assertEqual(workflow.count(automation_sha), 2)
         self.assertIn("sync:", workflow)
@@ -65,8 +65,8 @@ class UpdateWorkflowsTests(TempDirTestCase):
         self.assertEqual(self.independent_workflow.read_text(encoding="utf-8"), INDEPENDENT_WORKFLOW)
 
         with redirect_stderr(io.StringIO()):
-            self.assertEqual(verify_automation(self.automation_root, automation_sha), automation_sha)
-            self.assertEqual(prepare_mandant_update(self.automation_root, self.mandant_root, automation_sha), mandant_sha)
+            self.assertEqual(_verify_automation(self.automation_root, automation_sha), automation_sha)
+            self.assertEqual(_prepare_mandant_update(self.automation_root, self.mandant_root, automation_sha), mandant_sha)
 
     def test_builds_update_matrix(self) -> None:
         mandanten = self.root / "mandanten.json"
@@ -92,7 +92,7 @@ class UpdateWorkflowsTests(TempDirTestCase):
             ),
             encoding="utf-8",
         )
-        matrix = build_update_matrix(mandanten, releaselinien)["include"]
+        matrix = _build_update_matrix(mandanten, releaselinien)["include"]
         self.assertEqual(len(matrix), 6)
         self.assertIn(
             {"repository": "FinanzInformatik/fi_lbs_entw_oms_fi", "kuerzel": "FI", "branch": "release/R261"},

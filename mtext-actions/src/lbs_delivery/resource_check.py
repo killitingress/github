@@ -16,26 +16,20 @@ from . import git
 from .process import DeliveryError, Status
 
 
-def reject_nonstandard_number(value: str) -> None:
-    """Lehnt JavaScript-Zahlen ab, die der JSON-Standard nicht erlaubt."""
-
-    raise ValueError(f"nicht erlaubter Zahlenwert {value}")
-
-
-def check_json(path: Path) -> tuple[int, int, str] | None:
-    """Prüft eine JSON-Datei nach dem JSON-Standard und lokalisiert Syntaxfehler."""
+def _check_json(path: Path) -> tuple[int, int, str] | None:
+    """Prüft eine JSON-Datei und lokalisiert Syntaxfehler."""
 
     try:
         with path.open("rb") as source:
-            json.load(source, parse_constant=reject_nonstandard_number)
+            json.load(source)
     except json.JSONDecodeError as error:
         return error.lineno, error.colno, error.msg
-    except (UnicodeError, ValueError) as error:
+    except UnicodeError as error:
         return 1, 1, str(error)
     return None
 
 
-def check_xml(path: Path) -> tuple[int, int, str] | None:
+def _check_xml(path: Path) -> tuple[int, int, str] | None:
     """Prüft eine XML-Datei auf Wohlgeformtheit und lokalisiert Parsefehler."""
 
     try:
@@ -49,25 +43,26 @@ def check_xml(path: Path) -> tuple[int, int, str] | None:
 
 
 # Die Formatzuordnung wählt über diese Tabelle den passenden Parser aus.
-CHECKERS = {"json": check_json, "xml": check_xml}
+_CHECKERS = {"json": _check_json, "xml": _check_xml}
 
 
-def load_resource_formats(path: Path) -> dict[str, str]:
+def _load_resource_formats(path: Path) -> dict[str, str]:
     """Lädt die zentrale Zuordnung von Dateiendungen zu technischen Formaten."""
 
     extensions = json.loads(path.read_text(encoding="utf-8"))["dateiendungen"]
     resource_formats: dict[str, str] = {}
     for extension, resource_format in extensions.items():
+        # Endungen werden kleingeschrieben und müssen eindeutig einem bekannten Parser gehören.
         normalized = extension.lower()
         if normalized in resource_formats:
             raise ValueError("Ressourcenformat-Zuordnung enthält eine Dateiendung mehrfach")
-        if resource_format not in CHECKERS:
+        if resource_format not in _CHECKERS:
             raise ValueError("Ressourcenformat-Zuordnung ist ungültig")
         resource_formats[normalized] = resource_format
     return resource_formats
 
 
-def resource_paths(root: Path, resource_formats: dict[str, str], *, changed_only: bool) -> list[Path]:
+def _resource_paths(root: Path, resource_formats: dict[str, str], *, changed_only: bool) -> list[Path]:
     """Ermittelt alle oder die im Pull Request geänderten Ressourcendateien."""
 
     if changed_only:
@@ -75,11 +70,13 @@ def resource_paths(root: Path, resource_formats: dict[str, str], *, changed_only
         # werden durch is_file vor der Prüfung ausgeschlossen.
         candidates = [root / change.path for change in git.changes(root, "HEAD^1", "HEAD")]
     else:
+        # Manueller Lauf prüft den gesamten Mandantenstand ohne versteckte Verzeichnisse.
         candidates = []
         for directory, directories, filenames in os.walk(root):
             directories[:] = [name for name in directories if not name.startswith(".")]
             candidates.extend(Path(directory) / filename for filename in filenames)
 
+    # Nur vorhandene Dateien mit bekannter Endung außerhalb versteckter Pfade prüfen.
     return sorted(
         path
         for path in candidates
@@ -92,47 +89,35 @@ def resource_paths(root: Path, resource_formats: dict[str, str], *, changed_only
     )
 
 
-def check_resources(
-    root: Path, resource_formats: dict[str, str], *, changed_only: bool
-) -> tuple[list[Path], list[tuple[Path, int, int, str]]]:
-    """Prüft die ausgewählten Ressourcen und gibt Dateien sowie Befunde zurück."""
-
-    paths = resource_paths(root, resource_formats, changed_only=changed_only)
-    findings: list[tuple[Path, int, int, str]] = []
-    for path in paths:
-        if (finding := CHECKERS[resource_formats[path.suffix.lower()]](path)) is not None:
-            findings.append((path.relative_to(root), *finding))
-    return paths, findings
-
-
-def escape_workflow_command(value: object, *, property_value: bool = False) -> str:
+def _escape_workflow_command(value: object, *, property_value: bool = False) -> str:
     """Maskiert Zeichen, die GitHub als Teil eines Workflow-Kommandos liest."""
 
     escaped = str(value).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
     return escaped.replace(":", "%3A").replace(",", "%2C") if property_value else escaped
 
 
-def write_warning(path: Path, line: int, column: int, message: str) -> None:
-    """Schreibt einen Befund als Datei-Warnung in das GitHub-Actions-Protokoll."""
-
-    print(
-        f"::warning file={escape_workflow_command(path.as_posix(), property_value=True)},line={line},col={column},"
-        f"title=Ungültige Ressource::{escape_workflow_command(message)}"
-    )
-
-
 def run(*, root: Path, formats_path: Path, changed_only: bool) -> dict[str, object]:
     """Prüft Ressourcen, schreibt Warnungen und gibt das Workflow-Ergebnis zurück."""
 
+    # Formatzuordnung laden und die ausgewählten Ressourcen prüfen.
     try:
-        resource_formats = load_resource_formats(formats_path)
+        resource_formats = _load_resource_formats(formats_path)
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         raise DeliveryError(Status.VALIDATION_FAILED, str(exc)) from exc
 
-    paths, findings = check_resources(root, resource_formats, changed_only=changed_only)
+    paths = _resource_paths(root, resource_formats, changed_only=changed_only)
+    findings: list[tuple[Path, int, int, str]] = []
+    for path in paths:
+        # Der Parser richtet sich nach der Endung aus der Formatzuordnung.
+        if (finding := _CHECKERS[resource_formats[path.suffix.lower()]](path)) is not None:
+            findings.append((path.relative_to(root), *finding))
 
+    # Syntaxbefunde als GitHub-Warnungen ausgeben, ohne den Lauf zu blockieren.
     for path, line, column, message in findings:
-        write_warning(path, line, column, message)
+        print(
+            f"::warning file={_escape_workflow_command(path.as_posix(), property_value=True)},line={line},col={column},"
+            f"title=Ungültige Ressource::{_escape_workflow_command(message)}"
+        )
 
     if summary_path := os.environ.get("GITHUB_STEP_SUMMARY"):
         Path(summary_path).write_text(

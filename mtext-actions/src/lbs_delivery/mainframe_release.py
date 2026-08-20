@@ -22,10 +22,10 @@ from .project_package import build_project_package, release_scope
 
 
 # FULL- und DELTA-Pakete werden als Member in diesem Mainframe-Dataset abgelegt.
-MAINFRAME_DATASET = "IEA.LOMS.TONICZ"
+_MAINFRAME_DATASET = "IEA.LOMS.TONICZ"
 
 # Die erzeugte JCL wird an dieses JES-Ziel übergeben.
-MAINFRAME_JES_TARGET = "LIT9028A"
+_MAINFRAME_JES_TARGET = "LIT9028A"
 
 # Prüft ein Mainframe-Subsystem anhand des Zeichenvorrats und der Feldlänge,
 # die Vorlage und Zielsystem akzeptieren.
@@ -38,9 +38,7 @@ _MEMBER_RE = re.compile(r"[A-Z0-9]{1,8}")
 _ASSIGNMENT_RE = re.compile(r"[A-Z0-9]{1,12}")
 
 
-def _render_jcl(
-    template: str, *, ispw: str, level: str, subsystem: str, assignment: str, member: str,
-) -> str:
+def _render_jcl(template: str, *, ispw: str, level: str, subsystem: str, assignment: str, member: str) -> str:
     """Prüft die Mainframe-Werte und setzt sie in die JCL-Vorlage ein."""
 
     # Nur Werte einsetzen, die von der Vorlage und dem Mainframe akzeptiert werden.
@@ -54,16 +52,13 @@ def _render_jcl(
         raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Werte sind ungültig")
 
     # Platzhalter in der Vorlage durch die geprüften Werte ersetzen.
-    values = {
-        "ISPW": ispw,
-        "LEVEL": level,
-        "SUBSYS": subsystem,
-        "ASSIGNMENT": assignment,
-        "MEMBER": member,
-    }
-    rendered = template
-    for name, value in values.items():
-        rendered = rendered.replace(f"@@{name}@@", value)
+    rendered = (
+        template.replace("@@ISPW@@", ispw)
+        .replace("@@LEVEL@@", level)
+        .replace("@@SUBSYS@@", subsystem)
+        .replace("@@ASSIGNMENT@@", assignment)
+        .replace("@@MEMBER@@", member)
+    )
 
     # Wenn noch @@-Platzhalter im resultierenden JCL stehen, ist die Vorlage wohl ungültig.
     if "@@" in rendered:
@@ -88,12 +83,12 @@ def _submit_package(
         session.set_pasv(True)
 
         with Path(package_path).open("rb") as package:
-            session.storbinary(f"STOR '{MAINFRAME_DATASET}({member})'", package)
+            session.storbinary(f"STOR '{_MAINFRAME_DATASET}({member})'", package)
 
         session.sendcmd("SITE FILETYPE=JES")
 
         with Path(jcl_path).open("rb") as jcl:
-            session.storlines(f"STOR {MAINFRAME_JES_TARGET}", jcl)
+            session.storlines(f"STOR {_MAINFRAME_JES_TARGET}", jcl)
 
         session.quit()
     except ftplib.all_errors as exc:
@@ -101,14 +96,16 @@ def _submit_package(
         raise DeliveryError(Status.MAINFRAME_TRANSFER_FAILED, "FTPS-/JES-Übergabe fehlgeschlagen") from exc
 
 
-def publish_mainframe(*, artifact_root: str | Path) -> dict[str, object]:
+def _publish_mainframe(*, artifact_root: str | Path) -> dict[str, object]:
     """Übergibt alle vorbereiteten Pakete und JCL-Dateien an den Mainframe."""
 
+    # Pakete und JCL im Artefaktverzeichnis voraussetzen.
     root = Path(artifact_root)
     packages = sorted(root.glob("*.tgz"))
     if not packages or any(not package.with_suffix(".jcl").is_file() for package in packages):
         raise DeliveryError(Status.PACKAGE_FAILED, "Releasepakete oder JCL fehlen")
 
+    # FTPS-Zugang aus der Runner-Umgebung lesen.
     host = os.environ["MAINFRAME_FTPS_HOST"]
     user = os.environ["MAINFRAME_FTPS_USER"]
     password = os.environ["MAINFRAME_FTPS_PASSWORD"]
@@ -119,6 +116,7 @@ def publish_mainframe(*, artifact_root: str | Path) -> dict[str, object]:
     if not 1 <= port <= 65_535:
         raise DeliveryError(Status.VALIDATION_FAILED, "FTPS-Port ist ungültig")
 
+    # Jedes Paket mit seiner JCL an den Mainframe übergeben.
     for package in packages:
         _submit_package(
             package,
@@ -134,7 +132,7 @@ def publish_mainframe(*, artifact_root: str | Path) -> dict[str, object]:
 
 
 # Der Paketbau wird vom gleichnamigen Workflow-Einstieg aufgerufen.
-def build_release(
+def _build_release(
     configuration: Configuration,
     *, repository_root: str | Path, output_directory: str | Path, jcl_template: str, tag: str,
     trigger_sha: str,
@@ -151,11 +149,14 @@ def build_release(
     tag_match = git.RELEASE_TAG_RE.fullmatch(tag)
     if tag_match is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
+
     releaselinie = f"R{tag_match.group('releaselinie')}"
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
+
     allowed_branches = release_branches(configuration, releaselinie)
     target_sha = git.require_release_commit(root, tag, allowed_branches)
+
     if trigger_sha and trigger_sha != target_sha:
         raise DeliveryError(Status.SOURCE_FAILED, "auslösender Commit stimmt nicht zum Tag")
 
@@ -163,10 +164,7 @@ def build_release(
     # Stand durch den Freigabe-Pull-Request eingetragen wurde. Beta-Tags nutzen
     # diesen Freigabeweg nicht.
     if not tag_match.group("beta_suffix") and configuration.letztes_release != tag:
-        raise DeliveryError(
-            Status.SOURCE_FAILED,
-            "Mandantenkonfiguration nennt eine andere freigegebene Release-Version",
-        )
+        raise DeliveryError(Status.SOURCE_FAILED, "Mandantenkonfiguration nennt eine andere freigegebene Release-Version")
 
     # FULL- oder DELTA-Lieferung und ihren tatsächlichen Paketvergleich bestimmen.
     base, cumulative = release_scope(root, tag, target_sha)
@@ -193,6 +191,7 @@ def build_release(
             base=base,
             target=(tag, target_sha),
         )
+
         for package_path in archives:
             member = package_path.stem
             package_path.with_suffix(".jcl").write_text(
@@ -214,7 +213,8 @@ def run_build_command(arguments: argparse.Namespace) -> dict[str, object]:
     workspace = Path(os.environ.get("GITHUB_WORKSPACE", "."))
     source = workspace / "source"
     configuration = config.load_configuration(source, os.environ["SOURCE_REPOSITORY"])
-    build_release(
+    
+    _build_release(
         configuration,
         repository_root=source,
         output_directory=workspace / "dist",
@@ -222,6 +222,7 @@ def run_build_command(arguments: argparse.Namespace) -> dict[str, object]:
         tag=arguments.tag,
         trigger_sha=arguments.trigger_sha,
     )
+
     return {"status": Status.ARTIFACT_READY.value} | (
         {"warnungen": list(configuration.warnungen)} if configuration.warnungen else {}
     )
@@ -230,4 +231,4 @@ def run_build_command(arguments: argparse.Namespace) -> dict[str, object]:
 def run_publish_command(_arguments: argparse.Namespace) -> dict[str, object]:
     """Übergibt die vorbereiteten Release-Dateien an den Mainframe."""
 
-    return publish_mainframe(artifact_root=Path(os.environ["RELEASE_DIRECTORY"]))
+    return _publish_mainframe(artifact_root=Path(os.environ["RELEASE_DIRECTORY"]))

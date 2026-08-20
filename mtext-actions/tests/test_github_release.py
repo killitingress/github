@@ -5,9 +5,9 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from lbs_delivery.github import publish_release
+from lbs_delivery.github import _publish_release
 from lbs_delivery.process import Status
-from lbs_delivery.mainframe_release import build_release
+from lbs_delivery.mainframe_release import _build_release
 
 from tests.support import (
     TempDirTestCase,
@@ -37,7 +37,7 @@ class GitHubReleaseTests(TempDirTestCase):
         self.dist = self.root / "dist"
 
         git(self.repository, "checkout", "--detach", "v261.108")
-        build_release(
+        _build_release(
             self.configuration,
             repository_root=self.repository,
             output_directory=self.dist,
@@ -54,7 +54,7 @@ class GitHubReleaseTests(TempDirTestCase):
             return handler(arguments)
 
         with patch("lbs_delivery.github.request", side_effect=request):
-            result = publish_release(
+            result = _publish_release(
                 artifact_root=self.dist,
                 repository=self.configuration.repository,
                 **PUBLISH_KWARGS,

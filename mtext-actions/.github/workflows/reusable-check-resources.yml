@@ -1,19 +1,25 @@
 name: Wiederverwendbare Konfigurations- und Ressourcenprüfung
 
-# Dieser Workflow prüft Mandantenkonfiguration sowie JSON- und XML-Ressourcen.
+# Dieser Workflow prüft die Mandantenkonfiguration. Die Prüfung der JSON- und
+# XML-Ressourcen ist optional und bei Pull Requests auf geänderte Dateien begrenzt.
 'on':
   workflow_call:
     inputs:
       commit_sha:
-        description: Commit im Mandanten-Repository, dessen Ressourcen geprüft werden
+        description: Commit im Mandanten-Repository, dessen Stand geprüft wird
         required: true
         type: string
       automation_ref:
         description: CI/CD-Version, aus der dieser Workflow geladen wurde
         required: true
         type: string
+      check_resources:
+        description: JSON- und XML-Ressourcen prüfen
+        required: false
+        default: true
+        type: boolean
       changed_only:
-        description: Bei Pull Requests nur geänderte Ressourcen prüfen
+        description: Nur geänderte Ressourcen prüfen
         required: false
         default: false
         type: boolean
@@ -31,17 +37,15 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 15
     steps:
-      # Lädt den zu prüfenden Commit in den Arbeitsbereich
       - name: Check-Out Mandanten-Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           path: source
-          # Lädt auch den vorherigen Commit für den Vergleich
-          fetch-depth: 2
+          # Bei geänderten Ressourcen wird der vorherige Commit für den Diff benötigt
+          fetch-depth: ${{ inputs.check_resources && inputs.changed_only && 2 || 1 }}
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
 
-      # Lädt die festgelegte Version der Prüfungen.
       - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -51,19 +55,18 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.automation_token }}
 
-      # Prüft Git und Python und stellt den Python-Pfad bereit.
       - name: Python-Runtime ermitteln
         id: runtime
         run: bash automation/scripts/runner-preflight.sh
 
-      # Prüft die Mandantenkonfiguration ohne Ressourcen zu übertragen.
       - name: Mandantenkonfiguration prüfen
         run: >-
           "${{ steps.runtime.outputs.python }}" automation/src/mtext.py
           validate-config
 
-      # Prüft JSON-Syntax und XML-Wohlgeformtheit und gibt Befunde als Warnungen aus.
+      # Pull Requests prüfen den Diff, manuelle Vollprüfungen den gesamten Stand.
       - name: Ressourcen prüfen
+        if: inputs.check_resources
         env:
           CHANGED_ONLY: ${{ inputs.changed_only && '--changed-only' || '' }}
         run: >-

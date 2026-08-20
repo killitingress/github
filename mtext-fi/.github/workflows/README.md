@@ -1,41 +1,32 @@
 # CI/CD-Workflows des Mandanten-Repositories
 
-Die Workflowdateien enthalten die Git-Auslöser des Mandanten. Die
-CI/CD-Implementierung wird über eine Commit-SHA aus
-`FinanzInformatik/fi_lbs_entw_oms_mtext_actions`, kurz `mtext_actions`, geladen.
+Die Workflowdateien starten die Läufe dieses Mandanten-Repositories. Die
+eigentliche CI/CD-Implementierung kommt aus
+`FinanzInformatik/fi_lbs_entw_oms_mtext_actions` (`mtext_actions`) über eine
+Commit-SHA.
 
-## Benötigtes Repository-Secret
+## Voraussetzungen
 
 `MTEXT_ACTIONS_TOKEN` ist ein Fine-grained PAT eines technischen
-GitHub-Benutzers. Es ist auf das zentrale CI/CD-Repository begrenzt
-und besitzt:
+GitHub-Benutzers für `mtext_actions` mit:
 
-- `Contents: read` zum Laden der angegebenen CI/CD-Version,
-- `Actions: write` zum Starten des zentralen Release-Workflows.
+- `Contents: read` zum Laden der CI/CD-Version
+- `Actions: write` zum Starten des zentralen Release-Workflows
 
 Mainframe-Zugangsdaten liegen nicht im Mandanten-Repository.
 
-Die zentral bereitgestellte Organisationsvariable `MTEXT_CIFS_ROOT` bezeichnet
-den auf dem Runner eingehängten CIFS-Basispfad für die Adapterübergabe.
+Die Organisationsvariable `MTEXT_CIFS_ROOT` bezeichnet den auf dem Runner
+eingehängten CIFS-Basispfad für die Adapterübergabe.
 
 ## `check-resources.yml`
 
-Jeder Pull Request prüft Mandantenkonfiguration sowie hinzugefügte, geänderte
-und umbenannte Ressourcen. Welche Dateiendungen als JSON oder XML gelesen
-werden, legt `config/ressourcenformate.json` in `mtext_actions` fest. Über
-**Run workflow** kann für den gewählten Branch eine Vollprüfung gestartet
-werden.
-
-Ungültige JSON-Syntax und nicht wohlgeformtes XML erscheinen mit Datei und
-Fundstelle als Warnungen. Diese Befunde lassen den Lauf erfolgreich enden und
-verhindern den Merge nicht.
-
-Eine spätere XSD-Prüfung der Tonic-XMLs benötigt zunächst das verbindliche XSD
-und seine Zuordnung zu den Ressourcen.
+Bei jedem Pull Request prüft der Lauf die Mandantenkonfiguration und nur die
+geänderten Ressourcen. Manuell prüft der Lauf standardmäßig den gesamten Stand;
+die Ressourcenprüfung lässt sich dabei abwählen. Dateiendungen und Formate
+stehen in `config/ressourcenformate.json` in `mtext_actions`. Syntaxbefunde
+erscheinen als Warnungen und blockieren den Merge nicht.
 
 ## `sync-resources.yml`
-
-Automatische Auslöser:
 
 | Branch | Ziel |
 |---|---|
@@ -43,43 +34,26 @@ Automatische Auslöser:
 | `release/Rnnn` | M/Text-Funktionstest der Releaselinie |
 | `main` | M/Text-Funktionstest der in `.github/config.json` genannten Releaselinie |
 
-Der manuelle Start erhält eine Commit-SHA. Er gleicht den Commit
-vollständig mit dem Ziel des ausgewählten Branches ab. Feature-Branches führen
-zum Ziel M/Text-Entwicklung, `main` und Release-Branches zum Ziel
-M/Text-Funktionstest. Die Releaselinie stammt aus dem ausgewählten Branch und
-bei `main` aus der Mandantenkonfiguration des Commits. Normale Push-Läufe
-verwenden den vorherigen und den neuen Commit des GitHub-Ereignisses und
-übergeben die dabei geänderten Projekte über CIFS an den Adapter.
-
-Ändert ein Push nach `main` die konfigurierte Releaselinie, wird dieser erste
-Stand automatisch vollständig mit M/Text-Entwicklung und M/Text-Funktionstest
-synchronisiert.
+Ein Push übergibt die geänderten Projekte über CIFS an den Adapter. Der
+manuelle Start gleicht die angegebene Commit-SHA vollständig mit dem Ziel des
+ausgewählten Branches ab. Ändert ein Push nach `main` die Releaselinie, folgt
+ein vollständiger Abgleich mit M/Text-Entwicklung und M/Text-Funktionstest.
 
 ## `release-approval.yml`
 
-Der manuelle Start verwendet den in GitHub ausgewählten Branch und erwartet
-die Release-Version aus dem Wartungstool. Er trägt sie als `letztes_release` in
-`.github/config.json` auf einem Branch mit dem Präfix `release-approval/` ein.
-Den Pull Request auf den Lieferbranch eröffnet die anfordernde Person selbst,
-damit sie ihn nicht selbst genehmigen kann. Der Pull Request zeigt zusätzlich
-einen Check mit Branchstand und Lieferumfang. Nach Review und Merge erstellt
-der Workflow den Release-Tag auf dem Merge-Commit des Pull Requests.
+Der manuelle Start trägt die Release-Version aus dem Wartungstool als
+`letztes_release` in `.github/config.json` auf einem Branch
+`release-approval/...` ein. Die anfordernde Person eröffnet den Pull Request
+auf den Lieferbranch selbst. Ein Check zeigt Branchstand und Lieferumfang.
+Nach Merge entsteht der Release-Tag auf dem Merge-Commit.
 
-Beta-Tags werden direkt erstellt und benötigen keinen Freigabe-Pull-Request.
-
-## `release.yml`
-
-Ein Push eines Tags wie `v261.100`, `v261.108` oder `v261.108a` ruft den
-Dispatch-Workflow der angegebenen CI/CD-Version auf. Dieser startet
-`release.yml` in `mtext_actions` mit Repository, Tag, auslösender Commit-SHA
-und der CI/CD-Version.
-
-Paketbau und Mainframe-Übergabe laufen anschließend in `mtext_actions`. Der
-Mandantenlauf erhält keinen FTPS-Zugang.
+Ein Push eines Tags (`v261.100`, `v261.108`, `v261.108a`) startet den zentralen
+Workflow `release.yml`. Beta-Tags brauchen keinen Freigabe-Pull-Request.
+Paketbau und Mainframe-Übergabe laufen in `mtext_actions`.
 
 ## Aktualisierung
 
-Der zentrale Workflow **Mandanten-Workflows aktualisieren** aktualisiert die
-Verweise auf `mtext_actions` in `main` und den vorhandenen Release-Branches. Er
-schreibt die Änderung direkt in den jeweiligen Branch. Eigene Workflows ohne
-einen Aufruf von `mtext_actions` bleiben unverändert.
+Der zentrale Workflow **Mandanten-Workflows aktualisieren** schreibt die
+Verweise auf `mtext_actions` direkt in `main` und die vorhandenen
+Release-Branches. Workflows ohne Aufruf von `mtext_actions` bleiben
+unverändert.

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import urllib.parse
 from pathlib import Path
 
 from . import config, git, github
@@ -21,7 +22,7 @@ from .project_package import project_elements, release_scope
 
 # Technische Freigabe-Branches tragen Release-Version und Laufbezug. Der
 # Abschluss erkennt damit den vorgesehenen Pull-Request-Ablauf.
-APPROVAL_BRANCH_PREFIX = "release-approval/"
+_APPROVAL_BRANCH_PREFIX = "release-approval/"
 
 
 def _regular_release_tag(tag: str, failure: Status, message: str) -> str:
@@ -52,9 +53,10 @@ def _validated_release_tag(
 ) -> str:
     """Prüft die gemeinsame Tag-, Branch- und Konfigurationsangabe des PRs."""
 
-    if not approval_branch.startswith(APPROVAL_BRANCH_PREFIX):
+    # Release-Tag aus dem Freigabe-Branch lesen und zur Releaselinie zuordnen.
+    if not approval_branch.startswith(_APPROVAL_BRANCH_PREFIX):
         raise DeliveryError(Status.SOURCE_FAILED, "Pull Request ist keine Release-Freigabe")
-    tag = approval_branch.removeprefix(APPROVAL_BRANCH_PREFIX).split("/", 1)[0]
+    tag = approval_branch.removeprefix(_APPROVAL_BRANCH_PREFIX).split("/", 1)[0]
     releaselinie = _regular_release_tag(
         tag,
         Status.SOURCE_FAILED,
@@ -67,6 +69,7 @@ def _validated_release_tag(
         Status.SOURCE_FAILED,
         "Zielbranch passt nicht zur Release-Version",
     )
+    # Konfiguration und Git-Stand müssen denselben, noch freien Tag nennen.
     if configuration.letztes_release != tag:
         raise DeliveryError(Status.SOURCE_FAILED, "Mandantenkonfiguration nennt eine andere Release-Version")
     if git.reference_exists(root, f"refs/tags/{tag}"):
@@ -74,7 +77,7 @@ def _validated_release_tag(
     return tag
 
 
-def prepare_release_approval(
+def _prepare_release_approval(
     configuration: Configuration,
     *,
     repository_root: str | Path,
@@ -86,6 +89,7 @@ def prepare_release_approval(
     """Aktualisiert die Release-Version und benennt den Freigabe-Branch."""
 
     root = Path(repository_root)
+    # Tag, Lieferbranch und ausgecheckten Branchstand prüfen.
     releaselinie = _regular_release_tag(
         tag,
         Status.VALIDATION_FAILED,
@@ -105,6 +109,7 @@ def prepare_release_approval(
     if git.reference_exists(root, f"refs/tags/{tag}"):
         raise DeliveryError(Status.SOURCE_FAILED, "Release-Tag ist bereits vorhanden")
 
+    # `letztes_release` im Arbeitsbaum setzen. Der Antragsteller öffnet den PR selbst.
     path = root / MANDANT_CONFIG_PATH
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
@@ -116,10 +121,10 @@ def prepare_release_approval(
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
         raise DeliveryError(Status.SOURCE_FAILED, "Mandantenkonfiguration kann nicht aktualisiert werden") from exc
 
-    return f"{APPROVAL_BRANCH_PREFIX}{tag}/{run_reference}", path
+    return f"{_APPROVAL_BRANCH_PREFIX}{tag}/{run_reference}", path
 
 
-def check_release_approval(
+def _check_release_approval(
     configuration: Configuration,
     *,
     repository_root: str | Path,
@@ -134,6 +139,7 @@ def check_release_approval(
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Pull Request")
     tag = _validated_release_tag(configuration, root, approval_branch, branch)
 
+    # Lieferart und Bezugsstand bestimmen, danach den geplanten Umfang je Projekt.
     base, changes = release_scope(root, tag, target_sha)
     delivery_type = "FULL" if base is None else "DELTA"
     base_reference = "–" if base is None else base[0]
@@ -162,7 +168,7 @@ def check_release_approval(
     return "\n".join(lines)
 
 
-def finalize_release_approval(
+def _finalize_release_approval(
     configuration: Configuration,
     *,
     repository_root: str | Path,
@@ -174,6 +180,7 @@ def finalize_release_approval(
     """Prüft den zusammengeführten Freigabe-PR und gibt den Release-Tag zurück."""
 
     root = Path(repository_root)
+    # Zusammengeführten PR gegen Branch, Merge-Commit und Freigabe-Branch abgleichen.
     match pull_request:
         case {
             "merged": True,
@@ -202,8 +209,10 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
     source = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "source"
     repository = os.environ["SOURCE_REPOSITORY"]
     configuration = config.load_configuration(source, repository)
+
+    # Freigabe-Branch mit aktualisiertem `letztes_release` vorbereiten.
     if arguments.approval_command == "prepare":
-        approval_branch, path = prepare_release_approval(
+        approval_branch, path = _prepare_release_approval(
             configuration,
             repository_root=source,
             tag=arguments.tag,
@@ -219,8 +228,9 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
             },
         }
 
+    # Geplanten Lieferumfang des offenen Pull Requests prüfen.
     if arguments.approval_command == "check":
-        summary = check_release_approval(
+        summary = _check_release_approval(
             configuration,
             repository_root=source,
             approval_branch=arguments.approval_branch,
@@ -232,19 +242,26 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
             "summary": summary,
         }
 
+    # Merge-Commit mit der freigegebenen Version tagen.
     if arguments.approval_command == "finalize":
-        tag = finalize_release_approval(
+        pull_request = github.request(
+            method="GET",
+            url=(
+                f"{arguments.api_url.rstrip('/')}/repos/"
+                f"{urllib.parse.quote(repository, safe='/')}/pulls/{arguments.pull_request_number}"
+            ),
+            token=os.environ["WORKFLOW_CONFIGURATION_TOKEN"],
+            failure=Status.SOURCE_FAILED,
+        )
+        if not isinstance(pull_request, dict):
+            raise DeliveryError(Status.SOURCE_FAILED, "GitHub-Antwort zum Pull Request ist ungültig")
+        tag = _finalize_release_approval(
             configuration,
             repository_root=source,
             approval_branch=arguments.approval_branch,
             branch=arguments.branch,
             merge_sha=arguments.merge_sha,
-            pull_request=github.read_pull_request(
-                api_url=arguments.api_url,
-                repository=repository,
-                number=arguments.pull_request_number,
-                token=os.environ["WORKFLOW_CONFIGURATION_TOKEN"],
-            ),
+            pull_request=pull_request,
         )
         return {"status": Status.RELEASE_APPROVAL_VALIDATED.value, "outputs": {"release_tag": tag}}
 

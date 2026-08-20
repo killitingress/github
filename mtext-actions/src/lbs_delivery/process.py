@@ -128,6 +128,7 @@ def execute(operation: Callable[[], dict[str, object]]) -> int:
             for name, value in outputs.items():
                 stream.write(f"{name}={value}\n")
 
+    # Warnungen dürfen den Lauf nicht blockieren und gehören deshalb nach stderr.
     for warnung in result.get("warnungen", []):
         print(f"WARNUNG: {warnung}", file=sys.stderr)
     print(json.dumps(result, sort_keys=True))

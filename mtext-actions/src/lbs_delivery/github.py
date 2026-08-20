@@ -19,12 +19,13 @@ from .process import DeliveryError, NETWORK_TIMEOUT, Status
 
 
 # Von GitHub für die REST-API vorgegebene Version des Anfrageformats.
-API_VERSION = "2022-11-28"
+_API_VERSION = "2022-11-28"
 
 # GitHub empfiehlt diesen Medientyp für JSON-Antworten der REST-API.
-JSON_MEDIA_TYPE = "application/vnd.github+json"
+_JSON_MEDIA_TYPE = "application/vnd.github+json"
 
 
+# Gemeinsamer HTTP-Zugang zur GitHub-REST-API für alle Aufrufe dieses Moduls.
 def request(
     *,
     method: str,
@@ -43,12 +44,14 @@ def request(
     Aufrufer festgelegten Status.
     """
 
+    # Request-Body und Header für JSON oder Binärupload aufbauen.
     body = json.dumps(payload).encode() if payload is not None else content
     headers = {
-        "Accept": JSON_MEDIA_TYPE,
+        "Accept": _JSON_MEDIA_TYPE,
         "Authorization": f"Bearer {token}",
-        "X-GitHub-Api-Version": API_VERSION,
+        "X-GitHub-Api-Version": _API_VERSION,
     }
+
     if payload is not None:
         headers["Content-Type"] = "application/json"
     elif content_type is not None:
@@ -59,21 +62,19 @@ def request(
         with urllib.request.urlopen(http_request, timeout=NETWORK_TIMEOUT) as response:
             response_body = response.read()
     except urllib.error.HTTPError as exc:
+        # Fehlende Ressourcen darf der Aufrufer als leeres Ergebnis behandeln.
         if missing_ok and exc.code == 404:
             return None
-        detail = ""
         try:
-            error_body = json.loads(exc.read())
-        except (UnicodeError, json.JSONDecodeError):
-            pass
-        else:
-            if isinstance(error_body, dict) and isinstance(error_body.get("message"), str):
-                detail = error_body["message"]
-        suffix = f": {detail}" if detail else ""
+            message = json.loads(exc.read()).get("message")
+        except (UnicodeError, json.JSONDecodeError, AttributeError, TypeError):
+            message = None
+        suffix = f": {message}" if isinstance(message, str) and message else ""
         raise DeliveryError(failure, f"GitHub antwortet mit HTTP {exc.code}{suffix}") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
         raise DeliveryError(failure, "GitHub ist nicht erreichbar") from exc
 
+    # Leere Antworten sind zulässig, sonst muss der Body gültiges JSON sein.
     if not response_body:
         return None
     try:
@@ -82,21 +83,7 @@ def request(
         raise DeliveryError(failure, "GitHub-Antwort ist ungültig") from exc
 
 
-def read_pull_request(*, api_url: str, repository: str, number: int, token: str) -> dict[str, object]:
-    """Liest den gemergten Pull Request als Grundlage der Freigabeprüfung."""
-
-    document = request(
-        method="GET",
-        url=f"{api_url.rstrip('/')}/repos/{urllib.parse.quote(repository, safe='/')}/pulls/{number}",
-        token=token,
-        failure=Status.SOURCE_FAILED,
-    )
-    if not isinstance(document, dict):
-        raise DeliveryError(Status.SOURCE_FAILED, "GitHub-Antwort zum Pull Request ist ungültig")
-    return document
-
-
-def publish_release(
+def _publish_release(
     *,
     artifact_root: str | Path,
     api_url: str,
@@ -112,11 +99,11 @@ def publish_release(
     Informationsdateien werden dabei ersetzt.
     """
 
+    # Informationsdateien aus dem Release-Artefakt lesen und Lieferart bestimmen.
     information_files = sorted(Path(artifact_root).glob("_INFO_*.json"))
     if not information_files:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien fehlen")
 
-    # Die Informationsdateien bestimmen die gemeinsame Lieferart des Releases.
     delivery_types: set[str] = set()
     try:
         for information in information_files:
@@ -124,11 +111,12 @@ def publish_release(
             delivery_types.add("DELTA" if "von" in document["stand"] else "FULL")
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdatei ist ungültig") from exc
+
     if len(delivery_types) != 1:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien haben verschiedene Lieferarten")
     delivery_type = delivery_types.pop()
 
-    # Die Release-Beschreibung verlinkt auf die hochgeladenen Informationsdateien.
+    # Release-Beschreibung mit Stand und Download-Links der Informationsdateien.
     download_root = f"{server_url.rstrip('/')}/{repository}/releases/download/{urllib.parse.quote(release_tag, safe='')}"
     lines = [
         "## Lieferung",
@@ -142,9 +130,11 @@ def publish_release(
         "## Informationsdateien",
         "",
     ]
+
     for information in information_files:
         name = information.name
         lines.append(f"- [Herunterladen]({download_root}/{urllib.parse.quote(name, safe='')}): `{name}`")
+
     release_values = {
         "tag_name": release_tag,
         "name": f"Release {release_tag}",
@@ -152,11 +142,12 @@ def publish_release(
         "draft": False,
         "prerelease": False,
     }
+
     repository_path = urllib.parse.quote(repository)
     release_path = urllib.parse.quote(release_tag, safe="")
     releases_url = f"{api_url.rstrip('/')}/repos/{repository_path}/releases"
 
-    # Ein vorhandenes Release wird aktualisiert, ein fehlendes wird neu angelegt.
+    # Vorhandenes Release aktualisieren, sonst neu anlegen.
     release = request(
         method="GET",
         url=f"{releases_url}/tags/{release_path}",
@@ -183,14 +174,14 @@ def publish_release(
             payload=release_values,
         )
 
-    # Die API bestimmt Upload-Adresse und sichtbare Release-Adresse.
+    # Upload- und Anzeigeadresse aus der Release-Antwort übernehmen.
     match release:
         case {"upload_url": str(upload_url), "html_url": str(release_url)}:
             upload_url = upload_url.split("{", 1)[0]
         case _:
             raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub Release ist unvollständig")
 
-    # Eigene Informationsdateien eines Wiederanlaufs werden vor dem Upload ersetzt.
+    # Gleichnamige Assets eines Wiederanlaufs ersetzen und Informationsdateien anhängen.
     assets_by_name: dict[str, int] = {}
     for asset in existing_assets:
         match asset:
@@ -198,6 +189,7 @@ def publish_release(
                 assets_by_name[name] = asset_id
             case _:
                 raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub-Asset ist ungültig")
+
     for information in information_files:
         name = information.name
         if (asset_id := assets_by_name.get(name)) is not None:
@@ -221,10 +213,11 @@ def publish_release(
     }
 
 
+# Workflow-Einstieg: Umgebungsvariablen des Release-Jobs an die Veröffentlichung übergeben.
 def run_publish_command(_arguments: argparse.Namespace) -> dict[str, object]:
     """Veröffentlicht die Lieferinformationen aus dem Workflow-Arbeitsbereich."""
 
-    return publish_release(
+    return _publish_release(
         artifact_root=Path(os.environ["RELEASE_DIRECTORY"]),
         api_url=os.environ["GITHUB_API_URL"],
         server_url=os.environ["GITHUB_SERVER_URL"],

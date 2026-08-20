@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from lbs_delivery import sync as sync_command
 from lbs_delivery.process import DeliveryError, Status
-from lbs_delivery.sync import sync_resources
+from lbs_delivery.sync import _sync_resources
 
 from tests.support import TempDirTestCase, git, load_test_configuration, setup_sync_repository
 
@@ -45,7 +45,7 @@ class SyncTests(TempDirTestCase):
     def sync(self, commit: str, previous_commit: str | None, **kwargs: object) -> dict[str, object]:
         """Startet einen Sync-Lauf mit den gemeinsamen Testangaben."""
 
-        return sync_resources(
+        return _sync_resources(
             self.configuration,
             repository_root=self.repository,
             commit=commit,
@@ -81,7 +81,7 @@ class SyncTests(TempDirTestCase):
             patch.object(sync_command.git, "read_file", return_value=PREVIOUS_CONFIG),
             patch.object(
                 sync_command,
-                "sync_resources",
+                "_sync_resources",
                 side_effect=({"status": Status.ADAPTER_ACCEPTED.value}, {"status": Status.ADAPTER_ACCEPTED.value}),
             ) as synchronize,
         ):
@@ -92,7 +92,7 @@ class SyncTests(TempDirTestCase):
         with (
             patch.dict(os.environ, environment | {"GITHUB_REF_NAME": "feature/R271/test"}, clear=True),
             patch.object(sync_command.config, "load_configuration", return_value=configuration),
-            patch.object(sync_command, "sync_resources", return_value={"status": Status.ADAPTER_ACCEPTED.value}) as synchronize,
+            patch.object(sync_command, "_sync_resources", return_value={"status": Status.ADAPTER_ACCEPTED.value}) as synchronize,
         ):
             sync_command.run_command(arguments)
         self.assertEqual(synchronize.call_args.kwargs["previous_commit"], "1" * 40)
@@ -100,11 +100,11 @@ class SyncTests(TempDirTestCase):
         with (
             patch.dict(
                 os.environ,
-                environment | {"GITHUB_REF_NAME": "feature/R271/test", "MTEXT_PREVIOUS_COMMIT": sync_command.EMPTY_PUSH_COMMIT},
+                environment | {"GITHUB_REF_NAME": "feature/R271/test", "MTEXT_PREVIOUS_COMMIT": sync_command._EMPTY_PUSH_COMMIT},
                 clear=True,
             ),
             patch.object(sync_command.config, "load_configuration", return_value=configuration),
-            patch.object(sync_command, "sync_resources", return_value={"status": Status.ADAPTER_ACCEPTED.value}) as synchronize,
+            patch.object(sync_command, "_sync_resources", return_value={"status": Status.ADAPTER_ACCEPTED.value}) as synchronize,
         ):
             sync_command.run_command(arguments)
         self.assertIsNone(synchronize.call_args.kwargs["previous_commit"])
@@ -115,7 +115,7 @@ class SyncTests(TempDirTestCase):
             patch.object(sync_command.git, "read_file", return_value=PREVIOUS_CONFIG),
             patch.object(
                 sync_command,
-                "sync_resources",
+                "_sync_resources",
                 side_effect=(
                     {"status": Status.ADAPTER_ACCEPTED.value},
                     DeliveryError(Status.ADAPTER_FAILED, "Adapter nicht erreichbar"),
@@ -147,7 +147,7 @@ class SyncTests(TempDirTestCase):
 
         with (
             patch("lbs_delivery.sync.uuid.uuid4", return_value=SimpleNamespace(hex="auftrag")),
-            patch("lbs_delivery.sync.call_adapter", return_value=(202, "angenommen")) as adapter,
+            patch("lbs_delivery.sync._call_adapter", return_value=(202, "angenommen")) as adapter,
         ):
             result = self.sync(commit, previous_commit)
 
@@ -180,7 +180,7 @@ class SyncTests(TempDirTestCase):
 
         with (
             patch("lbs_delivery.sync.uuid.uuid4", return_value=SimpleNamespace(hex="wiederholung")),
-            patch("lbs_delivery.sync.call_adapter", return_value=(202, "angenommen")) as repeated_adapter,
+            patch("lbs_delivery.sync._call_adapter", return_value=(202, "angenommen")) as repeated_adapter,
         ):
             self.sync(commit, previous_commit)
         repeated_payload = repeated_adapter.call_args.args[1]
@@ -191,7 +191,7 @@ class SyncTests(TempDirTestCase):
         """Prüft FULL beim fehlenden Vorgänger und den Lauf ohne Projektänderung."""
 
         commit = git(self.repository, "rev-parse", "HEAD")
-        with patch("lbs_delivery.sync.call_adapter", return_value=(202, "angenommen")) as adapter:
+        with patch("lbs_delivery.sync._call_adapter", return_value=(202, "angenommen")) as adapter:
             result = self.sync(commit, None)
         request_path = Path(result["pfad"])
         self.assertTrue((request_path / "FIBASISF.tgz").is_file())
@@ -207,7 +207,7 @@ class SyncTests(TempDirTestCase):
         git(self.repository, "commit", "-m", "Metadaten")
         self.track_branch()
         metadata_commit = git(self.repository, "rev-parse", "HEAD")
-        with patch("lbs_delivery.sync.call_adapter") as adapter:
+        with patch("lbs_delivery.sync._call_adapter") as adapter:
             result = self.sync(metadata_commit, commit)
         self.assertEqual(result["projekte"], [])
         adapter.assert_not_called()

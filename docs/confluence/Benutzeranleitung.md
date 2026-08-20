@@ -5,19 +5,68 @@
 Diese Anleitung beschreibt die tägliche Arbeit mit M/Text-Ressourcen in Git.
 Sie richtet sich an Entwickler und Repository-Verantwortliche.
 
-Jede Änderung wird in einem eigenen Feature-Branch bearbeitet:
+### Grundprinzipien
+
+In SVN ist ein Commit eine Aktion, durch die Änderungen an das zentrale
+Repository übertragen werden. Dabei entsteht eine neue Revision. In Git
+hingegen hält ein Commit einen Entwicklungsstand samt Historie zu einem
+bestimmten Zeitpunkt fest und entspricht damit am ehesten einer SVN-Revision.
+Seine Commit-SHA kennzeichnet ihn eindeutig. Diese besteht aus 40 hexadezimalen
+Zeichen, während eine SVN-Revision eine aufsteigende Nummer ist. Git-Commits
+werden normalerweise lokal erstellt und erst durch einen Push nach GitHub
+übertragen. Technisch ist ein Branch in Git ein Zeiger auf einen Commit. Beim
+Push eines Branches nach GitHub werden sämtliche fehlenden Commits dorthin
+übertragen und der Branch in GitHub auf den dann aktuellsten Commit
+*verschoben*.
+
+Jeder Entwicklungsauftrag wie eine Änderung, Erweiterung oder Korrektur wird
+als Feature in einem eigenen temporären Feature-Branch umgesetzt. Wenn ein
+Feature fertig entwickelt und getestet wurde, kann ein Pull Request angelegt
+werden, um es in einen Zielbranch wie `main` zu übernehmen. Der Pull Request
+muss dazu im 4-Augenprinzip geprüft und freigegeben werden. Danach werden die
+Änderungen des Feature-Branches per Squash Merge in den Zielbranch
+übernommen. Dabei entsteht ein neuer Stand und somit auch ein neuer Commit.
+
+Wird ein Feature-Branch nach GitHub gepusht, werden seine M/Text-Projekte
+automatisch mit der M/Text-Entwicklungsumgebung synchronisiert, damit der
+Entwickler das Feature dort testen kann. Ein Merge nach `main` oder
+`release/Rnnn` synchronisiert automatisch die M/Text-Funktionstestumgebung.
+Dort soll das Feature von der LBS getestet und fachlich freigegeben werden.
+
+Ein Release wird aus einem fachlich freigegebenen Branch `main` oder
+`release/Rnnn` vorbereitet. Der Release-Freigabeprozess hält Release-Version
+und Lieferumfang fest. Eine zweite Person prüft und genehmigt den zugehörigen
+Pull Request. Nach dessen Merge erzeugt der Workflow den Release-Tag und
+startet Paketbau sowie Mainframe-Übergabe.
+
+### Änderungsablauf
 
 ```text
-Feature-Branch pushen
-    │
+Entwicklung in lokalem Feature-Branch (feature/Rnnn/<Bezeichnung>)
+    │ Push
     ▼
-Änderung in M/Text-Entwicklung testen
-    │
+Synchronisierung mit M/Text-Entwicklung
+    │ Entwicklung testen
     ▼
-Pull Request prüfen und mit Squash Merge zusammenführen
-    │
+Pull Request nach main (oder release/Rnnn)
+    │ Review und Merge
     ▼
-zusammengeführten Stand in der M/Text-Funktionstestumgebung prüfen
+Synchronisierung mit M/Text-Funktionstest
+    │ fachlich freigeben lassen
+    ▼
+Branchstand ist für ein Release bereit
+```
+
+### Release-Ablauf
+
+```text
+Gewählter Branchstand auf main (oder release/Rnnn)
+    │ Release-Freigabe starten
+    ▼
+Pull Request vom technischen Freigabe-Branch nach main (oder release/Rnnn)
+    │ Review und Merge
+    ▼
+Release-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
 ```
 
 Für Branches und Release-Tags gelten folgende Namen:
@@ -116,7 +165,8 @@ Vor einer Bearbeitung, einem Cherry-Pick oder dem direkten Erstellen eines Tags:
 Ein Fetch allein aktualisiert den ausgecheckten Branch und dessen Dateien
 nicht. Schlägt die Aktualisierung wegen lokaler Änderungen oder eigener
 Commits fehl, wird kein Force-Push erzwungen. Das weitere Vorgehen richtet sich
-nach [Push-Ablehnung und Konflikte behandeln](#push-ablehnung-und-konflikte-behandeln).
+nach dem vorhandenen lokalen Stand. Vor einem weiteren Versuch werden die
+lokalen Änderungen, die eigenen Commits und ein möglicher Konflikt geprüft.
 
 ## 3. Zielbranch einer Änderung bestimmen
 
@@ -217,11 +267,6 @@ Pull-Request-Ablauf wie eine Ressourcenänderung. Im Pull Request prüft der
 Workflow **Mandantenkonfiguration und Ressourcen prüfen** die Konfiguration
 und die geänderten Ressourcen. Dieser Lauf muss erfolgreich sein, bevor die
 Änderung zusammengeführt wird.
-
-Die verbindliche Bedeutung der Konfigurationsfelder und der
-Projektverzeichnisse ist im
-[Zielbild](./Zielbild_GitHub_Actions_Git.md) beschrieben. Für einen Wechsel der
-führenden Releaselinie gilt der Ablauf in Kapitel 9.
 
 ## 5. Pull Request und M/Text-Funktionstest
 
@@ -355,7 +400,7 @@ Ein Release-Tag ohne Buchstabensuffix wie `v261.108` wird durch den
 Freigabeworkflow erstellt:
 
 1. Im Mandanten-Repository **Actions** und den Workflow
-   **Release vorbereiten** öffnen.
+   **Release freigeben und starten** öffnen.
 2. **Run workflow** wählen.
 3. `main` oder den passenden `release/Rnnn` als Branch auswählen.
 4. Die im Wartungstool vergebene Release-Version eingeben.
@@ -582,8 +627,8 @@ Die Wiederholung eines älteren Synchronisationslaufs kann einen neueren
 M/Text-Zielstand durch den Stand des älteren Commits ersetzen. Deshalb werden
 vorher die Commit-SHA des Laufs, der aktuelle Branch-Commit und der gewünschte
 Zielstand verglichen. Ist der Branch inzwischen weitergelaufen, wird statt des
-alten Laufs der gewünschte Commit über den manuellen Vollabgleich aus Kapitel 8
-synchronisiert.
+alten Laufs der Workflow **M/Text-Ressourcen synchronisieren** für einen
+manuellen Vollabgleich des gewünschten Commits gestartet.
 
 Bei einer fehlgeschlagenen Mainframe-Übergabe wird der Übergabejob mit dem
 bereits gebauten Artefakt wiederholt. Dafür wird kein neuer Release-Tag

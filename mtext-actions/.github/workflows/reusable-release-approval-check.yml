@@ -1,7 +1,7 @@
 name: Wiederverwendbare Release-Vorprüfung
 
-# Dieser Workflow prüft den im Pull Request vorgesehenen Release und zeigt
-# Branchstand sowie Lieferumfang als Zusammenfassung im Mandanten-Repository.
+# Dieser direkt eingebundene Workflow prüft den im Pull Request vorgesehenen
+# Release und zeigt Branchstand sowie Lieferumfang im Mandanten-Repository.
 'on':
   workflow_call:
     inputs:
