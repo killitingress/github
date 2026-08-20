@@ -41,8 +41,10 @@ geprüft und mit Squash Merge zusammengeführt.
 
 ## FULL oder DELTA auslösen
 
-Ein berechtigter Benutzer setzt den organisationsweit geschützten Release-Tag
-auf einen Commit von `main` oder `release/Rnnn`:
+Ein Release ohne Buchstabensuffix wird über den Workflow **Release
+vorbereiten** und einen von der anfordernden Person eröffneten
+Freigabe-Pull-Request erstellt. Nach Review und Merge setzt der Workflow den
+Release-Tag. Für die Tags gilt:
 
 - `v261.100` erzeugt ein FULL,
 - ein weiterer Tag wie `v261.108` erzeugt ein kumulatives DELTA gegen
@@ -57,8 +59,8 @@ in diesem Repository.
 ## Mandantenkonfiguration
 
 `.github/config.json` enthält unter anderem Mandantenkürzel, führende
-`releaselinie`, Ausschlüsse und Hostprofile. Eine Änderung der Datei startet
-die Konfigurationsprüfung.
+`releaselinie`, das zuletzt freigegebene Release, Ausschlüsse und Hostprofile.
+Eine Änderung der Datei startet die Konfigurationsprüfung.
 
 ## Weitere Informationen
 

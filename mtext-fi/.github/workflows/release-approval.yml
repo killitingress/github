@@ -2,7 +2,7 @@ name: Release vorbereiten
 
 # Der manuelle Start verwendet den in GitHub ausgewählten Lieferbranch und legt
 # den Freigabe-Branch an. Den Pull Request dazu eröffnet der Antragsteller
-# selbst. Nach dessen Merge wird der Release-Tag erstellt.
+# selbst. Ein Check zeigt den Lieferumfang, nach dem Merge entsteht der Tag.
 'on':
   workflow_dispatch:
     inputs:
@@ -12,9 +12,10 @@ name: Release vorbereiten
         type: string
   pull_request:
     types:
+      - opened
+      - reopened
+      - synchronize
       - closed
-    paths:
-      - .github/release-approvals/*.json
 
 permissions:
   contents: read
@@ -33,6 +34,26 @@ jobs:
       automation_ref: 0000000000000000000000000000000000000000
     secrets:
       dispatch_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}
+
+  # Die Vorprüfung läuft als Job dieses Pull Requests, damit GitHub ihr
+  # Ergebnis und die Markdown-Zusammenfassung direkt dort anzeigt. Bei anderen
+  # Pull Requests wird der Job erfolgreich übersprungen.
+  check:
+    name: Release vorprüfen
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.action != 'closed' &&
+      startsWith(github.event.pull_request.head.ref, 'release-approval/')
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/release-approval-check.yml@0000000000000000000000000000000000000000
+    with:
+      source_repository: ${{ github.repository }}
+      source_branch: ${{ github.event.pull_request.base.ref }}
+      approval_branch: ${{ github.event.pull_request.head.ref }}
+      target_sha: ${{ github.event.pull_request.head.sha }}
+      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
+      automation_ref: 0000000000000000000000000000000000000000
+    secrets:
+      automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}
 
   finalize:
     name: Freigegebenen Release-Tag erstellen

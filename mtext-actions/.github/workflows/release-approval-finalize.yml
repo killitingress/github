@@ -1,20 +1,21 @@
 name: Zentrale Release-Freigabe abschließen
 
-# Dieser Workflow prüft den zusammengeführten Freigabe-Pull-Request und erzeugt
-# den regulären Release-Tag auf dessen Merge-Commit.
+# Zweiter Teil der Release-Freigabe: den gemergten Pull Request zuordnen und
+# den Release-Tag auf dessen Merge-Commit erzeugen. Der Push des Tags startet
+# den Release-Workflow des Mandanten.
 'on':
-  workflow_dispatch:
-    inputs:
+  workflow_dispatch: # Aufruf hier per GitHub-API durch den Mandanten-Workflow reusable-dispatch.yml
+    inputs: # alle Eingaben kommen aus dem aufrufenden Workflow
       source_repository:
-        description: Mandanten-Repository
+        description: aktuelles Mandanten-Repository
         required: true
         type: string
       source_branch:
-        description: Lieferbranch
+        description: Basis-Branch des Pull-Requests (Lieferbranch)
         required: true
         type: string
       approval_branch:
-        description: Gemergter Freigabe-Branch
+        description: Head-Branch (release-approval/...)
         required: true
         type: string
       merge_sha:
@@ -26,7 +27,7 @@ name: Zentrale Release-Freigabe abschließen
         required: true
         type: string
       automation_ref:
-        description: Festgelegte CI/CD-Version
+        description: fest eingetragene CI/CD-Version im Mandanten-Workflow
         required: true
         type: string
 
@@ -41,8 +42,8 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 15
     steps:
-      # Lädt den von GitHub gemeldeten Merge-Commit mit seiner Historie, weil
-      # die Prüfung den Vergleich zum freigegebenen Commit benötigt.
+      # Lädt den von GitHub gemeldeten Merge-Commit mit seiner Historie und der
+      # darin freigegebenen Release-Version.
       - name: Check-Out Mandantenstand
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -66,8 +67,8 @@ jobs:
         id: runtime
         run: bash automation/scripts/runner-preflight.sh
 
-      # GitHub-Daten und versionierter Nachweis müssen denselben Merge, Branch,
-      # Commit und Lieferumfang belegen.
+      # GitHub-Daten, Zielbranch und eingetragene Release-Version müssen zum
+      # zusammengeführten Freigabe-Pull-Request gehören.
       - name: Zusammengeführte Freigabe prüfen
         id: finalize
         env:
@@ -87,9 +88,8 @@ jobs:
           --pull-request-number "$PULL_REQUEST_NUMBER"
           --api-url "$GITHUB_API_URL"
 
-      # Der Tag zeigt auf den Merge-Commit und enthält damit den Nachweis, den
-      # der Releasebau erneut prüft. Sein Push startet den Release-Workflow des
-      # Mandanten.
+      # Der Tag zeigt auf den Merge-Commit mit der freigegebenen Release-Version.
+      # Sein Push startet den Release-Workflow des Mandanten.
       - name: Freigegebenen Release-Tag erstellen
         env:
           RELEASE_TAG: ${{ steps.finalize.outputs.release_tag }}

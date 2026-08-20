@@ -16,16 +16,9 @@ import ssl
 from pathlib import Path
 
 from . import config, git
-from .config import (
-    CODEPIPELINE_STAGES,
-    ISPW_INSTANZEN,
-    RELEASEFREIGABE_PULL_REQUEST,
-    Configuration,
-    release_branches,
-)
+from .config import CODEPIPELINE_STAGES, ISPW_INSTANZEN, Configuration, release_branches
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
 from .project_package import build_project_package, release_scope
-from .release_approval import require_release_approval
 
 
 # FULL- und DELTA-Pakete werden als Member in diesem Mainframe-Dataset abgelegt.
@@ -166,15 +159,13 @@ def build_release(
     if trigger_sha and trigger_sha != target_sha:
         raise DeliveryError(Status.SOURCE_FAILED, "auslösender Commit stimmt nicht zum Tag")
 
-    # Reguläre Tags im Standardverfahren müssen den Freigabenachweis des
-    # zusammengeführten Pull Requests im getaggten Stand enthalten.
-    if configuration.releasefreigabe == RELEASEFREIGABE_PULL_REQUEST and not tag_match.group("beta_suffix"):
-        require_release_approval(
-            configuration,
-            repository_root=root,
-            tag=tag,
-            target_sha=target_sha,
-            branches=allowed_branches,
+    # Ein regulärer Tag muss der Release-Version entsprechen, die im getaggten
+    # Stand durch den Freigabe-Pull-Request eingetragen wurde. Beta-Tags nutzen
+    # diesen Freigabeweg nicht.
+    if not tag_match.group("beta_suffix") and configuration.letztes_release != tag:
+        raise DeliveryError(
+            Status.SOURCE_FAILED,
+            "Mandantenkonfiguration nennt eine andere freigegebene Release-Version",
         )
 
     # FULL- oder DELTA-Lieferung und ihren tatsächlichen Paketvergleich bestimmen.

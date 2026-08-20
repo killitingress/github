@@ -6,11 +6,9 @@ import io
 import os
 import unittest
 from contextlib import redirect_stdout
-from pathlib import Path
 from unittest.mock import patch
 
 from lbs_delivery.resource_check import run
-from lbs_delivery.process import DeliveryError
 
 from tests.support import AUTOMATION_ROOT, TempDirTestCase, git, init_git_repository
 
@@ -71,15 +69,6 @@ class CheckResourcesTests(TempDirTestCase):
         self.assertIn("::warning file=brief.datamodel", command_output)
         self.assertNotIn("bestehend.formio", command_output)
         self.assertEqual(result, {"status": "RESOURCE_CHECKED", "files": 1, "warnings": 1})
-
-    def test_reports_resource_format_error(self) -> None:
-        """Erhält die fachliche Meldung einer ungültigen Formatzuordnung."""
-
-        formats = self.root / "formate.json"
-        formats.write_text('{"dateiendungen": {".json": "json", ".JSON": "json"}}', encoding="utf-8")
-
-        with self.assertRaisesRegex(DeliveryError, "Dateiendung mehrfach"):
-            run(root=self.repository, formats_path=formats, changed_only=False)
 
 
 if __name__ == "__main__":

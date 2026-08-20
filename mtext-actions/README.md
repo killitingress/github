@@ -30,7 +30,7 @@ Mainframe-Übergabe.
 - `src/lbs_delivery/git.py`: Commit-, Branch-, Tag- und Diff-Abfragen
 - `src/lbs_delivery/github.py`: GitHub-Anfragen, Pull Requests und Releases
 - `src/lbs_delivery/project_package.py`: gemeinsames Projektpaket für Sync und Release
-- `src/lbs_delivery/release_approval.py`: versionierter Freigabenachweis
+- `src/lbs_delivery/release_approval.py`: Freigabe-Branch, PR-Vorprüfung und Tag-Erstellung
 - `src/lbs_delivery/resource_check.py`: warnende JSON- und XML-Prüfung
 - `src/lbs_delivery/rollout.py`: Aktualisierung der Mandanten-Workflows
 - `src/lbs_delivery/sync.py`: CIFS-Übergabe und Adapterauftrag
@@ -57,8 +57,7 @@ Mandanten-Repositories. Es benötigt dort `Contents: read and write` und
 `Workflows: read and write` sowie `Pull requests: read`. Der
 technische Benutzer ist in den Schutzregeln als Ausnahme von der
 Pull-Request-Pflicht für den administrativen Rollout hinterlegt. Die geltenden
-Tag-Regeln müssen die Erstellung regulärer Release-Tags durch diese Identität
-zulassen.
+Die organisationsweit vorgegebenen Tag-Regeln gelten auch für diesen Zugriff.
 
 Jedes Mandanten-Repository erhält `MTEXT_ACTIONS_TOKEN` als Repository-Secret.
 Der Fine-grained PAT ist auf
@@ -74,7 +73,7 @@ GitHub Environments werden nicht verwendet.
 ## Workflow-Aktualisierungen
 
 Der manuell gestartete Workflow **Mandanten-Workflows aktualisieren** erhält die
-vollständige Commit-SHA der gewünschten CI/CD-Version von `mtext_actions`. Er
+Commit-SHA der gewünschten CI/CD-Version von `mtext_actions`. Er
 wird von den zuständigen Admins gestartet, prüft die angegebene
 CI/CD-Version und verarbeitet für jeden Mandanten:
 

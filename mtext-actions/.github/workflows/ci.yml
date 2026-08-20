@@ -8,6 +8,7 @@ name: Zentrale Testsuite
     branches:
       - main
 
+# Beschränkt GITHUB_TOKEN auf Lesezugriff für dieses Repository (für Check-Out)
 permissions:
   contents: read
 

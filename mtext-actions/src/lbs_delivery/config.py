@@ -42,18 +42,6 @@ MTEXT_ZIEL_REIHENFOLGE = (MTEXT_ZIEL_ENTWICKLUNG, MTEXT_ZIEL_FUNKTIONSTEST)
 # Erlaubte CodePipeline-Umgebungen: `P` für Produktion und `T` für Test.
 ISPW_INSTANZEN = {"T", "P"}
 
-# Reguläre Releases verwenden ohne abweichende Mandantenangabe einen
-# Freigabe-Pull-Request.
-RELEASEFREIGABE_PULL_REQUEST = "pull_request"
-
-# Diese bewusste Ausnahme erlaubt berechtigten Benutzern, reguläre
-# Release-Tags direkt zu erstellen.
-RELEASEFREIGABE_DIREKTER_TAG = "direkter_tag"
-
-# Die Konfigurationsprüfung akzeptiert ausschließlich die beiden vereinbarten
-# Freigabewege für reguläre Releases.
-RELEASEFREIGABEN = {RELEASEFREIGABE_PULL_REQUEST, RELEASEFREIGABE_DIREKTER_TAG}
-
 # Hostprofile dürfen auf diese sechs eingerichteten CodePipeline-Stages zeigen.
 CODEPIPELINE_STAGES = {"FKTE", "FKTF", "JURJ", "JURP", "SVTS", "VPTV"}
 
@@ -88,8 +76,9 @@ class Configuration:
     releaselinie: str
     # CodePipeline-Umgebung (Produktion oder Testumgebung)
     ispw: str
-    # Freigabeweg für reguläre Release-Tags
-    releasefreigabe: str
+    # Zuletzt über den Lieferbranch freigegebene Release-Version. Vor dem
+    # ersten Release steht hier `None`.
+    letztes_release: str | None
     # Mainframe-Subsystem
     subsystem: str
     # Zuordnung der Projektverzeichnisse zu ihren Projektcodes, zum Beispiel `LOMS_Basis[BY]` zu `BASIS`.
@@ -181,7 +170,7 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
     kuerzel = mandant["kuerzel"]
     releaselinie = mandant["releaselinie"]
     ispw = mandant["ispw"]
-    releasefreigabe = mandant.get("releasefreigabe", RELEASEFREIGABE_PULL_REQUEST)
+    letztes_release = mandant.get("letztes_release")
     hostprofile = mandant["hostprofile"]
     excluded_projects = mandant.get("excluded_projects", [])
     if not isinstance(excluded_projects, list):
@@ -196,8 +185,8 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
 
     if ispw not in ISPW_INSTANZEN:
         raise DeliveryError(Status.VALIDATION_FAILED, "ISPW-Instanz ist ungültig")
-    if releasefreigabe not in RELEASEFREIGABEN:
-        raise DeliveryError(Status.VALIDATION_FAILED, "Releasefreigabe ist ungültig")
+    if letztes_release is not None and not isinstance(letztes_release, str):
+        raise DeliveryError(Status.VALIDATION_FAILED, "letztes Release ist ungültig")
 
     for profile in hostprofile.values():
         if profile["stage"] not in CODEPIPELINE_STAGES or not profile.get("assignment"):
@@ -213,7 +202,7 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
         kuerzel=kuerzel,
         releaselinie=releaselinie,
         ispw=ispw,
-        releasefreigabe=releasefreigabe,
+        letztes_release=letztes_release,
         subsystem=mandant_stammdaten.subsystem,
         projects=projects,
         hostprofile=hostprofile,
@@ -271,5 +260,5 @@ def run_validation(_arguments: argparse.Namespace) -> dict[str, object]:
         "repository": configuration.repository,
         "releaselinie": configuration.releaselinie,
         "releaselinien": sorted(configuration.releaselinien),
-        "releasefreigabe": configuration.releasefreigabe,
+        "letztes_release": configuration.letztes_release,
     } | ({"warnungen": list(configuration.warnungen)} if configuration.warnungen else {})

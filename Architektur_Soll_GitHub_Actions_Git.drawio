@@ -31,7 +31,7 @@
         <mxCell id="dev-user" value="&lt;b&gt;M/Text Workbench&lt;/b&gt;&lt;br&gt;&lt;br&gt;Feature-Branch erstellen&lt;br&gt;Ressource ändern und committen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="65" y="205" width="160" height="95" as="geometry"/>
         </mxCell>
-        <mxCell id="dev-branch" value="&lt;b&gt;feature/Rnnn/Bezeichnung&lt;/b&gt;&lt;br&gt;&lt;br&gt;exakter Commit&lt;br&gt;vollständige SHA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
+        <mxCell id="dev-branch" value="&lt;b&gt;feature/Rnnn/Bezeichnung&lt;/b&gt;&lt;br&gt;&lt;br&gt;Commit-SHA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="300" y="205" width="173" height="95" as="geometry"/>
         </mxCell>
         <mxCell id="dev-caller" value="&lt;b&gt;sync-resources.yml&lt;/b&gt;&lt;br&gt;&lt;br&gt;Push-Trigger&lt;br&gt;Ziel: M/Text-Entwicklung" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
@@ -102,13 +102,13 @@
         <mxCell id="stage-rel" value="3. Release" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=16;fontStyle=1;fontColor=#a65a00" vertex="1" parent="1">
           <mxGeometry x="35" y="785" width="200" height="30" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-user" value="&lt;b&gt;Repository-Verantwortliche&lt;/b&gt;&lt;br&gt;&lt;br&gt;abgenommenen Commit wählen&lt;br&gt;Release-Tag erstellen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
+        <mxCell id="rel-user" value="&lt;b&gt;Anfordernde Person&lt;/b&gt;&lt;br&gt;&lt;br&gt;Release vorbereiten starten&lt;br&gt;Freigabe-PR eröffnen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="40" y="838" width="195" height="120" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-branch" value="&lt;b&gt;main oder&lt;br&gt;release/Rnnn&lt;/b&gt;&lt;br&gt;&lt;br&gt;abgenommener Commit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
+        <mxCell id="rel-branch" value="&lt;b&gt;Release-Freigabe-PR&lt;/b&gt;&lt;br&gt;&lt;br&gt;letztes_release und Vorprüfung&lt;br&gt;Review durch zweite Person" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="290" y="845" width="140" height="105" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-tag" value="&lt;b&gt;vnnn.nnn&lt;/b&gt;&lt;br&gt;&lt;br&gt;geschützter Tag" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
+        <mxCell id="rel-tag" value="&lt;b&gt;Merge-Commit&lt;/b&gt;&lt;br&gt;&lt;br&gt;Release-Tag vnnn.nnn" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="460" y="853" width="100" height="90" as="geometry"/>
         </mxCell>
         <mxCell id="rel-caller" value="&lt;b&gt;release.yml&lt;/b&gt;&lt;br&gt;&lt;br&gt;Tag-Push startet Dispatch&lt;br&gt;PAT: Actions write" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
@@ -182,8 +182,8 @@
         <mxCell id="e-stage-2" value="abgenommener Stand" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0.5;entryY=0" edge="1" parent="1" source="acc-target" target="rel-user">
           <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1940" y="563"/><mxPoint x="1940" y="825"/><mxPoint x="138" y="825"/></Array></mxGeometry>
         </mxCell>
-        <mxCell id="e-rel-1" value="Stand wählen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="rel-user" target="rel-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-rel-2" value="Tag setzen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="rel-branch" target="rel-tag"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-rel-1" value="PR eröffnen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="rel-user" target="rel-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-rel-2" value="Review und Merge" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="rel-branch" target="rel-tag"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-rel-3" value="Tag-Push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="rel-tag" target="rel-caller"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-rel-dispatch" value="workflow_dispatch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="rel-caller" target="release-workflow"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-release-build" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="release-workflow" target="build-job"><mxGeometry relative="1" as="geometry"/></mxCell>

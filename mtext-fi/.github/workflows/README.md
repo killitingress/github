@@ -1,7 +1,7 @@
 # CI/CD-Workflows des Mandanten-Repositories
 
 Die Workflowdateien enthalten die Git-Auslöser des Mandanten. Die
-CI/CD-Implementierung wird über eine vollständige Commit-SHA aus
+CI/CD-Implementierung wird über eine Commit-SHA aus
 `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`, kurz `mtext_actions`, geladen.
 
 ## Benötigtes Repository-Secret
@@ -43,7 +43,7 @@ Automatische Auslöser:
 | `release/Rnnn` | M/Text-Funktionstest der Releaselinie |
 | `main` | M/Text-Funktionstest der in `.github/config.json` genannten Releaselinie |
 
-Der manuelle Start erhält eine vollständige Commit-SHA. Er gleicht den Commit
+Der manuelle Start erhält eine Commit-SHA. Er gleicht den Commit
 vollständig mit dem Ziel des ausgewählten Branches ab. Feature-Branches führen
 zum Ziel M/Text-Entwicklung, `main` und Release-Branches zum Ziel
 M/Text-Funktionstest. Die Releaselinie stammt aus dem ausgewählten Branch und
@@ -58,17 +58,14 @@ synchronisiert.
 ## `release-approval.yml`
 
 Der manuelle Start verwendet den in GitHub ausgewählten Branch und erwartet
-die Release-Version aus dem Wartungstool. Er veröffentlicht den
-Freigabenachweis unter `.github/release-approvals` auf einem Branch mit dem
-Präfix `release-approval/`. Den Pull Request auf den Lieferbranch eröffnet die
-anfordernde Person selbst, damit sie ihn nicht selbst genehmigen kann. Nach
-Review und Merge erstellt der Workflow den regulären Release-Tag auf dem
-Merge-Commit des Pull Requests. Der getaggte Stand enthält damit den Nachweis,
-den der zentrale Releasebau erneut prüft.
+die Release-Version aus dem Wartungstool. Er trägt sie als `letztes_release` in
+`.github/config.json` auf einem Branch mit dem Präfix `release-approval/` ein.
+Den Pull Request auf den Lieferbranch eröffnet die anfordernde Person selbst,
+damit sie ihn nicht selbst genehmigen kann. Der Pull Request zeigt zusätzlich
+einen Check mit Branchstand und Lieferumfang. Nach Review und Merge erstellt
+der Workflow den Release-Tag auf dem Merge-Commit des Pull Requests.
 
-Beta-Tags und die konfigurierte Ausnahme `direkter_tag` werden weiterhin
-direkt erstellt. Ein direkt erstellter regulärer Tag wird bei der
-Standardkonfiguration vom zentralen Releasebau abgelehnt.
+Beta-Tags werden direkt erstellt und benötigen keinen Freigabe-Pull-Request.
 
 ## `release.yml`
 

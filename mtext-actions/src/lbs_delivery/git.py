@@ -64,7 +64,7 @@ def run(repository: str | Path, *arguments: str, returncodes: tuple[int, ...] = 
 
 
 def resolve(repository: str | Path, reference: str) -> str:
-    """Löst eine bekannte Referenz in eine vollständige Commit-SHA auf."""
+    """Löst eine bekannte Referenz in eine Commit-SHA auf."""
 
     # `^{commit}` löst die Referenz bis zum Commit auf und lehnt Tree- und Blob-Objekte ab.
     output = run(repository, "rev-parse", "--verify", "--end-of-options", f"{reference}^{{commit}}")

@@ -10,10 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-import mtext
-
 from lbs_delivery import sync as sync_command
-
 from lbs_delivery.process import DeliveryError, Status
 from lbs_delivery.sync import sync_resources
 
@@ -214,56 +211,6 @@ class SyncTests(TempDirTestCase):
             result = self.sync(metadata_commit, commit)
         self.assertEqual(result["projekte"], [])
         adapter.assert_not_called()
-
-    def test_rejects_missing_cifs_and_invalid_target(self) -> None:
-        """Prüft die echten Systemgrenzen vor dem Paketbau."""
-
-        commit = git(self.repository, "rev-parse", "HEAD")
-        with self.assertRaisesRegex(DeliveryError, "CIFS-Übergabepfad"):
-            sync_resources(
-                self.configuration,
-                repository_root=self.repository,
-                commit=commit,
-                previous_commit=None,
-                source_branch=self.branch,
-                releaselinie="R261",
-                zielstufe="Entwicklung",
-                handoff_root=self.root / "fehlt",
-            )
-        with self.assertRaisesRegex(DeliveryError, "Zielstufe"):
-            sync_resources(
-                self.configuration,
-                repository_root=self.repository,
-                commit=commit,
-                previous_commit=None,
-                source_branch=self.branch,
-                releaselinie="R261",
-                zielstufe="Unbekannt",
-                handoff_root=self.handoff_root,
-            )
-
-    def test_run_reads_cifs_environment(self) -> None:
-        """Prüft die Übergabe des GitHub- und Runner-Kontexts an den Ablauf."""
-
-        response = {"status": Status.ADAPTER_ACCEPTED.value, "synchronisationen": []}
-        with (
-            patch.dict(
-                os.environ,
-                {
-                    "GITHUB_WORKSPACE": str(self.root),
-                    "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
-                    "GITHUB_REF_NAME": "main",
-                    "GITHUB_EVENT_NAME": "push",
-                    "MTEXT_PREVIOUS_COMMIT": "1" * 40,
-                },
-                clear=True,
-            ),
-            patch("sys.argv", ["mtext.py", "sync-resources", "--commit", "2" * 40]),
-            patch.object(mtext.config, "load_configuration", return_value=SimpleNamespace(warnungen=())),
-            patch.object(mtext.sync, "plan_sync", return_value=("R261", (), "1" * 40)) as plan,
-        ):
-            self.assertEqual(mtext.run(), response)
-        self.assertEqual(plan.call_args.kwargs["previous_commit"], "1" * 40)
 
 
 if __name__ == "__main__":

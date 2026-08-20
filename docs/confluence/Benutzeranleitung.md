@@ -74,7 +74,7 @@ Unterschiede wichtig:
 |---|---|
 | Commit | Speichert einen Stand zunächst im lokalen Repository. |
 | Push | Überträgt lokale Commits nach GitHub und startet die zum Branch gehörenden Workflows. |
-| Commit-SHA | Bezeichnet einen Commit eindeutig. Für einen manuellen Vollabgleich wird die vollständige, 40-stellige SHA benötigt. |
+| Commit-SHA | Bezeichnet einen Commit eindeutig. Für einen manuellen Vollabgleich wird sie eingegeben. |
 | Fetch | Ruft neue Branchstände und Commits aus GitHub ab, ändert aber weder den ausgecheckten Branch noch dessen Dateien. |
 | Aktualisieren | Bringt den ausgecheckten Branch mit der dafür vorgesehenen Funktion des Git-Clients auf den aktuellen GitHub-Stand. |
 
@@ -201,7 +201,10 @@ verarbeitet hat. Erst dieser Stand wird in M/Text getestet.
 Die Datei `.github/config.json` enthält die Angaben, die für die Verarbeitung
 dieses Mandanten-Repositories benötigt werden. Dazu gehören die Releaselinie,
 das Mandantenkürzel, ausgeschlossene Projektverzeichnisse und die Zuordnung für
-die Mainframe-Übergabe.
+die Mainframe-Übergabe. Das Feld `letztes_release` nennt die zuletzt über den
+jeweiligen Lieferbranch freigegebene Release-Version. Vor dem ersten Release
+steht dort `null`. Beim Release-Freigabe-PR aktualisiert der Workflow dieses
+Feld.
 
 Als M/Text-Projekt gilt jedes nicht versteckte Verzeichnis direkt in der
 Repositorywurzel, sofern es nicht in `excluded_projects` ausgeschlossen ist.
@@ -210,9 +213,10 @@ prüfen, ob es verarbeitet werden soll und ob der daraus gebildete Projektcode
 eindeutig bleibt.
 
 Eine Änderung an `.github/config.json` folgt demselben Feature- und
-Pull-Request-Ablauf wie eine Ressourcenänderung. Der Push startet zusätzlich
-den Workflow **Validate mandant configuration**. Dieser Lauf muss erfolgreich
-sein, bevor die Änderung zusammengeführt wird.
+Pull-Request-Ablauf wie eine Ressourcenänderung. Im Pull Request prüft der
+Workflow **Mandantenkonfiguration und Ressourcen prüfen** die Konfiguration
+und die geänderten Ressourcen. Dieser Lauf muss erfolgreich sein, bevor die
+Änderung zusammengeführt wird.
 
 Die verbindliche Bedeutung der Konfigurationsfelder und der
 Projektverzeichnisse ist im
@@ -345,10 +349,10 @@ unterschiedliche Suffixe, beispielsweise `v261.108a` und `v261.108b`. Bei der
 späteren Erzeugung der Lieferung aus den CodePipeline-Elementen wird angegeben,
 dass es sich um eine Beta-Lieferung handelt.
 
-### Reguläres Release über einen Freigabe-PR
+### Release über einen Freigabe-PR
 
-Ohne abweichende Mandantenkonfiguration wird ein regulärer Tag wie `v261.108`
-durch den Freigabeworkflow erstellt:
+Ein Release-Tag ohne Buchstabensuffix wie `v261.108` wird durch den
+Freigabeworkflow erstellt:
 
 1. Im Mandanten-Repository **Actions** und den Workflow
    **Release vorbereiten** öffnen.
@@ -366,11 +370,12 @@ Den Pull Request eröffnet die anfordernde Person selbst. Sie ist damit dessen
 Autor und kann ihn nicht selbst genehmigen. So ist sichergestellt, dass die
 Freigabe von einer zweiten Person kommt.
 
-Der Pull Request zeigt Branch und Commit-SHA, Release-Version, den Bezugsstand,
-die betroffenen Projekte sowie die enthaltenen Änderungen und Löschungen. Bei
-einer FULL-Lieferung entfällt der Bezugsstand. Diese Angaben stehen in der
-geänderten Datei `.github/release-approvals/<Release-Tag>.json`. Eine andere
-Person prüft und führt den Pull Request zusammen:
+Im Diff des Pull Requests steht die neue Release-Version im Feld
+`letztes_release` der Datei `.github/config.json`. Der Check **Release
+vorprüfen** zeigt Branch und Commit-SHA, FULL oder DELTA, den Bezugsstand, die
+betroffenen Projekte sowie die enthaltenen Änderungen und Löschungen. Bei
+einer FULL-Lieferung entfällt der Bezugsstand. Der Pull Request kann erst nach
+erfolgreicher Vorprüfung zusammengeführt werden. Eine andere Person prüft:
 
 - Der angegebene Branchstand wurde in M/Text-Funktionstest geprüft
 - Die Release-Version stimmt mit dem Wartungstool überein
@@ -378,10 +383,7 @@ Person prüft und führt den Pull Request zusammen:
 
 Nach der Freigabe wird der Pull Request zusammengeführt. Der Workflow erstellt
 daraufhin den Release-Tag auf dem Merge-Commit des Pull Requests und startet den
-zentralen Release-Lauf. Hat sich der fachliche Branchstand oder die
-Mandantenkonfiguration während der Freigabe geändert, lehnt der Workflow die
-Tag-Erstellung ab. Das Release muss dann für den neuen Stand erneut vorbereitet
-werden.
+zentralen Release-Lauf.
 
 ### Beta-Tag erstellen
 
@@ -395,24 +397,6 @@ Ein Beta-Tag mit Buchstabensuffix kann ohne Freigabe-PR erstellt werden:
 
 Der Tag kann in der M/Text Workbench oder in GitHub erstellt werden. Ein
 Beta-Tag kann nicht für eine produktive Lieferung verwendet werden.
-
-### Ausnahme `direkter_tag`
-
-Enthält die Mandantenkonfiguration `"releasefreigabe": "direkter_tag"`, darf
-ein berechtigter Benutzer auch einen regulären Release-Tag direkt auf dem
-aktuellen Stand von `main` oder `release/Rnnn` erstellen und pushen. Der Push
-des Tags erteilt die fachliche Freigabe und startet den zentralen Release-Lauf.
-
-### Unerwünschten regulären Tag melden
-
-Wird bei geltender Pull-Request-Freigabe ein regulärer Tag direkt erstellt,
-lehnt der zentrale Release-Workflow die Lieferung ab. Der Tag darf nicht selbst
-verschoben oder unter einem abweichenden Namen ersetzt werden.
-
-Tagname und Commit-SHA werden festgehalten. Anschließend wird die
-FI-GitHub-Administration mit der Bitte kontaktiert, den unerwünschten Tag zu
-prüfen und zu löschen. Danach wird das Release über den Freigabe-PR erneut
-vorbereitet.
 
 ### Ergebnis kontrollieren
 
@@ -434,7 +418,7 @@ vollständiges F-Paket und ein leeres D-Paket. Jeder weitere Tag derselben
 Releaselinie erzeugt ein kumulatives DELTA gegen den `.100`-Tag.
 
 Die Informationsdatei eines DELTAs beschreibt den tatsächlich paketierten
-Vergleich vom regulären `.100`-Tag bis zum Release-Tag.
+Vergleich vom `.100`-Tag bis zum Release-Tag.
 
 Bei einem fehlgeschlagenen technischen Übergabeversuch wird der
 Übergabejob erneut ausgeführt. Er verwendet das bereits gebaute Artefakt. Für
@@ -452,11 +436,11 @@ Zielstufe bereit, die sich aus dem ausgewählten Branch ergibt:
 | `release/Rnnn` | M/Text-Funktionstest der Releaselinie |
 
 1. Im Mandanten-Repository **Actions** öffnen.
-2. Den Workflow **Sync M/Text resources** auswählen.
+2. Den Workflow **M/Text-Ressourcen synchronisieren** auswählen.
 3. **Run workflow** öffnen.
 4. Den Branch auswählen, zu dem der Commit gehört. Für die führende
    Releaselinie ist dies `main`.
-5. Die vollständige Commit-SHA eingeben.
+5. Die Commit-SHA eingeben.
 6. Den Workflow starten und den Lauf kontrollieren.
 7. Den bereitgestellten Stand im zugeordneten M/Text-Ziel prüfen.
 
@@ -507,10 +491,10 @@ und `main` bezeichnen zunächst denselben Stand.
 1. Einen Feature-Branch der neuen Releaselinie auf Basis von `main` erstellen.
 2. In `.github/config.json` ausschließlich das Feld `releaselinie` auf die
    neue führende Linie setzen, die Änderung committen und pushen.
-3. Prüfen, dass **Validate mandant configuration** und der Synchronisationslauf
-   für M/Text-Entwicklung erfolgreich waren.
-4. Einen Pull Request auf `main` erstellen, prüfen und mit Squash Merge
-   zusammenführen.
+3. Den Synchronisationslauf für M/Text-Entwicklung erfolgreich prüfen.
+4. Einen Pull Request auf `main` erstellen. Prüfen, dass
+   **Mandantenkonfiguration und Ressourcen prüfen** erfolgreich war, und den
+   Pull Request mit Squash Merge zusammenführen.
 5. Den automatisch gestarteten Synchronisationslauf kontrollieren. Der
    Squash-Commit wird vollständig mit M/Text-Entwicklung und
    M/Text-Funktionstest synchronisiert.
@@ -537,7 +521,6 @@ bleibt der Default Branch.
 | Pull Request wurde bereits zusammengeführt | Einen neuen Feature-Branch anlegen und den Fehler über einen neuen Pull Request korrigieren. |
 | Änderung wird auf einer weiteren Releaselinie nicht benötigt | Den dortigen Feature-Branch oder Pull Request nicht weiterführen. Eine bereits erfolgte Übernahme über einen neuen korrigierenden Commit zurücknehmen. |
 | Tag wurde lokal, aber noch nicht nach GitHub gepusht | Den lokalen Tag korrigieren und Tagnamen sowie Commit-SHA erneut prüfen. |
-| Regulärer Release-Tag wurde bei geltender Pull-Request-Freigabe direkt in GitHub angelegt | Tagname und Commit-SHA festhalten. Den Tag nicht selbst löschen oder verschieben. Die FI-GitHub-Administration um Prüfung und Löschung bitten. Danach das Release über den Freigabe-PR erneut vorbereiten. |
 
 Force-Pushes auf geschützte Branches sind nicht zulässig.
 
@@ -574,8 +557,9 @@ unwiederbringlich entfernen kann.
 | `RESOURCE_CHECKED` | JSON- und XML-Ressourcen wurden geprüft. Befunde stehen als Warnungen im Laufprotokoll. | Warnungen mit Datei und Fundstelle prüfen. |
 | `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinie wurden geprüft. | Inhaltliche Änderung weiter prüfen. Der Status bestätigt keine fachliche Freigabe. |
 | `VALIDATION_FAILED` | Eingabe oder Konfiguration ist ungültig. | Erste Fehlermeldung sowie Branch, Tag und Mandantenkonfiguration prüfen. |
-| `RELEASE_APPROVAL_READY` | Der Nachweis für den Release-Freigabe-PR wurde auf dem Freigabe-Branch veröffentlicht. | Den Pull Request auf den Lieferbranch eröffnen und fachlich prüfen lassen. |
-| `RELEASE_APPROVAL_VALIDATED` | Merge und Freigabenachweis passen zum freizugebenden Commit. | Die anschließende Tag-Erstellung und den zentralen Release-Lauf prüfen. |
+| `RELEASE_APPROVAL_READY` | Der Freigabe-Branch mit der neuen Release-Version wurde veröffentlicht. | Den Pull Request auf den Lieferbranch eröffnen. |
+| `RELEASE_APPROVAL_CHECKED` | Release-Version, Branchstand und Lieferumfang wurden geprüft und im Pull Request angezeigt. Der erforderliche Statuscheck ist erfolgreich. | Die Zusammenfassung fachlich prüfen und den Pull Request durch eine zweite Person freigeben lassen. |
+| `RELEASE_APPROVAL_VALIDATED` | Merge und eingetragene Release-Version gehören zum Freigabe-Pull-Request. | Die anschließende Tag-Erstellung und den zentralen Release-Lauf prüfen. |
 | `SOURCE_FAILED` | Commit, Branch oder Tag konnte nicht passend aufgelöst werden. | Commit-SHA, ausgewählten Branch oder Release-Tag und deren Zuordnung prüfen. |
 | `RESOURCE_TRANSFER_FAILED` | Projektpakete oder Informationsdateien konnten nicht auf CIFS bereitgestellt werden. | Fehlermeldung und betroffenes Projekt festhalten und die Repository-Verantwortlichen informieren. |
 | `ADAPTER_FAILED` | LTOMA war nicht erreichbar oder hat den Aufruf abgelehnt. | HTTP-Status und Antwort im Protokoll prüfen. Den Lauf erst nach Klärung der Ursache wiederholen. |
@@ -617,5 +601,5 @@ Support-Tickets kopiert.
 | Entwicklungsstand bereitstellen | Feature-Branch pushen |
 | Änderung nach M/Text-Funktionstest übernehmen | Pull Request prüfen und mit Squash Merge zusammenführen |
 | Änderung auf weitere Releasepfade übertragen | Squash-Commit in einen Feature-Branch der weiteren Linie übernehmen |
-| Regulären SVN-Tag erzeugen | Release über den Freigabe-PR vorbereiten und durch eine zweite Person freigeben lassen |
+| SVN-Tag erzeugen | Release über den Freigabe-PR vorbereiten und durch eine zweite Person freigeben lassen |
 | Beta-Tag erzeugen | Beta-Tag `vnnn.nnnx` auf dem aktuellen Stand des passenden geschützten Branches erstellen |

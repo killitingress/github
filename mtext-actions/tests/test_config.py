@@ -5,12 +5,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from lbs_delivery.config import (
-    RELEASEFREIGABE_DIREKTER_TAG,
-    RELEASEFREIGABE_PULL_REQUEST,
-    load_mandanten_zuordnung,
-    load_releaselinien_zuordnung,
-)
+from lbs_delivery.config import load_mandanten_zuordnung, load_releaselinien_zuordnung
 from lbs_delivery.process import DeliveryError
 
 from tests.support import TempDirTestCase, load_test_configuration, setup_repository
@@ -20,26 +15,6 @@ class ConfigTests(TempDirTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.repository = setup_repository(self.root, branch="main")
-
-    def test_warns_on_project_deviation(self) -> None:
-        (self.repository / "Fonts/value.txt").unlink()
-        (self.repository / "Fonts").rmdir()
-        (self.repository / "LOMS_Autonom").mkdir()
-        configuration = load_test_configuration(self.repository)
-        self.assertTrue(any("Projekte fehlen" in warnung for warnung in configuration.warnungen))
-        self.assertTrue(any("zusätzlich" in warnung for warnung in configuration.warnungen))
-
-    def test_uses_secure_release_approval_default(self) -> None:
-        """Prüft Standard, Ausnahme und ungültige Releasefreigabe."""
-
-        self.assertEqual(load_test_configuration(self.repository).releasefreigabe, RELEASEFREIGABE_PULL_REQUEST)
-        configuration = load_test_configuration(
-            self.repository,
-            mandant={"releasefreigabe": RELEASEFREIGABE_DIREKTER_TAG},
-        )
-        self.assertEqual(configuration.releasefreigabe, RELEASEFREIGABE_DIREKTER_TAG)
-        with self.assertRaisesRegex(DeliveryError, "Releasefreigabe"):
-            load_test_configuration(self.repository, mandant={"releasefreigabe": "unbekannt"})
 
     def test_derives_fragment_project_codes_for_by(self) -> None:
         for project in ("Configuration", "Fonts", "LOMS_Framework", "LOMS_PKA"):

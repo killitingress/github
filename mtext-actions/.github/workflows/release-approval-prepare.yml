@@ -1,9 +1,8 @@
 name: Zentrale Release-Freigabe vorbereiten
 
-# Dieser Workflow legt den Freigabenachweis im Mandanten-Repository ab und
-# veröffentlicht ihn auf einem technischen Branch. Den Pull Request eröffnet
-# der Antragsteller selbst, damit er dessen Autor ist und GitHub ihn den
-# eigenen Pull Request nicht genehmigen lässt.
+# Dieser Workflow aktualisiert die Release-Version auf einem technischen
+# Branch. Den Pull Request eröffnet der Antragsteller selbst, damit er dessen
+# Autor ist und die Freigabe von einer zweiten Person kommt.
 'on':
   workflow_dispatch:
     inputs:
@@ -45,8 +44,8 @@ jobs:
       GIT_COMMITTER_NAME: M/Text Release-Freigabe
       GIT_COMMITTER_EMAIL: mtext-release@users.noreply.github.com
     steps:
-      # Lädt den freizugebenden Branchstand mit seiner Historie, weil der
-      # Nachweis den Vergleich zum FULL-Tag der Releaselinie enthält.
+      # Lädt den freizugebenden Branchstand mit seiner Historie, weil die
+      # Vorbereitung vorhandene Release-Tags prüft.
       - name: Check-Out Mandantenstand
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -70,11 +69,10 @@ jobs:
         id: runtime
         run: bash automation/scripts/runner-preflight.sh
 
-      # Der erzeugte JSON-Nachweis ist die einzige Änderung des technischen
-      # Branches und zeigt im Pull Request den geprüften Lieferumfang. Das
-      # Skript benennt auch den Branch, weil der Abschluss den Release-Tag
-      # wieder aus diesem Namen liest.
-      - name: Freigabeanforderung erstellen
+      # Die aktualisierte Mandantenkonfiguration macht die Release-Version im
+      # Pull Request sichtbar. Der Branchname trägt sie zusätzlich zum
+      # Abschlussworkflow.
+      - name: Release-Version eintragen
         id: prepare
         env:
           PYTHON: ${{ steps.runtime.outputs.python }}

@@ -10,65 +10,101 @@ Produktivsetzung wird der dann gültige SVN-Stand nach Git übertragen.
 Danach sind Git und GitHub Actions für den Prozess führend und SVN wird
 zusammen mit dem EN4920-Netz abgebaut.
 
-Jeder Mandant erhält ein eigenes Git-Repository mit seinen M/Text-Ressourcen,
-Trigger-Workflows und einer für diesen Prozess relevanten Konfigurationsdatei.
-Die CI/CD-Automatisierung, die von diesen Trigger-Workflows genutzt wird, liegt
-im Repository `FinanzInformatik/fi_lbs_entw_oms_mtext_actions` (im Folgenden
-`mtext_actions`). Sie validiert das Repo, synchronisiert M/Text, erstellt die
-FULL- und DELTA-Pakete und übergibt sie an den Mainframe. Nach erfolgreicher
-Übergabe erstellt sie außerdem ein GitHub Release im jeweiligen
-Mandanten-Repository.
+Jeder Mandant erhält ein eigenes Git-Repository in github.intern mit seinen
+M/Text-Ressourcen, Trigger-Workflows und einer für diesen Prozess relevanten
+Konfigurationsdatei. Die CI/CD-Automatisierung, die von diesen
+Trigger-Workflows zentral genutzt wird, liegt im Repository
+`FinanzInformatik/fi_lbs_entw_oms_mtext_actions` (im Folgenden `mtext_actions`
+genannt). Sie führt Validierungen, Synchronisierung, Paketbau und Übergabe an
+den Mainframe (IZE9) durch.
 
-Das Branch-Modell folgt dem FI-Leitfaden:
+Wir orientieren uns am FI-Leitfaden zu Branches und Tags in Git:
 
 - `main` ist der geschützte, dauerhafte Branch der führenden Releaselinie
 - `release/Rnnn` enthält eine parallel gepflegte Releaselinie
 - Jede Änderung entsteht in einem Branch `feature/Rnnn/<Bezeichnung>`
-- Änderungen an `main` und `release/Rnnn` erfolgen über Pull Requests im
-  Vier-Augenprinzip
-- Pull Requests werden mit Squash Merge zusammengeführt
-- Release-Tags folgen dem Muster `vnnn.nnn` oder `vnnn.nnnx`
-- Reguläre Releases werden standardmäßig über einen Release-Freigabe-PR
-  freigegeben
+- Änderungen an `main` und `release/Rnnn` erfolgen ausschließlich über Pull Requests
+- Pull Requests werden nach Freigabe im 4-Augenprinzip mit Squash Merge zusammengeführt
+- Release-Tags folgen dem Muster `vnnn.nnn` (oder `vnnn.nnnx` für
+  Beta-Lieferungen)
 
-*M/Text-Entwicklung* und *M/Text-Funktionstest* sind keine Git-Branches. Sie
-bezeichnen die beiden M/Text-Umgebungen einer Releaselinie.
+### Grundprinzipien
+
+In SVN ist ein Commit eine Aktion, durch die Änderungen an das zentrale
+Repository übertragen werden. Dabei entsteht eine neue Revision. In Git
+hingegen hält ein Commit einen Entwicklungsstand samt Historie zu einem
+bestimmten Zeitpunkt fest und entspricht damit am ehesten einer SVN-Revision.
+Seine Commit-SHA kennzeichnet ihn eindeutig. Diese besteht aus 40 hexadezimalen
+Zeichen, während eine SVN-Revision eine aufsteigende Nummer ist. Git-Commits
+werden normalerweise lokal erstellt und erst durch einen Push nach GitHub
+übertragen. Technisch ist ein Branch ein Zeiger auf einen Commit. Beim Push
+eines Branches werden sämtliche in GitHub fehlenden Commits dorthin übertragen
+und der Branch in GitHub auf den dann aktuellsten Commit *verschoben*.
+
+Jeder Entwicklungsauftrag (Änderung, Erweiterung, Korrektur, ...) wird als
+Feature in einem eigenen temporären Feature-Branch umgesetzt. Wenn ein Feature
+fertig entwickelt und getestet wurde, kann ein PR (Pull Request) angelegt
+werden, um es in einen Zielbranch wie z.B. `main` zu übernehmen. Der Pull
+Request muss dazu im 4-Augenprinzip geprüft und freigegeben werden. Wenn das
+passiert ist, werden die Änderungen des Feature-Branches per Squash Merge in
+den Zielbranch übernommen. Dabei entsteht ein neuer Stand und somit auch ein
+neuer Commit.
+
+Wird ein Feature-Branch nach GitHub gepusht werden seine M/Text-Projekte
+automatisch mit der M/Text-Entwicklungsumgebung synchronisiert, damit das
+Feature vom Entwickler dort getestet werden kann. Ein Merge nach `main` oder
+`release/Rnnn` synchronisiert automatisch die M/Text-Funktionstestumgebung.
+Dort soll das Feature dann von der LBS getestet und fachlich freigegeben
+werden.
+
+Ein Release wird später aus einem fachlich freigegebenen Branch `main` oder
+`release/Rnnn` vorbereitet. Der Release-Freigabeprozess hält Release-Version
+und Lieferumfang fest. Eine zweite Person prüft und genehmigt den zugehörigen
+Pull Request. Nach dessen Merge erzeugt der Workflow den Release-Tag und
+startet Paketbau sowie Mainframe-Übergabe.
+
+#### Änderungsablauf
 
 ```text
-feature/Rnnn/<Bezeichnung>
+Entwicklung in lokalem Feature-Branch (feature/Rnnn/<Bezeichnung>)
     │ Push
     ▼
-M/Text-Entwicklung der Releaselinie
-    │ fachlich testen
+Synchronisierung mit M/Text-Entwicklung
+    │ Entwicklung testen
     ▼
-Pull Request nach main oder release/Rnnn
-    │ Review und Squash Merge
+Pull Request nach main (oder release/Rnnn)
+    │ Review und Merge
     ▼
-M/Text-Funktionstest der Releaselinie
-    │ regulärer Release-Freigabe-PR
+Synchronisierung mit M/Text-Funktionstest
+    │ fachlich freigeben lassen
+    ▼
+Branchstand ist für ein Release bereit
+```
+
+#### Release-Ablauf
+
+```text
+Gewählter Branchstand auf main (oder release/Rnnn)
+    │ Release-Freigabe starten
+    ▼
+Pull Request vom technischen Freigabe-Branch nach main (oder release/Rnnn)
     │ Review und Merge
     ▼
 Release-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
 ```
 
-Bei einem Feature-Push werden die M/Text-Projekte automatisch mit der
-M/Text-Entwicklungsumgebung synchronisiert. Ein Merge nach `main` oder
-`release/Rnnn` synchronisiert sie automatisch mit der
-M/Text-Funktionstestumgebung. Ein regulärer Release-Freigabe-PR bestätigt den
-zu liefernden Branchstand im Vier-Augenprinzip. Nach dem Merge erzeugt der
-Workflow den Release-Tag und startet den Paketbau und die Mainframe-Übergabe.
 
 ### Entscheidungen und Nutzen
 
 | Entscheidung | Nutzen |
 |---|---|
-| Branches nach dem organisationsweiten Leitfaden | `main`, Release- und Feature-Branches reichen für Entwicklung und Wartung aus. Zusätzliche Prozess-Branches oder Cherry-Picks zwischen M/Text-Entwicklung und M/Text-Funktionstest sind nicht nötig. |
-| Feature-Push nach M/Text-Entwicklung | Eine Änderung kann vor dem Pull Request im passenden M/Text-Ziel geprüft werden. |
+| Branches nach dem organisationsweiten Leitfaden | `main`, Release- und Feature-Branches bilden Entwicklung und Wartung gut ab. Pull Requests bedeuten natives 4-Augenprinzip. |
+| Feature-Push nach M/Text-Entwicklung | Eine Änderung kann vor dem Pull Request vom Entwickler getestet werden. Parallelentwicklungen mehrerer Entwickler werden unterstützt. |
 | Pull Request mit Squash Merge | Jeder Pull Request wird als ein fachlicher Commit in den Zielbranch übernommen. Review und Arbeitscommits bleiben im Pull Request sichtbar. |
-| Gemeinsames M/Text-Projektpaket | Synchronisation und Release verwenden dasselbe `.tgz`-Format und dieselbe JSON-Informationsdatei. Sie unterscheiden sich durch Bezugsstand und Transportweg. |
-| Adapter verantwortet die Übernahme nach `serverSync` | Der Workflow übergibt projektweise einen Vollstand oder die Änderungen eines Git-Ereignisses. Der Adapter aktualisiert daraus `serverSync` und startet die M/Text-Synchronisation. |
-| Release-Freigabe-PR für reguläre Releases | Eine zweite Person bestätigt Branchstand, Release-Version und Lieferumfang. Der Workflow erzeugt danach den Release-Tag auf dem Merge-Commit der Freigabe. |
-| Freigegebene CI/CD-Version | Alle Mandanten verwenden dieselbe geprüfte Version von `mtext_actions`. Die vollständige Commit-SHA zeigt, welche Version ausgeführt wurde. |
+| GitHub Actions statt Jenkins | Natives Git-Feeling mit modernen Workflows in einem zentralen Tool. |
+| Gemeinsames Lieferpaket-Format | Synchronisation und Release verwenden das gleiche Paketformat auf unterschiedlichen Transportwegen. |
+| Release-Freigabe-PR | Eine zweite Person bestätigt Release-Version und Lieferumfang. Der Workflow erzeugt danach den Release-Tag auf dem Merge-Commit der Freigabe. |
+| Freigegebene CI/CD-Version | Alle Mandanten verwenden dieselbe Version von `mtext_actions`. Die Commit-SHA zeigt, welche Version ausgeführt wurde. |
 | Zentrale Mainframe-Zugangsdaten | Mandanten-Repositories benötigen keine Mainframe-Zugangsdaten. |
 
 ## 2. Branch- und Pull-Request-Modell
@@ -80,17 +116,24 @@ Workflow den Release-Tag und startet den Paketbau und die Mainframe-Übergabe.
 | `main` | Führende Releaselinie und Ausgangspunkt der regulären Weiterentwicklung | Dauerhaft, Default Branch, geschützt, Änderung über Pull Request |
 | `release/Rnnn` | Parallel gepflegte Releaselinie, insbesondere für Wartung und Fehlerkorrekturen | Geschützt, Änderung über Pull Request, nach Ende der Pflege löschbar |
 | `feature/Rnnn/<Bezeichnung>` | Eine fachlich zusammengehörige Änderung für die genannte Releaselinie | Temporär, nach dem Merge löschbar |
+| `release-approval/<Release-Tag>/<Lauf>` | Technischer Branch für den Release-Freigabe-PR | Der Freigabeworkflow erstellt ihn mit der neuen Release-Version, nach dem Merge ist er löschbar |
 
 Beispiele für Feature-Branches sind:
 
 ```text
-feature/R260/issue-1234
 feature/R261/issue-5678
 feature/R270/neuer-brief
 ```
 
 Der Bezeichnungsteil eines Feature-Branches darf weitere Pfadsegmente
 enthalten, beispielsweise `feature/R270/briefe/anschreiben`.
+
+Der technische Freigabe-Branch ändert in `.github/config.json` das Feld
+`letztes_release` auf die freizugebende Version. Diese Änderung gibt dem Pull
+Request einen verständlichen Inhalt. Der Antragsteller eröffnet von diesem
+Branch den Release-Freigabe-PR auf den gewählten Lieferbranch. Er wird dadurch
+Autor des Pull Requests und kann die erforderliche Freigabe nicht selbst
+erteilen.
 
 Ein Feature-Branch beginnt auf dem geschützten Branch, in dem seine
 Releaselinie gepflegt wird:
@@ -133,22 +176,18 @@ Jahr.
 
 Vor dem Wechsel wird aus einem geeigneten `main`-Commit ein Branch
 `release/Rnnn` für die bisherige Releaselinie erstellt. Danach wird in einem
-eigenen Pull Request auf `main` nur das Feld `releaselinie` in der
-Mandantenkonfiguration (`.github/config.json`) geändert. Die M/Text-Ressourcen
-bleiben dabei unverändert. Nach dem Merge steht `main` für die neue
-Releaselinie.
-
-GitHub Actions erkennt dabei die geänderte `releaselinie` und synchronisiert die
-M/Text-Projekte aus `main` automatisch mit M/Text-Entwicklung und
-M/Text-Funktionstest der neuen Linie. Die Verantwortlichen des Repositories
-führen den Wechsel durch und kontrollieren beide Ziele. Für `mtext_actions` und
-`fi_lbs_entw_oms_fi` sind dies die FI-Fachverantwortlichen. Für die weiteren
-Mandanten-Repositories sind es die jeweiligen Mandantenverantwortlichen.
+eigenen Pull Request auf `main` das Feld `releaselinie` in jeder
+Mandantenkonfiguration (`.github/config.json`) geändert. GitHub Actions erkennt
+die geänderte `releaselinie` und synchronisiert automatisch mit
+M/Text-Entwicklung und M/Text-Funktionstest der neuen Linie. Nach dem Merge
+steht `main` für die neue Releaselinie. (TODO gegebenenfalls könnte dies
+zentral gesteuert werden, wenn alle Mandanten zum gleichen Zeitpunkt das
+Release wechseln)
 
 Release-Branches werden gelöscht, wenn keine Änderungen für die Linie mehr
-erwartet werden, bzw. in der Regel spätestens wenn es drei neuere Releases
-gibt. Bereits veröffentlichte Versionen können weiterhin über ihre geschützten
-Release-Tags ausgecheckt werden.
+erwartet werden, bzw. in der Regel wenn es drei neuere Releases gibt. Bereits
+veröffentlichte Versionen können weiterhin über Release-Tags ausgecheckt
+werden.
 
 ## 3. M/Text-Projektpaket und Synchronisation
 
@@ -211,7 +250,7 @@ Beim Merge des Pull Requests gelangt der Squash-Commit in den geschützten
 Zielbranch. Dadurch startet automatisch die Synchronisation mit der
 M/Text-Funktionstestumgebung.
 
-Ein manueller Vollabgleich kann mit einer vollständigen Commit-SHA gestartet
+Ein manueller Vollabgleich kann mit einer Commit-SHA gestartet
 werden. In GitHub Actions werden dafür der Branch und die Commit-SHA
 ausgewählt. Die Tabelle zeigt, in welches M/Text-Ziel die Projekte übertragen
 werden.
@@ -274,8 +313,8 @@ SHA-256-Prüfsummen enthalten kann.
 
 Für die Synchronisation ist ein DELTA die Änderung des auslösenden
 Git-Ereignisses. Der Workflow vergleicht dessen vorherigen und neuen Commit.
-Für ein Release ist ein DELTA kumulativ und vergleicht den regulären
-`.100`-Tag mit dem Release-Tag. Ein in `serverSync` gespeicherter Commit ist
+Für ein Release ist ein DELTA kumulativ und vergleicht den `.100`-Tag mit dem
+Release-Tag. Ein in `serverSync` gespeicherter Commit ist
 keine Vergleichsbasis.
 
 ### CIFS-Übergabe und Übernahme nach `serverSync`
@@ -355,13 +394,14 @@ Release-Tags folgen dem Muster `vnnn.nnn` oder `vnnn.nnnx`, beispielsweise
 `v261.100`, `v261.108` oder `v261.108a`. Der optionale Buchstabe kennzeichnet
 eine Beta-Lieferung.
 
-Für reguläre Releases ohne Buchstabensuffix ist der Release-Freigabe-PR der
-Regelweg. Ein Benutzer startet den Vorbereitungsworkflow auf `main` oder dem
+Für Release-Tags ohne Buchstabensuffix startet ein Benutzer den
+Vorbereitungsworkflow auf `main` oder dem
 passenden `release/Rnnn`. Der Workflow verwendet den aktuellen Stand des
 ausgewählten Branches und die im Wartungstool vergebene Release-Version. Eine
 beliebige Commit-SHA muss nicht eingegeben werden.
 
-Der Workflow legt den Freigabe-Branch an. Den Pull Request dazu eröffnet der
+Der Workflow legt den technischen Freigabe-Branch
+`release-approval/<Release-Tag>/<Lauf>` an. Den Pull Request dazu eröffnet der
 Antragsteller anschließend selbst. Damit ist er dessen Autor, und GitHub lässt
 niemanden den eigenen Pull Request genehmigen. Die Zustimmung einer zweiten
 Person ergibt sich dadurch aus der Schutzregel des Lieferbranches und muss
@@ -369,46 +409,32 @@ nicht zusätzlich nachgebildet werden.
 
 Der Release-Freigabe-PR zeigt:
 
-- den ausgewählten Branch und seine Commit-SHA
-- die Release-Version aus dem Wartungstool
+- im Diff die Änderung von `letztes_release` auf die Release-Version aus dem
+  Wartungstool
+- in der Zusammenfassung des Checks den Lieferbranch und seine Commit-SHA
 - den Bezugsstand der Lieferung, der bei einer FULL-Lieferung entfällt
 - die betroffenen Projekte
 - die enthaltenen Änderungen und Löschungen
 
-Der Workflow schreibt diese Angaben nach
-`.github/release-approvals/<Release-Tag>.json`. Die Datei enthält je Projekt
-dieselben Felder `projekt`, `stand` und `elemente` wie die spätere
-Informationsdatei. Die Prüfsummen entstehen erst beim Paketbau und sind daher
-nicht Teil der Freigabeanforderung. Der Pull Request nimmt diese Datei in
-den Lieferbranch auf und macht den geprüften Umfang dort dauerhaft
-nachvollziehbar.
-
 Eine zweite Person prüft, dass dieser Stand in M/Text-Funktionstest geprüft
-wurde und der ausgewiesene Umfang geliefert werden soll. Ändert sich der
-fachliche Branchstand oder die Mandantenkonfiguration während der Freigabe,
-muss der Freigabe-PR mit dem neuen Stand erzeugt werden. Nach Review und Merge
-prüft der Workflow die GitHub-Daten des Pull Requests und den versionierten
-Freigabenachweis. Danach erstellt der Workflow den regulären Release-Tag auf
-dem Merge-Commit des Pull Requests und startet die Lieferung.
+wurde und der ausgewiesene Umfang geliefert werden soll. Nach Review und Merge
+ordnet der Abschlussworkflow den zusammengeführten Pull Request dem
+technischen Freigabe-Branch und der eingetragenen Release-Version zu. Danach
+erstellt er den Release-Tag auf dem Merge-Commit des Pull Requests und startet
+die Lieferung.
 
-Der Merge-Commit trägt gegenüber dem freigegebenen Commit ausschließlich den
-Freigabenachweis. Weil der Tag auf ihm liegt, enthält der getaggte Stand diesen
-Nachweis, und der Releasebau kann ihn dort lesen und erneut gegen den
-freigegebenen Lieferumfang prüfen.
+Beim Bau eines regulären Releases muss `letztes_release` im getaggten Stand
+dem Release-Tag entsprechen. Damit wird kein Stand geliefert, dessen
+eingetragene Freigabeversion von seinem Tag abweicht. Für Beta-Tags gilt dieser
+Abgleich nicht.
 
-Fehlt `releasefreigabe` in der Mandantenkonfiguration, gilt dieser
-Pull-Request-Ablauf. Mit dem Wert `direkter_tag` kann ein Mandant reguläre
-Release-Tags durch einen berechtigten Benutzer erstellen lassen. Diese
-Konfigurationsänderung unterliegt selbst dem Pull-Request-Verfahren.
+Der Check **Release vorprüfen** ist für die Lieferbranches als erforderlicher
+Statuscheck eingerichtet. Bei anderen Pull Requests wird der Release-Job
+erfolgreich übersprungen. Ein Release-Freigabe-PR kann erst nach erfolgreicher
+Vorprüfung zusammengeführt werden.
 
-Ein regulärer Tag, der bei geltender Pull-Request-Freigabe außerhalb des
-Freigabeworkflows erstellt wurde, wird vom zentralen Release-Workflow
-abgelehnt. Der Tag wird nicht automatisch gelöscht oder verschoben. Der
-Mandant wendet sich zur Klärung und gegebenenfalls zur Löschung an die
-FI-GitHub-Administration.
-
-Beta-Tags mit Buchstabensuffix können in beiden Konfigurationen lokal oder in
-GitHub erstellt und gepusht werden. Sie können nicht für eine produktive
+Beta-Tags mit Buchstabensuffix können lokal oder in GitHub erstellt und
+gepusht werden. Sie können nicht für eine produktive
 Lieferung verwendet werden und benötigen deshalb keinen Release-Freigabe-PR.
 
 Für alle Release-Tags gelten außerdem folgende Regeln:
@@ -440,7 +466,7 @@ Lieferung. Dadurch kann ein vorheriges DELTA den neuen FULL-Stand nicht wieder
 verändern.
 
 Jede andere Release-Version derselben Releaselinie erzeugt ein kumulatives
-DELTA gegen den regulären `.100`-Tag. Das D-Element enthält alle seitdem neuen
+DELTA gegen den `.100`-Tag. Das D-Element enthält alle seitdem neuen
 und geänderten Dateien sowie eine Löschliste. `v261.108`, `v261.108a` und
 `v261.108b` enthalten damit jeweils alle Änderungen seit `v261.100`.
 
@@ -482,7 +508,7 @@ dürfen dabei nicht denselben Projektcode ergeben.
 Für den Inhalt der Elemente gilt:
 
 - Ein F-Element enthält den vollständigen Projektbaum
-- Ein reguläres D-Element enthält die seit `.100` neuen und geänderten Dateien
+- Ein D-Element enthält die seit `.100` neuen und geänderten Dateien
   sowie die Löschliste
 - Das bei einer FULL-Lieferung zusätzlich erzeugte D-Element enthält ein leeres
   Projektverzeichnis und eine leere Löschliste
@@ -502,8 +528,8 @@ Nach der Mainframe-Übergabe erstellt der zentrale Workflow im
 Mandanten-Repository ein GitHub Release zum vorhandenen Release-Tag. Die
 Release-Beschreibung nennt Release-Tag, Lieferart und Commit-SHA. Sie
 bestätigt die technische Übergabe und enthält die JSON-Informationsdateien.
-Diese dienen als Lieferbeleg. Die fachliche Freigabe ist bei einem regulären
-Release bereits durch den Release-Freigabe-PR erteilt.
+Diese dienen als Lieferbeleg. Die fachliche Freigabe ist durch den
+Release-Freigabe-PR erteilt.
 
 ### Mainframe-Übergabe
 
@@ -544,8 +570,6 @@ Ein Mandanten-Repository folgt diesem Aufbau:
 fi_lbs_entw_oms_<kuerzel>/
   .github/
     config.json
-    release-approvals/
-      <Release-Tag>.json
     workflows/
       check-resources.yml
       release-approval.yml
@@ -591,6 +615,7 @@ mtext-actions/
   .github/
     workflows/
       ci.yml
+      release-approval-check.yml
       release-approval-finalize.yml
       release-approval-prepare.yml
       release.yml
@@ -633,7 +658,7 @@ mtext-actions/
 | Mandantenkonfiguration und JSON- oder XML-Ressourcen prüfen | Pull Request oder manueller Start | `check-resources.yml` | `reusable-check-resources.yml` | `mtext.py validate-config` und `mtext.py check-resources` | Konfiguration geprüft, geänderte konfigurierte Ressourcen oder gewählter Vollstand geprüft und Syntaxbefunde als nicht blockierende Warnungen angezeigt |
 | M/Text-Entwicklung synchronisieren | Push auf `feature/Rnnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
 | M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/Rnnn` sowie manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
-| Reguläres Release freigeben | Manueller Start auf dem Lieferbranch, selbst eröffneter Freigabe-PR und dessen Merge | `release-approval.yml` | `reusable-dispatch.yml` → `release-approval-prepare.yml` oder `release-approval-finalize.yml` | `mtext.py release-approval` | Regulärer Release-Tag auf dem Merge-Commit der Freigabe erstellt |
+| Release freigeben | Manueller Start auf dem Lieferbranch, selbst eröffneter Freigabe-PR und dessen Merge | `release-approval.yml` | `release-approval-check.yml` sowie `reusable-dispatch.yml` → `release-approval-prepare.yml` oder `release-approval-finalize.yml` | `mtext.py release-approval` | Vorprüfung im Pull Request angezeigt und Release-Tag auf dem Merge-Commit erstellt |
 | Release bauen und übertragen | Push eines Tags `vnnn.nnn` oder `vnnn.nnnx` | `release.yml` | `reusable-dispatch.yml` → `release.yml` | `mtext.py build-release`, `publish-mainframe`, danach `publish-github-release` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
 | `mtext_actions` testen | Pull Request oder Push auf `main` in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` | Zentrale Tests ausgeführt |
 
@@ -645,7 +670,7 @@ Verarbeitung in `mtext_actions`:
 | Datei | Auslöser | Aufgabe |
 |---|---|---|
 | `check-resources.yml` | Pull Request oder manueller Start | Mandantenkonfiguration und geänderte konfigurierte Ressourcen oder den gewählten Vollstand prüfen, Syntaxbefunde als Warnungen anzeigen |
-| `release-approval.yml` | Manueller Start oder Merge eines Release-Freigabe-PR | Freigabe-Branch vorbereiten oder den regulären Release-Tag auf dem Merge-Commit erstellen |
+| `release-approval.yml` | Manueller Start oder Release-Freigabe-PR | Technischen Freigabe-Branch vorbereiten, Vorprüfung anzeigen oder den Release-Tag auf dem Merge-Commit erstellen |
 | `sync-resources.yml` | Push auf einen Feature-, `main`- oder Release-Branch sowie manueller Start | Projekte nach M/Text-Entwicklung oder -Funktionstest übertragen |
 | `release.yml` | Release-Tag | Release-Erstellung starten |
 
@@ -659,8 +684,9 @@ Merge nicht.
 | `reusable-check-resources.yml` | Aufruf durch `check-resources.yml` | Mandantenkonfiguration sowie JSON- und XML-Ressourcen ohne Zugriff auf Zielsysteme prüfen |
 | `reusable-dispatch.yml` | Aufruf durch `release.yml` oder `release-approval.yml` | Benannten zentralen Workflow mit seinen Eingaben starten |
 | `reusable-sync-resources.yml` | Aufruf durch `sync-resources.yml` | Projekte nach M/Text übertragen |
-| `release-approval-prepare.yml` | Start durch `reusable-dispatch.yml` | Freigabenachweis erzeugen und auf dem Freigabe-Branch veröffentlichen |
-| `release-approval-finalize.yml` | Start durch `reusable-dispatch.yml` | Nach geprüftem Merge den regulären Release-Tag erstellen |
+| `release-approval-check.yml` | Aufruf durch `release-approval.yml` | Geplanten Release prüfen und Branchstand sowie Lieferumfang im Pull Request anzeigen |
+| `release-approval-prepare.yml` | Start durch `reusable-dispatch.yml` | `letztes_release` aktualisieren und den technischen Freigabe-Branch veröffentlichen |
+| `release-approval-finalize.yml` | Start durch `reusable-dispatch.yml` | Nach dem Merge den Release-Tag erstellen |
 | `release.yml` | Start durch `reusable-dispatch.yml` | FULL- und DELTA-Pakete erstellen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
 | `ci.yml` | Pull Request oder Push auf `main` in `mtext_actions` | Tests ausführen |
 | `update-mandant-workflows.yml` | Manueller Start | Verweise auf `mtext_actions` in den Mandanten-Workflows aktualisieren |
@@ -705,8 +731,9 @@ mit dem zugehörigen Exitcode.
 | `RESOURCE_CHECKED` | JSON- und XML-Ressourcen wurden geprüft, Befunde stehen als Warnungen bereit | – |
 | `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinienzuordnung wurden geprüft | – |
 | `VALIDATION_FAILED` | Eingaben oder Konfiguration sind ungültig | `2` |
-| `RELEASE_APPROVAL_READY` | Freigabenachweis für den Pull Request wurde erzeugt | – |
-| `RELEASE_APPROVAL_VALIDATED` | Merge und Freigabenachweis passen zum freizugebenden Commit | – |
+| `RELEASE_APPROVAL_READY` | Technischer Branch mit der neuen Release-Version wurde veröffentlicht | – |
+| `RELEASE_APPROVAL_CHECKED` | Release-Version, Branchstand und Lieferumfang wurden für den Pull Request geprüft | – |
+| `RELEASE_APPROVAL_VALIDATED` | Merge und eingetragene Release-Version gehören zum Freigabe-Pull-Request | – |
 | `SOURCE_FAILED` | Checkout, Commit, Branch oder Tag können nicht als Quelle verwendet werden | `3` |
 | `RESOURCE_TRANSFER_FAILED` | Die Projektpakete konnten nicht für den Adapter bereitgestellt werden | `5` |
 | `ADAPTER_FAILED` | Der M/Text-Adapter war nicht erreichbar oder hat den Synchronisationsauftrag abgelehnt | `6` |
@@ -730,7 +757,7 @@ mit den M/Text-Projekten versioniert. Der Block `mandant` enthält:
 | `kuerzel` | Mandantenkürzel für Paketnamen und Fragmentprojekte |
 | `releaselinie` | Releaselinie von `main` |
 | `ispw` | CodePipeline-Instanz `T` oder `P` |
-| `releasefreigabe` | `pull_request` oder `direkter_tag`. Ohne das Feld gilt `pull_request`. |
+| `letztes_release` | Zuletzt über diesen Lieferbranch freigegebene Release-Version, vor dem ersten Release `null` |
 | `excluded_projects` | Projektverzeichnisse, die weder synchronisiert noch paketiert werden |
 | `hostprofile` | Assignment und CodePipeline-Stage je Hostprofil |
 
@@ -742,6 +769,7 @@ Beispiel:
     "kuerzel": "FI",
     "releaselinie": "R270",
     "ispw": "P",
+    "letztes_release": null,
     "excluded_projects": ["LOMS_Testdaten"],
     "hostprofile": {
       "FKT": {
@@ -758,18 +786,9 @@ Beispiel:
 ```
 
 Bei Feature- und Release-Branches steht die Releaselinie im Branchnamen. Bei
-`main` steht sie im Feld `releaselinie`. Mandanten, die reguläre Release-Tags
-durch einen berechtigten Benutzer erstellen lassen, setzen zusätzlich:
-
-```json
-{
-  "mandant": {
-    "releasefreigabe": "direkter_tag"
-  }
-}
-```
-
-Ohne diese ausdrückliche Ausnahme gilt die Freigabe über Pull Request.
+`main` steht sie im Feld `releaselinie`. Der Freigabeworkflow aktualisiert
+`letztes_release` auf dem technischen Freigabe-Branch. Die Konfiguration der
+fachlichen Projekte und Zielsysteme bleibt dabei unverändert.
 
 ### Zentrale Zuordnungen
 
@@ -794,10 +813,10 @@ Das Feld `stage` eines Hostprofils enthält eine der CodePipeline-Stages `FKTE`,
 
 | Gegenstand | Regel |
 |---|---|
-| `main` | Geschützt, keine Löschung oder Umbenennung, fachliche Änderung über Pull Request im Vier-Augenprinzip |
-| `release/Rnnn` | Geschützt, fachliche Änderung über Pull Request im Vier-Augenprinzip, Erstellung aus geschütztem Branch oder Release-Tag |
+| `main` | Geschützt, keine Löschung oder Umbenennung, fachliche Änderung über Pull Request im Vier-Augenprinzip, erforderlicher Statuscheck **Release vorprüfen** |
+| `release/Rnnn` | Geschützt, fachliche Änderung über Pull Request im Vier-Augenprinzip, erforderlicher Statuscheck **Release vorprüfen**, Erstellung aus geschütztem Branch oder Release-Tag |
 | `feature/Rnnn/<Bezeichnung>` | Keine zusätzliche Schutzregel |
-| Reguläre Release-Tags `vnnn.nnn` | Bei Pull-Request-Freigabe erstellt der technische Freigabeworkflow den Tag. Ein außerhalb dieses Ablaufs erzeugter Tag startet keine Lieferung. |
+| Release-Tags ohne Buchstabensuffix `vnnn.nnn` | Der technische Freigabeworkflow erstellt den Tag nach Review und Merge des Freigabe-Pull-Requests. |
 | Beta-Tags `vnnn.nnnx` | Dürfen lokal oder in GitHub auf einem Commit des passenden geschützten Branches erstellt werden. |
 | Workflowdateien und Mandantenkonfiguration | Mandantenkonfiguration und reguläre Workflowänderungen über Pull Request und Review. Freigegebene CI/CD-Versionen werden über den administrativen Rollout aktualisiert. |
 | GitHub Release | Der zentrale Workflow darf zum vorhandenen Tag ein GitHub Release im auslösenden Mandanten-Repository erstellen und die Informationsdateien anhängen |
@@ -817,15 +836,9 @@ besitzt dort `Contents: read and write`, `Pull requests: read` sowie
 `Workflows: read and write`. Der technische Benutzer ist in den Schutzregeln
 als Ausnahme von der Pull-Request-Pflicht für den administrativen
 Workflow-Rollout hinterlegt. Das Token aktualisiert die Trigger-Workflows,
-veröffentlicht die Freigabe-Branches, liest den zusammengeführten Freigabe-PR
+veröffentlicht die technischen Freigabe-Branches, liest den zusammengeführten Freigabe-PR
 und erstellt die freigegebenen Tags sowie die GitHub Releases mit den
 Informationsdateien.
-
-Ob organisationsweite Tag-Rulesets die Erstellung und Löschung der
-Release-Tags zusätzlich einschränken, ist mit der FI-GitHub-Administration zu
-prüfen. Die Lieferfreigabe verlässt sich nicht darauf. Der zentrale
-Release-Workflow lehnt einen regulären Tag ab, wenn die konfigurierte
-Pull-Request-Freigabe nicht nachgewiesen ist.
 
 ## 9. Mögliche Phase 2
 

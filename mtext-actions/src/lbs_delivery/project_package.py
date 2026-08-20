@@ -63,12 +63,7 @@ def release_scope(
 def package_stand(
     *, base: tuple[str, str] | None, target: tuple[str, str]
 ) -> dict[str, object]:
-    """Erstellt den gemeinsamen Bezugs- und Zielstand für Nachweise.
-
-    Freigabenachweis und Informationsdatei beschreiben den Stand mit denselben
-    Feldern. Der Prüfer findet damit im Pull Request die Angabe wieder, die
-    später die Lieferung begleitet.
-    """
+    """Erstellt den gemeinsamen Bezugs- und Zielstand der Lieferinformationen."""
 
     stand: dict[str, object] = {
         "bis": {"referenz": target[0], "commit": target[1]},
@@ -85,7 +80,7 @@ def project_elements(
     base: tuple[str, str] | None,
     changes: Iterable[git.GitChange],
 ) -> list[list[str]]:
-    """Ermittelt die projektbezogene Elementliste für Paket und Freigabe.
+    """Ermittelt die projektbezogene Elementliste für Paket und Vorprüfung.
 
     Ein fehlender Bezugsstand bezeichnet ein FULL mit allen Dateien als
     hinzugefügt. Andernfalls übernimmt ein DELTA Status und Pfade aus dem

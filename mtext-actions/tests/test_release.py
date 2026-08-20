@@ -15,7 +15,6 @@ from lbs_delivery.process import DeliveryError, NETWORK_TIMEOUT, Status
 
 from tests.support import (
     TempDirTestCase,
-    approve_release_tag,
     git,
     jcl_template,
     load_test_configuration,
@@ -25,19 +24,16 @@ from tests.support import (
 
 class ReleaseTests(TempDirTestCase):
     def setUp(self) -> None:
-        """Bereitet eine Releasehistorie und beide Freigabewege vor."""
+        """Bereitet eine Releasehistorie für FULL und DELTA vor."""
 
         super().setUp()
         self.repository = setup_release_repository(self.root)
         self.template = jcl_template()
 
-        # Das DELTA durchläuft den Standardweg mit Freigabe-Pull-Request, das
-        # FULL die konfigurierte Ausnahme mit direkt erstelltem Tag.
-        self.configuration = load_test_configuration(self.repository)
-        self.direct = load_test_configuration(
-            self.repository, mandant={"releasefreigabe": "direkter_tag"}
+        self.configuration = load_test_configuration(
+            self.repository,
+            mandant={"letztes_release": "v261.108"},
         )
-        approve_release_tag(self.repository, self.configuration, "v261.108")
 
     def build(self, output_directory: Path, *, tag: str, trigger_sha: str) -> None:
         """Erzeugt ein Releaseartefakt für den angegebenen Test-Tag."""
@@ -115,8 +111,12 @@ class ReleaseTests(TempDirTestCase):
 
         git(self.repository, "checkout", "--detach", "v261.100")
         full = self.root / "full"
+        full_configuration = load_test_configuration(
+            self.repository,
+            mandant={"letztes_release": "v261.100"},
+        )
         build_release(
-            self.direct,
+            full_configuration,
             repository_root=self.repository,
             output_directory=full,
             jcl_template=self.template,

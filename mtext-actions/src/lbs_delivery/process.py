@@ -21,9 +21,11 @@ class Status(str, Enum):
     CONFIG_VALIDATED = "CONFIG_VALIDATED"
     # Konfiguration oder Argumente sind ungültig.
     VALIDATION_FAILED = "VALIDATION_FAILED"
-    # Der Pull Request kann mit dem erzeugten Freigabenachweis geöffnet werden.
+    # Der Pull Request kann mit der aktualisierten Release-Version geöffnet werden.
     RELEASE_APPROVAL_READY = "RELEASE_APPROVAL_READY"
-    # Der Merge und sein Freigabenachweis passen zum freizugebenden Commit.
+    # Die Vorprüfung des im Pull Request vorgesehenen Releases war erfolgreich.
+    RELEASE_APPROVAL_CHECKED = "RELEASE_APPROVAL_CHECKED"
+    # Der Merge gehört zum vorbereiteten Freigabe-Pull-Request.
     RELEASE_APPROVAL_VALIDATED = "RELEASE_APPROVAL_VALIDATED"
     # Checkout, Commit, Branch oder Tag sind nicht als Quelle verwendbar.
     SOURCE_FAILED = "SOURCE_FAILED"
@@ -111,6 +113,13 @@ def execute(operation: Callable[[], dict[str, object]]) -> int:
     except (OSError, UnicodeError) as exc:
         print(f"{Status.VALIDATION_FAILED.value}: lokale Dateioperation fehlgeschlagen: {exc}", file=sys.stderr)
         return 2
+
+    # GitHub zeigt eine vorhandene Zusammenfassung direkt beim Workflow-Check an.
+    summary = result.pop("summary", "")
+    if summary and (summary_path := os.environ.get("GITHUB_STEP_SUMMARY")):
+        with Path(summary_path).open("a", encoding="utf-8") as stream:
+            stream.write(str(summary))
+            stream.write("\n")
 
     # Folgeschritte lesen Workflow-Ausgaben aus der von GitHub Actions vorgegebenen Datei.
     outputs = result.pop("outputs", {})

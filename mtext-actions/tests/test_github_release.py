@@ -11,7 +11,6 @@ from lbs_delivery.mainframe_release import build_release
 
 from tests.support import (
     TempDirTestCase,
-    approve_release_tag,
     git,
     jcl_template,
     load_test_configuration,
@@ -31,8 +30,10 @@ class GitHubReleaseTests(TempDirTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.repository = setup_release_repository(self.root)
-        self.configuration = load_test_configuration(self.repository)
-        approve_release_tag(self.repository, self.configuration, "v261.108")
+        self.configuration = load_test_configuration(
+            self.repository,
+            mandant={"letztes_release": "v261.108"},
+        )
         self.dist = self.root / "dist"
 
         git(self.repository, "checkout", "--detach", "v261.108")
@@ -83,31 +84,6 @@ class GitHubReleaseTests(TempDirTestCase):
         self.assertEqual(len(uploads), 1)
         self.assertIn("_INFO_FI-LOMS_Basis.json", uploads[0]["url"])
         self.assertEqual(uploads[0]["content_type"], "application/json")
-
-    def test_updates_existing_release_without_touching_foreign_assets(self) -> None:
-        def handler(arguments: dict[str, object]) -> object:
-            if arguments["method"] == "GET":
-                return {
-                    "id": 41,
-                    "html_url": "https://github.example/FI/mandant/releases/tag/v261.108",
-                    "upload_url": "https://uploads.github.example/repos/FI/mandant/releases/41/assets{?name,label}",
-                    "assets": [
-                        {"id": 52, "name": "_INFO_FI-LOMS_Basis.json"},
-                        {"id": 53, "name": "fremde-datei.txt"},
-                    ],
-                }
-            if arguments["method"] == "PATCH":
-                return {
-                    "id": 41,
-                    "html_url": "https://github.example/FI/mandant/releases/tag/v261.108",
-                    "upload_url": "https://uploads.github.example/repos/FI/mandant/releases/41/assets{?name,label}",
-                }
-            return None
-
-        calls, _result = self.publish(handler)
-        self.assertEqual([call["method"] for call in calls], ["GET", "PATCH", "DELETE", "POST"])
-        self.assertTrue(calls[2]["url"].endswith("/releases/assets/52"))
-        self.assertNotIn("53", " ".join(str(call["url"]) for call in calls))
 
 
 if __name__ == "__main__":

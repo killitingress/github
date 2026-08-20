@@ -3,6 +3,7 @@
     "kuerzel": "FI",
     "releaselinie": "R270",
     "ispw": "P",
+    "letztes_release": null,
     "excluded_projects": [
       "LOMS_Testdaten"
     ],

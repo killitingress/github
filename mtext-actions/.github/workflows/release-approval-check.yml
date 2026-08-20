@@ -1,0 +1,80 @@
+name: Wiederverwendbare Release-Vorprüfung
+
+# Dieser Workflow prüft den im Pull Request vorgesehenen Release und zeigt
+# Branchstand sowie Lieferumfang als Zusammenfassung im Mandanten-Repository.
+'on':
+  workflow_call:
+    inputs:
+      source_repository:
+        description: Mandanten-Repository
+        required: true
+        type: string
+      source_branch:
+        description: Lieferbranch des Pull Requests
+        required: true
+        type: string
+      approval_branch:
+        description: Technischer Freigabe-Branch
+        required: true
+        type: string
+      target_sha:
+        description: Stand des technischen Freigabe-Branches
+        required: true
+        type: string
+      automation_ref:
+        description: Festgelegte CI/CD-Version
+        required: true
+        type: string
+    secrets:
+      automation_token:
+        description: Token zum Laden der festgelegten CI/CD-Version
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Release vorprüfen
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 15
+    steps:
+      # Lädt den technischen Freigabe-Branch mit der Historie für FULL- und
+      # DELTA-Vergleich.
+      - name: Check-Out Freigabe-Stand
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+          repository: ${{ inputs.source_repository }}
+          ref: ${{ inputs.target_sha }}
+
+      # Lädt die festgelegte Implementierung der Vorprüfung.
+      - name: Check-Out CI/CD-Version
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+          ref: ${{ inputs.automation_ref }}
+          path: automation
+          persist-credentials: false
+          token: ${{ secrets.automation_token }}
+
+      - name: Python-Runtime ermitteln
+        id: runtime
+        run: bash automation/scripts/runner-preflight.sh
+
+      # Das Kommando prüft die technische Erstellbarkeit und schreibt den
+      # geplanten Lieferumfang nach GITHUB_STEP_SUMMARY.
+      - name: Release und Lieferumfang prüfen
+        env:
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          APPROVAL_BRANCH: ${{ inputs.approval_branch }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+        run: >-
+          "${{ steps.runtime.outputs.python }}"
+          automation/src/mtext.py release-approval check
+          --approval-branch "$APPROVAL_BRANCH"
+          --branch "$SOURCE_BRANCH"
+          --target-sha "$TARGET_SHA"
