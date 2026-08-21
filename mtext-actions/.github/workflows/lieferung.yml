@@ -1,0 +1,99 @@
+name: Zentrale Lieferung
+
+# Erzeugt den Liefer-Tag auf der festgehaltenen SHA und startet die
+# Mainframe-Übergabe. Der Branchstand wird nicht erneut gelesen.
+'on':
+  workflow_dispatch:
+    inputs:
+      source_repository:
+        description: Mandanten-Repository
+        required: true
+        type: string
+      lieferung_tag:
+        description: Liefer-Tag, zum Beispiel r261.108
+        required: true
+        type: string
+      source_sha:
+        description: festgehaltene SHA der Vorbereitung
+        required: true
+        type: string
+      source_branch:
+        description: Branch der Vorbereitung
+        required: true
+        type: string
+      prepare_actor:
+        description: vorbereitende Person
+        required: true
+        type: string
+      execute_actor:
+        description: ausführende Person
+        required: true
+        type: string
+permissions:
+  contents: read
+
+jobs:
+  tag:
+    name: Liefer-Tag erstellen
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 15
+    outputs:
+      lieferung_tag: ${{ steps.tag.outputs.lieferung_tag }}
+    steps:
+      # Lädt die festgehaltene SHA mit ihrer Historie. Die aktuelle
+      # Branchspitze wird nicht als neuer Lieferstand gelesen.
+      - name: Check-Out Mandantenstand
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+          repository: ${{ inputs.source_repository }}
+          ref: ${{ inputs.source_sha }}
+          token: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+
+      - name: Check-Out CI/CD-Version
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+          ref: ${{ github.workflow_sha }}
+          path: automation
+          persist-credentials: false
+
+      - name: Python-Runtime ermitteln
+        id: runtime
+        run: bash automation/scripts/runner-preflight.sh
+
+      # Der Tag zeigt auf die in der bestätigten Vorbereitung festgehaltene SHA.
+      - name: Liefer-Tag erstellen
+        id: tag
+        env:
+          PYTHON: ${{ steps.runtime.outputs.python }}
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          WORKFLOW_CONFIGURATION_TOKEN: ${{ secrets.WORKFLOW_CONFIGURATION_TOKEN }}
+          LIEFERUNG_TAG: ${{ inputs.lieferung_tag }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          PREPARE_ACTOR: ${{ inputs.prepare_actor }}
+          EXECUTE_ACTOR: ${{ inputs.execute_actor }}
+          GITHUB_API_URL: ${{ github.api_url }}
+        run: >-
+          "$PYTHON" automation/src/mtext.py lieferung tag
+          --tag "$LIEFERUNG_TAG"
+          --branch "$SOURCE_BRANCH"
+          --source-sha "$SOURCE_SHA"
+          --prepare-actor "$PREPARE_ACTOR"
+          --execute-actor "$EXECUTE_ACTOR"
+          --api-url "$GITHUB_API_URL"
+
+  # Nach dem Liefer-Tag startet derselbe Lauf den Paketbau. Ein Tag-Push allein
+  # löst keine Mainframe-Übergabe aus.
+  start-release:
+    name: Zentralen Release-Workflow starten
+    needs: tag
+    uses: ./.github/workflows/release.yml
+    with:
+      source_repository: ${{ inputs.source_repository }}
+      release_tag: ${{ needs.tag.outputs.lieferung_tag }}
+      trigger_sha: ${{ inputs.source_sha }}
+    secrets: inherit

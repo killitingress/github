@@ -18,17 +18,6 @@ Trigger-Workflows zentral genutzt wird, liegt im Repository
 genannt). Sie führt Validierungen, Synchronisierung, Paketbau und Übergabe an
 den Mainframe (IZE9) durch.
 
-Wir orientieren uns am FI-Leitfaden zu Branches und Tags in Git:
-
-- `main` ist der geschützte, dauerhafte Branch der führenden Releaselinie;uu
-- `release/nnn` enthält eine parallel gepflegte Releaselinie (z.B.
-  `release/261`)
-- Jede Änderung entsteht in einem Branch `feature/nnn/<Bezeichnung>`
-- Änderungen an `main` und `release/nnn` erfolgen ausschließlich über Pull Requests
-- Pull Requests werden nach Freigabe im 4-Augenprinzip mit Squash Merge zusammengeführt
-- Release-Tags folgen dem Muster `vnnn.nnn` (oder `vnnn.nnnx` für
-  Beta-Lieferungen)
-
 ### Grundprinzipien
 
 In SVN ist ein Commit eine Aktion, durch die Änderungen an das zentrale
@@ -60,11 +49,11 @@ M/Text-Funktionstestumgebung. Dort soll das Feature dann von der LBS getestet
 und fachlich freigegeben werden. Danach kann der Feature-Branch wieder gelöscht
 werden.
 
-Ein Release wird später aus einem fachlich freigegebenen Branch (`main` oder
-`release/nnn`) vorbereitet. Der Release-Freigabeprozess hält Release-Version
-und Lieferumfang fest. Eine zweite Person prüft und genehmigt den zugehörigen
-Pull Request. Nach dessen Merge erzeugt der Workflow den Release-Tag und
-startet Paketbau sowie Mainframe-Übergabe.
+Eine Mainframe-Lieferung verwendet den vollständigen Stand von `main` oder
+`release/nnn` oder eine auf `bereitstellung/nnn.nnn` zusammengestellte
+Teilmenge. Die Vorbereitung hält Commit-SHA, Liefer-Tag und Lieferumfang fest.
+Ein zweiter manueller Workflow bestätigt diesen Stand und startet Tag-Erzeugung,
+Paketbau und Mainframe-Übergabe.
 
 #### Änderungsablauf
 
@@ -81,21 +70,20 @@ Pull Request nach main (oder release/nnn)
 Synchronisierung mit M/Text-Funktionstest
     │ fachlich freigeben lassen
     ▼
-Branchstand ist für ein Release bereit
+Branchstand ist für eine Lieferung bereit
 ```
 
-#### Release-Ablauf
+#### Lieferablauf
 
 ```text
-Gewählter Branchstand auf main (oder release/nnn)
-    │ Release-Freigabe starten
+Branch und Liefer-Tag auswählen
+    │ Lieferung vorbereiten
     ▼
-Pull Request vom technischen Freigabe-Branch nach main (oder release/nnn)
-    │ Review und Merge
+Lieferumfang prüfen und Vorbereitungs-ID kopieren
+    │ Vorbereitete Lieferung mit dieser ID ausführen
     ▼
-Release-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
+Liefer-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
 ```
-
 
 ### Entscheidungen und Nutzen
 
@@ -105,21 +93,31 @@ Release-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
 | Feature-Push nach M/Text-Entwicklung | Eine Änderung kann vor dem Pull Request vom Entwickler getestet werden. Parallelentwicklungen mehrerer Entwickler werden unterstützt. |
 | Pull Request mit Squash Merge | Jeder Pull Request wird als ein fachlicher Commit in den Zielbranch übernommen. Review und Arbeitscommits bleiben im Pull Request sichtbar. |
 | GitHub Actions statt Jenkins | Natives Git-Feeling mit modernen Workflows in einem zentralen Tool. |
-| Gemeinsames Lieferpaket-Format | Synchronisation und Release verwenden das gleiche Paketformat auf unterschiedlichen Transportwegen. |
-| Release-Freigabe-PR | Eine zweite Person bestätigt Release-Version und Lieferumfang. Der Workflow erzeugt danach den Release-Tag auf dem Merge-Commit der Freigabe. |
+| Gemeinsames Lieferpaket-Format | Synchronisation und Mainframe-Lieferung verwenden das gleiche Paketformat auf unterschiedlichen Transportwegen. |
+| Zweistufige Lieferbestätigung | Die Vorbereitung zeigt den festgehaltenen Stand vor der Lieferung. Dieselbe Person kann direkt bestätigen, eine andere Person erfüllt das empfohlene Vier-Augenprinzip. |
 | Freigegebene CI/CD-Version | Alle Mandanten verwenden dieselbe Version von `mtext_actions`. Die Commit-SHA zeigt, welche Version ausgeführt wurde. |
 | Zentrale Mainframe-Zugangsdaten | Mandanten-Repositories benötigen keine Mainframe-Zugangsdaten. |
 
 ## 2. Branch- und Pull-Request-Modell
 
+Wir orientieren uns am FI-Leitfaden zu Branches und Tags in Git:
+
+- `main` ist der geschützte, dauerhafte Branch der produktiven Releaselinie
+- `release/nnn` enthält eine parallel gepflegte vorherige oder kommende
+  Releaselinie, zum Beispiel `release/260` oder `release/270`
+- Jede Änderung entsteht in einem Branch `feature/nnn/<Bezeichnung>`
+- Änderungen an `main` und `release/nnn` erfolgen ausschließlich über Pull Requests
+- Pull Requests werden nach Freigabe im 4-Augenprinzip mit Squash Merge zusammengeführt
+- Liefer-Tags folgen dem Muster `rnnn.nnn`
+
 ### Branches
 
 | Branch | Zweck | Schutz und Lebensdauer |
 |---|---|---|
-| `main` | Führende Releaselinie und Ausgangspunkt der regulären Weiterentwicklung | Dauerhaft, Default Branch, geschützt, Änderung über Pull Request |
-| `release/nnn` | Parallel gepflegte Releaselinie, insbesondere für Wartung und Fehlerkorrekturen | Geschützt, Änderung über Pull Request, nach Ende der Pflege löschbar |
+| `main` | Produktive Releaselinie und ihr Abnahmestand | Dauerhaft, Default Branch, geschützt, Änderung über Pull Request |
+| `release/nnn` | Parallel gepflegte vorherige oder kommende Releaselinie und ihr Abnahmestand | Geschützt, Änderung über Pull Request, nach Ende der Pflege löschbar |
 | `feature/nnn/<Bezeichnung>` | Eine fachlich zusammengehörige Änderung für die genannte Releaselinie | Temporär, nach dem Merge löschbar |
-| `release-approval/<Release-Tag>/<Lauf>` | Technischer Branch für den Release-Freigabe-PR | Der Freigabeworkflow erstellt ihn mit der neuen Release-Version, nach dem Merge ist er löschbar |
+| `bereitstellung/nnn.nnn` | Ausgewählte Squash-Commits für eine Teillieferung | Temporär, nach der Tag-Erzeugung löschbar |
 
 Beispiele für Feature-Branches sind:
 
@@ -134,11 +132,12 @@ enthalten, beispielsweise `feature/270/briefe/anschreiben`.
 Ein Feature-Branch beginnt auf dem geschützten Branch, in dem seine
 Releaselinie gepflegt wird:
 
-- Für die führende (aktive) Releaselinie ist `main` der Zielbranch
-- Für eine parallel gepflegte Linie ist `release/nnn` der Zielbranch
-- Ein Feature für eine spätere Releaselinie bleibt bis zum Linienwechsel im
-  Feature-Branch und kann dort entwickelt und in M/Text-Entwicklung getestet
-  werden
+- Für die produktive Releaselinie ist `main` der Zielbranch
+- Für die vorherige und die kommende Releaselinie ist `release/nnn` der
+  Zielbranch
+
+Damit können Änderungen für die kommende Releaselinie bereits zusammengeführt
+und in M/Text-Funktionstest abgenommen werden.
 
 ### Pull Requests und Squash Merge
 
@@ -167,22 +166,34 @@ Squash Merge wird aus folgenden Gründen verwendet:
 
 ### Wechsel der führenden Releaselinie
 
-Die führende Releaselinie wechselt mit dem OSPlus-Release, also zweimal im
-Jahr. `main` zeigt immer auf die aktuelle Releaselinie, und welche das zu einem
-Zeitpunkt ist, wird im Feld `releaselinie` der Mandantenkonfiguration
-(`.github/config.json`) festgehalten.
+Die produktive Releaselinie wechselt mit dem OSPlus-Release, also zweimal im
+Jahr. `main` zeigt auf die produktive Releaselinie. Das Feld `releaselinie` der
+Mandantenkonfiguration (`.github/config.json`) nennt diese Linie.
 
-Vor dem Wechsel wird aus einem geeigneten `main`-Commit ein Branch
-`release/nnn` für die bisherige Releaselinie erstellt. Danach wird in einem
-eigenen Pull Request auf `main` die `releaselinie` hochgezählt. GitHub
-Actions erkennt die Änderung und synchronisiert automatisch mit
-M/Text-Entwicklung und M/Text-Funktionstest der neuen Linie, so dass in den
-Umgebungen automatisch der korrekte neue Stand vorliegt.
+Vor dem Wechsel bestehen beispielsweise diese Stände:
+
+```text
+release/260   vorherige Releaselinie
+main          produktive Releaselinie 261
+release/270   kommende Releaselinie
+```
+
+Beim Wechsel wird der bisherige `main`-Stand als `release/261` erhalten. Für
+die Zusammenführung entsteht `feature/270/releaselinienwechsel` aus dem
+aktuellen `main`. `release/270` wird in diesen Branch gemergt. Konflikte und
+weitere Abweichungen werden so aufgelöst, dass der fachliche Inhalt dem
+vollständigen Stand von `release/270` entspricht.
+
+Im Branch für den Linienwechsel wird außerdem die Mandantenkonfiguration auf
+Releaselinie `270` geändert. Der vollständige Stand wird über einen Pull
+Request mit Squash Merge nach `main` übernommen. Ein Vergleich mit
+`release/270` stellt sicher, dass keine ausschließlich auf dem bisherigen
+`main` vorhandenen Inhalte unbeabsichtigt erhalten bleiben. Danach beginnt die
+Vorbereitung der kommenden Releaselinie auf `release/271`.
 
 Release-Branches werden gelöscht, wenn keine Änderungen für die Linie mehr
-erwartet werden, bzw. in der Regel wenn es drei neuere Releases gibt. Bereits
-veröffentlichte Versionen können weiterhin über Release-Tags ausgecheckt
-werden.
+erwartet werden. Bereits gelieferte Versionen können weiterhin über
+Liefer-Tags ausgecheckt werden.
 
 ## 3. Synchronisierung
 
@@ -228,7 +239,7 @@ gepflegt. Die derzeit vorgesehene rollierende Zuordnung lautet:
 
 ### Projektpakete und Lieferarten
 
-Synchronisation und Release verwenden dasselbe Paketformat. Wie im bisherigen
+Synchronisation und Mainframe-Lieferung verwenden dasselbe Paketformat. Wie im bisherigen
 Jenkins-Ablauf gibt es zwei Archivtypen. Ein F-Archiv enthält den vollständigen
 Projektbaum eines Tonic-(Fragment-)Projekts. Ein D-Archiv enthält neue und
 geänderte Dateien sowie eine Löschliste. Beide sind gzip-komprimierte
@@ -236,8 +247,8 @@ TAR-Dateien mit der Endung `.tgz`.
 
 | Lieferart | Inhalt | Vergleichsstand und Verwendung |
 |---|---|---|
-| FULL | F-Archiv mit dem vollständigen Projektbaum und leeres D-Archiv | Ohne Vergleichsstand. Für die erste Synchronisation, den Wechsel der führenden Releaselinie, den manuellen Vollabgleich und Releases mit der Versionsnummer `100`, auch als Beta |
-| DELTA | D-Archiv mit neuen und geänderten Dateien sowie einer Löschliste | Bei der Synchronisation zwischen vorherigem und neuem Commit des Git-Ereignisses. Beim Release kumulativ zwischen dem `.100`-Tag und dem Release-Tag |
+| FULL | F-Archiv mit dem vollständigen Projektbaum und leeres D-Archiv | Ohne Vergleichsstand. Für die initiale Synchronisation eines dauerhaften Branchs, den Wechsel der produktiven Releaselinie, den manuellen Vollabgleich und Lieferungen mit der Versionsnummer `100` |
+| DELTA | D-Archiv mit neuen und geänderten Dateien sowie einer Löschliste | Bei einem Feature-Push zwischen Ausgangsstand und Feature-Commit, danach zwischen vorherigem und neuem Commit des Feature-Branches. Bei der Mainframe-Lieferung kumulativ zwischen dem `.100`-Tag und dem Liefer-Tag |
 
 Das F-Archiv enthält das Projektverzeichnis mit allen Dateien und ersetzt den
 im Ziel vorhandenen Stand vollständig. Eine Löschliste ist deshalb nicht
@@ -252,16 +263,16 @@ muss - das Format ist gegenüber dem Jenkins-Ablauf unverändert. Eine
 Umbenennung erscheint als Löschung des bisherigen und Hinzufügen des neuen
 Pfads.
 
-Ein Voll-Lieferung (FULL) besteht aus dem F-Archiv und einem leeren D-Archiv.
+Eine Voll-Lieferung (FULL) besteht aus dem F-Archiv und einem leeren D-Archiv.
 Bei der Übernahme wird zuerst das F-Archiv und anschließend das leere D-Archiv
 verarbeitet. Bei der Mainframe-Übergabe ersetzt das leere D-Archiv das
 gleichnamige D-Archiv einer früheren Lieferung. Dadurch kann ein vorheriges
 DELTA den neuen FULL-Stand nicht wieder verändern. Eine Delta-Lieferung (DELTA)
 besteht aus dem D-Archiv.
 
-Der Archivname besteht aus Mandantenkürzel, Projektcode und `F` oder `D`. Beim
-Release ist der Name ohne `.tgz` zugleich das Mainframe-Member (siehe Kapitel
-"CodePipeline-Elemente").
+Der Archivname besteht aus Mandantenkürzel, Projektcode und `F` oder `D`. Bei
+der Mainframe-Lieferung ist der Name ohne `.tgz` zugleich das Mainframe-Member
+(siehe Kapitel "CodePipeline-Elemente").
 
 Neben den Archiven liegt für jedes Projekt eine JSON-Informationsdatei
 `_INFO_<Mandantenkürzel>-<Projekt>.json`, zum Beispiel
@@ -274,11 +285,11 @@ aufgebaut:
   "projekt": "LOMS_Basis",
   "stand": {
     "von": {
-      "referenz": "v261.100",
+      "referenz": "r261.100",
       "commit": "..."
     },
     "bis": {
-      "referenz": "v261.108",
+      "referenz": "r261.108",
       "commit": "..."
     }
   },
@@ -304,60 +315,63 @@ Mandant und Repository ergeben sich aus dem Mandanten-Repository und dem
 wiederholt. Die Informationsdatei liegt neben den Archiven, damit sie deren
 SHA-256-Prüfsummen enthalten kann.
 
-### Offene Entscheidung: Transport nach `serverSync`
+### Transport nach `serverSync`
 
-Für M/Text muss der aus den Projektpaketen erzeugte Stand unter `serverSync`
-bereitgestellt und anschließend über den bestehenden Adapter synchronisiert
-werden. Der technische Transportweg ist noch festzulegen. Zur Auswahl stehen:
+Der Runner schreibt Projektpakete und Informationsdateien vollständig in ein
+auftragsbezogenes CIFS-Verzeichnis. Anschließend meldet er dem Adapter den
+Pfad. Der Adapter prüft und verarbeitet den Auftrag unter `serverSync` und
+startet die M/Text-Synchronisation. Erst die erfolgreiche Annahme durch den
+Adapter bestätigt die technische Übergabe.
 
-| Variante | Ablauf | Vor der Entscheidung zu klären |
-|---|---|---|
-| PUT an den Adapter | Der Runner überträgt Projektpakete und Informationsdateien an den Adapter. Dieser prüft und verarbeitet sie unter `serverSync` und startet die Synchronisation. | HTTP-Vertrag, Authentifizierung, Größenlimits, Zeitgrenzen und Rückmeldung |
-| GitHub-Actions-Artefakt | Der Workflow speichert Projektpakete und Informationsdateien als Artefakt. Eine Zielkomponente lädt sie herunter, verarbeitet sie unter `serverSync` und startet die Synchronisation. | Zielkomponente, Zugriff auf GitHub Actions, Downloadmeldung und Aufbewahrungsfrist |
-| CIFS-Übergabeverzeichnis (entspricht bisherigem NFS Share) | Der Runner schreibt Projektpakete und Informationsdateien in ein auftragsbezogenes CIFS-Verzeichnis und meldet dem Adapter den Pfad. Dieser übernimmt die Verarbeitung unter `serverSync` und startet die Synchronisation. | CIFS-Basispfad und Rechte, Adaptervertrag, Rückmeldung sowie Aufbewahrung und Bereinigung |
+## 4. Mainframe-Lieferung
 
-## 4. Release
+Die Mainframe-Lieferung verwendet dasselbe Paketformat wie die
+M/Text-Synchronisierung, aber einen anderen Transportweg über CodePipeline der
+IZE9, MT91 und letztlich im Batch via LXT90#SV, Travic-Link und dem Folgejob
+`ressourcen_aktualisieren.sh`. Sie ist kein Release im Sinne des
+organisationsweiten Git-Leitfadens.
 
-Releases sind im Grunde auch nur Synchronisierungen, jedoch auf einem anderen
-Transportweg - über das CodePipeline der IZE9, MT91 und letztlich im Batch via
-LXT90#SV, Travic-Link und dem besonderen Folgejob `ressourcen_aktualisieren.sh`.
+### Liefer-Tags und Lieferstand
 
-### Release-Tags
+Liefer-Tags folgen dem Muster `rnnn.nnn`, beispielsweise `r261.100` oder
+`r261.108`. Die Versionsnummer `.100` bezeichnet das FULL einer Releaselinie.
+Der Tag entsteht auf dem vollständigen Stand von `main` oder `release/nnn`.
+Jede spätere Version derselben Releaselinie erzeugt wie im bisherigen
+Lieferprinzip ein kumulatives DELTA gegen `.100`.
 
-Release-Tags folgen dem Muster `vnnn.nnn` oder `vnnn.nnnx`, beispielsweise
-`v261.100`, `v261.108` oder `v261.108a`. Der optionale Buchstabe am Ende
-kennzeichnet eine Beta-Lieferung.
+Entspricht der gewünschte Lieferstand dem aktuellen Stand von `main` oder
+`release/nnn`, wird dieser Branch vorbereitet. Für eine Teillieferung entsteht
+`bereitstellung/nnn.nnn` aus dem vorherigen Liefer-Tag. Die vorgesehenen
+Squash-Commits werden mit EGit auf diesen Arbeitsbranch cherry-gepickt. Der
+Arbeitsbranch wird nicht nach M/Text-Funktionstest synchronisiert.
 
-Für eine Lieferung startet der Antragsteller den Vorbereitungsworkflow auf
-`main` (oder `release/nnn`). Der Workflow übernimmt die
-Release-Version (die via Wartungstool festgelegt wurde) und legt den
-technischen Freigabe-Branch `release-approval/<Release-Tag>/<Lauf>` an. Dabei
-wird das Feld `letztes_release` der Mandantenkonfiguration geändert und eine
-Workflow-Zusammenfassung erzeugt, die Informationen zu Commit, Bezugsstand,
-Projekten und Lieferumfang enthält und als Basis für die nachfolgende Prüfung
-durch eine zweite Person herangezogen wird.
+Der Workflow **Lieferung vorbereiten** hält Branch, Commit-SHA, Liefer-Tag und
+Lieferumfang in einem 30 Tage aufbewahrten Laufartefakt fest. Die
+Zusammenfassung zeigt die Vorbereitungs-ID. Die Branchspitze wird danach nicht
+erneut als Lieferstand aufgelöst.
 
-Der Antragsteller eröffnet den Pull Request des Freigabe-Branches nach `main`
-(der `release/nnn`). Eine zweite Person prüft den Stand und den Lieferumfang.
-Nach erfolgreicher Vorprüfung und dem Merge wird der Release-Tag auf dem
-Merge-Commit erstellt und die Lieferung gestartet. Der Release-Tag kann später
-nicht mehr geändert oder gelöscht werden per FI-Tag-Rulesets. Ein fälschlicher
-Weise angelegter Tag kann nur von den GitHub-Administratoren der FI
-zurückgenommen werden, daher ist vorher ausführlich zu prüfen!
+Nach der Prüfung startet eine Person **Vorbereitete Lieferung ausführen** mit
+dieser ID. Der Mandantenlauf lädt das Vorbereitungsartefakt und bestimmt den
+Lieferweg. Ist es die vorbereitende Person, handelt es sich um eine
+Direktlieferung. Eine andere Person erfüllt das empfohlene
+Vier-Augenprinzip. Der zentrale Workflow erzeugt danach den Liefer-Tag auf der
+festgehaltenen SHA und startet Paketbau sowie Mainframe-Übergabe.
 
-Beta-Tags können ohne dieses 4-Augenprinzip erstellt werden und stoßen direkt
-die Lieferung an, da sie sowieso nicht für produktive Lieferungen verwendet
-werden können.
+Die Liefer-Tags unterliegen nicht den Regeln für Release-Tags aus dem
+Git-Leitfaden. Ein fehlerhaft angelegter Tag kann gelöscht und anschließend
+korrekt vorbereitet werden. Ein Tag-Push allein startet keine Übertragung.
 
-### Release automatisch bauen und übertragen
+### Lieferung bauen und übertragen
 
-Ein zulässiger Release-Tag startet den zentralen Workflow in `mtext_actions`.
-Er checkt den markierten Commit aus, erzeugt je Projekt die in Kapitel 3
-beschriebenen Projektpakete und überträgt sie an den Mainframe. Die
-Versionsnummer `100` erzeugt auch bei einem Beta-Tag ein FULL. Alle anderen
-Versionen derselben Releaselinie erzeugen ein kumulatives DELTA gegen den
-`.100`-Tag. Die JSON-Informationsdatei bleibt beim GitHub-Artefakt und wird
-nicht als Mainframe-Member übertragen.
+Der zentrale Workflow checkt den markierten Commit aus, erzeugt je Projekt die
+in Kapitel 3 beschriebenen Projektpakete und überträgt sie an den Mainframe.
+Die JSON-Informationsdatei bleibt beim GitHub-Artefakt und wird nicht als
+Mainframe-Member übertragen.
+
+Der Workflow **Lieferung erneut übergeben** startet die Paketbildung und
+Mainframe-Übergabe für einen vorhandenen Liefer-Tag erneut. Derselbe Git-Stand
+darf mehrfach übertragen werden. Eine neue Bestätigung und ein neuer Tag sind
+dabei nicht erforderlich.
 
 ### CodePipeline-Elemente
 
@@ -391,9 +405,9 @@ dürfen dabei nicht denselben Projektcode ergeben.
 Der Inhalt der F- und D-Elemente richtet sich nach der in Kapitel 3
 beschriebenen Lieferart.
 
-### Releaseartefakt
+### Lieferartefakt
 
-Das GitHub-Actions-Artefakt, das beim Release entsteht, enthält die erzeugten
+Das GitHub-Actions-Artefakt, das bei der Lieferung entsteht, enthält die erzeugten
 Archive, die zugehörigen JCL-Dateien und die projektbezogenen
 JSON-Informationsdateien. Es wird 30 Tage aufbewahrt. Der Übergabejob überträgt
 die Archive unter ihren Membernamen und reicht die zugehörige JCL ein. Die
@@ -403,11 +417,11 @@ Schlägt die Übergabe fehl, kann dasselbe Artefakt erneut übergeben werden. Di
 Pakete müssen dafür nicht neu gebaut werden.
 
 Nach der Mainframe-Übergabe erstellt der zentrale Workflow im
-Mandanten-Repository ein GitHub Release zum vorhandenen Release-Tag. Die
-Release-Beschreibung nennt Release-Tag, Lieferart und Commit-SHA. Sie
+Mandanten-Repository ein GitHub Release zum vorhandenen Liefer-Tag. Die
+Beschreibung nennt Liefer-Tag, Lieferart und Commit-SHA. Sie
 bestätigt die technische Übergabe und enthält die JSON-Informationsdateien.
-Diese dienen als Lieferbeleg. Die fachliche Freigabe ist zuvor durch den
-Release-Freigabe-PR erfolgt.
+Diese dienen als Lieferbeleg. Die Bestätigung ist zuvor im
+Mandanten-Repository erfolgt.
 
 ### Mainframe-Übergabe
 
@@ -450,7 +464,9 @@ fi_lbs_entw_oms_<kuerzel>/
     config.json
     workflows/
       check-resources.yml
-      release-approval.yml
+      lieferung-ausfuehren.yml
+      lieferung-erneut-uebergeben.yml
+      lieferung-vorbereiten.yml
       sync-resources.yml
   <M/Text-Projekte>
 ```
@@ -492,11 +508,12 @@ mtext-actions/
   .github/
     workflows/
       ci.yml
-      release-approval.yml
+      lieferung.yml
       release.yml
       reusable-check-resources.yml
       reusable-dispatch.yml
-      reusable-release-approval-check.yml
+      reusable-lieferung-ausfuehren.yml
+      reusable-lieferung-check.yml
       reusable-sync-resources.yml
       update-mandant-workflows.yml
   config/
@@ -513,7 +530,7 @@ mtext-actions/
       mainframe_release.py
       process.py
       project_package.py
-      release_approval.py
+      lieferung.py
       resource_check.py
       rollout.py
       sync.py
@@ -534,8 +551,9 @@ mtext-actions/
 | Mandantenkonfiguration und JSON- oder XML-Ressourcen prüfen | Pull Request oder manueller Start | `check-resources.yml` | `reusable-check-resources.yml` | `mtext.py validate-config` und `mtext.py check-resources` | Konfiguration geprüft, geänderte konfigurierte Ressourcen oder gewählter Vollstand geprüft und Syntaxbefunde als nicht blockierende Warnungen angezeigt |
 | M/Text-Entwicklung synchronisieren | Push auf `feature/nnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
 | M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/nnn` sowie manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
-| Release freigeben | Manueller Start auf dem Lieferbranch, selbst eröffneter Freigabe-PR und dessen Merge | `release-approval.yml` | `reusable-release-approval-check.yml` sowie `reusable-dispatch.yml` → `release-approval.yml` | `mtext.py release-approval` | Vorprüfung im Pull Request angezeigt und Release-Tag auf dem Merge-Commit erstellt |
-| Release bauen und übertragen | Push eines Tags `vnnn.nnn` oder `vnnn.nnnx` | `release-approval.yml` | `reusable-dispatch.yml` → `release.yml` | `mtext.py build-release`, `publish-mainframe`, danach `publish-github-release` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
+| Lieferung vorbereiten | Manueller Start auf `main`, `release/nnn` oder `bereitstellung/nnn.nnn` | `lieferung-vorbereiten.yml` | `reusable-lieferung-check.yml` | `mtext.py lieferung check` | SHA und Lieferumfang angezeigt, Vorbereitungs-ID bereitgestellt |
+| Vorbereitete Lieferung ausführen | Manueller Start mit der Vorbereitungs-ID | `lieferung-ausfuehren.yml` | `reusable-lieferung-ausfuehren.yml` sowie `reusable-dispatch.yml` → `lieferung.yml` | `mtext.py lieferung ausfuehren` und `mtext.py lieferung tag` | Lieferweg bestimmt, Liefer-Tag auf der festgehaltenen SHA erstellt und Übergabe gestartet |
+| Lieferung bauen und übertragen | Aufruf nach Tag-Erstellung oder manueller Wiederanlauf | `lieferung-ausfuehren.yml` oder `lieferung-erneut-uebergeben.yml` | `lieferung.yml` → `release.yml` oder `reusable-dispatch.yml` → `release.yml` | `mtext.py build-release`, `publish-mainframe`, danach `publish-github-release` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
 | `mtext_actions` testen | Pull Request oder Push auf `main` in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` | Zentrale Tests ausgeführt |
 
 ### Trigger-Workflows in den Mandanten-Repositories
@@ -546,7 +564,9 @@ Verarbeitung in `mtext_actions`:
 | Datei | Auslöser | Aufgabe |
 |---|---|---|
 | `check-resources.yml` | Pull Request oder manueller Start | Mandantenkonfiguration und geänderte konfigurierte Ressourcen oder den gewählten Vollstand prüfen, Syntaxbefunde als Warnungen anzeigen |
-| `release-approval.yml` | Manueller Start, Release-Freigabe-PR oder Release-Tag | Technischen Freigabe-Branch vorbereiten, Vorprüfung anzeigen, den Release-Tag auf dem Merge-Commit erstellen oder die Release-Erstellung starten |
+| `lieferung-vorbereiten.yml` | Manueller Start auf dem ausgewählten Branch | SHA und Lieferumfang festhalten und die Vorbereitungs-ID anzeigen |
+| `lieferung-ausfuehren.yml` | Manueller Start mit der Vorbereitungs-ID | Vorbereitung laden, Lieferweg bestimmen und die zentrale Lieferung starten |
+| `lieferung-erneut-uebergeben.yml` | Manueller Start mit einem vorhandenen Liefer-Tag | Vorhandenen Lieferstand erneut an den Mainframe übergeben |
 | `sync-resources.yml` | Push auf einen Feature-, `main`- oder Release-Branch sowie manueller Start | Projekte nach M/Text-Entwicklung oder -Funktionstest übertragen |
 
 Syntaxbefunde aus `check-resources.yml` dienen als Hinweise und verhindern den
@@ -557,19 +577,20 @@ Merge nicht.
 | Datei | Auslöser | Aufgabe |
 |---|---|---|
 | `reusable-check-resources.yml` | Aufruf durch `check-resources.yml` | Mandantenkonfiguration sowie JSON- und XML-Ressourcen ohne Zugriff auf Zielsysteme prüfen |
-| `reusable-dispatch.yml` | Aufruf durch `release-approval.yml` | Benannten zentralen Workflow mit seinen Eingaben starten |
+| `reusable-dispatch.yml` | Aufruf durch einen Mandanten-Workflow | Benannten zentralen Workflow mit seinen Eingaben starten |
 | `reusable-sync-resources.yml` | Aufruf durch `sync-resources.yml` | Projekte nach M/Text übertragen |
-| `reusable-release-approval-check.yml` | Aufruf durch `release-approval.yml` | Geplanten Release prüfen und Branchstand sowie Lieferumfang im Pull Request anzeigen |
-| `release-approval.yml` | Start durch `reusable-dispatch.yml` mit `phase` `prepare` oder `finalize` | `letztes_release` und Freigabe-Branch vorbereiten oder nach dem Merge den Release-Tag erstellen |
+| `reusable-lieferung-check.yml` | Aufruf durch `lieferung-vorbereiten.yml` | Liefer-Tag und Branchstand prüfen, Lieferumfang anzeigen und Vorbereitung festhalten |
+| `reusable-lieferung-ausfuehren.yml` | Aufruf durch `lieferung-ausfuehren.yml` | Vorbereitungsartefakt laden und Direktlieferung oder Vier-Augen-Freigabe feststellen |
+| `lieferung.yml` | Start durch `reusable-dispatch.yml` | Liefer-Tag auf der festgehaltenen SHA erstellen und `release.yml` aufrufen |
 | `release.yml` | Start durch `reusable-dispatch.yml` | FULL- und DELTA-Pakete erstellen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
 | `ci.yml` | Pull Request oder Push auf `main` in `mtext_actions` | Tests ausführen |
 | `update-mandant-workflows.yml` | Manueller Start | Verweise auf `mtext_actions` in den Mandanten-Workflows aktualisieren |
 
 Die mit `reusable-` benannten Workflows werden direkt in einen Mandantenlauf
 eingebunden. Sie erhalten die benötigten Secrets aus dem Mandanten-Repository
-und verwenden die dort festgelegte CI/CD-Version. Die Vorbereitung und der
-Abschluss einer Release-Freigabe sowie der Releasebau benötigen dagegen die in
-`mtext_actions` hinterlegten technischen Zugänge. `reusable-dispatch.yml`
+und verwenden die dort festgelegte CI/CD-Version. Tag-Erzeugung und Paketbau
+benötigen dagegen die in `mtext_actions` hinterlegten technischen Zugänge.
+`reusable-dispatch.yml`
 startet sie deshalb über die GitHub-API als eigenen Lauf auf `main` in
 `mtext_actions`. Workflowdefinition und Python-Implementierung stammen in
 diesem Lauf aus demselben Commit. Die zentralen Secrets werden nicht an den
@@ -582,7 +603,7 @@ Die Python-Skripte schreiben ein erfolgreiches Ergebnis als JSON nach `stdout`
 und Warnungen oder Fehler nach `stderr`. Bei der Konfigurationsprüfung und der
 M/Text-Synchronisation sind diese Ausgaben im Mandanten-Repository sichtbar.
 
-Die Release-Erstellung läuft dagegen als eigener Workflow in `mtext_actions`.
+Die Lieferung läuft danach als eigener Workflow in `mtext_actions`.
 Ihr Ergebnis und die Informationen zum Paket werden deshalb nach Abschluss im
 GitHub Release des Mandanten-Repositories angezeigt.
 
@@ -615,9 +636,9 @@ mit dem zugehörigen Exitcode.
 | `RESOURCE_CHECKED` | JSON- und XML-Ressourcen wurden geprüft, Befunde stehen als Warnungen bereit | – |
 | `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinienzuordnung wurden geprüft | – |
 | `VALIDATION_FAILED` | Eingaben oder Konfiguration sind ungültig | `2` |
-| `RELEASE_APPROVAL_READY` | Technischer Branch mit der neuen Release-Version wurde veröffentlicht | – |
-| `RELEASE_APPROVAL_CHECKED` | Release-Version, Branchstand und Lieferumfang wurden für den Pull Request geprüft | – |
-| `RELEASE_APPROVAL_VALIDATED` | Merge und eingetragene Release-Version gehören zum Freigabe-Pull-Request | – |
+| `LIEFERUNG_CHECKED` | SHA, Liefer-Tag und Lieferumfang der Vorbereitung wurden festgehalten | – |
+| `LIEFERUNG_BESTAETIGT` | Die vorbereitete Lieferung wurde durch dieselbe oder eine zweite Person bestätigt | – |
+| `LIEFERUNG_TAGGED` | Der Liefer-Tag wurde auf der festgehaltenen SHA erstellt | – |
 | `SOURCE_FAILED` | Checkout, Commit, Branch oder Tag können nicht als Quelle verwendet werden | `3` |
 | `RESOURCE_TRANSFER_FAILED` | Die Projektpakete konnten nicht für den Adapter bereitgestellt werden | `5` |
 | `ADAPTER_FAILED` | Der M/Text-Adapter war nicht erreichbar oder hat den Synchronisationsauftrag abgelehnt | `6` |
@@ -641,7 +662,6 @@ mit den M/Text-Projekten versioniert. Der Block `mandant` enthält:
 | `kuerzel` | Mandantenkürzel für Paketnamen und Fragmentprojekte |
 | `releaselinie` | Releaselinie von `main` |
 | `ispw` | CodePipeline-Instanz `T` oder `P` |
-| `letztes_release` | Zuletzt über diesen Lieferbranch freigegebene Release-Version, vor dem ersten Release `null` |
 | `excluded_projects` | Projektverzeichnisse, die weder synchronisiert noch paketiert werden |
 | `hostprofile` | Assignment und CodePipeline-Stage je Hostprofil |
 
@@ -653,7 +673,6 @@ Beispiel:
     "kuerzel": "FI",
     "releaselinie": "270",
     "ispw": "P",
-    "letztes_release": null,
     "excluded_projects": ["LOMS_Testdaten"],
     "hostprofile": {
       "FKT": {
@@ -670,9 +689,8 @@ Beispiel:
 ```
 
 Bei Feature- und Release-Branches steht die Releaselinie im Branchnamen. Bei
-`main` steht sie im Feld `releaselinie`. Der Freigabeworkflow aktualisiert
-`letztes_release` auf dem technischen Freigabe-Branch. Die Konfiguration der
-fachlichen Projekte und Zielsysteme bleibt dabei unverändert.
+`main` steht sie im Feld `releaselinie`. Eine Lieferung verändert die
+Mandantenkonfiguration nicht.
 
 ### Zentrale Zuordnungen
 
@@ -697,11 +715,11 @@ Das Feld `stage` eines Hostprofils enthält eine der CodePipeline-Stages `FKTE`,
 
 | Gegenstand | Regel |
 |---|---|
-| `main` | Geschützt, keine Löschung oder Umbenennung, fachliche Änderung über Pull Request im Vier-Augenprinzip, erforderlicher Statuscheck **Release vorprüfen** |
-| `release/nnn` | Geschützt, fachliche Änderung über Pull Request im Vier-Augenprinzip, erforderlicher Statuscheck **Release vorprüfen**, Erstellung aus geschütztem Branch oder Release-Tag |
+| `main` | Geschützt, keine Löschung oder Umbenennung, fachliche Änderung über Pull Request im Vier-Augenprinzip |
+| `release/nnn` | Geschützt, fachliche Änderung über Pull Request im Vier-Augenprinzip |
 | `feature/nnn/<Bezeichnung>` | Keine zusätzliche Schutzregel |
-| Release-Tags ohne Buchstabensuffix `vnnn.nnn` | Der technische Freigabeworkflow erstellt den Tag nach Review und Merge des Freigabe-Pull-Requests. |
-| Beta-Tags `vnnn.nnnx` | Dürfen lokal oder in GitHub auf einem Commit des passenden geschützten Branches erstellt werden. |
+| `bereitstellung/nnn.nnn` | Keine zusätzliche Schutzregel, nach der Lieferung löschbar |
+| Liefer-Tags `rnnn.nnn` | Der zentrale Lieferworkflow erstellt den Tag auf der bestätigten SHA. Ein fehlerhafter Tag darf gelöscht werden. |
 | Workflowdateien und Mandantenkonfiguration | Mandantenkonfiguration und reguläre Workflowänderungen über Pull Request und Review. Freigegebene CI/CD-Versionen werden über den administrativen Rollout aktualisiert. |
 | GitHub Release | Der zentrale Workflow darf zum vorhandenen Tag ein GitHub Release im auslösenden Mandanten-Repository erstellen und die Informationsdateien anhängen |
 | Mainframe-Zugang | Repositoryvariablen und Repository-Secret in `mtext_actions` |
@@ -711,17 +729,15 @@ GitHub-Benutzers, um `mtext_actions` aufzurufen. Das Token gilt für das
 Repository `FinanzInformatik/fi_lbs_entw_oms_mtext_actions` und besitzt
 `Actions: read and write` sowie `Contents: read`. In den
 Mandanten-Repositories liegt es als Secret `MTEXT_ACTIONS_TOKEN`. Damit laden
-die Workflows die festgelegte CI/CD-Version und starten bei einem Release den
+die Workflows die festgelegte CI/CD-Version und starten bei einer Lieferung den
 zentralen Workflow.
 
 Für den Zugriff in Gegenrichtung liegt `WORKFLOW_CONFIGURATION_TOKEN` in
 `mtext_actions`. Es gilt für die zugeordneten Mandanten-Repositories und
-besitzt dort `Contents: read and write`, `Pull requests: read` sowie
-`Workflows: read and write`. Der technische Benutzer ist in den Schutzregeln
+besitzt dort `Contents: read and write` sowie `Workflows: read and write`. Der technische Benutzer ist in den Schutzregeln
 als Ausnahme von der Pull-Request-Pflicht für den administrativen
-Workflow-Rollout hinterlegt. Das Token aktualisiert die Trigger-Workflows,
-veröffentlicht die technischen Freigabe-Branches, liest den zusammengeführten Freigabe-PR
-und erstellt die freigegebenen Tags sowie die GitHub Releases mit den
+Workflow-Rollout hinterlegt. Das Token aktualisiert die Trigger-Workflows und
+erstellt die Liefer-Tags sowie die GitHub Releases mit den
 Informationsdateien.
 
 ## 9. Mögliche Phase 2

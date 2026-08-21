@@ -1,0 +1,39 @@
+name: Vorbereitete Lieferung ausführen
+
+# Die ausführende Person nennt die Vorbereitungs-ID. Dieselbe Person bestätigt
+# eine Direktlieferung, eine andere Person erfüllt das Vier-Augenprinzip.
+'on':
+  workflow_dispatch:
+    inputs:
+      vorbereitung_id:
+        description: Vorbereitungs-ID aus der Liefer-Vorprüfung
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  vorbereitung-lesen:
+    name: Vorbereitung prüfen
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-lieferung-ausfuehren.yml@0000000000000000000000000000000000000000
+    with:
+      source_repository: ${{ github.repository }}
+      vorbereitung_id: ${{ inputs.vorbereitung_id }}
+      actor: ${{ github.actor }}
+      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
+      automation_ref: 0000000000000000000000000000000000000000
+    secrets:
+      automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}
+
+  ausfuehren:
+    name: Lieferung ausführen
+    needs: vorbereitung-lesen
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-dispatch.yml@0000000000000000000000000000000000000000
+    with:
+      workflow: lieferung.yml
+      workflow_inputs: >-
+        {"source_repository":${{ toJSON(github.repository) }},"lieferung_tag":${{ toJSON(needs.vorbereitung-lesen.outputs.lieferung_tag) }},"source_sha":${{ toJSON(needs.vorbereitung-lesen.outputs.source_sha) }},"source_branch":${{ toJSON(needs.vorbereitung-lesen.outputs.source_branch) }},"prepare_actor":${{ toJSON(needs.vorbereitung-lesen.outputs.prepare_actor) }},"execute_actor":${{ toJSON(github.actor) }}}
+    secrets:
+      dispatch_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

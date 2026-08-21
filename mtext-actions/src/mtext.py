@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from lbs_delivery import config, github, mainframe_release, process, release_approval, resource_check, rollout, sync
+from lbs_delivery import config, github, lieferung, mainframe_release, process, resource_check, rollout, sync
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -38,33 +38,33 @@ def _build_parser() -> argparse.ArgumentParser:
     synchronize.add_argument("--commit", required=True)
     synchronize.set_defaults(handler=sync.run_command)
 
-    # Release-Freigabe über einen technischen Pull Request.
-    approval = commands.add_parser("release-approval", help="Release-Freigabe vorbereiten oder abschließen")
-    approval_commands = approval.add_subparsers(dest="approval_command", required=True)
+    # Lieferung vorprüfen, ihre Ausführung bestätigen oder den Liefer-Tag erzeugen.
+    delivery = commands.add_parser("lieferung", help="Lieferung vorprüfen, freigeben oder tagen")
+    delivery_commands = delivery.add_subparsers(dest="lieferung_command", required=True)
 
-    # Freigabe-Branch mit aktualisiertem `letztes_release` anlegen.
-    prepare = approval_commands.add_parser("prepare")
-    prepare.add_argument("--tag", required=True)
-    prepare.add_argument("--branch", required=True)
-    prepare.add_argument("--source-sha", required=True)
-    prepare.add_argument("--run-reference", required=True)
-    prepare.set_defaults(handler=release_approval.run_command)
+    # Branchstand festhalten und Lieferumfang anzeigen.
+    check_delivery = delivery_commands.add_parser("check")
+    check_delivery.add_argument("--tag", required=True)
+    check_delivery.add_argument("--branch", required=True)
+    check_delivery.add_argument("--source-sha", required=True)
+    check_delivery.add_argument("--actor", required=True)
+    check_delivery.set_defaults(handler=lieferung.run_command)
 
-    # Geplanten Lieferumfang des offenen Pull Requests prüfen.
-    check_approval = approval_commands.add_parser("check")
-    check_approval.add_argument("--approval-branch", required=True)
-    check_approval.add_argument("--branch", required=True)
-    check_approval.add_argument("--target-sha", required=True)
-    check_approval.set_defaults(handler=release_approval.run_command)
+    # Lokal geladenen Vorbereitungsstand durch dieselbe oder eine zweite Person bestätigen.
+    execute_delivery = delivery_commands.add_parser("ausfuehren")
+    execute_delivery.add_argument("--vorbereitung", type=Path, required=True)
+    execute_delivery.add_argument("--actor", required=True)
+    execute_delivery.set_defaults(handler=lieferung.run_command)
 
-    # Merge-Commit mit der freigegebenen Version tagen.
-    finalize = approval_commands.add_parser("finalize")
-    finalize.add_argument("--approval-branch", required=True)
-    finalize.add_argument("--branch", required=True)
-    finalize.add_argument("--merge-sha", required=True)
-    finalize.add_argument("--pull-request-number", type=int, required=True)
-    finalize.add_argument("--api-url", required=True)
-    finalize.set_defaults(handler=release_approval.run_command)
+    # Liefer-Tag auf der festgehaltenen SHA erzeugen.
+    tag_delivery = delivery_commands.add_parser("tag")
+    tag_delivery.add_argument("--tag", required=True)
+    tag_delivery.add_argument("--branch", required=True)
+    tag_delivery.add_argument("--source-sha", required=True)
+    tag_delivery.add_argument("--prepare-actor", required=True)
+    tag_delivery.add_argument("--execute-actor", required=True)
+    tag_delivery.add_argument("--api-url", required=True)
+    tag_delivery.set_defaults(handler=lieferung.run_command)
 
     # Release-Dateien erzeugen, an den Mainframe übergeben und Lieferinformationen veröffentlichen.
     release = commands.add_parser("build-release", help="Release-Dateien erstellen")

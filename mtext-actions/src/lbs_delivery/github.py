@@ -77,6 +77,7 @@ def request(
     # Leere Antworten sind zulässig, sonst muss der Body gültiges JSON sein.
     if not response_body:
         return None
+
     try:
         return json.loads(response_body)
     except (UnicodeError, json.JSONDecodeError) as exc:
@@ -196,6 +197,7 @@ def _publish_release(
             request(
                 method="DELETE", url=f"{releases_url}/assets/{asset_id}", token=token, failure=Status.GITHUB_RELEASE_FAILED
             )
+
         request(
             method="POST",
             url=f"{upload_url}?{urllib.parse.urlencode({'name': name})}",

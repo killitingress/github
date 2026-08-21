@@ -30,10 +30,7 @@ class ReleaseTests(TempDirTestCase):
         self.repository = setup_release_repository(self.root)
         self.template = jcl_template()
 
-        self.configuration = load_test_configuration(
-            self.repository,
-            mandant={"letztes_release": "v261.108"},
-        )
+        self.configuration = load_test_configuration(self.repository)
 
     def build(self, output_directory: Path, *, tag: str, trigger_sha: str) -> None:
         """Erzeugt ein Releaseartefakt für den angegebenen Test-Tag."""
@@ -50,17 +47,17 @@ class ReleaseTests(TempDirTestCase):
     def test_release_files_and_mainframe_transfer(self) -> None:
         """Prüft Paketinhalt, JCL und die vorbereitete Mainframe-Übergabe."""
 
-        git(self.repository, "checkout", "--detach", "v261.108")
+        git(self.repository, "checkout", "--detach", "r261.108")
         target_sha = git(self.repository, "rev-parse", "HEAD")
         first = self.root / "first"
         second = self.root / "second"
-        self.build(first, tag="v261.108", trigger_sha=target_sha)
-        self.build(second, tag="v261.108", trigger_sha=target_sha)
+        self.build(first, tag="r261.108", trigger_sha=target_sha)
+        self.build(second, tag="r261.108", trigger_sha=target_sha)
 
         information = json.loads(next(first.glob("_INFO_*.json")).read_text(encoding="utf-8"))
         self.assertEqual(information["projekt"], "LOMS_Basis")
-        self.assertEqual(information["stand"]["von"]["referenz"], "v261.100")
-        self.assertEqual(information["stand"]["bis"]["referenz"], "v261.108")
+        self.assertEqual(information["stand"]["von"]["referenz"], "r261.100")
+        self.assertEqual(information["stand"]["bis"]["referenz"], "r261.108")
         self.assertIn(["D", "deleted.txt"], information["elemente"])
         self.assertIn(["A", "new.txt"], information["elemente"])
         self.assertIn(["D", "rename-old.txt"], information["elemente"])
@@ -109,18 +106,14 @@ class ReleaseTests(TempDirTestCase):
         with self.assertRaisesRegex(DeliveryError, "Releasepakete oder JCL fehlen"):
             _publish_mainframe(artifact_root=second)
 
-        git(self.repository, "checkout", "--detach", "v261.100")
+        git(self.repository, "checkout", "--detach", "r261.100")
         full = self.root / "full"
-        full_configuration = load_test_configuration(
-            self.repository,
-            mandant={"letztes_release": "v261.100"},
-        )
         _build_release(
-            full_configuration,
+            self.configuration,
             repository_root=self.repository,
             output_directory=full,
             jcl_template=self.template,
-            tag="v261.100",
+            tag="r261.100",
             trigger_sha=git(self.repository, "rev-parse", "HEAD"),
         )
         self.assertEqual(sorted(package.stem for package in full.glob("*.tgz")), ["FIBASISD", "FIBASISF"])
@@ -130,9 +123,8 @@ class ReleaseTests(TempDirTestCase):
         self.assertTrue(all(element[0] == "A" for element in full_information["elemente"]))
 
         git(self.repository, "update-ref", "-d", "refs/remotes/origin/release/261")
-        git(self.repository, "update-ref", "refs/remotes/origin/main", target_sha)
         with self.assertRaises(DeliveryError):
-            self.build(self.root / "wrong-main-line", tag="v261.108", trigger_sha=target_sha)
+            self.build(self.root / "full-off-branch", tag="r261.100", trigger_sha=git(self.repository, "rev-parse", "HEAD"))
 
     def test_submits_package_and_jcl_with_explicit_ftps(self) -> None:
         """Prüft TLS-Aushandlung, geschützte Datenverbindung und JES-Übergabe."""
@@ -167,6 +159,16 @@ class ReleaseTests(TempDirTestCase):
         session.sendcmd.assert_called_once_with("SITE FILETYPE=JES")
         self.assertEqual(session.storlines.call_args.args[0], "STOR LIT9028A")
         session.quit.assert_called_once_with()
+
+    def test_delta_need_not_lie_on_release_branch(self) -> None:
+        """DELTA-Lieferungen dürfen auf einem Commit außerhalb von release/nnn liegen."""
+
+        git(self.repository, "checkout", "--detach", "r261.108")
+        git(self.repository, "commit", "--allow-empty", "-m", "bereitstellung")
+        picked = git(self.repository, "rev-parse", "HEAD")
+        git(self.repository, "tag", "-d", "r261.108")
+        git(self.repository, "tag", "r261.108", picked)
+        self.build(self.root / "picked-delta", tag="r261.108", trigger_sha=picked)
 
 
 if __name__ == "__main__":

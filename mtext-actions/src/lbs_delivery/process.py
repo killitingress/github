@@ -21,12 +21,12 @@ class Status(str, Enum):
     CONFIG_VALIDATED = "CONFIG_VALIDATED"
     # Konfiguration oder Argumente sind ungültig.
     VALIDATION_FAILED = "VALIDATION_FAILED"
-    # Der Pull Request kann mit der aktualisierten Release-Version geöffnet werden.
-    RELEASE_APPROVAL_READY = "RELEASE_APPROVAL_READY"
-    # Die Vorprüfung des im Pull Request vorgesehenen Releases war erfolgreich.
-    RELEASE_APPROVAL_CHECKED = "RELEASE_APPROVAL_CHECKED"
-    # Der Merge gehört zum vorbereiteten Freigabe-Pull-Request.
-    RELEASE_APPROVAL_VALIDATED = "RELEASE_APPROVAL_VALIDATED"
+    # SHA, Liefer-Tag und Lieferumfang der Vorbereitung sind festgehalten.
+    LIEFERUNG_CHECKED = "LIEFERUNG_CHECKED"
+    # Die vorbereitete Lieferung wurde durch dieselbe oder eine zweite Person bestätigt.
+    LIEFERUNG_BESTAETIGT = "LIEFERUNG_BESTAETIGT"
+    # Der Liefer-Tag wurde auf der festgehaltenen SHA erstellt.
+    LIEFERUNG_TAGGED = "LIEFERUNG_TAGGED"
     # Checkout, Commit, Branch oder Tag sind nicht als Quelle verwendbar.
     SOURCE_FAILED = "SOURCE_FAILED"
     # Ein Paket, eine JCL oder eine lokale Lieferdatei ist nicht verwendbar.

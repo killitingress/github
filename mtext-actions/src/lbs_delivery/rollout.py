@@ -62,8 +62,10 @@ def _verify_automation(automation_root: Path, automation_sha: str) -> str:
     checkout_sha = git.resolve(automation_root, "HEAD")
     if checkout_sha != automation_sha:
         raise DeliveryError(Status.SOURCE_FAILED, "zentraler Checkout entspricht nicht dem angegebenen Commit")
+
     if not list((automation_root / ".github/workflows").glob("*.yml")):
         raise DeliveryError(Status.VALIDATION_FAILED, "keine zentralen Workflows gefunden")
+
     return checkout_sha
 
 
@@ -79,6 +81,7 @@ def _prepare_mandant_update(automation_root: Path, mandant_root: Path, rollout_s
     }
     for path, text in pending.items():
         path.write_text(text, encoding="utf-8")
+
     # Die bereits geänderten Dateien müssen nach dem Schreiben vollständig gebunden sein.
     if any(_workflow_update(path, rollout_sha) is not None for path in pending):
         raise DeliveryError(Status.VALIDATION_FAILED, "CI/CD-Version konnte nicht vollständig gebunden werden")

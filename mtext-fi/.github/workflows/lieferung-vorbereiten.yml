@@ -1,0 +1,29 @@
+name: Lieferung vorbereiten
+
+# Der manuelle Start verwendet den in GitHub ausgewählten Branch. Die
+# Vorprüfung hält SHA und Lieferumfang für die spätere Bestätigung fest.
+'on':
+  workflow_dispatch:
+    inputs:
+      lieferung_tag:
+        description: Liefer-Tag, zum Beispiel r261.108
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  vorpruefen:
+    name: Lieferung vorprüfen
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-lieferung-check.yml@0000000000000000000000000000000000000000
+    with:
+      source_repository: ${{ github.repository }}
+      source_branch: ${{ github.ref_name }}
+      source_sha: ${{ github.sha }}
+      lieferung_tag: ${{ inputs.lieferung_tag }}
+      actor: ${{ github.actor }}
+      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
+      automation_ref: 0000000000000000000000000000000000000000
+    secrets:
+      automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

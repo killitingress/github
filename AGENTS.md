@@ -85,6 +85,17 @@
   unmittelbar lesbaren Code nicht bloß wiederholen und dieselbe Regel nicht an
   mehreren direkt aufeinanderfolgenden Stellen erneut erzählen.
 
+## Python
+
+- Unabhängige `if`-Blöcke werden durch Leerzeilen abgesetzt. Dazu gehört eine
+  Leerzeile vor dem Block und nach ihm, wenn der nächste Abschnitt fachlich
+  getrennt ist.
+- Wird ein Wert unmittelbar vor der Abfrage berechnet, die ihn verwendet, gehört
+  diese Zeile zum `if`-Block. Zwischen Vorberechnung und `if` steht keine
+  Leerzeile.
+- Eine `if`-/`elif`-/`else`-Kette bleibt ohne Leerzeilen zwischen ihren
+  Zweigen zusammen. Erst danach folgt die Trennung zum nächsten Block.
+
 ## YAML-Workflows
 
 - Anzeigenamen von Workflows, Jobs und Schritten werden auf Deutsch formuliert.

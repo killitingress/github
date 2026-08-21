@@ -17,11 +17,9 @@ from .process import DeliveryError, Status
 
 
 # Reguläre Ausdrücke prüfen die von Git und den Workflows gelieferten Namen.
-# Prüft einen vollständigen Release-Tag wie `v261.108` oder den Stand einer
-# Beta-Lieferung wie `v261.108a` und erfasst seine fachlichen Bestandteile.
-RELEASE_TAG_RE = re.compile(
-    r"v(?P<releaselinie>[0-9]{3})\.(?P<release>[0-9]{3})(?P<beta_suffix>[a-zA-Z]?)"
-)
+# Prüft einen Liefer-Tag wie `r261.108` und erfasst Releaselinie
+# sowie Versionsnummer. `.100` ist die FULL-Basis der Releaselinie.
+RELEASE_TAG_RE = re.compile(r"r(?P<releaselinie>[0-9]{3})\.(?P<release>[0-9]{3})")
 
 # Prüft einen geschützten Branch einer gepflegten Releaselinie und erfasst die
 # Releaselinie für die Auswahl des M/Text-Ziels.
@@ -30,6 +28,10 @@ _RELEASE_BRANCH_RE = re.compile(r"release/([0-9]{3})")
 # Prüft einen Feature-Branch einschließlich hierarchischer Bezeichnung und
 # erfasst die Releaselinie für die Entwicklungssynchronisation.
 _FEATURE_BRANCH_RE = re.compile(r"feature/([0-9]{3})/(.+)")
+
+# Prüft den temporären Arbeitsbranch einer Teillieferung und erfasst
+# Releaselinie sowie Versionsnummer, zum Beispiel `bereitstellung/261.108`.
+BEREITSTELLUNG_BRANCH_RE = re.compile(r"bereitstellung/([0-9]{3})\.([0-9]{3})")
 
 
 @dataclass(frozen=True)
@@ -129,12 +131,10 @@ def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str
     if source_branch == "main":
         return main_releaselinie, MTEXT_ZIEL_FUNKTIONSTEST
 
-    # Geschützter Lieferbranch einer gepflegten Releaselinie.
     release_match = _RELEASE_BRANCH_RE.fullmatch(source_branch)
     if release_match is not None:
         return release_match.group(1), MTEXT_ZIEL_FUNKTIONSTEST
 
-    # Feature-Branch synchronisiert in die Entwicklungsumgebung derselben Linie.
     feature_match = _FEATURE_BRANCH_RE.fullmatch(source_branch)
     if feature_match is not None:
         return feature_match.group(1), MTEXT_ZIEL_ENTWICKLUNG
@@ -142,34 +142,32 @@ def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str
     raise DeliveryError(Status.VALIDATION_FAILED, "Branch ist kein Synchronisationszweig")
 
 
-def require_release_commit(repository: str | Path, tag: str, branches: tuple[str, ...]) -> str:
-    """Gibt den Commit eines Release-Tags zurück und prüft seine Herkunft.
+def resolve_tag_commit(repository: str | Path, tag: str) -> str:
+    """Gibt den Commit eines Liefer-Tags zurück und prüft den Checkout."""
 
-    Checkout und Tag müssen auf denselben Commit zeigen. Dieser Commit muss auf
-    einem der angegebenen Remote-Branches liegen.
-    """
-
-    # Checkout und Tag müssen denselben Commit zeigen.
     target = resolve(repository, f"refs/tags/{tag}")
     if resolve(repository, "HEAD") != target:
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Tag")
 
-    # Der Tag-Commit muss auf einem der zulässigen Remote-Lieferbranches liegen.
+    return target
+
+
+def require_commit_on_branches(repository: str | Path, commit: str, branches: tuple[str, ...]) -> None:
+    """Fordert, dass der Commit auf einem der genannten Remote-Branches liegt."""
+
     output = run(
         repository,
         "for-each-ref",  # nur die angegebenen Referenzen unter `refs/remotes/origin`
         "--format=%(refname:short)",  # Kurzname, zum Beispiel `origin/main`
-        "--contains",  # nur Branches, deren Historie den Tag-Commit enthält
-        target,
+        "--contains",  # nur Branches, deren Historie den Commit enthält
+        commit,
         "refs/remotes/origin",  # Remote-Tracking-Branches, keine Tags
     )
 
     containing = set(output.decode().splitlines())
 
     if not any(f"origin/{branch}" in containing for branch in branches):
-        raise DeliveryError(Status.SOURCE_FAILED, "Release-Tag liegt auf keinem zulässigen Branch")
-
-    return target
+        raise DeliveryError(Status.SOURCE_FAILED, "Liefer-Tag liegt auf keinem zulässigen Branch")
 
 
 def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:

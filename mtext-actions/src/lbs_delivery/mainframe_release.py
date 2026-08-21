@@ -113,6 +113,7 @@ def _publish_mainframe(*, artifact_root: str | Path) -> dict[str, object]:
         port = int(os.environ["MAINFRAME_FTPS_PORT"])
     except ValueError as exc:
         raise DeliveryError(Status.VALIDATION_FAILED, "FTPS-Port ist ungültig") from exc
+
     if not 1 <= port <= 65_535:
         raise DeliveryError(Status.VALIDATION_FAILED, "FTPS-Port ist ungültig")
 
@@ -136,38 +137,32 @@ def _build_release(
     configuration: Configuration,
     *, repository_root: str | Path, output_directory: str | Path, jcl_template: str, tag: str,
     trigger_sha: str,
-) -> None:
-    """Prüft den Release-Tag und erzeugt Pakete, JCL und Informationsdateien.
+) -> str:
+    """Prüft den Liefer-Tag und erzeugt Pakete, JCL und Informationsdateien.
 
-    Die Funktion bindet den Tag an einen geschützten Branch, wählt FULL- oder
-    DELTA-Verarbeitung und schreibt Projektpakete, JCL und Informationsdateien.
+    `.100` muss auf `main` oder `release/nnn` liegen. Spätere Lieferungen
+    vergleichen kumulativ mit dieser FULL-Basis.
     """
 
     root = Path(repository_root)
 
-    # Release-Tag, Releaselinie und optional auslösenden Commit prüfen.
+    # Liefer-Tag, Releaselinie und optional auslösenden Commit prüfen.
     tag_match = git.RELEASE_TAG_RE.fullmatch(tag)
     if tag_match is None:
-        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
+        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Liefer-Tag")
 
     releaselinie = tag_match.group("releaselinie")
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
 
-    allowed_branches = release_branches(configuration, releaselinie)
-    target_sha = git.require_release_commit(root, tag, allowed_branches)
-
+    target_sha = git.resolve_tag_commit(root, tag)
     if trigger_sha and trigger_sha != target_sha:
         raise DeliveryError(Status.SOURCE_FAILED, "auslösender Commit stimmt nicht zum Tag")
 
-    # Ein regulärer Tag muss der Release-Version entsprechen, die im getaggten
-    # Stand durch den Freigabe-Pull-Request eingetragen wurde. Beta-Tags nutzen
-    # diesen Freigabeweg nicht.
-    if not tag_match.group("beta_suffix") and configuration.letztes_release != tag:
-        raise DeliveryError(Status.SOURCE_FAILED, "Mandantenkonfiguration nennt eine andere freigegebene Release-Version")
-
     # FULL- oder DELTA-Lieferung und ihren tatsächlichen Paketvergleich bestimmen.
     base, cumulative = release_scope(root, tag, target_sha)
+    if base is None:
+        git.require_commit_on_branches(root, target_sha, release_branches(configuration, releaselinie))
 
     # Neues Ausgabeverzeichnis anlegen.
     output = Path(output_directory)
@@ -206,6 +201,8 @@ def _build_release(
                 encoding="ascii",
             )
 
+    return target_sha
+
 
 def run_build_command(arguments: argparse.Namespace) -> dict[str, object]:
     """Erzeugt Release-Dateien aus dem GitHub-Workflow-Kontext."""
@@ -213,8 +210,8 @@ def run_build_command(arguments: argparse.Namespace) -> dict[str, object]:
     workspace = Path(os.environ.get("GITHUB_WORKSPACE", "."))
     source = workspace / "source"
     configuration = config.load_configuration(source, os.environ["SOURCE_REPOSITORY"])
-    
-    _build_release(
+
+    source_sha = _build_release(
         configuration,
         repository_root=source,
         output_directory=workspace / "dist",
@@ -223,9 +220,10 @@ def run_build_command(arguments: argparse.Namespace) -> dict[str, object]:
         trigger_sha=arguments.trigger_sha,
     )
 
-    return {"status": Status.ARTIFACT_READY.value} | (
-        {"warnungen": list(configuration.warnungen)} if configuration.warnungen else {}
-    )
+    return {
+        "status": Status.ARTIFACT_READY.value,
+        "outputs": {"source_sha": source_sha},
+    } | ({"warnungen": list(configuration.warnungen)} if configuration.warnungen else {})
 
 
 def run_publish_command(_arguments: argparse.Namespace) -> dict[str, object]:

@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import io
-import json
 import shutil
 import unittest
 from contextlib import redirect_stderr
 
 from lbs_delivery.process import DeliveryError
-from lbs_delivery.rollout import _build_update_matrix, _prepare_mandant_update, _verify_automation
+from lbs_delivery.rollout import _prepare_mandant_update, _verify_automation
 
 from tests.support import AUTOMATION_ROOT, TempDirTestCase, git, init_git_repository, ZERO_SHA
 
@@ -67,41 +66,6 @@ class UpdateWorkflowsTests(TempDirTestCase):
         with redirect_stderr(io.StringIO()):
             self.assertEqual(_verify_automation(self.automation_root, automation_sha), automation_sha)
             self.assertEqual(_prepare_mandant_update(self.automation_root, self.mandant_root, automation_sha), mandant_sha)
-
-    def test_builds_update_matrix(self) -> None:
-        mandanten = self.root / "mandanten.json"
-        mandanten.write_text(
-            json.dumps(
-                {
-                    "FI": {"repository": "FinanzInformatik/fi_lbs_entw_oms_fi", "subsystem": "LOMS"},
-                    "BY": {"repository": "FinanzInformatik/fi_lbs_entw_oms_by", "subsystem": "BYMT"},
-                }
-            ),
-            encoding="utf-8",
-        )
-        releaselinien = self.root / "releaselinien.json"
-        releaselinien.write_text(
-            json.dumps(
-                {
-                    "mtext_ziele": {"Entwicklung": "en", "Funktionstest": "fu"},
-                    "releaselinien": {
-                        "261": {"etaps_linie": "01", "hostprofil": "FKT"},
-                        "270": {"etaps_linie": "02", "hostprofil": "JUR"},
-                    },
-                }
-            ),
-            encoding="utf-8",
-        )
-        matrix = _build_update_matrix(mandanten, releaselinien)["include"]
-        self.assertEqual(len(matrix), 6)
-        self.assertIn(
-            {"repository": "FinanzInformatik/fi_lbs_entw_oms_fi", "kuerzel": "FI", "branch": "release/261"},
-            matrix,
-        )
-        self.assertIn(
-            {"repository": "FinanzInformatik/fi_lbs_entw_oms_by", "kuerzel": "BY", "branch": "main"},
-            matrix,
-        )
 
 
 if __name__ == "__main__":

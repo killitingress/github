@@ -11,7 +11,7 @@ Commit-SHA.
 GitHub-Benutzers für `mtext_actions` mit:
 
 - `Contents: read` zum Laden der CI/CD-Version
-- `Actions: write` zum Starten des zentralen Release-Workflows
+- `Actions: write` zum Starten der zentralen Lieferworkflows
 
 Mainframe-Zugangsdaten liegen nicht im Mandanten-Repository.
 
@@ -39,17 +39,32 @@ manuelle Start gleicht die angegebene Commit-SHA vollständig mit dem Ziel des
 ausgewählten Branches ab. Ändert ein Push nach `main` die Releaselinie, folgt
 ein vollständiger Abgleich mit M/Text-Entwicklung und M/Text-Funktionstest.
 
-## `release-approval.yml`
+## `lieferung-vorbereiten.yml`
 
-Der manuelle Start trägt die Release-Version aus dem Wartungstool als
-`letztes_release` in `.github/config.json` auf einem Branch
-`release-approval/...` ein. Die anfordernde Person eröffnet den Pull Request
-auf den Lieferbranch selbst. Ein Check zeigt Branchstand und Lieferumfang.
-Nach Merge entsteht der Release-Tag auf dem Merge-Commit.
+Der manuelle Start verwendet den in GitHub ausgewählten Branch. Die Vorprüfung
+hält SHA und Lieferumfang fest und zeigt die Vorbereitungs-ID. `.100` entsteht
+auf `main` oder `release/nnn` und erzeugt ein FULL des vollständigen Stands.
+Jede spätere Version derselben Releaselinie erzeugt ein kumulatives DELTA gegen
+`.100`. Teillieferungen werden auf `bereitstellung/nnn.nnn` zusammengestellt.
 
-Ein Push eines Tags (`v261.100`, `v261.108`, `v261.108a`) startet den zentralen
-Workflow `release.yml`. Beta-Tags brauchen keinen Freigabe-Pull-Request.
-Paketbau und Mainframe-Übergabe laufen in `mtext_actions`.
+Nach der Prüfung startet eine Person **Vorbereitete Lieferung ausführen** mit
+der angezeigten Vorbereitungs-ID. Dieselbe Person bestätigt eine
+Direktlieferung. Eine andere Person erfüllt das empfohlene Vier-Augenprinzip.
+
+## `lieferung-ausfuehren.yml`
+
+Die ausführende Person nennt die Vorbereitungs-ID. Der Lauf lädt die
+festgehaltenen Angaben, nennt den ermittelten Lieferweg und startet den
+zentralen Workflow `lieferung.yml`. Dort entsteht der Liefer-Tag. Anschließend
+startet `release.yml`. Ein Tag-Push allein startet keine
+Mainframe-Übergabe. Paketbau und Mainframe-Übergabe laufen in
+`mtext_actions`.
+
+## `lieferung-erneut-uebergeben.yml`
+
+Der manuelle Start nennt einen vorhandenen Liefer-Tag. Der zentrale Workflow
+`release.yml` überträgt denselben Stand erneut. Eine erneute Bestätigung
+entsteht nicht.
 
 ## Aktualisierung
 

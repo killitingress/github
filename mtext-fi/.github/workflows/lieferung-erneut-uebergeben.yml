@@ -1,0 +1,25 @@
+name: Lieferung erneut übergeben
+
+# Überträgt einen vorhandenen Liefer-Tag erneut an den Mainframe. Eine neue
+# fachliche Freigabe entsteht nicht.
+'on':
+  workflow_dispatch:
+    inputs:
+      lieferung_tag:
+        description: vorhandener Liefer-Tag, zum Beispiel r261.108
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  uebergeben:
+    name: Mainframe-Übergabe starten
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-dispatch.yml@0000000000000000000000000000000000000000
+    with:
+      workflow: release.yml
+      workflow_inputs: >-
+        {"source_repository":${{ toJSON(github.repository) }},"release_tag":${{ toJSON(inputs.lieferung_tag) }},"trigger_sha":""}
+    secrets:
+      dispatch_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

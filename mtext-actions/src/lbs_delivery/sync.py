@@ -55,6 +55,7 @@ def _call_adapter(url: str, payload: dict[str, object]) -> tuple[int, str]:
         raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {exc.code}: {body[:1000]}") from exc
     except (urllib.error.URLError, OSError, TimeoutError) as exc:
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapter ist nicht erreichbar") from exc
+
     if not 200 <= status < 300:
         raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {status}: {body[:1000]}")
     return status, body
@@ -73,9 +74,24 @@ def _plan_sync(
     # Branch liefert Releaselinie und die zugehörige M/Text-Zielstufe.
     releaselinie, zielstufe = git.resolve_sync_branch(source_branch, configuration.releaselinie)
 
-    # Manueller Lauf oder Push ohne Vorgänger: FULL ohne Vergleichscommit.
-    if event_name == "workflow_dispatch" or not previous_commit or previous_commit == _EMPTY_PUSH_COMMIT:
+    # Ein manueller Lauf gleicht den ausgewählten Commit vollständig ab.
+    if event_name == "workflow_dispatch":
         return releaselinie, (zielstufe,), None
+
+    # GitHub kennt beim ersten Push eines Feature-Branches keinen Vorgänger.
+    # Der gemeinsame Commit mit seinem Zielbranch grenzt die Feature-Änderungen
+    # ab, damit parallele Features nicht als FULL übertragen werden.
+    if previous_commit == _EMPTY_PUSH_COMMIT and zielstufe == config.MTEXT_ZIEL_ENTWICKLUNG:
+        base_branch = "main" if releaselinie == configuration.releaselinie else f"release/{releaselinie}"
+        previous_commit = git.run(
+            repository_root,
+            "merge-base",
+            "HEAD",
+            f"refs/remotes/origin/{base_branch}",
+        ).decode("ascii").strip()
+    elif not previous_commit or previous_commit == _EMPTY_PUSH_COMMIT:
+        return releaselinie, (zielstufe,), None
+
     if event_name != "push" or source_branch != "main":
         return releaselinie, (zielstufe,), previous_commit
 
@@ -83,6 +99,7 @@ def _plan_sync(
     document = json.loads(git.read_file(repository_root, previous_commit, config.MANDANT_CONFIG_PATH))
     if document["mandant"]["releaselinie"] == configuration.releaselinie:
         return releaselinie, (zielstufe,), previous_commit
+
     return releaselinie, config.MTEXT_ZIEL_REIHENFOLGE, None
 
 
@@ -100,17 +117,20 @@ def _sync_resources(
     """Erzeugt Projektpakete auf CIFS und meldet sie dem M/Text-Adapter.
 
     Ein normaler Push verwendet ausschließlich den Git-Vergleich zwischen
-    `previous_commit` und `commit`. Ein Push ohne Vorgänger erzeugt für jedes
-    Projekt ein FULL.
+    `previous_commit` und `commit`. Ein Aufruf ohne Vergleichscommit erzeugt
+    für jedes Projekt ein FULL.
     """
 
     # Geplantes Ziel und Commit-Zugehörigkeit prüfen.
     if zielstufe not in configuration.mtext_ziel_prefixe:
         raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Zielstufe ist ungültig")
+
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
+
     if git.resolve(repository_root, "HEAD") != commit:
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Commit")
+
     git.require_ancestor(repository_root, commit, f"refs/remotes/origin/{source_branch}")
 
     # Betroffene Projekte und den CIFS-Übergabepfad bestimmen.
@@ -177,6 +197,7 @@ def _sync_resources(
         shutil.rmtree(request_path, ignore_errors=True)
         if isinstance(exc, DeliveryError):
             raise
+
         raise DeliveryError(Status.RESOURCE_TRANSFER_FAILED, "CIFS-Übergabe ist fehlgeschlagen") from exc
 
     # Nach dem bereitgestellten Verzeichnis den passenden Adapter aufrufen.

@@ -20,7 +20,7 @@ from tests.support import (
 PUBLISH_KWARGS = {
     "api_url": "https://github.example/api/v3",
     "server_url": "https://github.example",
-    "release_tag": "v261.108",
+    "release_tag": "r261.108",
     "source_sha": "1" * 40,
     "token": "secret",
 }
@@ -30,19 +30,16 @@ class GitHubReleaseTests(TempDirTestCase):
     def setUp(self) -> None:
         super().setUp()
         self.repository = setup_release_repository(self.root)
-        self.configuration = load_test_configuration(
-            self.repository,
-            mandant={"letztes_release": "v261.108"},
-        )
+        self.configuration = load_test_configuration(self.repository)
         self.dist = self.root / "dist"
 
-        git(self.repository, "checkout", "--detach", "v261.108")
+        git(self.repository, "checkout", "--detach", "r261.108")
         _build_release(
             self.configuration,
             repository_root=self.repository,
             output_directory=self.dist,
             jcl_template=jcl_template(),
-            tag="v261.108",
+            tag="r261.108",
             trigger_sha=git(self.repository, "rev-parse", "HEAD"),
         )
 
@@ -68,7 +65,7 @@ class GitHubReleaseTests(TempDirTestCase):
             if arguments.get("payload") is not None:
                 return {
                     "id": 41,
-                    "html_url": "https://github.example/FI/mandant/releases/tag/v261.108",
+                    "html_url": "https://github.example/FI/mandant/releases/tag/r261.108",
                     "upload_url": "https://uploads.github.example/repos/FI/mandant/releases/41/assets{?name,label}",
                     "assets": [],
                 }
@@ -79,7 +76,7 @@ class GitHubReleaseTests(TempDirTestCase):
         body = next(call for call in calls if call.get("payload") is not None)["payload"]["body"]
         self.assertIn("## Lieferung", body)
         self.assertIn("LOMS_Basis", body)
-        self.assertIn("releases/download/v261.108/_INFO_FI-LOMS_Basis.json", body)
+        self.assertIn("releases/download/r261.108/_INFO_FI-LOMS_Basis.json", body)
         uploads = [call for call in calls if call.get("content") is not None]
         self.assertEqual(len(uploads), 1)
         self.assertIn("_INFO_FI-LOMS_Basis.json", uploads[0]["url"])

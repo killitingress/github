@@ -1,0 +1,114 @@
+name: Wiederverwendbare Liefer-Vorprüfung
+
+# Hält den ausgewählten Branchstand fest, prüft den Liefer-Tag und zeigt den
+# Lieferumfang. Das Artefakt gehört zum aufrufenden Mandantenlauf.
+'on':
+  workflow_call:
+    inputs:
+      source_repository:
+        description: Mandanten-Repository
+        required: true
+        type: string
+      source_branch:
+        description: ausgewählter Branch der Vorbereitung
+        required: true
+        type: string
+      source_sha:
+        description: festzuhaltender Branchstand
+        required: true
+        type: string
+      lieferung_tag:
+        description: vorgesehener Liefer-Tag
+        required: true
+        type: string
+      actor:
+        description: vorbereitende Person
+        required: true
+        type: string
+      automation_ref:
+        description: Festgelegte CI/CD-Version
+        required: true
+        type: string
+    secrets:
+      automation_token:
+        description: Token zum Laden der festgelegten CI/CD-Version
+        required: true
+    outputs:
+      lieferung_tag:
+        description: festgehaltener Liefer-Tag
+        value: ${{ jobs.check.outputs.lieferung_tag }}
+      source_sha:
+        description: festgehaltene SHA
+        value: ${{ jobs.check.outputs.source_sha }}
+      source_branch:
+        description: festgehaltener Branch
+        value: ${{ jobs.check.outputs.source_branch }}
+      prepare_actor:
+        description: vorbereitende Person
+        value: ${{ jobs.check.outputs.prepare_actor }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lieferung vorprüfen
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 15
+    outputs:
+      lieferung_tag: ${{ steps.check.outputs.lieferung_tag }}
+      source_sha: ${{ steps.check.outputs.source_sha }}
+      source_branch: ${{ steps.check.outputs.source_branch }}
+      prepare_actor: ${{ steps.check.outputs.prepare_actor }}
+    steps:
+      # Lädt den festzuhaltenden Stand mit seiner Historie für FULL- und
+      # DELTA-Vergleich.
+      - name: Check-Out Mandantenstand
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+          repository: ${{ inputs.source_repository }}
+          ref: ${{ inputs.source_sha }}
+
+      # Lädt die festgelegte Implementierung der Vorprüfung.
+      - name: Check-Out CI/CD-Version
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+          ref: ${{ inputs.automation_ref }}
+          path: automation
+          persist-credentials: false
+          token: ${{ secrets.automation_token }}
+
+      - name: Python-Runtime ermitteln
+        id: runtime
+        run: bash automation/scripts/runner-preflight.sh
+
+      # Das Kommando prüft die technische Erstellbarkeit, schreibt den
+      # geplanten Lieferumfang nach GITHUB_STEP_SUMMARY und legt die
+      # festgehaltenen Angaben für die spätere Bestätigung ab.
+      - name: Lieferung und Lieferumfang prüfen
+        id: check
+        env:
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          LIEFERUNG_TAG: ${{ inputs.lieferung_tag }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          ACTOR: ${{ inputs.actor }}
+        run: >-
+          "${{ steps.runtime.outputs.python }}"
+          automation/src/mtext.py lieferung check
+          --tag "$LIEFERUNG_TAG"
+          --branch "$SOURCE_BRANCH"
+          --source-sha "$SOURCE_SHA"
+          --actor "$ACTOR"
+
+      - name: Vorbereitung festhalten
+        uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de
+        with:
+          name: lieferung-vorbereitung
+          path: ${{ steps.check.outputs.vorbereitung_path }}
+          if-no-files-found: error
+          retention-days: 30

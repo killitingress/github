@@ -1,6 +1,6 @@
 name: Wiederverwendbarer Start eines zentralen Workflows
 
-# Release und Release-Freigabe wechseln in das zentrale Repository. Dort liegen
+# Lieferung und Release wechseln in das zentrale Repository. Dort liegen
 # die technische Identität und die Zugangsdaten für ihre weiteren Schritte.
 'on':
   workflow_call:

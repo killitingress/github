@@ -1,9 +1,16 @@
 # Benutzeranleitung für M/Text-Ressourcen mit Git
 
-## 1. Zweck und Grundablauf
+## 1. Einstieg von SVN zu Git
 
 Diese Anleitung beschreibt die tägliche Arbeit mit M/Text-Ressourcen in Git.
-Sie richtet sich an Entwickler und Repository-Verantwortliche.
+Sie richtet sich an Entwickler und Repository-Verantwortliche, die bisher mit
+SVN gearbeitet haben.
+
+### Kurzfassung
+
+Ausgangsbranch aktualisieren → Feature-Branch erstellen → Änderung committen
+und pushen → in M/Text-Entwicklung testen → Pull Request prüfen lassen → mit
+Squash Merge zusammenführen → in M/Text-Funktionstest abnehmen.
 
 ### Grundprinzipien
 
@@ -22,253 +29,189 @@ Push eines Branches nach GitHub werden sämtliche fehlenden Commits dorthin
 Jeder Entwicklungsauftrag wie eine Änderung, Erweiterung oder Korrektur wird
 als Feature in einem eigenen temporären Feature-Branch umgesetzt. Wenn ein
 Feature fertig entwickelt und getestet wurde, kann ein Pull Request angelegt
-werden, um es in einen Zielbranch wie `main` zu übernehmen. Der Pull Request
-muss dazu im 4-Augenprinzip geprüft und freigegeben werden. Danach werden die
+werden, um es in `main` oder `release/nnn` zu übernehmen. Der Pull Request muss
+dazu im Vier-Augen-Prinzip geprüft und freigegeben werden. Danach werden die
 Änderungen des Feature-Branches per Squash Merge in den Zielbranch
 übernommen. Dabei entsteht ein neuer Stand und somit auch ein neuer Commit.
 
-Wird ein Feature-Branch nach GitHub gepusht, werden seine M/Text-Projekte
-automatisch mit der M/Text-Entwicklungsumgebung synchronisiert, damit der
-Entwickler das Feature dort testen kann. Ein Merge nach `main` oder
-`release/nnn` synchronisiert automatisch die M/Text-Funktionstestumgebung.
-Dort soll das Feature von der LBS getestet und fachlich freigegeben werden.
+Wird ein Feature-Branch nach GitHub gepusht, werden die von ihm geänderten
+M/Text-Ressourcen automatisch mit der M/Text-Entwicklungsumgebung
+synchronisiert. Dort kann der Entwickler das Feature testen. Ein Merge nach
+`main` oder `release/nnn` synchronisiert automatisch die
+M/Text-Funktionstestumgebung. Dort soll das Feature von der LBS getestet und
+fachlich freigegeben werden.
 
-Ein Release wird aus einem fachlich freigegebenen Branch `main` oder
-`release/nnn` vorbereitet. Der Release-Freigabeprozess hält Release-Version
-und Lieferumfang fest. Eine zweite Person prüft und genehmigt den zugehörigen
-Pull Request. Nach dessen Merge erzeugt der Workflow den Release-Tag und
-startet Paketbau sowie Mainframe-Übergabe.
+Eine Mainframe-Lieferung wird aus einem fachlich freigegebenen Stand auf
+`main`, `release/nnn` oder `bereitstellung/nnn.nnn` vorbereitet. Die
+Vorbereitung hält den gewählten Commit, den Liefer-Tag und den Lieferumfang
+fest. Anschließend führt dieselbe oder eine zweite Person die vorbereitete
+Lieferung aus. Der zentrale Workflow erzeugt den Liefer-Tag und startet
+Paketbau sowie Mainframe-Übergabe.
 
-### Änderungsablauf
+### Grundablauf einer Änderung
 
 ```text
-Entwicklung in lokalem Feature-Branch (feature/nnn/<Bezeichnung>)
+Feature-Branch erstellen und Änderung committen
     │ Push
     ▼
-Synchronisierung mit M/Text-Entwicklung
-    │ Entwicklung testen
+Änderung in M/Text-Entwicklung testen
+    │ Pull Request und Review
     ▼
-Pull Request nach main (oder release/nnn)
-    │ Review und Merge
+Squash Merge nach main oder release/nnn
+    │ automatische Synchronisation
     ▼
-Synchronisierung mit M/Text-Funktionstest
-    │ fachlich freigeben lassen
-    ▼
-Branchstand ist für ein Release bereit
+Änderung in M/Text-Funktionstest abnehmen
 ```
 
-### Release-Ablauf
+### Grundablauf einer Mainframe-Lieferung
 
 ```text
-Gewählter Branchstand auf main (oder release/nnn)
-    │ Release-Freigabe starten
+Branch und Liefer-Tag auswählen
+    │ Lieferung vorbereiten
     ▼
-Pull Request vom technischen Freigabe-Branch nach main (oder release/nnn)
-    │ Review und Merge
+Lieferumfang prüfen und Vorbereitungs-ID kopieren
+    │ Vorbereitete Lieferung mit dieser ID ausführen
     ▼
-Release-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
+Liefer-Tag, Paketbau und Mainframe-Übergabe
 ```
 
-Für Branches und Release-Tags gelten folgende Namen:
+### Verwendete Namen
 
 | Gegenstand | Namensschema | Beispiel |
 |---|---|---|
-| Führende Releaselinie | `main` | `main` für 270 |
-| Parallel gepflegte Releaselinie | `release/nnn` | `release/261` |
+| Produktive Releaselinie | `main` | `main` führt 270 |
+| Parallel gepflegte Releaselinie | `release/nnn` | `release/261`, `release/271` |
 | Einzelne Änderung | `feature/nnn/<Bezeichnung>` | `feature/261/issue-5678` |
-| Release-Tag | `vnnn.nnn` oder `vnnn.nnnx` | `v261.108`, `v261.108a` |
+| Arbeitsbranch einer Teillieferung | `bereitstellung/nnn.nnn` | `bereitstellung/261.108` |
+| Liefer-Tag | `rnnn.nnn` | `r261.108` |
 
-M/Text-Entwicklung und M/Text-Funktionstest sind die beiden M/Text-Umgebungen.
-Es gibt dafür keine eigenen Git-Branches.
+M/Text-Entwicklung und M/Text-Funktionstest sind Zielumgebungen. Sie werden
+nicht durch eigene Git-Branches dargestellt.
 
-## 2. Voraussetzungen
+### Arbeitsmittel und Voraussetzungen
 
-Vor der ersten Bearbeitung müssen folgende Voraussetzungen erfüllt sein:
+Benötigt werden:
 
-- Der Benutzer besitzt Zugriff auf das Mandanten-Repository.
-- Das Mandanten-Repository ist lokal geklont und in der M/Text Workbench
-  beziehungsweise im verwendeten Eclipse-Arbeitsbereich eingebunden.
-- Benutzername und E-Mail-Adresse sind im Git-Client hinterlegt.
-- Die Releaselinie der Änderung ist bekannt.
+- Zugriff auf das Mandanten-Repository in GitHub
+- ein lokaler Klon des Mandanten-Repositorys
+- die Einbindung des Klons in die M/Text Workbench beziehungsweise den
+  verwendeten Eclipse-Arbeitsbereich
+- ein im Git-Client hinterlegter Benutzername und eine E-Mail-Adresse
+- die Releaselinie der vorgesehenen Änderung
 
-In einem Git-Arbeitsbaum kann jeweils ein Branch ausgecheckt sein. Wer
-gleichzeitig an mehreren Releaselinien arbeitet, verwendet getrennte lokale
-Klone und bei Bedarf getrennte Eclipse-Arbeitsbereiche. Dadurch bleiben
-Projektbaum, Releaselinie und lokale Änderungen eindeutig zugeordnet.
+| Anwendung | Aufgabe |
+|---|---|
+| M/Text Workbench mit EGit | Ressourcen bearbeiten, Branches verwalten, Änderungen prüfen, committen, cherry-picken und pushen |
+| GitHub im Browser | Pull Requests bearbeiten, Workflow-Läufe prüfen, Lieferungen starten, Tags und Lieferinformationen ansehen |
+
+In einem Git-Arbeitsbaum kann ein Branch ausgecheckt sein. Für gleichzeitig
+geöffnete Arbeiten an mehreren Releaselinien sind getrennte lokale Klone und
+Eclipse-Arbeitsbereiche sinnvoll. So bleiben Projektbaum, Releaselinie und
+lokale Änderungen eindeutig zugeordnet.
 
 Beispiel:
 
 ```text
-Arbeitsbereich 270  → Klon mit main oder feature/270/...
-Arbeitsbereich 261  → Klon mit release/261 oder feature/261/...
-Arbeitsbereich 271  → Klon mit feature/271/...
+Arbeitsbereich 270  → main oder feature/270/...
+Arbeitsbereich 261  → release/261 oder feature/261/...
+Arbeitsbereich 271  → release/271 oder feature/271/...
 ```
 
-### Wichtige Git-Grundlagen
+### Vor jeder Bearbeitung aktualisieren
 
-Git verwaltet die lokalen Versionsstände. GitHub stellt das gemeinsame
-Repository, Pull Requests und die GitHub-Actions-Automatisierung bereit.
+1. Das richtige Mandanten-Repository und den vorgesehenen Branch auswählen.
+2. Prüfen, dass keine ungesicherte Bearbeitung und keine laufende Git-Operation
+   offen ist.
+3. Die neuen GitHub-Stände mit EGit abrufen.
+4. Den ausgecheckten Ausgangsbranch aktualisieren.
+5. Kontrollieren, dass der lokale Branch und der GitHub-Branch denselben Stand
+   bezeichnen.
 
-Für Benutzer, die bisher mit SVN gearbeitet haben, sind vor allem diese
-Unterschiede wichtig:
+## 2. Feature entwickeln und in M/Text-Entwicklung testen
 
-| SVN | Git |
-|---|---|
-| Der ausgecheckte Arbeitsbereich ist eine Arbeitskopie des zentralen SVN-Repositorys | Jeder lokale Klon ist ein eigenes Git-Repository mit Versionshistorie |
-| Ein Commit überträgt die Änderung direkt an den SVN-Server | Ein Commit speichert die Änderung lokal, ein anschließender Push überträgt sie nach GitHub |
-| Ein Stand wird mit einer Revisionsnummer wie `r12345` bezeichnet | Ein Stand wird mit seiner Commit-SHA bezeichnet |
-| Branches werden meist für länger getrennte Stände verwendet | Ein Feature-Branch dient als vorübergehender Arbeitsbereich für eine Änderung |
+### Kurzfassung
 
-| Begriff | Bedeutung |
-|---|---|
-| Commit | Speichert einen Stand zunächst im lokalen Repository. |
-| Push | Überträgt lokale Commits nach GitHub und startet die zum Branch gehörenden Workflows. |
-| Commit-SHA | Bezeichnet einen Commit eindeutig. Für einen manuellen Vollabgleich wird sie eingegeben. |
-| Fetch | Ruft neue Branchstände und Commits aus GitHub ab, ändert aber weder den ausgecheckten Branch noch dessen Dateien. |
-| Aktualisieren | Bringt den ausgecheckten Branch mit der dafür vorgesehenen Funktion des Git-Clients auf den aktuellen GitHub-Stand. |
+Den Branch der Releaselinie aktualisieren, davon `feature/nnn/<Bezeichnung>`
+erstellen, Änderung committen und pushen. Anschließend den eigenen
+Synchronisationslauf und den Stand in M/Text-Entwicklung prüfen.
 
-### Arbeitsmittel
+### Ausgangsbranch bestimmen
 
-| Anwendung | Aufgabe |
-|---|---|
-| M/Text Workbench mit EGit | Ressourcen bearbeiten, Änderungen prüfen, Branches sowie Beta-Tags verwenden, committen und pushen |
-| GitHub im Browser | Pull Requests bearbeiten, Releases vorbereiten, Commits und Workflow-Läufe prüfen, Tags ansehen und Lieferinformationen öffnen |
+Die Releaselinie der Änderung bestimmt Ausgangsbranch und späteres
+Pull-Request-Ziel:
 
-Eine Git-Kommandozeile ist für den beschriebenen Ablauf nicht vorgeschrieben.
-
-Die folgenden Git-Funktionen werden im Ablauf benötigt. Wie sie im
-verwendeten Client heißen, kann sich unterscheiden:
-
-| Aufgabe | Git-Funktion |
-|---|---|
-| Arbeitsstand und Änderungen prüfen | Status und Diff |
-| GitHub-Stand abrufen und den lokalen Branch aktualisieren | Fetch und anschließend die vorgesehene Aktualisierungsfunktion |
-| Branch erstellen oder auswählen | Branch erstellen und Branch wechseln |
-| Änderungen speichern und übertragen | Add, Commit und Push |
-| Commit-SHA und konkrete Änderungen prüfen | Log und Show |
-| Einen Commit auf eine weitere Releaselinie übernehmen | Cherry-Pick |
-| Beta-Tag oder ausdrücklich erlaubten direkten Release-Tag anlegen und pushen | Tag und Push des einzelnen Tags |
-| Änderungen zurücknehmen | Restore, Reset oder Revert – abhängig davon, ob die Änderung bereits committet oder gepusht wurde |
-
-### Lokalen Branch vor der Arbeit aktualisieren
-
-Vor einer Bearbeitung, einem Cherry-Pick oder dem direkten Erstellen eines Tags:
-
-1. Das richtige Mandanten-Repository und den vorgesehenen Branch auswählen
-2. Prüfen, dass keine Git-Operation und keine ungesicherte Bearbeitung offen
-   ist
-3. Die neuen GitHub-Stände abrufen und den ausgecheckten Branch aktualisieren
-4. Kontrollieren, dass der lokale Branch und der GitHub-Branch auf denselben
-   Commit zeigen
-5. Erst danach mit der vorgesehenen Arbeit beginnen
-
-Ein Fetch allein aktualisiert den ausgecheckten Branch und dessen Dateien
-nicht. Schlägt die Aktualisierung wegen lokaler Änderungen oder eigener
-Commits fehl, wird kein Force-Push erzwungen. Das weitere Vorgehen richtet sich
-nach dem vorhandenen lokalen Stand. Vor einem weiteren Versuch werden die
-lokalen Änderungen, die eigenen Commits und ein möglicher Konflikt geprüft.
-
-## 3. Zielbranch einer Änderung bestimmen
-
-Vor dem Anlegen eines Feature-Branches werden der Ausgangsbranch und das
-Pull-Request-Ziel festgelegt. Für eine spätere Releaselinie kann das
-Pull-Request-Ziel zu diesem Zeitpunkt noch fehlen:
-
-| Änderung | Ausgangsbranch | Pull-Request-Ziel |
+| Änderung | Ausgangsbranch und Pull-Request-Ziel | Feature-Branch |
 |---|---|---|
-| Führende Releaselinie | `main` | `main` |
-| Ältere, weiterhin gepflegte Releaselinie | `release/nnn` | `release/nnn` |
-| Spätere Releaselinie ohne geschützten Zielbranch | Nach fachlicher Festlegung | Noch nicht vorhanden |
+| Produktive Releaselinie 270 | `main` | `feature/270/<Bezeichnung>` |
+| Weiter gepflegte Releaselinie 261 | `release/261` | `feature/261/<Bezeichnung>` |
+| Kommende Releaselinie 271 | `release/271` | `feature/271/<Bezeichnung>` |
 
-Der Name des Feature-Branches enthält dieselbe Releaselinie wie die Änderung.
-
-### Typische Szenarien
-
-| Fall | Ausgangsbranch | Feature-Branch | Pull-Request-Ziel |
-|---|---|---|---|
-| Feature für die führende 270 | `main` | `feature/270/neuer-brief` | `main` |
-| Fehlerkorrektur für die gepflegte 261 | `release/261` | `feature/261/issue-5678` | `release/261` |
-| Länger laufendes Feature für 271 | Nach fachlicher Festlegung | `feature/271/grosses-feature` | Nach dem Linienwechsel `main` |
-
-Ein länger laufendes Feature wird erst zusammengeführt, wenn ein geschützter
-Zielbranch seine Releaselinie vertritt. Der Feature-Branch wird regelmäßig mit
-Änderungen des festgelegten Ausgangsbranches aktualisiert. Nach dem
-Linienwechsel wird er vor dem Pull Request mit dem aktuellen `main` abgeglichen
-und erneut in M/Text-Entwicklung getestet.
-
-## 4. Feature entwickeln und in M/Text-Entwicklung testen
+Die kommende Releaselinie besitzt bereits vor dem Linienwechsel einen
+geschützten Release-Branch. Ihre Änderungen können dadurch zusammengeführt und
+in M/Text-Funktionstest abgenommen werden.
 
 ### Feature-Branch erstellen
 
-1. Im passenden lokalen Klon den festgelegten Ausgangsbranch auswählen.
-2. Prüfen, dass keine unbeabsichtigten lokalen Änderungen und keine noch
-   offene Git-Operation vorhanden sind.
-3. Den Ausgangsbranch auf den aktuellen GitHub-Stand bringen.
-4. Einen neuen Branch `feature/nnn/<Bezeichnung>` erstellen.
-5. Den Feature-Branch auschecken.
+1. Im passenden lokalen Klon den Ausgangsbranch auswählen.
+2. Den Ausgangsbranch auf den aktuellen GitHub-Stand bringen.
+3. Einen neuen Branch `feature/nnn/<Bezeichnung>` erstellen.
+4. Den Feature-Branch auschecken.
 
-Die Bezeichnung soll die fachliche Änderung erkennen lassen. Geeignete Namen
-sind beispielsweise:
+Die Bezeichnung soll den fachlichen Auftrag erkennen lassen. Beispiele sind:
 
 ```text
 feature/270/neuer-brief
 feature/261/issue-5678
-feature/270/adresse-korrigieren
+feature/271/adresse-korrigieren
 ```
 
-### Änderungen committen
+### Änderung bearbeiten und committen
 
 1. Die Ressourcen in der M/Text Workbench bearbeiten.
-2. In der Git-Ansicht die geänderten und neuen Dateien kontrollieren.
+2. In der Git-Ansicht die geänderten, neuen und gelöschten Dateien prüfen.
 3. Unbeabsichtigte Dateien von der Übernahme ausschließen oder zurücknehmen.
 4. Die fachlich zusammengehörigen Änderungen zum Commit hinzufügen.
 5. Eine verständliche Commit-Nachricht eingeben.
 6. Den Commit erstellen.
 
-Auf einem Feature-Branch dürfen mehrere Zwischen-Commits entstehen. Beim
-Squash Merge werden sie später zu einem Commit auf dem Zielbranch
-zusammengefasst.
+Auf dem Feature-Branch dürfen mehrere Zwischen-Commits entstehen. Sie werden
+beim späteren Squash Merge auf dem Zielbranch zusammengefasst.
 
-### Mit M/Text-Entwicklung synchronisieren
+### Nach M/Text-Entwicklung übertragen
 
 1. Den Feature-Branch nach GitHub pushen.
-2. In GitHub prüfen, dass der Synchronisationslauf für den Branch gestartet
-   wurde.
-3. Nach erfolgreichem Lauf die Änderung in der M/Text-Entwicklungsumgebung der
-   Releaselinie testen.
-4. Bei weiteren Korrekturen erneut committen und pushen.
+2. Im Mandanten-Repository unter **Actions** den Lauf **M/Text-Ressourcen
+   synchronisieren** öffnen.
+3. Kontrollieren, dass der Lauf den eigenen Feature-Branch und dessen aktuellen
+   Commit verarbeitet.
+4. Nach erfolgreichem Lauf die Änderung in M/Text-Entwicklung testen.
+5. Erforderliche Korrekturen erneut committen und pushen.
 
-Jeder Push überträgt den neuen Zielstand automatisch. Ein erfolgreicher Lauf
-bestätigt die Übertragung, nicht die fachliche Richtigkeit der Änderung. Diese
-prüft der Entwickler anschließend in M/Text.
+Der erfolgreiche Workflow bestätigt die technische Übertragung. Die fachliche
+Richtigkeit wird anschließend in M/Text geprüft.
 
-Nach mehreren kurz aufeinanderfolgenden Pushes ist zu prüfen, dass der letzte
-erfolgreiche Synchronisationslauf den aktuellen Commit des Feature-Branches
-verarbeitet hat. Erst dieser Stand wird in M/Text getestet.
+### Parallele Feature-Branches koordinieren
 
-### Mandantenkonfiguration ändern
+Feature-Branches derselben Releaselinie verwenden dieselbe
+M/Text-Entwicklungsumgebung. Sie erhalten keine getrennten Testumgebungen. Der
+erste Push eines neuen Feature-Branches wird mit dessen Ausgangsbranch
+verglichen. Auch dabei werden die durch das Feature geänderten Ressourcen
+übertragen. Weitere Pushes verwenden die Änderungen seit dem vorherigen Commit
+dieses Feature-Branches.
 
-Die Datei `.github/config.json` enthält die Angaben, die für die Verarbeitung
-dieses Mandanten-Repositories benötigt werden. Dazu gehören die Releaselinie,
-das Mandantenkürzel, ausgeschlossene Projektverzeichnisse und die Zuordnung für
-die Mainframe-Übergabe. Das Feld `letztes_release` nennt die zuletzt über den
-jeweiligen Lieferbranch freigegebene Release-Version. Vor dem ersten Release
-steht dort `null`. Beim Release-Freigabe-PR aktualisiert der Workflow dieses
-Feld.
+Unterschiedliche Ressourcen können dadurch parallel entwickelt und getestet
+werden. Ändern mehrere Feature-Branches dieselbe Ressource, bestimmt die zuletzt
+für diese Ressource synchronisierte Änderung ihren Inhalt in
+M/Text-Entwicklung. Dieser seltene Fall wird zwischen den beteiligten
+Entwicklern abgestimmt.
 
-Als M/Text-Projekt gilt jedes nicht versteckte Verzeichnis direkt in der
-Repositorywurzel, sofern es nicht in `excluded_projects` ausgeschlossen ist.
-Vor dem Hinzufügen oder Umbenennen eines Projektverzeichnisses ist deshalb zu
-prüfen, ob es verarbeitet werden soll und ob der daraus gebildete Projektcode
-eindeutig bleibt.
+## 3. Pull Request und M/Text-Funktionstest
 
-Eine Änderung an `.github/config.json` folgt demselben Feature- und
-Pull-Request-Ablauf wie eine Ressourcenänderung. Im Pull Request prüft der
-Workflow **Mandantenkonfiguration und Ressourcen prüfen** die Konfiguration
-und die geänderten Ressourcen. Dieser Lauf muss erfolgreich sein, bevor die
-Änderung zusammengeführt wird.
+### Kurzfassung
 
-## 5. Pull Request und M/Text-Funktionstest
+Pull Request vom Feature-Branch zum Branch seiner Releaselinie erstellen →
+Prüfer zuordnen → Änderungen und Prüfläufe kontrollieren → **Squash and merge**
+→ Synchronisationslauf und Stand in M/Text-Funktionstest prüfen.
 
 ### Pull Request erstellen
 
@@ -277,374 +220,400 @@ Wenn die Änderung in M/Text-Entwicklung erfolgreich geprüft wurde:
 1. Das Mandanten-Repository in GitHub öffnen.
 2. Einen Pull Request vom Feature-Branch auf den zugehörigen Zielbranch
    erstellen.
-3. Kontrollieren, dass Quell- und Zielbranch dieselbe Releaselinie betreffen.
+3. Kontrollieren, dass der Feature-Branch für dieselbe Releaselinie angelegt
+   wurde wie der Zielbranch.
 4. Die Änderung und das Ergebnis des Entwicklungstests verständlich
    beschreiben.
-5. Den vorgesehenen Prüfer zuordnen.
+5. Eine zweite Person für das Review zuordnen.
 
 Beispiele:
 
 ```text
-feature/270/neuer-brief  → main
+feature/270/neuer-brief  → main, wenn main die Releaselinie 270 führt
 feature/261/issue-5678   → release/261
+feature/271/neuer-brief  → release/271
 ```
 
-### Feature-Branch aktualisieren
+Der Wechsel der produktiven Releaselinie ist ein eigener Ablauf. Dort wird ein
+Branch der kommenden Linie bewusst nach `main` übernommen.
 
-Hat sich der Zielbranch seit dem Erstellen des Feature-Branches geändert, kann
-der Feature-Branch aktualisiert werden. Falls GitHub im Pull Request die
-Funktion **Update branch** anbietet, kann sie dafür verwendet werden. Durch den
-späteren Squash Merge erscheinen dabei keine zusätzlichen Merge-Commits auf
-dem Zielbranch.
+### Zielbranchänderungen und Konflikte behandeln
 
-### Push-Ablehnung und Konflikte behandeln
-
-Wird ein Push abgelehnt, weil der Feature-Branch auf GitHub inzwischen
-fortgeschritten ist, wird zunächst dessen aktueller Stand abgerufen und in den
-lokalen Feature-Branch übernommen. Eine solche Ablehnung bedeutet noch nicht,
-dass sich Dateiänderungen widersprechen.
+Hat sich der Zielbranch geändert, kann GitHub im Pull Request **Update branch**
+anbieten. Diese Funktion übernimmt den neuen Zielbranchstand in den
+Feature-Branch. Der spätere Squash Merge hält zusätzliche Arbeitscommits vom
+Zielbranch fern.
 
 Entsteht beim Aktualisieren oder bei einem Cherry-Pick ein Konflikt:
 
 1. Nicht pushen und die betroffenen Dateien sowie die laufende Git-Operation
    prüfen.
-2. Für jede Konfliktstelle den bisherigen Inhalt, die neue Änderung und den
-   gemeinsamen Ausgangsstand vergleichen.
-3. Den fachlich richtigen Inhalt herstellen und alle Konfliktmarkierungen
-   entfernen.
-4. Die aufgelösten Dateien bestätigen und die Git-Operation fortsetzen. Ist
-   die richtige Auflösung unklar, die Operation abbrechen und die Abweichung
-   mit den Beteiligten klären.
-5. Nach Abschluss den Arbeitsstand und die Änderungen kontrollieren. Erst dann
-   den Feature-Branch pushen und bei Bedarf erneut in M/Text-Entwicklung testen.
+2. Den bisherigen Inhalt, die neue Änderung und den gemeinsamen Ausgangsstand
+   vergleichen.
+3. Den fachlich richtigen Inhalt herstellen und Konfliktmarkierungen entfernen.
+4. Die aufgelösten Dateien bestätigen und die Git-Operation fortsetzen.
+5. Ist die richtige Auflösung unklar, die Operation abbrechen und die
+   Abweichung mit den Beteiligten klären.
+6. Nach der Auflösung den gesamten Arbeitsstand prüfen, pushen und erneut in
+   M/Text-Entwicklung testen.
+
+Wird ein Push abgelehnt, weil der Feature-Branch in GitHub inzwischen
+fortgeschritten ist, wird zunächst dessen aktueller Stand abgerufen und in den
+lokalen Feature-Branch übernommen. Eine Push-Ablehnung bedeutet nicht
+automatisch, dass ein inhaltlicher Konflikt besteht.
 
 ### Prüfen und zusammenführen
 
-1. Der Prüfer kontrolliert die Änderung nach den geltenden Review-Vorgaben.
-2. Offene Rückfragen oder Änderungswünsche werden im Pull Request geklärt.
-3. Der Entwickler pusht erforderliche Korrekturen in denselben Feature-Branch.
-4. Nach erfolgreichem Review wird **Squash and merge** gewählt.
-5. Die endgültige Commit-Nachricht wird kontrolliert.
-6. Der Feature-Branch wird nach dem Merge gelöscht.
+1. Die zweite Person prüft Änderung, Löschungen und Testbeschreibung.
+2. Rückfragen und Änderungswünsche werden im Pull Request geklärt.
+3. Korrekturen werden in denselben Feature-Branch gepusht und erneut getestet.
+4. Das Ergebnis von **Mandantenkonfiguration und Ressourcen prüfen** wird
+   kontrolliert. Fehler in der Konfiguration werden vor dem Merge korrigiert.
+   Hinweise zur JSON- oder XML-Syntax werden fachlich bewertet.
+5. Nach erfolgreichem Review wird **Squash and merge** gewählt.
+6. Die endgültige Commit-Nachricht wird kontrolliert.
+7. Der Feature-Branch wird nach dem Merge gelöscht.
 
-Der Merge erzeugt einen Commit auf dem geschützten Zielbranch. Dieser Push
-startet automatisch die Synchronisation mit der M/Text-Funktionstestumgebung.
+Der Squash Merge erzeugt einen Commit auf `main` oder `release/nnn`. Dieser
+Push startet die Synchronisation mit M/Text-Funktionstest.
 
-### Stand in M/Text-Funktionstest prüfen
+### Stand in M/Text-Funktionstest abnehmen
 
-1. In GitHub prüfen, dass der Synchronisationslauf für M/Text-Funktionstest
-   erfolgreich war.
-2. Den zusammengeführten Stand in der M/Text-Funktionstestumgebung der
-   Releaselinie prüfen.
-3. Einen festgestellten Fehler über einen neuen Feature-Branch korrigieren.
+1. Unter **Actions** den Synchronisationslauf des Zielbranches öffnen.
+2. Prüfen, dass der Lauf den Squash-Commit des Pull Requests verarbeitet.
+3. Nach erfolgreicher Übertragung den Stand in M/Text-Funktionstest prüfen.
+4. Einen festgestellten Fehler über einen neuen Feature-Branch korrigieren.
 
-Auf `main` oder `release/nnn` wird nicht direkt korrigiert.
+Auf `main` und `release/nnn` werden fachliche Änderungen nicht direkt
+committet.
 
-## 6. Änderung auf eine weitere Releaselinie übernehmen
+## 4. Änderung auf eine weitere Releaselinie übernehmen
 
-Eine Änderung wird manchmal auf mehreren Releaselinien benötigt. Dafür wird
-der Squash-Commit der bereits zusammengeführten Änderung übernommen.
+### Kurzfassung
 
-1. Den Pull Request der ursprünglichen Änderung öffnen.
+Squash-Commit der ursprünglichen Änderung ermitteln → neuen Feature-Branch von
+der weiteren Releaselinie erstellen → Commit cherry-picken → testen → über
+einen eigenen Pull Request zusammenführen.
+
+Soll eine bereits zusammengeführte Änderung auf einer weiteren Releaselinie
+verwendet werden, wird ihr Squash-Commit übernommen:
+
+1. Den ursprünglichen Pull Request öffnen.
 2. Die Commit-SHA des Squash-Commits feststellen.
-3. Im lokalen Klon der weiteren Releaselinie den geschützten Ausgangsbranch
-   aktualisieren.
-4. Einen neuen Feature-Branch für diese Releaselinie erstellen.
-5. Den Squash-Commit per Cherry-Pick in den neuen Feature-Branch übernehmen.
-6. Konflikte im Feature-Branch lösen.
-7. Push, Entwicklungstest und Pull Request wie gewohnt durchführen.
+3. Den geschützten Ausgangsbranch der weiteren Releaselinie aktualisieren.
+4. Von diesem Stand einen neuen Feature-Branch für die weitere Releaselinie
+   erstellen.
+5. Den Squash-Commit mit EGit per Cherry-Pick übernehmen.
+6. Konflikte fachlich auflösen und den vollständigen Stand prüfen.
+7. Den Feature-Branch pushen und die Änderung in M/Text-Entwicklung testen.
+8. Einen Pull Request auf den Zielbranch dieser Releaselinie erstellen.
+9. Review, Squash Merge und M/Text-Funktionstest wie in Kapitel 3 durchführen.
 
 Beispiel:
 
 ```text
-Fehler zuerst in release/261 behoben
-    │ Squash-Commit übernehmen
+Squash-Commit aus release/261
+    │ Cherry-Pick
     ▼
 feature/270/issue-5678
     │ Pull Request
     ▼
-main
+main, wenn main die Releaselinie 270 führt
 ```
 
-Der Cherry-Pick ersetzt keinen Pull Request und keine Prüfung auf der weiteren
-Releaselinie.
+Der Cherry-Pick ersetzt weder den Pull Request noch die Prüfung auf der
+weiteren Releaselinie.
 
-## 7. Release erstellen
+## 5. Mainframe-Lieferung ausführen
 
-### Voraussetzungen
+### Kurzfassung
 
-Vor dem Vorbereiten eines Releases müssen folgende Bedingungen erfüllt sein:
+Branch und Liefer-Tag wählen → **Lieferung vorbereiten** → Lieferumfang prüfen
+und Vorbereitungs-ID kopieren → **Vorbereitete Lieferung ausführen** →
+Mainframe-Übergabe und GitHub Release kontrollieren.
 
-- Der aktuelle Stand von `main` oder `release/nnn` soll geliefert werden
-- Die Synchronisation dieses Branchstands mit der M/Text-Funktionstestumgebung war
-  erfolgreich
-- Die im Wartungstool vergebene Release-Version ist bekannt
+### Lieferstand und Liefer-Tag bestimmen
 
-Beispiele:
+Liefer-Tags heißen beispielsweise:
 
 ```text
-v261.100   FULL-Basis der Releaselinie 261
-v261.108   kumulatives DELTA gegen v261.100
-v261.108a  Beta-Lieferstand als kumulatives DELTA gegen v261.100
+r261.100   FULL-Basis der Releaselinie 261
+r261.108   kumulatives DELTA gegen r261.100
 ```
 
-Der optionale letzte Klein- oder Großbuchstabe kennzeichnet einen
-Beta-Lieferstand. Mehrere Beta-Lieferungen derselben Release-Version erhalten
-unterschiedliche Suffixe, beispielsweise `v261.108a` und `v261.108b`. Bei der
-späteren Erzeugung der Lieferung aus den CodePipeline-Elementen wird angegeben,
-dass es sich um eine Beta-Lieferung handelt.
+`r261.100` bezeichnet den vollständigen Stand von `main` oder `release/261`.
+Eine Teillieferung mit der Versionsnummer `.100` ist nicht vorgesehen.
 
-### Release über einen Freigabe-PR
+Entspricht eine spätere Lieferung der aktuellen Branchspitze von `main` oder
+`release/nnn`, wird dieser Branch ausgewählt. Sollen ausgewählte, bereits in
+M/Text-Funktionstest abgenommene Änderungen geliefert werden, wird ein
+Bereitstellungsbranch zusammengestellt.
 
-Ein Release-Tag ohne Buchstabensuffix wie `v261.108` wird durch den
-Freigabeworkflow erstellt:
+### Teillieferung zusammenstellen
 
-1. Im Mandanten-Repository **Actions** und den Workflow
-   **Release freigeben und starten** öffnen.
-2. **Run workflow** wählen.
-3. `main` oder den passenden `release/nnn` als Branch auswählen.
-4. Die im Wartungstool vergebene Release-Version eingeben.
-5. Den Workflow starten und seinen Abschluss abwarten.
-6. Im Repository unter **Branches** den neuen Branch
-   `release-approval/<Release-Tag>/<Lauf>` suchen und dort den Pull Request
-   eröffnen.
-7. Als Ziel des Pull Requests den in Schritt 3 gewählten Lieferbranch
-   einstellen. GitHub schlägt `main` vor.
+1. Branches und Tags mit EGit aus GitHub abrufen.
+2. Den vorherigen Liefer-Tag auswählen, beispielsweise `r261.107`.
+3. Von diesem Tag `bereitstellung/261.108` erstellen und auschecken.
+4. Die vorgesehenen Squash-Commits in der gewünschten Reihenfolge per
+   Cherry-Pick übernehmen.
+5. Konflikte fachlich auflösen und jeden fortgesetzten Cherry-Pick prüfen.
+6. Den vollständigen Branchstand und die enthaltenen Commits kontrollieren.
+7. Den Bereitstellungsbranch nach GitHub pushen.
 
-Den Pull Request eröffnet die anfordernde Person selbst. Sie ist damit dessen
-Autor und kann ihn nicht selbst genehmigen. So ist sichergestellt, dass die
-Freigabe von einer zweiten Person kommt.
+Der Bereitstellungsbranch wird nicht nach M/Text synchronisiert. Maßgeblich ist
+der in der Liefer-Vorprüfung angezeigte Inhalt. Nach erfolgreicher Lieferung
+kann der Bereitstellungsbranch gelöscht werden.
 
-Im Diff des Pull Requests steht die neue Release-Version im Feld
-`letztes_release` der Datei `.github/config.json`. Der Check **Release
-vorprüfen** zeigt Branch und Commit-SHA, FULL oder DELTA, den Bezugsstand, die
-betroffenen Projekte sowie die enthaltenen Änderungen und Löschungen. Bei
-einer FULL-Lieferung entfällt der Bezugsstand. Der Pull Request kann erst nach
-erfolgreicher Vorprüfung zusammengeführt werden. Eine andere Person prüft:
+### Lieferung vorbereiten
 
-- Der angegebene Branchstand wurde in M/Text-Funktionstest geprüft
-- Die Release-Version stimmt mit dem Wartungstool überein
-- Die aufgeführten Änderungen und Löschungen sollen geliefert werden
+1. Im Mandanten-Repository **Actions** öffnen.
+2. **Lieferung vorbereiten** auswählen.
+3. **Run workflow** öffnen.
+4. `main`, den passenden `release/nnn` oder den Bereitstellungsbranch
+   auswählen.
+5. Den Liefer-Tag `rnnn.nnn` eingeben und den Workflow starten.
+6. In der Zusammenfassung Branch, Commit, FULL oder DELTA, Bezugsstand und
+   projektbezogenen Lieferumfang prüfen.
+7. Die angezeigte **Vorbereitungs-ID** kopieren.
 
-Nach der Freigabe wird der Pull Request zusammengeführt. Der Workflow erstellt
-daraufhin den Release-Tag auf dem Merge-Commit des Pull Requests und startet den
-zentralen Release-Lauf.
+Die Commit-SHA wird aus dem ausgewählten Branch ermittelt. Sie wird nicht
+eingegeben. Die Vorbereitung hält diesen Stand fest, damit spätere Änderungen
+am Branch die vorbereitete Lieferung nicht verändern.
 
-### Beta-Tag erstellen
+### Vorbereitete Lieferung bestätigen und ausführen
 
-Ein Beta-Tag mit Buchstabensuffix kann ohne Freigabe-PR erstellt werden:
+1. Nach der Prüfung unter **Actions** den Workflow **Vorbereitete Lieferung
+   ausführen** öffnen.
+2. Die Vorbereitungs-ID eingeben.
+3. Den Workflow starten.
+4. Den angezeigten Lieferweg und den Start des zentralen Lieferlaufs prüfen.
 
-1. Den aktuellen Stand von `main` oder dem passenden `release/nnn` prüfen.
-2. Den vorgegebenen Beta-Tagnamen, beispielsweise `v261.108a`, auf diesem
-   Commit anlegen.
-3. Den Tag nach GitHub pushen.
-4. Prüfen, dass der zentrale Release-Lauf gestartet wurde.
+Startet die vorbereitende Person auch den zweiten Workflow, ist es eine
+Direktlieferung. Startet eine andere Person den zweiten Workflow, ist es eine
+Vier-Augen-Freigabe.
 
-Der Tag kann in der M/Text Workbench oder in GitHub erstellt werden. Ein
-Beta-Tag kann nicht für eine produktive Lieferung verwendet werden.
+Der zentrale Lauf erstellt den Liefer-Tag auf dem vorbereiteten Commit, baut
+die Pakete und startet die Mainframe-Übergabe. Das Pushen eines Tags durch
+einen Benutzer startet keine Mainframe-Übergabe.
 
 ### Ergebnis kontrollieren
 
-Nach Abschluss ist in GitHub zu prüfen, dass der zentrale Lauf erfolgreich
-beendet wurde. Der Lauf:
+Nach Abschluss wird geprüft:
 
-1. lädt den getaggten Mandantenstand,
-2. bestimmt FULL oder DELTA,
-3. erstellt Projektpakete, JSON-Informationsdateien und JCL,
-4. übergibt Paket und JCL an den Mainframe,
-5. erstellt zum Tag ein GitHub Release im Mandanten-Repository.
+1. Der zentrale Lieferlauf ist erfolgreich beendet.
+2. Paket und JCL wurden an den Mainframe übergeben.
+3. Im Mandanten-Repository besteht zum Liefer-Tag ein GitHub Release.
+4. Das GitHub Release nennt den gelieferten Commit und enthält die
+   JSON-Informationsdateien der Projekte.
 
-Das GitHub Release enthält für jedes Projekt die JSON-Informationsdatei mit
-Bezugsstand, Zielstand, Elementen und SHA-256-Prüfsummen. Die
-Informationsdateien werden nicht an den Mainframe übertragen.
+Bei `.100` enthält das Lieferartefakt je Projekt ein vollständiges F-Paket und
+ein leeres D-Paket. Spätere Liefer-Tags derselben Releaselinie erzeugen ein
+kumulatives DELTA gegen den `.100`-Tag.
 
-Bei einem `.100`-Tag enthält das Artefakt für jedes einbezogene Projekt ein
-vollständiges F-Paket und ein leeres D-Paket. Jeder weitere Tag derselben
-Releaselinie erzeugt ein kumulatives DELTA gegen den `.100`-Tag.
+### Vorhandene Lieferung erneut übergeben
 
-Die Informationsdatei eines DELTAs beschreibt den tatsächlich paketierten
-Vergleich vom `.100`-Tag bis zum Release-Tag.
-
-Bei einem fehlgeschlagenen technischen Übergabeversuch wird der
-Übergabejob erneut ausgeführt. Er verwendet das bereits gebaute Artefakt. Für
-einen technischen Wiederanlauf wird kein zusätzlicher Tag erzeugt.
-
-## 8. Manuellen Vollabgleich starten
-
-Der manuelle Vollabgleich stellt einen ausgewählten Commit vollständig in der
-Zielstufe bereit, die sich aus dem ausgewählten Branch ergibt:
-
-| Ausgewählter Branch | Zielstufe |
-|---|---|
-| `feature/nnn/<Bezeichnung>` | M/Text-Entwicklung |
-| `main` | M/Text-Funktionstest der in diesem Commit konfigurierten Releaselinie |
-| `release/nnn` | M/Text-Funktionstest der Releaselinie |
+Ein Git-Stand darf mehrfach an CodePipeline übergeben werden:
 
 1. Im Mandanten-Repository **Actions** öffnen.
-2. Den Workflow **M/Text-Ressourcen synchronisieren** auswählen.
-3. **Run workflow** öffnen.
-4. Den Branch auswählen, zu dem der Commit gehört. Für die führende
-   Releaselinie ist dies `main`.
-5. Die Commit-SHA eingeben.
-6. Den Workflow starten und den Lauf kontrollieren.
-7. Den bereitgestellten Stand im zugeordneten M/Text-Ziel prüfen.
+2. **Lieferung erneut übergeben** auswählen.
+3. Den vorhandenen Liefer-Tag eingeben.
+4. Den Workflow starten und den zentralen Lieferlauf kontrollieren.
 
-Die Releaselinie wird aus dem ausgewählten Branch und bei `main` aus der
-Mandantenkonfiguration des Commits ermittelt. Der Lauf ersetzt die dem
-Mandanten zugeordneten Projektstände vollständig. Projektstände anderer
-Mandanten bleiben erhalten.
+Dabei entstehen keine neue Bestätigung und kein neuer Tag.
 
-Soll ausnahmsweise ein beliebiger Commit nach M/Text-Entwicklung übertragen
-werden, wird ein kurzlebiger Feature-Branch der passenden Releaselinie auf
-diesem Commit erstellt und gepusht. Beispielsweise kann
-`feature/271/wiederherstellung` verwendet werden. Der Push synchronisiert den
-Commit nach M/Text-Entwicklung. Nach dem erfolgreichen Lauf kann der Hilfsbranch
-gelöscht werden.
+Wurde ein Liefer-Tag auf einem falschen Stand erstellt, wird er nicht für einen
+anderen Stand wiederverwendet. Der fehlerhafte Tag wird nach dem dafür
+festgelegten GitHub-Verfahren gelöscht. Anschließend wird die richtige
+Lieferung erneut vorbereitet und ausgeführt.
 
-## 9. Die führende Releaselinie wechseln
+## 6. Sonderabläufe für Repository-Verantwortliche
 
-Der Wechsel wird zum unternehmensweit vorgegebenen Hauptrelease durch die
-Repository-Verantwortlichen durchgeführt.
+### Kurzfassung
 
-### Ausgangsstand vorbereiten
+Mandantenkonfiguration über einen Pull Request ändern. Einen manuellen
+Vollabgleich mit Branch und vollständiger Commit-SHA starten. Beim
+Releaselinienwechsel den bisherigen `main` erhalten, die kommende Linie über
+einen geprüften Übergangsbranch nach `main` übernehmen und anschließend die
+nächste Releaselinie anlegen.
 
-1. Prüfen, dass die neue Releaselinie in der zentralen Zuordnung eingerichtet
-   ist.
-2. In der M/Text Workbench das Mandanten-Repository und `main` auswählen.
-3. Prüfen, dass keine lokalen Änderungen und keine Git-Operation offen sind.
-4. `main` mit dem GitHub-Stand aktualisieren.
-5. Kontrollieren, dass dieser Stand in M/Text-Funktionstest geprüft wurde und
-   die bisherige Releaselinie abschließt.
+### Mandantenkonfiguration ändern
 
-Falls die bisherige Releaselinie weiter gepflegt wird:
+`.github/config.json` enthält das Mandantenkürzel, die von `main` geführte
+Releaselinie, ausgeschlossene Projektverzeichnisse und die Hostprofile für die
+Mainframe-Übergabe. Eine Lieferung verändert diese Datei nicht.
 
-1. In der Git-Ansicht `release/nnn` auf Basis von `main` erstellen und
-   auschecken.
-2. `release/nnn` nach GitHub pushen.
-3. In GitHub kontrollieren, dass `release/nnn` und `main` auf denselben Commit
-   zeigen.
-4. Den automatisch gestarteten Synchronisationslauf kontrollieren.
-5. In GitHub kontrollieren, dass Änderungen an `release/nnn` einen Pull Request
-   und das Vier-Augenprinzip erfordern und Force-Push gesperrt ist.
-6. In der M/Text Workbench wieder `main` auswählen.
+Eine normale Änderung der Mandantenkonfiguration wird in einem Feature-Branch
+bearbeitet und über einen Pull Request in den Zielbranch übernommen. Das Feld
+`releaselinie` von `main` wird im Ablauf zum Wechsel der produktiven
+Releaselinie geändert.
 
-Beim Erstellen des Release-Branches entsteht kein neuer Commit. Der neue Branch
-und `main` bezeichnen zunächst denselben Stand.
+Der Workflow **Mandantenkonfiguration und Ressourcen prüfen** kontrolliert die
+Konfiguration. Fehler werden vor dem Merge korrigiert. Syntaxbefunde zu
+Ressourcen erscheinen als Hinweise und werden geprüft.
 
-### Releaselinie wechseln
+Als M/Text-Projekt gilt jedes nicht versteckte Verzeichnis direkt in der
+Repositorywurzel, sofern es nicht in `excluded_projects` ausgeschlossen ist.
+Vor dem Hinzufügen oder Umbenennen eines Projektverzeichnisses ist zu prüfen,
+ob es verarbeitet werden soll und ob der daraus gebildete Projektcode eindeutig
+bleibt.
 
-1. Einen Feature-Branch der neuen Releaselinie auf Basis von `main` erstellen.
-2. In `.github/config.json` ausschließlich das Feld `releaselinie` auf die
-   neue führende Linie setzen, die Änderung committen und pushen.
-3. Den Synchronisationslauf für M/Text-Entwicklung erfolgreich prüfen.
-4. Einen Pull Request auf `main` erstellen. Prüfen, dass
-   **Mandantenkonfiguration und Ressourcen prüfen** erfolgreich war, und den
-   Pull Request mit Squash Merge zusammenführen.
-5. Den automatisch gestarteten Synchronisationslauf kontrollieren. Der
-   Squash-Commit wird vollständig mit M/Text-Entwicklung und
-   M/Text-Funktionstest synchronisiert.
-6. Den Stand in M/Text-Entwicklung und M/Text-Funktionstest kontrollieren.
-7. Neue Feature-Branches für die neue führende Linie auf Basis von `main`
+### Manuellen Vollabgleich starten
+
+Ein manueller Vollabgleich ersetzt die einbezogenen Projektstände in der
+M/Text-Zielumgebung durch den ausgewählten Git-Stand. Der Lauf wird deshalb mit
+anderen Arbeiten auf derselben Releaselinie abgestimmt.
+
+1. Den gewünschten Commit in GitHub öffnen und seine vollständige SHA kopieren.
+2. Im Mandanten-Repository **Actions** öffnen.
+3. **M/Text-Ressourcen synchronisieren** auswählen.
+4. **Run workflow** öffnen.
+5. Den Branch auswählen, zu dem der Commit gehört.
+6. Die vollständige Commit-SHA eingeben.
+7. Den Workflow starten und den Lauf kontrollieren.
+8. Den vollständigen Stand im zugeordneten M/Text-Ziel prüfen.
+
+Der ausgewählte Commit muss zum ausgewählten Branch gehören. `main` und
+`release/nnn` führen nach M/Text-Funktionstest. Ein Feature-Branch führt nach
+M/Text-Entwicklung.
+
+### Die produktive Releaselinie wechseln
+
+Vor dem Wechsel bestehen beispielsweise diese Stände:
+
+```text
+release/260   vorherige Releaselinie
+main          produktive Releaselinie 261
+release/270   kommende Releaselinie
+```
+
+#### Bisherige und kommende Linie abschließen
+
+1. Prüfen, dass `release/270` den vollständigen neuen Stand enthält und in
+   M/Text-Funktionstest abgenommen wurde.
+2. `main` aktualisieren und prüfen, dass dieser Stand die bisher produktive
+   Releaselinie 261 abschließt.
+3. Falls 261 weiter gepflegt wird, `release/261` auf dem aktuellen
+   `main`-Commit erstellen und nach GitHub pushen.
+4. Prüfen, dass `release/261` und der bisherige `main` denselben Commit
+   bezeichnen.
+
+Beim Erstellen von `release/261` entsteht kein neuer Commit. Die
+organisationsweiten Regeln schützen den Branch anhand seines Namens.
+
+#### Kommende Linie nach main übernehmen
+
+1. In EGit die aktuellen Stände von `main` und `release/270` abrufen.
+2. Auf Basis des aktuellen `main` den Branch
+   `feature/270/releaselinienwechsel` erstellen und auschecken.
+3. `release/270` in diesen Branch mergen.
+4. Konflikte anhand des vorgesehenen Stands von 270 auflösen und die
+   Zusammenführung abschließen.
+5. Den gesamten Branch mit `release/270` vergleichen. Ausschließlich auf dem
+   bisherigen `main` vorhandene Inhalte entfernen, wenn sie nicht zu 270
+   gehören.
+6. In `.github/config.json` das Feld `releaselinie` auf `270` setzen.
+7. Die Änderung committen und den Branch pushen.
+8. Erneut den vollständigen Inhalt mit `release/270` vergleichen. Abgesehen
+   von der für `main` benötigten Mandantenkonfiguration dürfen keine
+   unbeabsichtigten Unterschiede bestehen.
+9. Einen Pull Request von `feature/270/releaselinienwechsel` nach `main`
    erstellen.
+10. Den vollständigen Dateiinhalt und insbesondere Löschungen prüfen.
+11. Das Review durchführen und den Pull Request mit Squash Merge
+    zusammenführen.
+12. Prüfen, dass `main` dem vorgesehenen Stand von 270 entspricht und die
+    Mandantenkonfiguration `270` nennt.
 
-Scheitert die Übertragung nach M/Text-Funktionstest, nachdem die Übertragung
-nach M/Text-Entwicklung bereits erfolgreich war, bleibt der Stand in
-M/Text-Entwicklung bestehen. Der fehlgeschlagene Lauf wird erneut ausgeführt.
-Dabei werden M/Text-Entwicklung und M/Text-Funktionstest vollständig neu
-abgeglichen.
+Der vollständige Vergleich ist erforderlich, weil ein Merge konfliktfreie
+Änderungen des bisherigen `main` beibehalten kann.
 
-Die bisherige Linie wird anschließend über `release/nnn` gepflegt. `main`
-bleibt der Default Branch.
+#### Synchronisation und nächste Linie
 
-## 10. Änderungen zurücknehmen
+1. Den automatisch gestarteten Synchronisationslauf von `main` kontrollieren.
+2. Prüfen, dass der vollständige Stand zuerst nach M/Text-Entwicklung und
+   anschließend nach M/Text-Funktionstest übertragen wurde.
+3. Den Stand in beiden Umgebungen kontrollieren.
+4. Neue Features für 270 auf Basis von `main` erstellen.
+5. `release/271` auf Basis des neuen `main` erstellen und dort die kommende
+   Releaselinie vorbereiten.
+
+Die bisherige Linie 261 wird anschließend über `release/261` gepflegt. `main`
+bleibt der Default Branch und führt jetzt 270.
+
+## 7. Fehler beheben und Workflow-Läufe kontrollieren
+
+### Kurzfassung
+
+Erwarteten Branch, Commit oder Liefer-Tag feststellen → erste aussagekräftige
+Fehlermeldung prüfen → Ursache im Feature-Branch oder in der technischen
+Einrichtung beheben → aktuellen gewünschten Stand erneut verarbeiten. Alte
+Synchronisationsläufe nicht unkontrolliert wiederholen.
+
+### Git-Änderungen sicher korrigieren
 
 | Situation | Vorgehen |
 |---|---|
-| Noch nicht committete lokale Änderung | In der Git-Ansicht die betroffenen Dateien zurücksetzen. Vorher prüfen, ob lokale M/Text-Ressourcen dadurch verloren gehen. |
-| Commit liegt nur im Feature-Branch | Einen korrigierenden Commit im selben Feature-Branch erstellen oder den lokalen Commit vor dem Push mit der freigegebenen Git-Funktion überarbeiten. |
-| Feature-Stand wurde in M/Text-Entwicklung bereitgestellt | Den Feature-Branch korrigieren und erneut pushen. Der neue Zielstand wird in M/Text-Entwicklung bereitgestellt. |
-| Pull Request wurde bereits zusammengeführt | Einen neuen Feature-Branch anlegen und den Fehler über einen neuen Pull Request korrigieren. |
-| Änderung wird auf einer weiteren Releaselinie nicht benötigt | Den dortigen Feature-Branch oder Pull Request nicht weiterführen. Eine bereits erfolgte Übernahme über einen neuen korrigierenden Commit zurücknehmen. |
-| Tag wurde lokal, aber noch nicht nach GitHub gepusht | Den lokalen Tag korrigieren und Tagnamen sowie Commit-SHA erneut prüfen. |
+| Änderung ist noch nicht committet | Betroffene Dateien nach Prüfung mit **Restore** zurücksetzen. |
+| Eigener Commit wurde noch nicht gepusht | Commit im lokalen Feature-Branch korrigieren oder mit **Reset** zurücknehmen. |
+| Feature-Branch wurde bereits gepusht | Einen korrigierenden Commit erstellen und erneut pushen. |
+| Pull Request wurde bereits zusammengeführt | Einen neuen Feature-Branch und einen neuen Pull Request für die Korrektur erstellen. |
+| Änderung wird auf einer weiteren Releaselinie nicht benötigt | Den dortigen Feature-Branch oder Pull Request beenden. Eine bereits zusammengeführte Änderung über einen neuen Korrektur-Commit zurücknehmen. |
 
-Force-Pushes auf geschützte Branches sind nicht zulässig.
+**Clean** gehört nicht zum normalen Bedienweg. Die Funktion kann nicht
+versionierte M/Text-Ressourcen unwiederbringlich entfernen.
 
-Die Git-Funktionen unterscheiden sich danach, wie weit eine Änderung bereits
-veröffentlicht wurde:
+### Workflow-Lauf prüfen
 
-| Funktion | Verwendung |
-|---|---|
-| `Restore` | Noch nicht committete Änderungen an ausgewählten Dateien verwerfen |
-| `Reset` | Einen eigenen, noch nicht gepushten Commit lokal zurücknehmen |
-| `Revert` | Einen neuen Commit erzeugen, der eine bereits veröffentlichte Änderung zurücknimmt |
+1. Im Mandanten-Repository **Actions** öffnen.
+2. Den Workflow und den betroffenen Lauf auswählen.
+3. Branch oder Liefer-Tag und verarbeiteten Commit mit dem erwarteten Stand
+   vergleichen.
+4. Die Jobs öffnen und die erste aussagekräftige Fehlermeldung prüfen.
+5. Zugangsdaten nicht in Kommentare, Workflow-Eingaben oder Support-Tickets
+   kopieren.
 
-`Reset` und `Rebase` sowie das nachträgliche Ändern eines Commits werden nicht
-auf bereits veröffentlichte Commits angewendet. `Clean` gehört nicht zum
-normalen Bedienweg, weil es nicht versionierte M/Text-Ressourcen
-unwiederbringlich entfernen kann.
+Für Paketbau und Mainframe-Übergabe führt der Mandantenlauf zu einem zentralen
+Lauf in `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Das abschließende
+GitHub Release steht wieder im Mandanten-Repository.
 
-## 11. Workflow-Läufe kontrollieren
+### Fehlgeschlagene Ressourcenprüfung
 
-### Lauf prüfen
+- Fehler in `.github/config.json` werden im Feature-Branch korrigiert.
+- Hinweise zu JSON- oder XML-Ressourcen werden anhand der genannten Datei und
+  Fundstelle geprüft.
+- Nach einer Korrektur wird derselbe Feature-Branch erneut gepusht.
 
-1. Für Ressourcenprüfung und Synchronisation im Mandanten-Repository
-   **Actions** öffnen. Für einen Release den zentralen Lauf in
-   `FinanzInformatik/fi_lbs_entw_oms_mtext_actions` öffnen.
-2. Den betroffenen Lauf auswählen.
-3. Repository, Branch oder Tag, Ziel-Commit und Auslöser mit dem erwarteten
-   Stand vergleichen.
-4. Die Jobs und ihre Protokolle öffnen und den abschließenden Status prüfen.
-5. Bei einem Fehler die erste aussagekräftige Fehlermeldung auswerten.
+### Fehlgeschlagene M/Text-Synchronisation
 
-| Status oder Fehlerbild | Bedeutung | Nächste Prüfung |
-|---|---|---|
-| Workflow kann die festgelegte CI/CD-Version nicht laden | Zugriff oder technische Einrichtung ist unvollständig | Lauf und verwendete CI/CD-Version festhalten und die Repository-Verantwortlichen informieren. Die Workflowdateien nicht selbst ändern. |
-| `RESOURCE_CHECKED` | JSON- und XML-Ressourcen wurden geprüft. Befunde stehen als Warnungen im Laufprotokoll. | Warnungen mit Datei und Fundstelle prüfen. |
-| `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinie wurden geprüft. | Inhaltliche Änderung weiter prüfen. Der Status bestätigt keine fachliche Freigabe. |
-| `VALIDATION_FAILED` | Eingabe oder Konfiguration ist ungültig. | Erste Fehlermeldung sowie Branch, Tag und Mandantenkonfiguration prüfen. |
-| `RELEASE_APPROVAL_READY` | Der Freigabe-Branch mit der neuen Release-Version wurde veröffentlicht. | Den Pull Request auf den Lieferbranch eröffnen. |
-| `RELEASE_APPROVAL_CHECKED` | Release-Version, Branchstand und Lieferumfang wurden geprüft und im Pull Request angezeigt. Der erforderliche Statuscheck ist erfolgreich. | Die Zusammenfassung fachlich prüfen und den Pull Request durch eine zweite Person freigeben lassen. |
-| `RELEASE_APPROVAL_VALIDATED` | Merge und eingetragene Release-Version gehören zum Freigabe-Pull-Request. | Die anschließende Tag-Erstellung und den zentralen Release-Lauf prüfen. |
-| `SOURCE_FAILED` | Commit, Branch oder Tag konnte nicht passend aufgelöst werden. | Commit-SHA, ausgewählten Branch oder Release-Tag und deren Zuordnung prüfen. |
-| `RESOURCE_TRANSFER_FAILED` | Projektpakete oder Informationsdateien konnten nicht auf CIFS bereitgestellt werden. | Fehlermeldung und betroffenes Projekt festhalten und die Repository-Verantwortlichen informieren. |
-| `ADAPTER_FAILED` | LTOMA war nicht erreichbar oder hat den Aufruf abgelehnt. | HTTP-Status und Antwort im Protokoll prüfen. Den Lauf erst nach Klärung der Ursache wiederholen. |
-| `ADAPTER_ACCEPTED` | LTOMA hat den Aufruf angenommen. | Die fachliche Wirkung anschließend in M/Text kontrollieren. |
-| `PACKAGE_FAILED` | Projektpaket, JSON-Informationsdatei oder JCL konnte nicht erstellt oder verwendet werden. | Erste Fehlermeldung, betroffenes Projekt und Releasebasis prüfen. |
-| `ARTIFACT_READY` | Projektpakete, JSON-Informationsdateien und JCL wurden erstellt. | Den nachfolgenden Mainframe-Übergabejob kontrollieren. |
-| `MAINFRAME_TRANSFER_FAILED` | FTPS- oder JES-Übergabe ist fehlgeschlagen. | Übergabeprotokoll prüfen und vor einem Wiederanlauf klären, ob der vorherige Versuch angenommen wurde. |
-| `MAINFRAME_SUBMITTED` | Paket und JCL wurden technisch übergeben. | Den nachgelagerten Status auf dem Mainframe nach dem festgelegten Betriebsverfahren kontrollieren. |
-| `GITHUB_RELEASE_FAILED` | Die Lieferinformationen konnten im Mandanten-Repository nicht bereitgestellt werden. | Den fehlgeschlagenen Rückmeldungsjob wiederholen. Das Paket wird dabei nicht erneut übertragen. |
-| `GITHUB_RELEASE_PUBLISHED` | Zusammenfassung und Informationsdateien stehen beim Release-Tag bereit. | Die Zusammenfassung prüfen und bei Bedarf die Informationsdateien herunterladen. |
+Ein alter Push-Lauf wird nicht unkontrolliert erneut ausgeführt. Er kann ein
+älteres DELTA auf einen inzwischen neueren M/Text-Stand anwenden. Stattdessen
+wird zunächst der gewünschte Git-Stand bestimmt.
 
-### Lauf wiederholen
+- Gehört der gewünschte Stand weiterhin zur aktuellen Branchspitze, wird die
+  Ursache behoben und der aktuelle Stand erneut synchronisiert.
+- Ist ein vollständiger, eindeutig bestimmter Stand erforderlich, startet ein
+  Repository-Verantwortlicher den manuellen Vollabgleich.
+- Vor jedem Vollabgleich wird die Auswirkung auf parallele Arbeiten derselben
+  Releaselinie abgestimmt.
 
-**Re-run jobs** wiederholt einen vorhandenen Lauf mit demselben Commit und
-derselben Git-Referenz. Ein fehlgeschlagener Rückmeldungsjob kann direkt
-wiederholt werden. Er aktualisiert das GitHub Release und überträgt das Paket
-nicht erneut.
+### Fehlgeschlagene Mainframe-Lieferung
 
-Die Wiederholung eines älteren Synchronisationslaufs kann einen neueren
-M/Text-Zielstand durch den Stand des älteren Commits ersetzen. Deshalb werden
-vorher die Commit-SHA des Laufs, der aktuelle Branch-Commit und der gewünschte
-Zielstand verglichen. Ist der Branch inzwischen weitergelaufen, wird statt des
-alten Laufs der Workflow **M/Text-Ressourcen synchronisieren** für einen
-manuellen Vollabgleich des gewünschten Commits gestartet.
+Vor einer erneuten Übergabe wird geprüft, ob Mainframe oder CodePipeline den
+vorherigen Versuch bereits angenommen haben. Danach wird **Lieferung erneut
+übergeben** mit dem vorhandenen Liefer-Tag gestartet. Ein neuer Tag ist nicht
+erforderlich.
 
-Bei einer fehlgeschlagenen Mainframe-Übergabe wird der Übergabejob mit dem
-bereits gebauten Artefakt wiederholt. Dafür wird kein neuer Release-Tag
-erstellt.
+Ist ausschließlich das Bereitstellen der Lieferinformationen in GitHub
+fehlgeschlagen, kann der fehlgeschlagene Rückmeldungsjob erneut ausgeführt
+werden. Das Paket wird dabei nicht noch einmal an den Mainframe übertragen.
 
-Zugangsdaten werden nicht in Workflow-Eingaben, GitHub-Kommentare oder
-Support-Tickets kopiert.
-
-## 12. Zuordnung zum bisherigen SVN-Ablauf
+### Kurzübersicht vom SVN- zum Git-Ablauf
 
 | Bisheriger SVN-Schritt | Git-Ablauf |
 |---|---|
-| Arbeitskopie aktualisieren | Fetch und Aktualisierung des ausgecheckten Branches |
+| Arbeitskopie aktualisieren | GitHub-Stände abrufen und ausgecheckten Branch aktualisieren |
 | Änderung committen | Lokal committen und Feature-Branch pushen |
-| Entwicklungsstand bereitstellen | Feature-Branch pushen |
+| Entwicklungsstand bereitstellen | Feature-Branch pushen und M/Text-Entwicklung prüfen |
 | Änderung nach M/Text-Funktionstest übernehmen | Pull Request prüfen und mit Squash Merge zusammenführen |
-| Änderung auf weitere Releasepfade übertragen | Squash-Commit in einen Feature-Branch der weiteren Linie übernehmen |
-| SVN-Tag erzeugen | Release über den Freigabe-PR vorbereiten und durch eine zweite Person freigeben lassen |
-| Beta-Tag erzeugen | Beta-Tag `vnnn.nnnx` auf dem aktuellen Stand des passenden geschützten Branches erstellen |
+| Änderung auf eine weitere Releaselinie übertragen | Squash-Commit in einen neuen Feature-Branch cherry-picken |
+| SVN-Tag für eine Lieferung erzeugen | Lieferung vorbereiten, Lieferumfang prüfen und vorbereitete Lieferung ausführen |

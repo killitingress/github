@@ -63,7 +63,7 @@ class SyncTests(TempDirTestCase):
         git(self.repository, "update-ref", f"refs/remotes/origin/{self.branch}", "HEAD")
 
     def test_run_command(self) -> None:
-        """Prüft Vollabgleich, Ereignisvergleich und Fehlerkontext der Ablaufsteuerung."""
+        """Prüft Vollabgleich, Feature-Vergleich und Fehlerkontext der Ablaufsteuerung."""
 
         configuration = SimpleNamespace(releaselinie="270", warnungen=())
         arguments = SimpleNamespace(commit=GITHUB_CONTEXT["commit"])
@@ -104,10 +104,17 @@ class SyncTests(TempDirTestCase):
                 clear=True,
             ),
             patch.object(sync_command.config, "load_configuration", return_value=configuration),
+            patch.object(sync_command.git, "run", return_value=("3" * 40 + "\n").encode()) as merge_base,
             patch.object(sync_command, "_sync_resources", return_value={"status": Status.ADAPTER_ACCEPTED.value}) as synchronize,
         ):
             sync_command.run_command(arguments)
-        self.assertIsNone(synchronize.call_args.kwargs["previous_commit"])
+        self.assertEqual(synchronize.call_args.kwargs["previous_commit"], "3" * 40)
+        merge_base.assert_called_once_with(
+            self.root / "source",
+            "merge-base",
+            "HEAD",
+            "refs/remotes/origin/release/271",
+        )
 
         with (
             patch.dict(os.environ, environment, clear=True),
@@ -186,6 +193,34 @@ class SyncTests(TempDirTestCase):
         repeated_payload = repeated_adapter.call_args.args[1]
         self.assertEqual(repeated_payload["auftrag"], payload["auftrag"])
         self.assertNotEqual(repeated_payload["pfad"], payload["pfad"])
+
+    def test_first_feature_push_uses_its_target_branch_as_comparison(self) -> None:
+        """Vergleicht den ersten Feature-Push mit main oder dem Release-Branch."""
+
+        configuration = SimpleNamespace(releaselinie="270")
+        for source_branch, expected_base in (
+            ("feature/270/main-feature", "refs/remotes/origin/main"),
+            ("feature/271/future-feature", "refs/remotes/origin/release/271"),
+        ):
+            with self.subTest(source_branch=source_branch):
+                with patch.object(sync_command.git, "run", return_value=("4" * 40 + "\n").encode()) as merge_base:
+                    releaselinie, zielstufen, previous = sync_command._plan_sync(
+                        configuration,
+                        repository_root=self.repository,
+                        source_branch=source_branch,
+                        event_name="push",
+                        previous_commit=sync_command._EMPTY_PUSH_COMMIT,
+                    )
+
+                self.assertEqual(zielstufen, ("Entwicklung",))
+                self.assertEqual(previous, "4" * 40)
+                self.assertEqual(releaselinie, source_branch.split("/")[1])
+                merge_base.assert_called_once_with(
+                    self.repository,
+                    "merge-base",
+                    "HEAD",
+                    expected_base,
+                )
 
     def test_full_package_and_empty_sync(self) -> None:
         """Prüft FULL beim fehlenden Vorgänger und den Lauf ohne Projektänderung."""

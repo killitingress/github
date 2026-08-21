@@ -1,22 +1,37 @@
-name: Zentrales Release
+name: Zentrale Mainframe-Lieferung
 
-# Dieser Workflow baut und überträgt das Release des angegebenen
+# Dieser Workflow baut und überträgt die Lieferung des angegebenen
 # Mandanten-Repositories
 'on':
-  workflow_dispatch:
+  workflow_call:
     inputs:
       source_repository:
-        description: Mandanten-Repository, aus dem das Release erstellt wird
+        description: Mandanten-Repository, aus dem die Lieferung erstellt wird
         required: true
         type: string
       release_tag:
-        description: Release-Tag im Format vnnn.nnn oder vnnn.nnnx
+        description: Liefer-Tag, zum Beispiel r261.108
         required: true
         type: string
       trigger_sha:
-        description: Commit, auf den der Release-Tag zeigt
+        description: Commit, auf den der Liefer-Tag zeigt
         required: true
         type: string
+  workflow_dispatch:
+    inputs:
+      source_repository:
+        description: Mandanten-Repository, aus dem die Lieferung erstellt wird
+        required: true
+        type: string
+      release_tag:
+        description: Liefer-Tag, zum Beispiel r261.108
+        required: true
+        type: string
+      trigger_sha:
+        description: Commit des Liefer-Tags, leer liest den Tag
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -27,9 +42,11 @@ jobs:
     name: FULL- oder DELTA-Artefakt erstellen
     runs-on: [self-hosted, linux]
     timeout-minutes: 15
+    outputs:
+      source_sha: ${{ steps.pakete.outputs.source_sha }}
     steps:
-      # Lädt den Commit des Release-Tags mit seiner Historie
-      - name: Check-Out Release-Tag
+      # Lädt den Commit des Liefer-Tags mit seiner Historie
+      - name: Check-Out Liefer-Tag
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
@@ -54,7 +71,8 @@ jobs:
         run: bash automation/scripts/runner-preflight.sh
 
       # Schreibt alle Dateien für die Mainframe-Übergabe nach dist
-      - name: Release-Dateien erstellen
+      - name: Lieferdateien erstellen
+        id: pakete
         env:
           INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
           INPUT_TRIGGER_SHA: ${{ inputs.trigger_sha }}
@@ -65,7 +83,7 @@ jobs:
           --trigger-sha "$INPUT_TRIGGER_SHA"
 
       # Speichert den Inhalt von dist als Laufartefakt
-      - name: Release-Artefakt speichern
+      - name: Lieferartefakt speichern
         uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de
         with:
           name: release
@@ -76,7 +94,7 @@ jobs:
 
   # Die Mainframe-Zugangsdaten sind nur in diesem Job verfügbar
   publish:
-    name: Release an Mainframe übergeben
+    name: Lieferung an Mainframe übergeben
     needs: build
     runs-on: [self-hosted, linux]
     concurrency:
@@ -93,8 +111,8 @@ jobs:
           path: automation
           persist-credentials: false
 
-      # Lädt das Release-Artefakt in das für diesen Job geleerte temporäre Verzeichnis
-      - name: Release-Artefakt herunterladen
+      # Lädt das Lieferartefakt in das für diesen Job geleerte temporäre Verzeichnis
+      - name: Lieferartefakt herunterladen
         uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
         with:
           name: release
@@ -106,7 +124,7 @@ jobs:
         run: bash automation/scripts/runner-preflight.sh
 
       # Überträgt jedes Paket per FTPS und reicht seine JCL bei JES ein
-      - name: Release an Mainframe übergeben
+      - name: Lieferung an Mainframe übergeben
         env:
           MAINFRAME_FTPS_HOST: ${{ vars.MAINFRAME_FTPS_HOST }}
           MAINFRAME_FTPS_PASSWORD: ${{ secrets.MAINFRAME_FTPS_PASSWORD }}
@@ -132,8 +150,8 @@ jobs:
           path: automation
           persist-credentials: false
 
-      # Lädt das Release-Artefakt in das für diesen Job geleerte temporäre Verzeichnis
-      - name: Release-Artefakt herunterladen
+      # Lädt das Lieferartefakt in das für diesen Job geleerte temporäre Verzeichnis
+      - name: Lieferartefakt herunterladen
         uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
         with:
           name: release
@@ -151,6 +169,6 @@ jobs:
           RELEASE_DIRECTORY: ${{ runner.temp }}/release
           RELEASE_TAG: ${{ inputs.release_tag }}
           SOURCE_REPOSITORY: ${{ inputs.source_repository }}
-          TRIGGER_SHA: ${{ inputs.trigger_sha }}
+          TRIGGER_SHA: ${{ inputs.trigger_sha || needs.build.outputs.source_sha }}
         run: >-
           "${{ steps.runtime.outputs.python }}" automation/src/mtext.py publish-github-release

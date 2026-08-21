@@ -22,6 +22,7 @@ Synchronisation und Releasepaketen ausgeschlossen.
 | `main` | führende Releaselinie aus `.github/config.json` |
 | `release/nnn` | parallel gepflegte Releaselinie |
 | `feature/nnn/<Bezeichnung>` | einzelne fachliche Änderung |
+| `bereitstellung/nnn.nnn` | Arbeitsbranch einer Teillieferung |
 
 `main` und `release/nnn` sind geschützt. Änderungen werden über Pull Requests
 geprüft und mit Squash Merge zusammengeführt.
@@ -41,25 +42,29 @@ geprüft und mit Squash Merge zusammengeführt.
 
 ## FULL oder DELTA auslösen
 
-Ein Release ohne Buchstabensuffix wird über den Workflow **Release
-vorbereiten** und einen von der anfordernden Person eröffneten
-Freigabe-Pull-Request erstellt. Nach Review und Merge setzt der Workflow den
-Release-Tag. Für die Tags gilt:
+Eine Lieferung wird über den Workflow **Lieferung vorbereiten** auf dem
+ausgewählten Branch vorbereitet. Die Vorprüfung hält SHA und Lieferumfang fest
+und zeigt die Vorbereitungs-ID. Danach startet eine Person **Vorbereitete
+Lieferung ausführen** mit dieser ID. Dieselbe Person bestätigt eine
+Direktlieferung. Eine andere Person erfüllt das empfohlene Vier-Augenprinzip.
+Der zentrale Lauf setzt den Liefer-Tag auf der festgehaltenen SHA.
 
-- `v261.100` erzeugt ein FULL,
-- ein weiterer Tag wie `v261.108` erzeugt ein kumulatives DELTA gegen
-  `v261.100`,
-- ein Tag mit einem Buchstabensuffix wie `v261.108a` kennzeichnet einen
-  Beta-Lieferstand und erzeugt dasselbe kumulative DELTA.
+- `r261.100` entsteht auf `main` oder `release/261` und erzeugt ein FULL
+- ein weiterer Tag wie `r261.108` erzeugt ein kumulatives DELTA gegen
+  `r261.100`
 
-Der Mandanten-Workflow startet automatisch den zentralen CI/CD-Releaseweg in
-`FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Das FTPS-Passwort liegt nicht
-in diesem Repository.
+Teillieferungen werden auf `bereitstellung/nnn.nnn` zusammengestellt. Der
+Ausführungslauf startet die zentrale Mainframe-Lieferung in
+`FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Ein Tag-Push allein startet
+keine Mainframe-Übergabe. Das FTPS-Passwort liegt nicht in diesem Repository.
+
+Ein vorhandener Liefer-Tag lässt sich über **Lieferung erneut übergeben**
+ohne erneute Bestätigung noch einmal an den Mainframe übertragen.
 
 ## Mandantenkonfiguration
 
 `.github/config.json` enthält unter anderem Mandantenkürzel, führende
-`releaselinie`, das zuletzt freigegebene Release, Ausschlüsse und Hostprofile.
+`releaselinie`, Ausschlüsse und Hostprofile.
 Eine Änderung der Datei startet die Konfigurationsprüfung.
 
 ## Weitere Informationen

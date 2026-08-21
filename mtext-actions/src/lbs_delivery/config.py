@@ -76,9 +76,6 @@ class Configuration:
     releaselinie: str
     # CodePipeline-Umgebung (Produktion oder Testumgebung)
     ispw: str
-    # Zuletzt über den Lieferbranch freigegebene Release-Version. Vor dem
-    # ersten Release steht hier `None`.
-    letztes_release: str | None
     # Mainframe-Subsystem
     subsystem: str
     # Zuordnung der Projektverzeichnisse zu ihren Projektcodes, zum Beispiel `LOMS_Basis[BY]` zu `BASIS`.
@@ -112,6 +109,7 @@ def release_branches(configuration: Configuration, releaselinie: str) -> tuple[s
 
     if configuration.releaselinie == releaselinie:
         return "main", f"release/{releaselinie}"
+
     return (f"release/{releaselinie}",)
 
 
@@ -136,8 +134,10 @@ def load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
     for kuerzel, values in mandanten.items():
         repository = values["repository"]
         subsystem = values["subsystem"]
+
         if repository in repositories:
             raise DeliveryError(Status.VALIDATION_FAILED, "Mandantenzuordnung ist nicht eindeutig")
+
         repositories.add(repository)
         zuordnung[kuerzel] = MandantStamm(repository=repository, subsystem=subsystem)
 
@@ -149,8 +149,10 @@ def load_releaselinien_zuordnung(path: str | Path) -> tuple[dict[str, str], dict
 
     document = _read_json(path)
     mtext_ziele = document["mtext_ziele"]
+
     if set(mtext_ziele) != set(MTEXT_ZIEL_REIHENFOLGE):
         raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Ziele sind ungültig")
+
     mtext_ziel_prefixe = {zielstufe: mtext_ziele[zielstufe] for zielstufe in MTEXT_ZIEL_REIHENFOLGE}
     return mtext_ziel_prefixe, document["releaselinien"]
 
@@ -171,7 +173,6 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
     kuerzel = mandant["kuerzel"]
     releaselinie = mandant["releaselinie"]
     ispw = mandant["ispw"]
-    letztes_release = mandant.get("letztes_release")
     hostprofile = mandant["hostprofile"]
     excluded_projects = mandant.get("excluded_projects", [])
     if not isinstance(excluded_projects, list):
@@ -187,8 +188,6 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
 
     if ispw not in ISPW_INSTANZEN:
         raise DeliveryError(Status.VALIDATION_FAILED, "ISPW-Instanz ist ungültig")
-    if letztes_release is not None and not isinstance(letztes_release, str):
-        raise DeliveryError(Status.VALIDATION_FAILED, "letztes Release ist ungültig")
 
     for profile in hostprofile.values():
         if profile["stage"] not in CODEPIPELINE_STAGES or not profile.get("assignment"):
@@ -200,12 +199,12 @@ def load_configuration(repository_root: str | Path, repository_name: str) -> Con
         if values["hostprofil"] not in hostprofile:
             raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist ungültig")
 
+
     return Configuration(
         repository=repository_name,
         kuerzel=kuerzel,
         releaselinie=releaselinie,
         ispw=ispw,
-        letztes_release=letztes_release,
         subsystem=mandant_stammdaten.subsystem,
         projects=projects,
         hostprofile=hostprofile,
@@ -228,6 +227,7 @@ def _scan_projects(root: Path, kuerzel: str, excluded_projects: tuple[str, ...])
     if not projects or len(projects) != len(set(projects.values())):
         raise DeliveryError(Status.VALIDATION_FAILED, "abgeleitete Projektcodes sind nicht eindeutig")
 
+
     return projects
 
 
@@ -246,6 +246,7 @@ def _reference_warnings(kuerzel: str, projects: dict[str, str]) -> tuple[str, ..
         warnungen.append("Projekte fehlen gegenüber dem aktuellen Referenzstand: " + ", ".join(fehlend))
 
     zusaetzlich = sorted(names - referenz)
+
     if zusaetzlich:
         warnungen.append("Projekte sind gegenüber dem aktuellen Referenzstand zusätzlich: " + ", ".join(zusaetzlich))
 
@@ -263,5 +264,4 @@ def run_validation(_arguments: argparse.Namespace) -> dict[str, object]:
         "repository": configuration.repository,
         "releaselinie": configuration.releaselinie,
         "releaselinien": sorted(configuration.releaselinien),
-        "letztes_release": configuration.letztes_release,
     } | ({"warnungen": list(configuration.warnungen)} if configuration.warnungen else {})

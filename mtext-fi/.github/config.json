@@ -3,7 +3,6 @@
     "kuerzel": "FI",
     "releaselinie": "270",
     "ispw": "P",
-    "letztes_release": null,
     "excluded_projects": [
       "LOMS_Testdaten"
     ],

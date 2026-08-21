@@ -2,7 +2,7 @@
 
 Das Repository `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`, kurz
 `mtext_actions`, enthält die zentrale CI/CD-Automatisierung für
-Mandantenkonfiguration, M/Text-Synchronisation, Releasebau und
+Mandantenkonfiguration, M/Text-Synchronisation, Paketbau und
 Mainframe-Übergabe.
 
 ## Aufbau
@@ -23,14 +23,14 @@ Mainframe-Übergabe.
 | `MAINFRAME_FTPS_PORT` | Repositoryvariable | Steuerungsport des expliziten FTPS-Zugangs |
 | `MAINFRAME_FTPS_USER` | Repositoryvariable | zentraler technischer FTPS-Benutzer |
 | `MAINFRAME_FTPS_PASSWORD` | Repository-Secret | FTPS-Passwort für den zentralen Übergabejob |
-| `WORKFLOW_CONFIGURATION_TOKEN` | Repository-Secret | Mandanten-Workflows ausrollen, Freigabe-Branches und Release-Tags erstellen sowie Lieferinformationen veröffentlichen |
+| `WORKFLOW_CONFIGURATION_TOKEN` | Repository-Secret | Mandanten-Workflows ausrollen, Liefer-Tags erstellen sowie Lieferinformationen veröffentlichen |
 
 `WORKFLOW_CONFIGURATION_TOKEN` gilt für die zugeordneten
-Mandanten-Repositories. Es benötigt dort `Contents: read and write`,
-`Workflows: read and write` und `Pull requests: read`. Der technische Benutzer
-ist in den Schutzregeln als Ausnahme von der Pull-Request-Pflicht für den
-administrativen Rollout hinterlegt. Die organisationsweit vorgegebenen
-Tag-Regeln gelten auch für diesen Zugriff.
+Mandanten-Repositories. Es benötigt dort `Contents: read and write` und
+`Workflows: read and write`. Der technische Benutzer ist in den Schutzregeln
+als Ausnahme von der Pull-Request-Pflicht für den administrativen Rollout
+hinterlegt. Die Liefer-Tags `rnnn.nnn` fallen nicht unter die Schutzregeln für
+Release-Tags aus dem Git-Leitfaden.
 
 Jedes Mandanten-Repository erhält `MTEXT_ACTIONS_TOKEN` als Repository-Secret.
 Der Fine-grained PAT ist auf `mtext_actions` begrenzt und besitzt dort
@@ -40,6 +40,25 @@ Die Organisationsvariable `MTEXT_CIFS_ROOT` enthält den auf dem Runner
 eingehängten CIFS-Basispfad für die Adapterübergabe.
 
 GitHub Environments werden nicht verwendet.
+
+## Mainframe-Lieferung
+
+Eine Lieferung wird im Mandanten-Repository in zwei Schritten gestartet:
+
+1. **Lieferung vorbereiten** prüft den ausgewählten Branchstand, hält seine
+   SHA und den Lieferumfang fest und zeigt die Vorbereitungs-ID.
+2. **Vorbereitete Lieferung ausführen** lädt die festgehaltene Vorbereitung.
+   Dieselbe Person bestätigt eine Direktlieferung. Eine andere Person erfüllt
+   das empfohlene Vier-Augenprinzip.
+
+Der zentrale Workflow erstellt den Liefer-Tag `rnnn.nnn` auf der
+festgehaltenen SHA und ruft anschließend Paketbau und Mainframe-Übergabe auf.
+Ein Tag-Push allein löst keine Übergabe aus. **Lieferung erneut übergeben**
+verarbeitet einen vorhandenen Liefer-Tag ein weiteres Mal.
+
+Die `.100`-Lieferung einer Releaselinie ist ein FULL. Spätere Lieferungen sind
+kumulative DELTAs gegen diesen `.100`-Tag. Teillieferungen werden im
+Mandanten-Repository auf `bereitstellung/nnn.nnn` zusammengestellt.
 
 ## Mandanten-Workflows aktualisieren
 

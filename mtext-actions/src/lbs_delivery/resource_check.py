@@ -56,6 +56,7 @@ def _load_resource_formats(path: Path) -> dict[str, str]:
         normalized = extension.lower()
         if normalized in resource_formats:
             raise ValueError("Ressourcenformat-Zuordnung enthält eine Dateiendung mehrfach")
+
         if resource_format not in _CHECKERS:
             raise ValueError("Ressourcenformat-Zuordnung ist ungültig")
         resource_formats[normalized] = resource_format

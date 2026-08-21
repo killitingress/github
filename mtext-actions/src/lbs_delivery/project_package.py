@@ -49,14 +49,14 @@ def release_scope(
 
     tag_match = git.RELEASE_TAG_RE.fullmatch(tag)
     if tag_match is None:
-        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Release-Tag")
+        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Liefer-Tag")
 
     # FULL hat keinen Bezugsstand und keinen Git-Vergleich.
     if tag_match.group("release") == _FULL_RELEASE:
         return None, []
 
-    # DELTA vergleicht kumulativ mit dem FULL-Tag derselben Releaselinie.
-    base_reference = f"v{tag_match.group('releaselinie')}.{_FULL_RELEASE}"
+    # DELTA vergleicht kumulativ mit der `.100`-Lieferung derselben Releaselinie.
+    base_reference = f"r{tag_match.group('releaselinie')}.{_FULL_RELEASE}"
     base_sha = git.resolve(repository_root, f"refs/tags/{base_reference}")
     git.require_ancestor(repository_root, base_sha, target_sha)
     return (base_reference, base_sha), git.changes(repository_root, base_sha, target_sha)
@@ -133,6 +133,7 @@ def _write_delta_archive(
                 if status == "D":
                     deleted.append(repository_relative.as_posix())
                     continue
+
                 source = repository_root / repository_relative
                 if not source.is_file():
                     raise DeliveryError(Status.PACKAGE_FAILED, "DELTA-Datei fehlt")
@@ -196,7 +197,6 @@ def build_project_package(
 
     prefix = f"{configuration.kuerzel}{project_code}"
     archives: list[Path] = []
-    # FULL erhält zusätzlich das vollständige F-Archiv.
     if base is None:
         full_archive = output / f"{prefix}F.tgz"
         _write_archive(full_archive, root, [f"./{project}"])

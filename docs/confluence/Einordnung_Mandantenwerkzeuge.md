@@ -61,10 +61,16 @@ Git kann Inhalte zwischen Branches, Tags und Commits vergleichen. Durch einen
 Squash Merge entsteht jedoch ein neuer Commit mit einer neuen SHA auch wenn die
 übernommenen Dateiinhalte dem Feature-Stand entsprechen. Im neuen Zielbild gibt
 es außerdem keine drei entsprechenden Git-Branches. Daher kann der bisherige
-Ablauf nicht unverändert weiterverwendet werden. Allerdings wird das Gewünschte
-prinzipiell schon durch den neuen Lieferweg sichergestellt:
+Ablauf nicht unverändert weiterverwendet werden. Der neue Lieferweg stellt den
+Zusammenhang zwischen Abnahme- und Lieferstand wie folgt her:
 
-1. Pull Request nach 4-Augenprinzip
-2. Squash Merge erzeugt Commit in geschütztem Zielbranch - kann nachträglich nicht mehr verändert werden
-3. Release-Tag auf dem Merge-Commit der Freigabe und Paketbau aus diesem Commit
-4. GitHub Release mit Commit und Lieferinformationen
+1. Der Pull Request führt die fachlich geprüfte Änderung mit Squash Merge in
+   `main` oder `release/nnn` zusammen.
+2. Die Synchronisation überträgt diesen Branchstand nach
+   M/Text-Funktionstest.
+3. **Lieferung vorbereiten** hält die ausgewählte SHA und den Lieferumfang
+   fest. Bei einer Teillieferung enthält `bereitstellung/nnn.nnn` die
+   ausgewählten, bereits abgenommenen Squash-Commits.
+4. **Vorbereitete Lieferung ausführen** bestätigt diesen festgehaltenen Stand.
+   Der Liefer-Tag und der Paketbau verwenden dieselbe SHA.
+5. Das GitHub Release nennt die SHA und enthält die Lieferinformationen.
