@@ -90,7 +90,7 @@ def _publish_release(
     api_url: str,
     server_url: str,
     repository: str,
-    release_tag: str,
+    liefer_tag: str,
     source_sha: str,
     token: str,
 ) -> dict[str, object]:
@@ -118,11 +118,11 @@ def _publish_release(
     delivery_type = delivery_types.pop()
 
     # Release-Beschreibung mit Stand und Download-Links der Informationsdateien.
-    download_root = f"{server_url.rstrip('/')}/{repository}/releases/download/{urllib.parse.quote(release_tag, safe='')}"
+    download_root = f"{server_url.rstrip('/')}/{repository}/releases/download/{urllib.parse.quote(liefer_tag, safe='')}"
     lines = [
         "## Lieferung",
         "",
-        f"- Release: `{release_tag}`",
+        f"- Liefer-Tag: `{liefer_tag}`",
         f"- Lieferart: `{delivery_type}`",
         f"- Commit: `{source_sha}`",
         "",
@@ -137,15 +137,15 @@ def _publish_release(
         lines.append(f"- [Herunterladen]({download_root}/{urllib.parse.quote(name, safe='')}): `{name}`")
 
     release_values = {
-        "tag_name": release_tag,
-        "name": f"Release {release_tag}",
+        "tag_name": liefer_tag,
+        "name": f"Release {liefer_tag}",
         "body": "\n".join(lines) + "\n",
         "draft": False,
         "prerelease": False,
     }
 
     repository_path = urllib.parse.quote(repository)
-    release_path = urllib.parse.quote(release_tag, safe="")
+    release_path = urllib.parse.quote(liefer_tag, safe="")
     releases_url = f"{api_url.rstrip('/')}/repos/{repository_path}/releases"
 
     # Vorhandenes Release aktualisieren, sonst neu anlegen.
@@ -210,12 +210,12 @@ def _publish_release(
     return {
         "status": Status.GITHUB_RELEASE_PUBLISHED.value,
         "repository": repository,
-        "release_tag": release_tag,
+        "liefer_tag": liefer_tag,
         "release_url": release_url,
     }
 
 
-# Workflow-Einstieg: Umgebungsvariablen des Release-Jobs an die Veröffentlichung übergeben.
+# Workflow-Einstieg: Umgebungsvariablen des Berichtsjobs an die Veröffentlichung übergeben.
 def run_publish_command(_arguments: argparse.Namespace) -> dict[str, object]:
     """Veröffentlicht die Lieferinformationen aus dem Workflow-Arbeitsbereich."""
 
@@ -224,7 +224,7 @@ def run_publish_command(_arguments: argparse.Namespace) -> dict[str, object]:
         api_url=os.environ["GITHUB_API_URL"],
         server_url=os.environ["GITHUB_SERVER_URL"],
         repository=os.environ["SOURCE_REPOSITORY"],
-        release_tag=os.environ["RELEASE_TAG"],
+        liefer_tag=os.environ["LIEFER_TAG"],
         source_sha=os.environ["TRIGGER_SHA"],
         token=os.environ["MANDANT_REPOSITORY_TOKEN"],
     )

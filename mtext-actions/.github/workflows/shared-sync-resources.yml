@@ -1,11 +1,11 @@
 name: Shared Workflow – Ressourcen mit M/Text synchronisieren
 
 # Dieser Workflow synchronisiert den festgelegten Commit eines
-# Mandanten-Repositories mit der zugehörigen M/Text-Stufe. Er lädt den
-# Mandantenstand mit seiner Historie und die freigegebene zentrale
-# Implementierung. Der Python-Ablauf bestimmt aus Branch und Ereignis die
-# Releaselinie, die Zielstufe und den benötigten Lieferumfang. Anschließend legt
-# er die Übergabe für den M/Text-Adapter auf dem gemeinsamen CIFS-Pfad ab.
+# Mandanten-Repositories mit M/Text. Er lädt den Mandantenstand mit seiner
+# Historie und die freigegebene zentrale Implementierung. Der Python-Ablauf
+# bestimmt aus Branch und Ereignis Releaselinie, Zielstufen und den
+# Änderungsumfang, legt die Pakete auf dem gemeinsamen CIFS-Pfad ab und meldet
+# sie dem M/Text-Adapter.
 'on':
   workflow_call:
     inputs:
@@ -27,7 +27,6 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 10
     steps:
-      # Lädt den angegebenen Commit mit seiner Historie
       - name: Check-Out Mandantenstand
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -51,7 +50,6 @@ jobs:
         id: runtime
         run: bash automation/scripts/runner-preflight.sh
 
-      # Prüft den Commit und synchronisiert die Ressourcen mit der M/Text-Stufe
       - name: Ressourcen synchronisieren
         env:
           INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}

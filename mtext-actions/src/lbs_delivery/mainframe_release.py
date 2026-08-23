@@ -137,7 +137,7 @@ def _build_release(
     configuration: Configuration,
     *, repository_root: str | Path, output_directory: str | Path, jcl_template: str, tag: str,
     trigger_sha: str,
-) -> str:
+) -> None:
     """Prüft den Liefer-Tag und erzeugt Pakete, JCL und Informationsdateien.
 
     `.100` muss auf `main` oder `release/nnn` liegen. Spätere Lieferungen
@@ -147,7 +147,7 @@ def _build_release(
     root = Path(repository_root)
 
     # Liefer-Tag, Releaselinie und optional auslösenden Commit prüfen.
-    tag_match = git.RELEASE_TAG_RE.fullmatch(tag)
+    tag_match = git.LIEFER_TAG_RE.fullmatch(tag)
     if tag_match is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Liefer-Tag")
 
@@ -205,8 +205,6 @@ def _build_release(
                 encoding="ascii",
             )
 
-    return target_sha
-
 
 def run_build_command(arguments: argparse.Namespace) -> dict[str, object]:
     """Erzeugt Release-Dateien aus dem GitHub-Workflow-Kontext."""
@@ -215,7 +213,7 @@ def run_build_command(arguments: argparse.Namespace) -> dict[str, object]:
     source = workspace / "source"
     configuration = config.load_configuration(source, os.environ["SOURCE_REPOSITORY"])
 
-    source_sha = _build_release(
+    _build_release(
         configuration,
         repository_root=source,
         output_directory=workspace / "dist",
@@ -224,10 +222,9 @@ def run_build_command(arguments: argparse.Namespace) -> dict[str, object]:
         trigger_sha=arguments.trigger_sha,
     )
 
-    return {
-        "status": Status.ARTIFACT_READY.value,
-        "outputs": {"source_sha": source_sha},
-    } | ({"warnungen": list(configuration.warnungen)} if configuration.warnungen else {})
+    return {"status": Status.ARTIFACT_READY.value} | (
+        {"warnungen": list(configuration.warnungen)} if configuration.warnungen else {}
+    )
 
 
 def run_publish_command(_arguments: argparse.Namespace) -> dict[str, object]:

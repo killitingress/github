@@ -47,7 +47,7 @@ def release_scope(
     eingespielt werden kann.
     """
 
-    tag_match = git.RELEASE_TAG_RE.fullmatch(tag)
+    tag_match = git.LIEFER_TAG_RE.fullmatch(tag)
     if tag_match is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Liefer-Tag")
 

@@ -1,10 +1,11 @@
 name: Zentrale Testsuite
 
-# Dieser Workflow prüft die zentrale CI/CD-Implementierung bei Pull Requests und
-# Änderungen an main. Er lädt den betroffenen Repository-Stand, ermittelt die
-# verfügbare Python-Runtime und führt die Unit-Tests mit src als Python-Pfad aus.
-# Die Tests sprechen weder M/Text noch den Mainframe an. Ein erfolgreicher Lauf
-# bestätigt die Ausführbarkeit der zentralen Python-Abläufe auf dem Runner.
+# Dieser Workflow prüft mtext_actions bei Pull Requests und Änderungen an main.
+# Er lädt den betroffenen Repository-Stand, ermittelt die verfügbare
+# Python-Runtime und führt die Unit-Tests aus. Die Tests sprechen natürlich
+# weder M/Text noch den Mainframe an.
+# Ein erfolgreicher Lauf bestätigt die Ausführbarkeit der Python-Abläufe auf dem
+# Runner und deren Korrektheit.
 'on':
   pull_request:
   push:
@@ -36,6 +37,11 @@ jobs:
       - name: Python-Runtime ermitteln
         id: runtime
         run: bash scripts/runner-preflight.sh
+
+      # Workflow-Dateien mit actionlint prüfen, sobald der Runner das Kommando
+      # bereitstellt.
+      # - name: Workflow-Dateien prüfen
+      #   run: actionlint
 
       # Führt alle Unit-Tests aus
       - name: Unit-Tests ausführen

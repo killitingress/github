@@ -75,7 +75,7 @@ def _vorbereitungslauf(api_url: str, repository: str, tag: str, token: str) -> i
 def run_aufloesen(arguments: argparse.Namespace) -> dict[str, object]:
     """Ordnet den Liefer-Tag einer Vorbereitung oder einer Wiederholung zu."""
 
-    if git.RELEASE_TAG_RE.fullmatch(arguments.tag) is None:
+    if git.LIEFER_TAG_RE.fullmatch(arguments.tag) is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Liefer-Tag")
 
     api_url = arguments.api_url
@@ -132,7 +132,7 @@ def _require_lieferung_source(
     """
 
     # Liefer-Tag und Releaselinie prüfen.
-    tag_match = git.RELEASE_TAG_RE.fullmatch(tag)
+    tag_match = git.LIEFER_TAG_RE.fullmatch(tag)
     if tag_match is None:
         raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Liefer-Tag")
     releaselinie = tag_match.group("releaselinie")
@@ -201,7 +201,7 @@ def _summary(
         listed = git.run(root, "tag", "--list", f"r{releaselinie}.*").decode().splitlines()
         earlier = []
         for name in listed:
-            tag_match = git.RELEASE_TAG_RE.fullmatch(name)
+            tag_match = git.LIEFER_TAG_RE.fullmatch(name)
             if tag_match is not None and tag_match.group("release") < release:
                 earlier.append(tag_match.group("release"))
 
@@ -359,9 +359,6 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
             failure=Status.SOURCE_FAILED,
             payload={"ref": f"refs/tags/{arguments.tag}", "sha": arguments.source_sha},
         )
-        return {
-            "status": Status.LIEFERUNG_TAGGED.value,
-            "outputs": {"source_sha": arguments.source_sha},
-        }
+        return {"status": Status.LIEFERUNG_TAGGED.value}
 
     raise DeliveryError(Status.VALIDATION_FAILED, "unbekannter Lieferbefehl")

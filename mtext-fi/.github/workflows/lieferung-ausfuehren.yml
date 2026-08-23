@@ -10,7 +10,7 @@ name: Lieferung ausführen
 'on':
   workflow_dispatch:
     inputs:
-      lieferung_tag:
+      liefer_tag:
         description: Geplanter oder vorhandener Liefer-Tag, zum Beispiel r261.108
         required: true
         type: string
@@ -25,14 +25,12 @@ permissions:
   actions: read
 
 jobs:
-  # Übergibt Liefer-Tag und ausführende Person an den zentralen Lieferablauf
+  # Startet den zentralen Lieferablauf für den gewählten Liefer-Tag
   lieferung-ausfuehren:
     name: Lieferung ausführen
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@main
     with:
-      source_repository: ${{ github.repository }}
-      lieferung_tag: ${{ inputs.lieferung_tag }}
-      actor: ${{ github.actor }}
+      liefer_tag: ${{ inputs.liefer_tag }}
       direktlieferung_bestaetigt: ${{ inputs.direktlieferung_bestaetigt }}
     secrets:
       automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

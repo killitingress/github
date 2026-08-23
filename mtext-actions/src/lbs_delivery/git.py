@@ -19,7 +19,7 @@ from .process import DeliveryError, Status
 # Reguläre Ausdrücke prüfen die von Git und den Workflows gelieferten Namen.
 # Prüft einen Liefer-Tag wie `r261.108` und erfasst Releaselinie
 # sowie Versionsnummer. `.100` ist die FULL-Basis der Releaselinie.
-RELEASE_TAG_RE = re.compile(r"r(?P<releaselinie>[0-9]{3})\.(?P<release>[0-9]{3})")
+LIEFER_TAG_RE = re.compile(r"r(?P<releaselinie>[0-9]{3})\.(?P<release>[0-9]{3})")
 
 # Prüft einen geschützten Branch einer gepflegten Releaselinie und erfasst die
 # Releaselinie für die Auswahl des M/Text-Ziels.

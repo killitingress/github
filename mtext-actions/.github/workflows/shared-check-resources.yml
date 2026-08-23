@@ -1,27 +1,18 @@
 name: Shared Workflow – Mandantenkonfiguration und Ressourcen prüfen
 
-# Dieser Workflow prüft einen festgelegten Commit aus dem Mandanten-Repository.
-# Die Mandantenkonfiguration wird in jedem Lauf gegen die zentralen Zuordnungen
-# geprüft. Die Prüfung der JSON- und XML-Ressourcen kann abgewählt oder auf die
-# geänderten Dateien begrenzt werden. Für den Änderungsvergleich lädt der Lauf
-# zusätzlich den vorherigen Commit. Die Prüfung greift nicht auf M/Text oder den
-# Mainframe zu.
+# Dieser Workflow prüft den Mandantenstand des aufrufenden Laufs. Die
+# Mandantenkonfiguration wird in jedem Lauf gegen die zentralen Zuordnungen
+# geprüft. Die Prüfung der JSON- und XML-Ressourcen kann abgewählt werden.
+# Pull Requests prüfen geänderte Dateien und laden dafür den Vorgänger.
+# Manuelle Läufe prüfen den gesamten Stand. Die Prüfung greift nicht auf M/Text
+# oder den Mainframe zu.
 'on':
   workflow_call:
     inputs:
-      commit_sha:
-        description: Commit im Mandanten-Repository, dessen Stand geprüft wird
-        required: true
-        type: string
       check_resources:
         description: JSON- und XML-Ressourcen des Mandantenstands prüfen
         required: false
         default: true
-        type: boolean
-      changed_only:
-        description: Prüfung auf geänderte Ressourcen begrenzen
-        required: false
-        default: false
         type: boolean
     secrets:
       automation_token:
@@ -37,15 +28,13 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 10
     steps:
-      # Lädt den zu prüfenden Mandantenstand. Für den Änderungsvergleich wird
-      # zusätzlich sein Vorgänger benötigt.
+      # Für Pull Requests wird der Vorgänger für den Änderungsvergleich geladen.
       - name: Check-Out Mandantenstand
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           path: source
-          fetch-depth: ${{ inputs.check_resources && inputs.changed_only && 2 || 1 }}
+          fetch-depth: ${{ inputs.check_resources && github.event_name == 'pull_request' && 2 || 1 }}
           persist-credentials: false
-          ref: ${{ inputs.commit_sha }}
 
       # Lädt die freigegebene Implementierung der Prüfung
       - name: Check-Out CI/CD-Version
@@ -68,11 +57,11 @@ jobs:
           "${{ steps.runtime.outputs.python }}" automation/src/mtext.py
           validate-config
 
-      # Pull Requests prüfen den Diff, manuelle Vollprüfungen den gesamten Stand.
+      # Pull Requests prüfen geänderte Ressourcen, manuelle Läufe den gesamten Stand
       - name: Ressourcen prüfen
         if: inputs.check_resources
         env:
-          CHANGED_ONLY: ${{ inputs.changed_only && '--changed-only' || '' }}
+          CHANGED_ONLY: ${{ github.event_name == 'pull_request' && '--changed-only' || '' }}
         run: >-
           "${{ steps.runtime.outputs.python }}" automation/src/mtext.py check-resources
           --root source

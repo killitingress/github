@@ -530,7 +530,6 @@ mtext-actions/
       ci.yml
       lieferung.yml
       shared-check-resources.yml
-      shared-dispatch.yml
       shared-lieferung-ausfuehren.yml
       shared-lieferung-check.yml
       shared-sync-resources.yml
@@ -586,7 +585,7 @@ vorgesehen ist und in welchen Repositories sie installiert werden darf.
 | M/Text-Entwicklung synchronisieren | Push auf `feature/nnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `shared-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
 | M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/nnn` sowie manueller Start | `sync-resources.yml` | `shared-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
 | Lieferung vorbereiten | Manueller Start auf `main`, `release/nnn` oder `bereitstellung/nnn.nnn` | `lieferung-vorbereiten.yml` | `shared-lieferung-check.yml` | `mtext.py lieferung check` | SHA und Lieferumfang unter dem geplanten Liefer-Tag festgehalten |
-| Lieferung ausführen | Manueller Start mit einem geplanten oder vorhandenen Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` → `shared-dispatch.yml` → `lieferung.yml` | `mtext.py lieferung aufloesen`, bei einer Vorbereitung `mtext.py lieferung ausfuehren` und `mtext.py lieferung tag` | Vorbereitung bestätigt und erstmalige Übergabe gestartet oder vorhandener Lieferstand erneut übergeben |
+| Lieferung ausführen | Manueller Start mit einem geplanten oder vorhandenen Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` → `lieferung.yml` | `mtext.py lieferung aufloesen`, bei einer Vorbereitung `mtext.py lieferung ausfuehren` und `mtext.py lieferung tag` | Vorbereitung bestätigt und erstmalige Übergabe gestartet oder vorhandener Lieferstand erneut übergeben |
 | Lieferung bauen und übertragen | Erstellter oder vorhandener Liefer-Tag | `lieferung-ausfuehren.yml` | `lieferung.yml` | `mtext.py build-release`, `publish-mainframe`, danach `publish-github-release` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
 | `mtext_actions` testen | Pull Request oder Push auf `main` in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` | Zentrale Tests ausgeführt |
 
@@ -610,21 +609,21 @@ Merge nicht.
 | Datei | Auslöser | Aufgabe |
 |---|---|---|
 | `shared-check-resources.yml` | Aufruf durch `check-resources.yml` | Mandantenkonfiguration sowie JSON- und XML-Ressourcen ohne Zugriff auf Zielsysteme prüfen |
-| `shared-dispatch.yml` | Aufruf durch einen Mandanten-Workflow | Benannten zentralen Workflow mit seinen Eingaben starten |
 | `shared-sync-resources.yml` | Aufruf durch `sync-resources.yml` | Projekte nach M/Text übertragen |
 | `shared-lieferung-check.yml` | Aufruf durch `lieferung-vorbereiten.yml` | Liefer-Tag und Branchstand prüfen, Lieferumfang anzeigen und Vorbereitung festhalten |
 | `shared-lieferung-ausfuehren.yml` | Aufruf durch `lieferung-ausfuehren.yml` | Liefer-Tag auflösen, eine Vorbereitung bestätigen und `lieferung.yml` starten |
-| `lieferung.yml` | Start durch `shared-dispatch.yml` | Bei einer erstmaligen Lieferung den Tag erstellen, FULL- oder DELTA-Pakete bauen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
+| `lieferung.yml` | Start durch `shared-lieferung-ausfuehren.yml` | Bei einer erstmaligen Lieferung den Tag erstellen, FULL- oder DELTA-Pakete bauen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
 | `ci.yml` | Pull Request oder Push auf `main` in `mtext_actions` | Tests ausführen |
 
 Die als `shared-*.yml` abgelegten Shared Workflows werden direkt in einen
 Mandantenlauf eingebunden. Sie erhalten die benötigten Secrets aus dem
 Mandanten-Repository und verwenden `main` aus `mtext_actions`. Tag-Erzeugung
 und Paketbau benötigen dagegen die in `mtext_actions` hinterlegten technischen
-Zugänge. `shared-dispatch.yml` startet sie deshalb über die GitHub-API als
-eigenen Lauf auf `main` in `mtext_actions`. Workflowdefinition und
-Python-Implementierung stammen in diesem Lauf aus demselben Commit. Die
-zentralen Secrets werden nicht an den Mandantenlauf übergeben.
+Zugänge. `shared-lieferung-ausfuehren.yml` startet `lieferung.yml` deshalb über
+die GitHub-API als eigenen Lauf auf `main` in `mtext_actions`.
+Workflowdefinition und Python-Implementierung stammen in diesem Lauf aus
+demselben Commit. Die zentralen Secrets werden nicht an den Mandantenlauf
+übergeben.
 
 ### Protokolle und Rückmeldung
 

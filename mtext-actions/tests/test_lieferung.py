@@ -289,7 +289,7 @@ class LieferungTests(TempDirTestCase):
                     "WORKFLOW_CONFIGURATION_TOKEN": "secret",
                 },
             ):
-                run_command(
+                result = run_command(
                     argparse.Namespace(
                         lieferung_command="tag",
                         tag="r261.108",
@@ -298,6 +298,7 @@ class LieferungTests(TempDirTestCase):
                         api_url="https://github.example/api/v3",
                     )
                 )
+        self.assertEqual(result, {"status": "LIEFERUNG_TAGGED"})
         self.assertEqual(calls[-1]["payload"], {"ref": "refs/tags/r261.108", "sha": self.source_sha})
 
 

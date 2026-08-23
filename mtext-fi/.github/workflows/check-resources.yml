@@ -24,15 +24,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Übergibt den gewählten Mandantenstand an die zentrale Prüfung
+  # Startet die zentrale Prüfung für den gewählten Mandantenstand
   check:
     name: Mandantenkonfiguration und Ressourcen prüfen
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
     with:
-      # Pull Requests prüfen den Merge-Commit, manuelle Starts den gewählten
-      # Branchstand
-      commit_sha: ${{ github.sha }}
       check_resources: ${{ github.event_name != 'workflow_dispatch' || inputs.check_resources }}
-      changed_only: ${{ github.event_name == 'pull_request' }}
     secrets:
       automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

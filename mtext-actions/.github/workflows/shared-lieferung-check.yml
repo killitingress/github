@@ -9,24 +9,8 @@ name: Shared Workflow – Lieferung vorprüfen
 'on':
   workflow_call:
     inputs:
-      source_repository:
-        description: Mandanten-Repository, dessen Stand vorbereitet wird
-        required: true
-        type: string
-      source_branch:
-        description: Ausgewählter Branch der Vorbereitung
-        required: true
-        type: string
-      source_sha:
-        description: Festzuhaltender Branchstand
-        required: true
-        type: string
-      lieferung_tag:
+      liefer_tag:
         description: Vorgesehener Liefer-Tag
-        required: true
-        type: string
-      actor:
-        description: Vorbereitende Person
         required: true
         type: string
     secrets:
@@ -37,23 +21,17 @@ permissions:
   contents: read
 
 jobs:
-  # Prüft den vorgesehenen Lieferstand und hält seine Angaben für die spätere
-  # Ausführung fest
   check:
     name: Lieferung vorprüfen
     runs-on: [self-hosted, linux]
     timeout-minutes: 10
     steps:
-      # Lädt den festzuhaltenden Stand mit seiner Historie für FULL- und
-      # DELTA-Vergleich.
       - name: Check-Out Mandantenstand
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
           path: source
           persist-credentials: false
-          repository: ${{ inputs.source_repository }}
-          ref: ${{ inputs.source_sha }}
 
       # Lädt die freigegebene Implementierung der Vorprüfung.
       - name: Check-Out CI/CD-Version
@@ -70,26 +48,24 @@ jobs:
         id: runtime
         run: bash automation/scripts/runner-preflight.sh
 
-      # Das Kommando prüft die technische Erstellbarkeit, schreibt den
-      # geplanten Lieferumfang nach GITHUB_STEP_SUMMARY und legt die
-      # festgehaltenen Angaben für die spätere Bestätigung ab.
+      # Prüft Liefer-Tag, Branch und Lieferumfang, schreibt die Vorprüfung in die
+      # Actions-Zusammenfassung und legt vorbereitung.json an
       - name: Lieferung und Lieferumfang prüfen
         id: check
         env:
-          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
-          LIEFERUNG_TAG: ${{ inputs.lieferung_tag }}
-          SOURCE_BRANCH: ${{ inputs.source_branch }}
-          SOURCE_SHA: ${{ inputs.source_sha }}
-          ACTOR: ${{ inputs.actor }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+          LIEFER_TAG: ${{ inputs.liefer_tag }}
+          SOURCE_BRANCH: ${{ github.ref_name }}
+          SOURCE_SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
         run: >-
           "${{ steps.runtime.outputs.python }}"
           automation/src/mtext.py lieferung check
-          --tag "$LIEFERUNG_TAG"
+          --tag "$LIEFER_TAG"
           --branch "$SOURCE_BRANCH"
           --source-sha "$SOURCE_SHA"
           --actor "$ACTOR"
 
-      # Speichert die geprüften Angaben als Artefakt des Mandantenlaufs
       - name: Vorbereitung festhalten
         uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de
         with:

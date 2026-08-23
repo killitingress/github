@@ -63,14 +63,16 @@ class GitHubReleaseTests(TempDirTestCase):
                 api_url="https://github.example/api/v3",
                 server_url="https://github.example",
                 repository=self.configuration.repository,
-                release_tag="r261.108",
+                liefer_tag="r261.108",
                 source_sha="1" * 40,
                 token="secret",
             )
 
         self.assertEqual(result["status"], Status.GITHUB_RELEASE_PUBLISHED.value)
+        self.assertEqual(result["liefer_tag"], "r261.108")
         body = next(call for call in calls if call.get("payload") is not None)["payload"]["body"]
         self.assertIn("## Lieferung", body)
+        self.assertIn("- Liefer-Tag: `r261.108`", body)
         self.assertIn("LOMS_Basis", body)
         self.assertIn("releases/download/r261.108/_INFO_FI-LOMS_Basis.json", body)
         uploads = [call for call in calls if call.get("content") is not None]
