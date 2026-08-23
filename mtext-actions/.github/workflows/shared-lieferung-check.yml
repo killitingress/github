@@ -1,4 +1,4 @@
-name: Wiederverwendbare Liefer-Vorprüfung
+name: Shared Workflow – Liefer-Vorprüfung
 
 # Hält den ausgewählten Branchstand fest, prüft den Liefer-Tag und zeigt den
 # Lieferumfang. Das Artefakt gehört zum aufrufenden Mandantenlauf.
@@ -25,28 +25,10 @@ name: Wiederverwendbare Liefer-Vorprüfung
         description: vorbereitende Person
         required: true
         type: string
-      automation_ref:
-        description: Festgelegte CI/CD-Version
-        required: true
-        type: string
     secrets:
       automation_token:
-        description: Token zum Laden der festgelegten CI/CD-Version
+        description: Token zum Laden der zentralen CI/CD-Implementierung
         required: true
-    outputs:
-      lieferung_tag:
-        description: festgehaltener Liefer-Tag
-        value: ${{ jobs.check.outputs.lieferung_tag }}
-      source_sha:
-        description: festgehaltene SHA
-        value: ${{ jobs.check.outputs.source_sha }}
-      source_branch:
-        description: festgehaltener Branch
-        value: ${{ jobs.check.outputs.source_branch }}
-      prepare_actor:
-        description: vorbereitende Person
-        value: ${{ jobs.check.outputs.prepare_actor }}
-
 permissions:
   contents: read
 
@@ -54,12 +36,7 @@ jobs:
   check:
     name: Lieferung vorprüfen
     runs-on: [self-hosted, linux]
-    timeout-minutes: 15
-    outputs:
-      lieferung_tag: ${{ steps.check.outputs.lieferung_tag }}
-      source_sha: ${{ steps.check.outputs.source_sha }}
-      source_branch: ${{ steps.check.outputs.source_branch }}
-      prepare_actor: ${{ steps.check.outputs.prepare_actor }}
+    timeout-minutes: 10
     steps:
       # Lädt den festzuhaltenden Stand mit seiner Historie für FULL- und
       # DELTA-Vergleich.
@@ -72,12 +49,12 @@ jobs:
           repository: ${{ inputs.source_repository }}
           ref: ${{ inputs.source_sha }}
 
-      # Lädt die festgelegte Implementierung der Vorprüfung.
+      # Lädt die freigegebene Implementierung der Vorprüfung.
       - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
-          ref: ${{ inputs.automation_ref }}
+          ref: main
           path: automation
           persist-credentials: false
           token: ${{ secrets.automation_token }}
@@ -108,7 +85,7 @@ jobs:
       - name: Vorbereitung festhalten
         uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de
         with:
-          name: lieferung-vorbereitung
+          name: ${{ steps.check.outputs.vorbereitung_name }}
           path: ${{ steps.check.outputs.vorbereitung_path }}
           if-no-files-found: error
           retention-days: 30

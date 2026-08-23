@@ -1,6 +1,6 @@
-<mxfile host="app.diagrams.net" modified="2026-08-21T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+<mxfile host="app.diagrams.net" modified="2026-08-23T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
   <diagram id="soll-github-actions" name="Soll-Ablauf GitHub Actions Git">
-    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1850" math="0" shadow="0">
+    <mxGraphModel dx="0" dy="0" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2000" pageHeight="1650" math="0" shadow="0">
       <root>
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
@@ -13,16 +13,16 @@
         </mxCell>
 
         <mxCell id="col-user" value="Anwender und Lieferteam" style="swimlane;html=1;horizontal=1;startSize=22;container=0;collapsible=0;fillColor=#f5f5f5;swimlaneFillColor=#ffffff;strokeColor=#666666;fontFamily=Arial;fontSize=15;fontStyle=1" vertex="1" parent="1">
-          <mxGeometry x="20" y="98" width="235" height="1730" as="geometry"/>
+          <mxGeometry x="20" y="98" width="235" height="1530" as="geometry"/>
         </mxCell>
         <mxCell id="col-mandant" value="Mandanten-Repository (z. B. fi_lbs_entw_oms_fi)" style="swimlane;html=1;horizontal=1;startSize=22;container=0;collapsible=0;fillColor=#dae8fc;swimlaneFillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=15;fontStyle=1" vertex="1" parent="1">
-          <mxGeometry x="270" y="98" width="478" height="1730" as="geometry"/>
+          <mxGeometry x="270" y="98" width="478" height="1530" as="geometry"/>
         </mxCell>
-        <mxCell id="col-automation" value="GitHub Actions und zentrale CI/CD-Automatisierung (mtext_actions)" style="swimlane;html=1;horizontal=1;startSize=22;container=0;collapsible=0;fillColor=#fff2cc;swimlaneFillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=15;fontStyle=1" vertex="1" parent="1">
-          <mxGeometry x="765" y="98" width="780" height="1730" as="geometry"/>
+        <mxCell id="col-automation" value="GitHub Actions und freigegebene CI/CD-Automatisierung (mtext_actions/main)" style="swimlane;html=1;horizontal=1;startSize=22;container=0;collapsible=0;fillColor=#fff2cc;swimlaneFillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=15;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="765" y="98" width="780" height="1530" as="geometry"/>
         </mxCell>
         <mxCell id="col-target" value="Zielsysteme" style="swimlane;html=1;horizontal=1;startSize=22;container=0;collapsible=0;fillColor=#d5e8d4;swimlaneFillColor=#ffffff;strokeColor=#82b366;fontFamily=Arial;fontSize=15;fontStyle=1" vertex="1" parent="1">
-          <mxGeometry x="1560" y="98" width="400" height="1730" as="geometry"/>
+          <mxGeometry x="1560" y="98" width="400" height="1530" as="geometry"/>
         </mxCell>
 
         <mxCell id="stage-dev" value="1. M/Text-Entwicklung" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=16;fontStyle=1;fontColor=#1a4f8b" vertex="1" parent="1">
@@ -37,7 +37,7 @@
         <mxCell id="dev-caller" value="&lt;b&gt;sync-resources.yml&lt;/b&gt;&lt;br&gt;Push-Trigger&lt;br&gt;Ziel: M/Text-Entwicklung" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="535" y="205" width="185" height="95" as="geometry"/>
         </mxCell>
-        <mxCell id="dev-sync" value="&lt;b&gt;reusable-sync-resources.yml&lt;/b&gt;&lt;br&gt;Config, Branch und SHA prüfen&lt;br&gt;Git-Differenz ermitteln" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
+        <mxCell id="dev-sync" value="&lt;b&gt;shared-sync-resources.yml&lt;/b&gt;&lt;br&gt;Config, Branch und SHA prüfen&lt;br&gt;Git-Differenz ermitteln" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="795" y="188" width="285" height="130" as="geometry"/>
         </mxCell>
         <mxCell id="dev-target" value="&lt;b&gt;M/Text-Entwicklung&lt;/b&gt;&lt;br&gt;serverSync fortschreiben&lt;br&gt;LTOMA synchronisieren&lt;br&gt;&lt;b&gt;ADAPTER_ACCEPTED&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
@@ -49,7 +49,7 @@
         <mxCell id="config-caller" value="&lt;b&gt;validate-config.yml&lt;/b&gt;&lt;br&gt;Push-Trigger&lt;br&gt;Änderung an .github/config.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
           <mxGeometry x="535" y="332" width="185" height="76" as="geometry"/>
         </mxCell>
-        <mxCell id="config-validate" value="&lt;b&gt;reusable-validate-config.yml&lt;/b&gt;&lt;br&gt;frühes Feedback ohne Zielzugriff" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
+        <mxCell id="config-validate" value="&lt;b&gt;shared-check-resources.yml&lt;/b&gt;&lt;br&gt;frühes Feedback ohne Zielzugriff" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="795" y="340" width="285" height="60" as="geometry"/>
         </mxCell>
 
@@ -68,7 +68,7 @@
         <mxCell id="acc-caller" value="&lt;b&gt;sync-resources.yml&lt;/b&gt;&lt;br&gt;Push-Trigger&lt;br&gt;main oder release/nnn" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="555" y="505" width="165" height="115" as="geometry"/>
         </mxCell>
-        <mxCell id="acc-sync" value="&lt;b&gt;reusable-sync-resources.yml&lt;/b&gt;&lt;br&gt;Config, Branch und SHA prüfen&lt;br&gt;Releaselinienwechsel erkennen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
+        <mxCell id="acc-sync" value="&lt;b&gt;shared-sync-resources.yml&lt;/b&gt;&lt;br&gt;Config, Branch und SHA prüfen&lt;br&gt;Releaselinienwechsel erkennen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
           <mxGeometry x="795" y="500" width="285" height="125" as="geometry"/>
         </mxCell>
         <mxCell id="acc-target" value="&lt;b&gt;M/Text-Funktionstest&lt;/b&gt;&lt;br&gt;serverSync fortschreiben&lt;br&gt;LTOMA synchronisieren&lt;br&gt;&lt;b&gt;ADAPTER_ACCEPTED&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontFamily=Arial;fontSize=12;spacing=6" vertex="1" parent="1">
@@ -111,25 +111,25 @@
         <mxCell id="rel-approval-caller" value="&lt;b&gt;lieferung-vorbereiten.yml&lt;/b&gt;&lt;br&gt;manueller Start&lt;br&gt;Branch, SHA und Tag übergeben" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="290" y="855" width="190" height="90" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-approval-prepare" value="&lt;b&gt;reusable-lieferung-check.yml&lt;/b&gt;&lt;br&gt;Tag und Branchstand prüfen&lt;br&gt;Lieferumfang ermitteln" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
+        <mxCell id="rel-approval-prepare" value="&lt;b&gt;shared-lieferung-check.yml&lt;/b&gt;&lt;br&gt;Tag und Branchstand prüfen&lt;br&gt;Lieferumfang ermitteln" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="795" y="845" width="285" height="110" as="geometry"/>
         </mxCell>
         <mxCell id="rel-approval-branch" value="&lt;b&gt;Vorbereitungsartefakt&lt;/b&gt;&lt;br&gt;Branch, SHA, Liefer-Tag&lt;br&gt;und vorbereitende Person" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
           <mxGeometry x="290" y="985" width="190" height="95" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-branch" value="&lt;b&gt;Actions-Zusammenfassung&lt;/b&gt;&lt;br&gt;SHA und Lieferumfang&lt;br&gt;Vorbereitungs-ID" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
+        <mxCell id="rel-branch" value="&lt;b&gt;Actions-Zusammenfassung&lt;/b&gt;&lt;br&gt;SHA und Lieferumfang&lt;br&gt;geplanter Liefer-Tag" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
           <mxGeometry x="535" y="985" width="185" height="95" as="geometry"/>
         </mxCell>
         <mxCell id="rel-approval-check" value="&lt;b&gt;Vorbereitung festgehalten&lt;/b&gt;&lt;br&gt;30 Tage verfügbar&lt;br&gt;&lt;b&gt;LIEFERUNG_CHECKED&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
           <mxGeometry x="795" y="975" width="285" height="110" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-reviewer" value="&lt;b&gt;Bestätigende Person&lt;/b&gt;&lt;br&gt;Zusammenfassung prüfen&lt;br&gt;Ausführung mit ID starten" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
+        <mxCell id="rel-reviewer" value="&lt;b&gt;Bestätigende Person&lt;/b&gt;&lt;br&gt;Zusammenfassung prüfen&lt;br&gt;Ausführung mit Liefer-Tag starten" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="40" y="1125" width="195" height="90" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-merge" value="&lt;b&gt;lieferung-ausfuehren.yml&lt;/b&gt;&lt;br&gt;manueller Start&lt;br&gt;Vorbereitungs-ID übergeben" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
+        <mxCell id="rel-merge" value="&lt;b&gt;lieferung-ausfuehren.yml&lt;/b&gt;&lt;br&gt;manueller Start&lt;br&gt;Liefer-Tag übergeben" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="290" y="1125" width="190" height="90" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-approval-finalize" value="&lt;b&gt;reusable-lieferung-ausfuehren.yml&lt;/b&gt;&lt;br&gt;Vorbereitung laden und prüfen&lt;br&gt;zentrale Lieferung starten" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
+        <mxCell id="rel-approval-finalize" value="&lt;b&gt;shared-lieferung-ausfuehren.yml&lt;/b&gt;&lt;br&gt;Vorbereitung laden und prüfen&lt;br&gt;zentrale Lieferung starten" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontFamily=Arial;fontSize=10;spacing=4" vertex="1" parent="1">
           <mxGeometry x="795" y="1115" width="285" height="110" as="geometry"/>
         </mxCell>
         <mxCell id="rel-tag" value="&lt;b&gt;Liefer-Tag rnnn.nnn&lt;/b&gt;&lt;br&gt;auf der festgehaltenen SHA" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
@@ -138,7 +138,7 @@
         <mxCell id="release-delivery-title" value="&lt;b&gt;Lieferung bauen und übertragen&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=12;fontColor=#666666" vertex="1" parent="1">
           <mxGeometry x="35" y="1320" width="260" height="25" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-caller" value="&lt;b&gt;lieferung.yml&lt;/b&gt;&lt;br&gt;Liefer-Tag erstellen&lt;br&gt;Paketbau aufrufen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
+        <mxCell id="rel-caller" value="&lt;b&gt;lieferung.yml&lt;/b&gt;&lt;br&gt;Liefer-Tag bei Erstlieferung erstellen&lt;br&gt;Paketbau aufrufen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="535" y="1355" width="185" height="95" as="geometry"/>
         </mxCell>
         <mxCell id="release-workflow" value="&lt;b&gt;release.yml in mtext_actions&lt;/b&gt;&lt;br&gt;Liefer-Tag und Quelle prüfen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
@@ -167,22 +167,6 @@
         </mxCell>
         <mxCell id="delivery-report-job" value="&lt;b&gt;Rückmeldung&lt;/b&gt;&lt;br&gt;GitHub Release aktualisieren und Info-Dateien anhängen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="795" y="1500" width="285" height="70" as="geometry"/>
-        </mxCell>
-
-        <mxCell id="divider-3" style="shape=line;strokeColor=#b3b3b3;dashed=1" vertex="1" parent="1">
-          <mxGeometry x="35" y="1600" width="1890" height="1" as="geometry"/>
-        </mxCell>
-        <mxCell id="stage-maintenance" value="4. Workflow-Aktualisierung (betrieblicher Nebenablauf)" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=16;fontStyle=1;fontColor=#666666" vertex="1" parent="1">
-          <mxGeometry x="35" y="1620" width="520" height="30" as="geometry"/>
-        </mxCell>
-        <mxCell id="maintenance-no-mandant-step" value="&lt;b&gt;Mandanten&lt;/b&gt;&lt;br&gt;kein Bedien- oder Prüfschritt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#b3b3b3;dashed=1;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
-          <mxGeometry x="40" y="1685" width="195" height="100" as="geometry"/>
-        </mxCell>
-        <mxCell id="maintenance-target" value="&lt;b&gt;Geschützter Mandantenbranch&lt;/b&gt;&lt;br&gt;&lt;b&gt;main&lt;/b&gt; und vorhandene &lt;b&gt;release/nnn&lt;/b&gt;&lt;br&gt;administrativer Rollout-Commit unter .github/workflows&lt;br&gt;keine M/Text-Synchronisation" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
-          <mxGeometry x="300" y="1675" width="420" height="120" as="geometry"/>
-        </mxCell>
-        <mxCell id="maintenance-workflow" value="&lt;b&gt;update-mandant-workflows.yml&lt;/b&gt;&lt;br&gt;administrativer Start mit gewünschter SHA&lt;br&gt;Mandanten und Zielbranches prüfen&lt;br&gt;Workflow-Version direkt aktualisieren" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
-          <mxGeometry x="795" y="1675" width="400" height="120" as="geometry"/>
         </mxCell>
 
         <mxCell id="e-dev-1" value="Push" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="dev-user" target="dev-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
@@ -216,7 +200,7 @@
         </mxCell>
         <mxCell id="e-rel-4" value="Zusammenfassung erstellen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="rel-approval-branch" target="rel-branch"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-rel-5" value="Vorbereitung abschließen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="rel-branch" target="rel-approval-check"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-rel-6" value="Vorbereitungs-ID anzeigen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=0.5;exitY=1;entryX=1;entryY=0.5" edge="1" parent="1" source="rel-approval-check" target="rel-reviewer">
+        <mxCell id="e-rel-6" value="Lieferumfang anzeigen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=0.5;exitY=1;entryX=1;entryY=0.5" edge="1" parent="1" source="rel-approval-check" target="rel-reviewer">
           <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="938" y="1105"/><mxPoint x="255" y="1105"/><mxPoint x="255" y="1170"/></Array></mxGeometry>
         </mxCell>
         <mxCell id="e-rel-7" value="manueller Start" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="rel-reviewer" target="rel-merge"><mxGeometry relative="1" as="geometry"/></mxCell>
@@ -236,7 +220,6 @@
         </mxCell>
         <mxCell id="e-report-release" value="bereitstellen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=0;exitY=0.5;entryX=1;entryY=0.5" edge="1" parent="1" source="delivery-report-job" target="github-release"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-release-check" value="prüfen" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=0;exitY=0.5;entryX=1;entryY=0.5" edge="1" parent="1" source="github-release" target="release-check"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-maintenance-update" value="direkt aktualisieren" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=0;exitY=0.5;entryX=1;entryY=0.5" edge="1" parent="1" source="maintenance-workflow" target="maintenance-target"><mxGeometry relative="1" as="geometry"/></mxCell>
       </root>
     </mxGraphModel>
   </diagram>

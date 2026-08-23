@@ -1,7 +1,7 @@
-name: Wiederverwendbarer Start eines zentralen Workflows
+name: Shared Workflow – Zentralen Workflow starten
 
-# Lieferung und Release wechseln in das zentrale Repository. Dort liegen
-# die technische Identität und die Zugangsdaten für ihre weiteren Schritte.
+# Zentrale Abläufe wechseln in das zentrale Repository. Dort liegen die
+# technische Identität und die Zugangsdaten für ihre weiteren Schritte.
 'on':
   workflow_call:
     inputs:
@@ -25,7 +25,7 @@ jobs:
   dispatch:
     name: Zentralen Workflow starten
     runs-on: [self-hosted, linux]
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       # Der API-Aufruf erzeugt einen Lauf in mtext_actions, damit dort die
       # zentrale technische Identität und die zentralen Secrets gelten.

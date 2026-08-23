@@ -12,11 +12,12 @@ zusammen mit dem EN4920-Netz abgebaut.
 
 Jeder Mandant erhält ein eigenes Git-Repository in github.intern mit seinen
 M/Text-Ressourcen, Trigger-Workflows und einer für diesen Prozess relevanten
-Konfigurationsdatei. Die CI/CD-Automatisierung, die von diesen
-Trigger-Workflows zentral genutzt wird, liegt im Repository
-`FinanzInformatik/fi_lbs_entw_oms_mtext_actions` (im Folgenden `mtext_actions`
-genannt). Sie führt Validierungen, Synchronisierung, Paketbau und Übergabe an
-den Mainframe (IZE9) durch.
+Konfigurationsdatei. Die zentral genutzte CI/CD-Automatisierung wird im
+Folgenden `mtext_actions` genannt. Sie führt Validierungen, Synchronisierung,
+Paketbau und Übergabe an den Mainframe (IZE9) durch. Der aktuelle Entwurf
+verwendet dafür `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Die
+endgültige Organization und der Repositoryname sind noch mit den GitHub-Admins
+zu klären.
 
 ### Grundprinzipien
 
@@ -31,6 +32,10 @@ werden normalerweise lokal erstellt und erst durch einen Push nach GitHub
 Push eines Branches nach GitHub werden sämtliche fehlenden Commits dorthin
 übertragen und der Branch in GitHub auf den dann aktuellsten Commit
 *verschoben*.
+
+Die M/Workbench ist das zentrale Arbeitsmittel für die Bearbeitung der
+M/Text-Ressourcen und den Git-Abgleich. Über EGit werden lokale Branches und
+Commits verwaltet sowie Stände mit GitHub abgeglichen.
 
 Jeder Entwicklungsauftrag (Änderung, Erweiterung, Korrektur, ...) wird als
 Feature in einem eigenen temporären Feature-Branch umgesetzt. Wenn ein Feature
@@ -58,7 +63,8 @@ Paketbau und Mainframe-Übergabe.
 #### Änderungsablauf
 
 ```text
-Entwicklung in lokalem Feature-Branch (feature/nnn/<Bezeichnung>)
+Ressourcen in M/Workbench auf lokalem Feature-Branch bearbeiten
+    (feature/nnn/<Bezeichnung>)
     │ Push
     ▼
 Synchronisierung mit M/Text-Entwicklung
@@ -79,8 +85,8 @@ Branchstand ist für eine Lieferung bereit
 Branch und Liefer-Tag auswählen
     │ Lieferung vorbereiten
     ▼
-Lieferumfang prüfen und Vorbereitungs-ID kopieren
-    │ Vorbereitete Lieferung mit dieser ID ausführen
+Lieferumfang prüfen
+    │ Lieferung mit demselben geplanten Liefer-Tag ausführen
     ▼
 Liefer-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
 ```
@@ -94,8 +100,8 @@ Liefer-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
 | Pull Request mit Squash Merge | Jeder Pull Request wird als ein fachlicher Commit in den Zielbranch übernommen. Review und Arbeitscommits bleiben im Pull Request sichtbar. |
 | GitHub Actions statt Jenkins | Natives Git-Feeling mit modernen Workflows in einem zentralen Tool. |
 | Gemeinsames Lieferpaket-Format | Synchronisation und Mainframe-Lieferung verwenden das gleiche Paketformat auf unterschiedlichen Transportwegen. |
-| Zweistufige Lieferbestätigung | Die Vorbereitung zeigt den festgehaltenen Stand vor der Lieferung. Dieselbe Person kann direkt bestätigen, eine andere Person erfüllt das empfohlene Vier-Augenprinzip. |
-| Freigegebene CI/CD-Version | Alle Mandanten verwenden dieselbe Version von `mtext_actions`. Die Commit-SHA zeigt, welche Version ausgeführt wurde. |
+| Zweistufige Lieferbestätigung | Die Vorbereitung zeigt den festgehaltenen Stand vor der Lieferung. Eine andere Person erfüllt das empfohlene Vier-Augenprinzip. Dieselbe Person muss eine Direktlieferung als Abweichung bewusst bestätigen. |
+| Freigegebene CI/CD-Version | `main` in `mtext_actions` enthält die freigegebene Version. Alle Mandanten verwenden diesen Stand bei ihren nächsten Workflow-Läufen. |
 | Zentrale Mainframe-Zugangsdaten | Mandanten-Repositories benötigen keine Mainframe-Zugangsdaten. |
 
 ## 2. Branch- und Pull-Request-Modell
@@ -317,11 +323,20 @@ SHA-256-Prüfsummen enthalten kann.
 
 ### Transport nach `serverSync`
 
-Der Runner schreibt Projektpakete und Informationsdateien vollständig in ein
-auftragsbezogenes CIFS-Verzeichnis. Anschließend meldet er dem Adapter den
-Pfad. Der Adapter prüft und verarbeitet den Auftrag unter `serverSync` und
-startet die M/Text-Synchronisation. Erst die erfolgreiche Annahme durch den
-Adapter bestätigt die technische Übergabe.
+Der Transportweg auf das bisher per NFS angesprochene Verzeichnis für die
+Synchronisation von M/Text (`serverSync`) ist noch zu klären. Verschiedene
+Möglichkeiten kommen infrage. In jedem Fall würden zuvor zusammengestellte
+Projektpakete und Informationsdateien übergeben:
+
+- NFS- oder CIFS-Share, der im Runner eingebunden ist und direkt beschrieben
+  werden kann
+- Upload per POST-Request an LTOMA
+- Download eines passenden GitHub-Actions-Artefakts durch LTOMA
+- weitere noch zu klärende Möglichkeit
+
+Die weitere Verarbeitung bleibt im Idealfall wie bisher: Der `/sync`-Endpunkt
+des Adapters wird aufgerufen und startet intern den
+M/Text-Synchronisierungsprozess.
 
 ## 4. Mainframe-Lieferung
 
@@ -347,19 +362,27 @@ Arbeitsbranch wird nicht nach M/Text-Funktionstest synchronisiert.
 
 Der Workflow **Lieferung vorbereiten** hält Branch, Commit-SHA, Liefer-Tag und
 Lieferumfang in einem 30 Tage aufbewahrten Laufartefakt fest. Die
-Zusammenfassung zeigt die Vorbereitungs-ID. Die Branchspitze wird danach nicht
-erneut als Lieferstand aufgelöst.
+Branchspitze wird danach nicht erneut als Lieferstand aufgelöst. Das Artefakt
+heißt beispielsweise `r261.108-lieferungsartefakt`. Bestehen mehrere
+Vorbereitungen desselben Liefer-Tags, verwendet die Ausführung die neueste noch
+verfügbare Vorbereitung.
 
-Nach der Prüfung startet eine Person **Vorbereitete Lieferung ausführen** mit
-dieser ID. Der Mandantenlauf lädt das Vorbereitungsartefakt und bestimmt den
+Nach der Prüfung startet eine Person **Lieferung ausführen** mit dem geplanten
+Liefer-Tag. Der Mandantenlauf lädt die neueste Vorbereitung und bestimmt den
 Lieferweg. Ist es die vorbereitende Person, handelt es sich um eine
-Direktlieferung. Eine andere Person erfüllt das empfohlene
-Vier-Augenprinzip. Der zentrale Workflow erzeugt danach den Liefer-Tag auf der
-festgehaltenen SHA und startet Paketbau sowie Mainframe-Übergabe.
+Direktlieferung, die als Abweichung vom empfohlenen Vier-Augenprinzip bewusst
+bestätigt werden muss. Ist es eine abweichende Person, ist dadurch das
+Vier-Augenprinzip erfüllt. Der zentrale Workflow erzeugt danach den Liefer-Tag
+auf der festgehaltenen SHA und startet Paketbau sowie Mainframe-Übergabe.
 
-Die Liefer-Tags unterliegen nicht den Regeln für Release-Tags aus dem
-Git-Leitfaden. Ein fehlerhaft angelegter Tag kann gelöscht und anschließend
-korrekt vorbereitet werden. Ein Tag-Push allein startet keine Übertragung.
+Die Liefer-Tags unterliegen bewusst nicht den Regeln für Release-Tags aus dem
+Git-Leitfaden, da es sich um projektspezifische Tags handelt die nichts mit
+OSP-E Releases zu tun haben. Ein fehlerhaft angelegter Tag kann somit gelöscht
+und anschließend unter demselben geplanten Liefer-Tag korrekt vorbereitet
+werden. Bei `.100` ist zu beachten, dass spätere DELTA-Lieferungen diesen
+Stand als Bezugsstand verwenden. Anders als im bisherigen SVN Ablauf startet
+ein Tag-Push keine Übertragung - es muss der dafür vorgesehene Workflow benutzt
+werden.
 
 ### Lieferung bauen und übertragen
 
@@ -368,10 +391,10 @@ in Kapitel 3 beschriebenen Projektpakete und überträgt sie an den Mainframe.
 Die JSON-Informationsdatei bleibt beim GitHub-Artefakt und wird nicht als
 Mainframe-Member übertragen.
 
-Der Workflow **Lieferung erneut übergeben** startet die Paketbildung und
-Mainframe-Übergabe für einen vorhandenen Liefer-Tag erneut. Derselbe Git-Stand
-darf mehrfach übertragen werden. Eine neue Bestätigung und ein neuer Tag sind
-dabei nicht erforderlich.
+Wird **Lieferung ausführen** mit einem vorhandenen Liefer-Tag gestartet, beginnt
+die Paketbildung und Mainframe-Übergabe für diesen Stand erneut. Derselbe
+Git-Stand darf mehrfach übertragen werden. Eine neue Bestätigung ist dabei
+nicht erforderlich.
 
 ### CodePipeline-Elemente
 
@@ -413,8 +436,8 @@ JSON-Informationsdateien. Es wird 30 Tage aufbewahrt. Der Übergabejob überträ
 die Archive unter ihren Membernamen und reicht die zugehörige JCL ein. Die
 Informationsdateien werden nicht an den Mainframe übertragen.
 
-Schlägt die Übergabe fehl, kann dasselbe Artefakt erneut übergeben werden. Die
-Pakete müssen dafür nicht neu gebaut werden.
+Schlägt die Übergabe fehl, kann derselbe Liefer-Tag erneut ausgeführt werden.
+Der Paketbau und die Mainframe-Übergabe werden dabei erneut gestartet.
 
 Nach der Mainframe-Übergabe erstellt der zentrale Workflow im
 Mandanten-Repository ein GitHub Release zum vorhandenen Liefer-Tag. Die
@@ -465,7 +488,6 @@ fi_lbs_entw_oms_<kuerzel>/
     workflows/
       check-resources.yml
       lieferung-ausfuehren.yml
-      lieferung-erneut-uebergeben.yml
       lieferung-vorbereiten.yml
       sync-resources.yml
   <M/Text-Projekte>
@@ -494,14 +516,12 @@ Die Mandanten-Repositories sind verbindlich zugeordnet:
 ### Zentrales CI/CD-Repository `mtext_actions`
 
 Im Mandanten-Repository stehen nur kleine Trigger-Workflows. Die eigentlichen
-Arbeitsschritte liegen in `mtext_actions`. Bei späteren Änderungen trägt
-`update-mandant-workflows.yml` in den Trigger-Workflows ein, welche Version von
-`mtext_actions` sie verwenden sollen.
+Arbeitsschritte liegen in `mtext_actions`. Die Trigger-Workflows verweisen auf
+`main`. Dieser Branch enthält die freigegebene zentrale CI/CD-Version.
 
-`mtext_actions` ist in diesem Zielbild das Repository
-`FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Es enthält die
-wiederverwendbaren Workflows, die gemeinsame Python-Anwendung, die zentrale
-Releaselinien- und Mandantenzuordnung, das JCL-Template und die Tests:
+`mtext_actions` enthält die Shared Workflows, die gemeinsame Python-Anwendung,
+die zentrale Releaselinien- und Mandantenzuordnung, das JCL-Template und die
+Tests:
 
 ```text
 mtext-actions/
@@ -510,12 +530,11 @@ mtext-actions/
       ci.yml
       lieferung.yml
       release.yml
-      reusable-check-resources.yml
-      reusable-dispatch.yml
-      reusable-lieferung-ausfuehren.yml
-      reusable-lieferung-check.yml
-      reusable-sync-resources.yml
-      update-mandant-workflows.yml
+      shared-check-resources.yml
+      shared-dispatch.yml
+      shared-lieferung-ausfuehren.yml
+      shared-lieferung-check.yml
+      shared-sync-resources.yml
   config/
     mandanten.json
     ressourcenformate.json
@@ -532,7 +551,6 @@ mtext-actions/
       project_package.py
       lieferung.py
       resource_check.py
-      rollout.py
       sync.py
     mtext.py
   templates/
@@ -541,19 +559,36 @@ mtext-actions/
     <automatisierte Tests>
 ```
 
+#### Noch zu bestätigende GitHub-Vorgaben
+
+Der aktuelle Implementierungsstand beruht auf Arbeitsannahmen, die vor dem
+produktiven Rollout bestätigt oder angepasst werden müssen:
+
+| Arbeitsannahme | Mögliche abweichende Vorgabe | Konsequenz |
+|---|---|---|
+| `mtext_actions` liegt unter `FinanzInformatik` | Shared Workflows müssen in einer anderen Organization liegen | Vollständige Repositoryverweise, Zugriffsfreigaben und die GitHub-Actions-Richtlinien der beteiligten Organizations müssen angepasst werden. |
+| Shared Workflows, Python-Anwendung, Konfiguration und zentrale Lieferworkflows liegen gemeinsam in `mtext_actions` | In der Ziel-Organization soll ein eigenständiges Repository ausschließlich für Shared Workflows entstehen | Die Aufteilung und die gemeinsame Versionierung der Workflow- und Python-Implementierung müssen festgelegt werden. |
+| Zugriffe zwischen `mtext_actions` und Mandanten-Repositories erfolgen mit PATs | Die GitHub-Admins stellen eine andere technische Identität bereit | Secret-Verträge und die Erzeugung der Zugriffstoken in den Workflows müssen angepasst werden. |
+
+Ein Umzug des gesamten Repositorys würde die heutige gemeinsame Versionierung
+beibehalten und erfordert daher voraussichtlich weniger technische Änderungen
+als eine Aufteilung. Der Umzug stellt jedoch noch keine technische Identität
+für die Zugriffe auf die Mandanten-Repositories bereit. Hierfür ist gesondert
+zu klären, ob eine von den zuständigen Organizations verwaltete GitHub App
+vorgesehen ist und in welchen Repositories sie installiert werden darf.
+
 ## 6. Workflows
 
 ### Gesamtzusammenhang
 
 | Prozessschritt | Auslöser | Trigger-Workflow | Zentraler Workflow | Python-Skript | Ergebnis |
 |---|---|---|---|---|---|
-| Mandanten-Workflows aktualisieren | Manueller Start in `mtext_actions` mit der gewünschten Commit-SHA | keiner | `update-mandant-workflows.yml` | `mtext.py rollout` | Verweise auf `mtext_actions` verwenden die neue Version |
-| Mandantenkonfiguration und JSON- oder XML-Ressourcen prüfen | Pull Request oder manueller Start | `check-resources.yml` | `reusable-check-resources.yml` | `mtext.py validate-config` und `mtext.py check-resources` | Konfiguration geprüft, geänderte konfigurierte Ressourcen oder gewählter Vollstand geprüft und Syntaxbefunde als nicht blockierende Warnungen angezeigt |
-| M/Text-Entwicklung synchronisieren | Push auf `feature/nnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
-| M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/nnn` sowie manueller Start | `sync-resources.yml` | `reusable-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
-| Lieferung vorbereiten | Manueller Start auf `main`, `release/nnn` oder `bereitstellung/nnn.nnn` | `lieferung-vorbereiten.yml` | `reusable-lieferung-check.yml` | `mtext.py lieferung check` | SHA und Lieferumfang angezeigt, Vorbereitungs-ID bereitgestellt |
-| Vorbereitete Lieferung ausführen | Manueller Start mit der Vorbereitungs-ID | `lieferung-ausfuehren.yml` | `reusable-lieferung-ausfuehren.yml` sowie `reusable-dispatch.yml` → `lieferung.yml` | `mtext.py lieferung ausfuehren` und `mtext.py lieferung tag` | Lieferweg bestimmt, Liefer-Tag auf der festgehaltenen SHA erstellt und Übergabe gestartet |
-| Lieferung bauen und übertragen | Aufruf nach Tag-Erstellung oder manueller Wiederanlauf | `lieferung-ausfuehren.yml` oder `lieferung-erneut-uebergeben.yml` | `lieferung.yml` → `release.yml` oder `reusable-dispatch.yml` → `release.yml` | `mtext.py build-release`, `publish-mainframe`, danach `publish-github-release` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
+| Mandantenkonfiguration und JSON- oder XML-Ressourcen prüfen | Pull Request oder manueller Start | `check-resources.yml` | `shared-check-resources.yml` | `mtext.py validate-config` und `mtext.py check-resources` | Konfiguration geprüft, geänderte konfigurierte Ressourcen oder gewählter Vollstand geprüft und Syntaxbefunde als nicht blockierende Warnungen angezeigt |
+| M/Text-Entwicklung synchronisieren | Push auf `feature/nnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `shared-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
+| M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/nnn` sowie manueller Start | `sync-resources.yml` | `shared-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
+| Lieferung vorbereiten | Manueller Start auf `main`, `release/nnn` oder `bereitstellung/nnn.nnn` | `lieferung-vorbereiten.yml` | `shared-lieferung-check.yml` | `mtext.py lieferung check` | SHA und Lieferumfang unter dem geplanten Liefer-Tag festgehalten |
+| Lieferung ausführen | Manueller Start mit einem geplanten oder vorhandenen Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` → `shared-dispatch.yml` → `lieferung.yml` → `release.yml` | `mtext.py lieferung aufloesen`, bei einer Vorbereitung `mtext.py lieferung ausfuehren` und `mtext.py lieferung tag` | Vorbereitung bestätigt und erstmalige Übergabe gestartet oder vorhandener Lieferstand erneut übergeben |
+| Lieferung bauen und übertragen | Aufruf durch den zentralen Lieferworkflow | `lieferung-ausfuehren.yml` | `lieferung.yml` → `release.yml` | `mtext.py build-release`, `publish-mainframe`, danach `publish-github-release` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
 | `mtext_actions` testen | Pull Request oder Push auf `main` in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` | Zentrale Tests ausgeführt |
 
 ### Trigger-Workflows in den Mandanten-Repositories
@@ -564,37 +599,34 @@ Verarbeitung in `mtext_actions`:
 | Datei | Auslöser | Aufgabe |
 |---|---|---|
 | `check-resources.yml` | Pull Request oder manueller Start | Mandantenkonfiguration und geänderte konfigurierte Ressourcen oder den gewählten Vollstand prüfen, Syntaxbefunde als Warnungen anzeigen |
-| `lieferung-vorbereiten.yml` | Manueller Start auf dem ausgewählten Branch | SHA und Lieferumfang festhalten und die Vorbereitungs-ID anzeigen |
-| `lieferung-ausfuehren.yml` | Manueller Start mit der Vorbereitungs-ID | Vorbereitung laden, Lieferweg bestimmen und die zentrale Lieferung starten |
-| `lieferung-erneut-uebergeben.yml` | Manueller Start mit einem vorhandenen Liefer-Tag | Vorhandenen Lieferstand erneut an den Mainframe übergeben |
+| `lieferung-vorbereiten.yml` | Manueller Start auf dem ausgewählten Branch | SHA und Lieferumfang unter dem geplanten Liefer-Tag festhalten |
+| `lieferung-ausfuehren.yml` | Manueller Start mit einem geplanten oder vorhandenen Liefer-Tag | Neueste Vorbereitung bestätigen und die zentrale Lieferung starten oder vorhandenen Lieferstand erneut übergeben |
 | `sync-resources.yml` | Push auf einen Feature-, `main`- oder Release-Branch sowie manueller Start | Projekte nach M/Text-Entwicklung oder -Funktionstest übertragen |
 
 Syntaxbefunde aus `check-resources.yml` dienen als Hinweise und verhindern den
 Merge nicht.
 
-### Zentrale Workflows
+### Shared Workflows und zentrale Workflows
 
 | Datei | Auslöser | Aufgabe |
 |---|---|---|
-| `reusable-check-resources.yml` | Aufruf durch `check-resources.yml` | Mandantenkonfiguration sowie JSON- und XML-Ressourcen ohne Zugriff auf Zielsysteme prüfen |
-| `reusable-dispatch.yml` | Aufruf durch einen Mandanten-Workflow | Benannten zentralen Workflow mit seinen Eingaben starten |
-| `reusable-sync-resources.yml` | Aufruf durch `sync-resources.yml` | Projekte nach M/Text übertragen |
-| `reusable-lieferung-check.yml` | Aufruf durch `lieferung-vorbereiten.yml` | Liefer-Tag und Branchstand prüfen, Lieferumfang anzeigen und Vorbereitung festhalten |
-| `reusable-lieferung-ausfuehren.yml` | Aufruf durch `lieferung-ausfuehren.yml` | Vorbereitungsartefakt laden und Direktlieferung oder Vier-Augen-Freigabe feststellen |
-| `lieferung.yml` | Start durch `reusable-dispatch.yml` | Liefer-Tag auf der festgehaltenen SHA erstellen und `release.yml` aufrufen |
-| `release.yml` | Start durch `reusable-dispatch.yml` | FULL- und DELTA-Pakete erstellen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
+| `shared-check-resources.yml` | Aufruf durch `check-resources.yml` | Mandantenkonfiguration sowie JSON- und XML-Ressourcen ohne Zugriff auf Zielsysteme prüfen |
+| `shared-dispatch.yml` | Aufruf durch einen Mandanten-Workflow | Benannten zentralen Workflow mit seinen Eingaben starten |
+| `shared-sync-resources.yml` | Aufruf durch `sync-resources.yml` | Projekte nach M/Text übertragen |
+| `shared-lieferung-check.yml` | Aufruf durch `lieferung-vorbereiten.yml` | Liefer-Tag und Branchstand prüfen, Lieferumfang anzeigen und Vorbereitung festhalten |
+| `shared-lieferung-ausfuehren.yml` | Aufruf durch `lieferung-ausfuehren.yml` | Liefer-Tag auflösen, eine Vorbereitung bestätigen und `lieferung.yml` starten |
+| `lieferung.yml` | Start durch `shared-dispatch.yml` | Bei einer erstmaligen Lieferung den Tag erstellen und `release.yml` aufrufen |
+| `release.yml` | Aufruf durch `lieferung.yml` oder manueller Start | FULL- und DELTA-Pakete erstellen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
 | `ci.yml` | Pull Request oder Push auf `main` in `mtext_actions` | Tests ausführen |
-| `update-mandant-workflows.yml` | Manueller Start | Verweise auf `mtext_actions` in den Mandanten-Workflows aktualisieren |
 
-Die mit `reusable-` benannten Workflows werden direkt in einen Mandantenlauf
-eingebunden. Sie erhalten die benötigten Secrets aus dem Mandanten-Repository
-und verwenden die dort festgelegte CI/CD-Version. Tag-Erzeugung und Paketbau
-benötigen dagegen die in `mtext_actions` hinterlegten technischen Zugänge.
-`reusable-dispatch.yml`
-startet sie deshalb über die GitHub-API als eigenen Lauf auf `main` in
-`mtext_actions`. Workflowdefinition und Python-Implementierung stammen in
-diesem Lauf aus demselben Commit. Die zentralen Secrets werden nicht an den
-Mandantenlauf übergeben.
+Die als `shared-*.yml` abgelegten Shared Workflows werden direkt in einen
+Mandantenlauf eingebunden. Sie erhalten die benötigten Secrets aus dem
+Mandanten-Repository und verwenden `main` aus `mtext_actions`. Tag-Erzeugung
+und Paketbau benötigen dagegen die in `mtext_actions` hinterlegten technischen
+Zugänge. `shared-dispatch.yml` startet sie deshalb über die GitHub-API als
+eigenen Lauf auf `main` in `mtext_actions`. Workflowdefinition und
+Python-Implementierung stammen in diesem Lauf aus demselben Commit. Die
+zentralen Secrets werden nicht an den Mandantenlauf übergeben.
 
 ### Protokolle und Rückmeldung
 
@@ -607,23 +639,13 @@ Die Lieferung läuft danach als eigener Workflow in `mtext_actions`.
 Ihr Ergebnis und die Informationen zum Paket werden deshalb nach Abschluss im
 GitHub Release des Mandanten-Repositories angezeigt.
 
-### Aktualisierung der Mandanten-Workflows
+### Zentrale CI/CD-Version
 
-Wenn die Mandanten-Repositories eine neue Version von `mtext_actions`
-verwenden sollen, starten die zuständigen Admins
-`update-mandant-workflows.yml` manuell. Der Workflow aktualisiert alle
-Workflowdateien, die einen wiederverwendbaren Workflow aus `mtext_actions`
-aufrufen. Eigene Workflows ohne einen solchen Aufruf bleiben unverändert. Für
-jeden Zielbranch schreibt er einen administrativen Rollout-Commit.
-
-Die Workflowdateien gehören zu den Branches der Mandanten-Repositories. Daher
-aktualisiert der Workflow `main` und jeden vorhandenen Release-Branch getrennt.
-Nicht vorhandene Mandanten-Repositories und Branches werden mit einer Warnung
-übersprungen.
-Der technische Rollout-Zugriff darf dafür die Pull-Request-Pflicht der
-geschützten Zielbranches umgehen. Fachliche Änderungen verwenden weiterhin den
-Pull-Request-Ablauf. Reine Änderungen unter `.github/workflows` lösen keine
-M/Text-Synchronisation aus.
+Änderungen werden nach erfolgreicher zentraler Testsuite über einen Pull
+Request in `mtext_actions/main` zusammengeführt. Dieser Stand ist freigegeben.
+Die Mandanten-Workflows verweisen auf `mtext_actions@main` und verwenden ihn
+bei ihrem nächsten Lauf. Eine separate Aktualisierung der Mandantenbranches ist
+dafür nicht erforderlich.
 
 ### Status und Fehlercodes
 
@@ -717,28 +739,28 @@ Das Feld `stage` eines Hostprofils enthält eine der CodePipeline-Stages `FKTE`,
 |---|---|
 | `main` | Geschützt, keine Löschung oder Umbenennung, fachliche Änderung über Pull Request im Vier-Augenprinzip |
 | `release/nnn` | Geschützt, fachliche Änderung über Pull Request im Vier-Augenprinzip |
+| `mtext_actions/main` | Geschützt, Änderung nach erfolgreicher zentraler Testsuite über Pull Request |
 | `feature/nnn/<Bezeichnung>` | Keine zusätzliche Schutzregel |
 | `bereitstellung/nnn.nnn` | Keine zusätzliche Schutzregel, nach der Lieferung löschbar |
 | Liefer-Tags `rnnn.nnn` | Der zentrale Lieferworkflow erstellt den Tag auf der bestätigten SHA. Ein fehlerhafter Tag darf gelöscht werden. |
-| Workflowdateien und Mandantenkonfiguration | Mandantenkonfiguration und reguläre Workflowänderungen über Pull Request und Review. Freigegebene CI/CD-Versionen werden über den administrativen Rollout aktualisiert. |
+| Workflowdateien und Mandantenkonfiguration | Änderungen erfolgen über Pull Request und Review. Die Trigger-Workflows verweisen auf `mtext_actions@main`. |
 | GitHub Release | Der zentrale Workflow darf zum vorhandenen Tag ein GitHub Release im auslösenden Mandanten-Repository erstellen und die Informationsdateien anhängen |
 | Mainframe-Zugang | Repositoryvariablen und Repository-Secret in `mtext_actions` |
 
-Die Trigger-Workflows verwenden das Fine-grained PAT eines technischen
-GitHub-Benutzers, um `mtext_actions` aufzurufen. Das Token gilt für das
-Repository `FinanzInformatik/fi_lbs_entw_oms_mtext_actions` und besitzt
-`Actions: read and write` sowie `Contents: read`. In den
-Mandanten-Repositories liegt es als Secret `MTEXT_ACTIONS_TOKEN`. Damit laden
-die Workflows die festgelegte CI/CD-Version und starten bei einer Lieferung den
-zentralen Workflow.
+Der aktuelle Implementierungsstand erwartet in den Mandanten-Repositories
+`MTEXT_ACTIONS_TOKEN` mit `Actions: read and write` sowie `Contents: read` für
+`mtext_actions`. Damit laden die Workflows die freigegebene CI/CD-Version aus
+`main` und starten bei einer Lieferung den zentralen Workflow.
 
-Für den Zugriff in Gegenrichtung liegt `WORKFLOW_CONFIGURATION_TOKEN` in
-`mtext_actions`. Es gilt für die zugeordneten Mandanten-Repositories und
-besitzt dort `Contents: read and write` sowie `Workflows: read and write`. Der technische Benutzer ist in den Schutzregeln
-als Ausnahme von der Pull-Request-Pflicht für den administrativen
-Workflow-Rollout hinterlegt. Das Token aktualisiert die Trigger-Workflows und
-erstellt die Liefer-Tags sowie die GitHub Releases mit den
-Informationsdateien.
+Für den Zugriff in Gegenrichtung erwartet `mtext_actions` derzeit
+`WORKFLOW_CONFIGURATION_TOKEN` mit `Contents: read and write` für die
+zugeordneten Mandanten-Repositories. Der Zugriff wird für Liefer-Tags und
+GitHub Releases mit den Informationsdateien benötigt.
+
+Für den produktiven Rollout fehlt eine vom persönlichen Benutzer unabhängige
+technische Identität. Ob die beiden PAT-Verträge durch eine GitHub App oder
+eine andere Vorgabe der GitHub-Admins ersetzt werden, ist offen. Die
+erforderlichen Repositoryberechtigungen bleiben dabei fachlich bestehen.
 
 ## 9. Mögliche Phase 2
 

@@ -1,4 +1,4 @@
-name: Wiederverwendbare Konfigurations- und Ressourcenprüfung
+name: Shared Workflow – Konfigurations- und Ressourcenprüfung
 
 # Dieser Workflow prüft die Mandantenkonfiguration. Die Prüfung der JSON- und
 # XML-Ressourcen ist optional und bei Pull Requests auf geänderte Dateien begrenzt.
@@ -7,10 +7,6 @@ name: Wiederverwendbare Konfigurations- und Ressourcenprüfung
     inputs:
       commit_sha:
         description: Commit im Mandanten-Repository, dessen Stand geprüft wird
-        required: true
-        type: string
-      automation_ref:
-        description: CI/CD-Version, aus der dieser Workflow geladen wurde
         required: true
         type: string
       check_resources:
@@ -25,7 +21,7 @@ name: Wiederverwendbare Konfigurations- und Ressourcenprüfung
         type: boolean
     secrets:
       automation_token:
-        description: Token zum Laden der festgelegten CI/CD-Version
+        description: Token zum Laden der zentralen CI/CD-Implementierung
         required: true
 
 permissions:
@@ -35,7 +31,7 @@ jobs:
   check:
     name: Mandantenkonfiguration und Ressourcen prüfen
     runs-on: [self-hosted, linux]
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Check-Out Mandanten-Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -50,7 +46,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
-          ref: ${{ inputs.automation_ref }}
+          ref: main
           path: automation
           persist-credentials: false
           token: ${{ secrets.automation_token }}

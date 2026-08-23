@@ -21,20 +21,19 @@ name: M/Text-Ressourcen synchronisieren
 permissions:
   contents: read
 
-# Synchronisierungen laufen nacheinander
+# Die Warteschlange behält bis zu 100 Synchronisierungen und führt sie
+# nacheinander aus
 concurrency:
   group: mtext-sync-${{ github.repository }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   # Der zentrale Workflow führt die Synchronisierung aus
   sync:
     name: Ressourcen mit M/Text synchronisieren
-    timeout-minutes: 15
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-sync-resources.yml@0000000000000000000000000000000000000000
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-sync-resources.yml@main
     with:
       commit_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.commit_sha || github.sha }}
-      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
-      automation_ref: 0000000000000000000000000000000000000000
     secrets:
       automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

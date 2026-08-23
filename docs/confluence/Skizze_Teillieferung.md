@@ -78,14 +78,15 @@ manuellen Workflow-Schritten ausgeführt:
 
 1. Eine Person startet **Lieferung vorbereiten**.
 2. Der Workflow hält SHA und Lieferumfang fest und zeigt die
-   Vorbereitungs-ID.
-3. Nach der Prüfung startet eine Person **Vorbereitete Lieferung ausführen**
-   mit dieser ID.
+   Vorbereitung unter dem geplanten Liefer-Tag an.
+3. Nach der Prüfung startet eine Person **Lieferung ausführen** mit diesem
+   Liefer-Tag.
 4. Tag und Übertragung entstehen.
 
 Startet dieselbe Person beide Workflows, ist es eine Direktlieferung. Startet
 eine andere Person den zweiten Workflow, ist es eine Vier-Augen-Freigabe. Eine
-Konfiguration oder vorherige Auswahl des Lieferwegs ist nicht erforderlich.
+Direktlieferung muss beim manuellen Start bewusst als Abweichung vom
+empfohlenen Vier-Augenprinzip bestätigt werden.
 
 Vorprüfung, Bestätigung und Liefer-Tag beziehen sich auf die zu Beginn
 festgehaltene SHA. Die Branchspitze wird danach nicht erneut aufgelöst.
@@ -99,8 +100,8 @@ keine Übertragung.
 ## Wiederholung einer Lieferung
 
 Der Tag bezeichnet den Git-Stand, nicht den einzelnen CodePipeline-Lauf.
-Derselbe Stand darf mehrfach übertragen werden. Eine erneute Bestätigung ist
-dafür nicht erforderlich.
+Derselbe Stand darf über **Lieferung ausführen** mehrfach übertragen werden.
+Eine erneute Bestätigung ist dafür nicht erforderlich.
 
 ## Wechsel auf die kommende Releaselinie
 
@@ -132,4 +133,3 @@ einzelnen 270-Commits bleiben auffindbar.
 - `.100` ist der vollständige Branchstand und die Basis späterer Lieferungen.
 - Die Mandantenkonfiguration enthält keinen technischen Lieferstatus.
 - Die Branchmuster und die Mandantenkonfiguration verwenden `nnn` statt `Rnnn`.
-- Der administrative Rollout bleibt auf `main` und `release/nnn` beschränkt.

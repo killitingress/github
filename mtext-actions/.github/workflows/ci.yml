@@ -21,7 +21,7 @@ jobs:
   test:
     name: Zentrale CI/CD-Implementierung testen
     runs-on: [self-hosted, linux]
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       # Lädt die zu prüfende CI/CD-Version in den Arbeitsbereich
       - name: Check-Out CI/CD-Version

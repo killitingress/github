@@ -1,7 +1,8 @@
-"""Bereitet eine Lieferung vor, bestätigt sie und erzeugt den Liefer-Tag.
+"""Bereitet eine Lieferung vor, löst sie auf und erzeugt den Liefer-Tag.
 
-Die Vorprüfung hält Branchstand und SHA fest. Die Ausführung taggt diesen
-festgehaltenen Stand.
+Die Vorprüfung hält Branchstand und SHA fest. Die Auflösung unterscheidet eine
+neue Lieferung von der Wiederholung. Die Ausführung taggt den festgehaltenen
+Stand.
 """
 
 from __future__ import annotations
@@ -20,6 +21,98 @@ from .project_package import _FULL_RELEASE, project_elements, release_scope
 
 # Datei im Artefakt mit Tag, SHA, Branch, Repository und vorbereitender Person.
 _VORBEREITUNG_DATEI = "vorbereitung.json"
+
+# Der geplante Liefer-Tag macht die zugehörige Vorbereitung ohne technische
+# Lauf-ID auffindbar.
+_VORBEREITUNG_ARTEFAKT = "{tag}-lieferungsartefakt"
+
+# Die GitHub-API liefert pro Seite höchstens so viele Artefakte. Alle Seiten
+# werden gelesen, damit auch häufig vorbereitete Liefer-Tags eindeutig bleiben.
+_ARTEFAKTE_PRO_SEITE = 100
+
+
+def _vorbereitungslauf(api_url: str, repository: str, tag: str, token: str) -> int | None:
+    """Ermittelt den neuesten noch verfügbaren Vorbereitungslauf.
+
+    Die Funktion kapselt die paginierte Actions-API als eigenständige
+    I/O-Grenze des Auflösungsschritts.
+    """
+
+    repository_path = urllib.parse.quote(repository, safe="/")
+    artifact_name = _VORBEREITUNG_ARTEFAKT.format(tag=tag)
+    artifacts: list[object] = []
+    page = 1
+    while True:
+        query = urllib.parse.urlencode(
+            {"name": artifact_name, "per_page": _ARTEFAKTE_PRO_SEITE, "page": page}
+        )
+        document = github.request(
+            method="GET",
+            url=f"{api_url.rstrip('/')}/repos/{repository_path}/actions/artifacts?{query}",
+            token=token,
+            failure=Status.SOURCE_FAILED,
+        )
+        if not isinstance(document, dict) or not isinstance(document.get("artifacts"), list):
+            raise DeliveryError(Status.SOURCE_FAILED, "Vorbereitungsartefakte können nicht ermittelt werden")
+
+        page_artifacts = document["artifacts"]
+        artifacts.extend(page_artifacts)
+        if len(page_artifacts) < _ARTEFAKTE_PRO_SEITE:
+            break
+        page += 1
+
+    available = [artifact for artifact in artifacts if isinstance(artifact, dict) and artifact.get("expired") is False]
+    if not available:
+        return None
+
+    try:
+        newest = max(available, key=lambda artifact: (artifact["created_at"], artifact["id"]))
+        return newest["workflow_run"]["id"]
+    except (KeyError, TypeError):
+        raise DeliveryError(Status.SOURCE_FAILED, "Vorbereitungsartefakt ist ungültig") from None
+
+
+def run_aufloesen(arguments: argparse.Namespace) -> dict[str, object]:
+    """Ordnet den Liefer-Tag einer Vorbereitung oder einer Wiederholung zu."""
+
+    if git.RELEASE_TAG_RE.fullmatch(arguments.tag) is None:
+        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Liefer-Tag")
+
+    api_url = arguments.api_url
+    repository = os.environ["SOURCE_REPOSITORY"]
+    token = os.environ["GITHUB_TOKEN"]
+    repository_path = urllib.parse.quote(repository, safe="/")
+    tag_path = urllib.parse.quote(arguments.tag, safe="")
+    reference = github.request(
+        method="GET",
+        url=f"{api_url.rstrip('/')}/repos/{repository_path}/git/ref/tags/{tag_path}",
+        token=token,
+        failure=Status.SOURCE_FAILED,
+        missing_ok=True,
+    )
+    if reference is not None:
+        match reference:
+            case {"object": {"sha": str(source_sha), "type": "commit"}}:
+                return {
+                    "outputs": {
+                        "wiederholung": "true",
+                        "source_sha": source_sha,
+                    },
+                }
+            case _:
+                raise DeliveryError(Status.SOURCE_FAILED, "Liefer-Tag ist ungültig")
+
+    run_id = _vorbereitungslauf(api_url, repository, arguments.tag, token)
+    if run_id is None:
+        raise DeliveryError(Status.SOURCE_FAILED, "Für den Liefer-Tag besteht keine Vorbereitung")
+
+    return {
+        "outputs": {
+            "wiederholung": "false",
+            "vorbereitung_id": run_id,
+            "vorbereitung_name": _VORBEREITUNG_ARTEFAKT.format(tag=arguments.tag),
+        },
+    }
 
 
 def _require_lieferung_source(
@@ -52,7 +145,7 @@ def _require_lieferung_source(
     if git.resolve(root, "HEAD") != sha:
         raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zur festgehaltenen SHA")
 
-    if git.reference_exists(root, f"refs/tags/{tag}"):
+    if require_current_tip and git.reference_exists(root, f"refs/tags/{tag}"):
         raise DeliveryError(Status.SOURCE_FAILED, "Liefer-Tag ist bereits vorhanden")
 
     # Bereitstellungsbranch oder Releaselinie-Branch zuordnen.
@@ -98,9 +191,7 @@ def _summary(
         f"| Bezugsstand | `{base_reference}` |",
     ]
 
-    if run_id := os.environ.get("GITHUB_RUN_ID"):
-        lines.append(f"| Vorbereitungs-ID | `{run_id}` |")
-    lines.extend(("", ""))
+    lines.append("")
 
     # Projektbezogene Elementlisten für Lieferumfang und optionalen Vorgänger.
     sections: list[tuple[str, tuple[str, str] | None, list[git.GitChange]]] = [
@@ -162,7 +253,7 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
                     "sha": arguments.source_sha,
                     "branch": arguments.branch,
                     "repository": os.environ["SOURCE_REPOSITORY"],
-                    "actor": arguments.actor,
+                    "prepare_actor": arguments.actor,
                 },
                 ensure_ascii=False,
                 indent=2,
@@ -183,10 +274,7 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
             ),
             "outputs": {
                 "vorbereitung_path": vorbereitung.as_posix(),
-                "lieferung_tag": arguments.tag,
-                "source_sha": arguments.source_sha,
-                "source_branch": arguments.branch,
-                "prepare_actor": arguments.actor,
+                "vorbereitung_name": _VORBEREITUNG_ARTEFAKT.format(tag=arguments.tag),
             },
         }
 
@@ -202,7 +290,7 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
                 "sha": str(sha),
                 "branch": str(branch),
                 "repository": str(repository),
-                "actor": str(prepare_actor),
+                "prepare_actor": str(prepare_actor),
             }:
                 pass
             case _:
@@ -211,9 +299,26 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
         if repository != os.environ["SOURCE_REPOSITORY"]:
             raise DeliveryError(Status.SOURCE_FAILED, "Vorbereitung gehört zu einem anderen Repository")
 
+        if tag != arguments.tag:
+            raise DeliveryError(Status.SOURCE_FAILED, "Vorbereitung gehört zu einem anderen Liefer-Tag")
+
         if not prepare_actor or not arguments.actor:
             raise DeliveryError(Status.SOURCE_FAILED, "Lieferperson fehlt")
-        lieferweg = "Direktlieferung" if prepare_actor == arguments.actor else "Vier-Augen-Freigabe"
+
+        direktlieferung = prepare_actor == arguments.actor
+        if direktlieferung and not arguments.direktlieferung_bestaetigt:
+            raise DeliveryError(
+                Status.VALIDATION_FAILED,
+                "Direktlieferung muss mit der Abweichung vom empfohlenen Vier-Augenprinzip und dem damit "
+                "verbundenen Risiko bewusst bestätigt werden",
+            )
+
+        lieferweg = (
+            "Direktlieferung – Abweichung vom empfohlenen Vier-Augenprinzip und damit verbundenes Risiko "
+            "bewusst bestätigt"
+            if direktlieferung
+            else "Vier-Augen-Freigabe"
+        )
         return {
             "status": Status.LIEFERUNG_BESTAETIGT.value,
             "summary": "\n".join(
@@ -227,10 +332,8 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
                 )
             ),
             "outputs": {
-                "lieferung_tag": tag,
                 "source_sha": sha,
                 "source_branch": branch,
-                "prepare_actor": prepare_actor,
             },
         }
 
@@ -248,8 +351,6 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
             require_current_tip=False,
         )
 
-        if not arguments.prepare_actor or not arguments.execute_actor:
-            raise DeliveryError(Status.SOURCE_FAILED, "Lieferperson fehlt")
         repository = os.environ["SOURCE_REPOSITORY"]
         github.request(
             method="POST",
@@ -260,7 +361,7 @@ def run_command(arguments: argparse.Namespace) -> dict[str, object]:
         )
         return {
             "status": Status.LIEFERUNG_TAGGED.value,
-            "outputs": {"lieferung_tag": arguments.tag, "source_sha": arguments.source_sha},
+            "outputs": {"source_sha": arguments.source_sha},
         }
 
     raise DeliveryError(Status.VALIDATION_FAILED, "unbekannter Lieferbefehl")

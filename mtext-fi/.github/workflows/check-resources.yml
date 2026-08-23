@@ -22,13 +22,10 @@ concurrency:
 jobs:
   check:
     name: Mandantenkonfiguration und Ressourcen prüfen
-    timeout-minutes: 15
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-check-resources.yml@0000000000000000000000000000000000000000
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
     with:
       # Pull Requests prüfen den Merge-Commit, manuelle Starts den gewählten Branchstand
       commit_sha: ${{ github.sha }}
-      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
-      automation_ref: 0000000000000000000000000000000000000000
       check_resources: ${{ github.event_name != 'workflow_dispatch' || inputs.check_resources }}
       changed_only: ${{ github.event_name == 'pull_request' }}
     secrets:

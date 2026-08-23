@@ -41,7 +41,7 @@ jobs:
   build:
     name: FULL- oder DELTA-Artefakt erstellen
     runs-on: [self-hosted, linux]
-    timeout-minutes: 15
+    timeout-minutes: 10
     outputs:
       source_sha: ${{ steps.pakete.outputs.source_sha }}
     steps:
@@ -100,7 +100,7 @@ jobs:
     concurrency:
       group: mainframe-${{ inputs.source_repository }}
       cancel-in-progress: false
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       # Lädt die Implementierung aus demselben Commit wie diesen Workflow
       - name: Check-Out CI/CD-Version
@@ -139,7 +139,7 @@ jobs:
     name: Bereitstellungsbericht im Mandanten-Repository veröffentlichen
     needs: [build, publish]
     runs-on: [self-hosted, linux]
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       # Lädt die Implementierung aus demselben Commit wie diesen Workflow
       - name: Check-Out CI/CD-Version

@@ -23,14 +23,12 @@ Mainframe-Übergabe.
 | `MAINFRAME_FTPS_PORT` | Repositoryvariable | Steuerungsport des expliziten FTPS-Zugangs |
 | `MAINFRAME_FTPS_USER` | Repositoryvariable | zentraler technischer FTPS-Benutzer |
 | `MAINFRAME_FTPS_PASSWORD` | Repository-Secret | FTPS-Passwort für den zentralen Übergabejob |
-| `WORKFLOW_CONFIGURATION_TOKEN` | Repository-Secret | Mandanten-Workflows ausrollen, Liefer-Tags erstellen sowie Lieferinformationen veröffentlichen |
+| `WORKFLOW_CONFIGURATION_TOKEN` | Repository-Secret | Liefer-Tags erstellen und Lieferinformationen veröffentlichen |
 
 `WORKFLOW_CONFIGURATION_TOKEN` gilt für die zugeordneten
-Mandanten-Repositories. Es benötigt dort `Contents: read and write` und
-`Workflows: read and write`. Der technische Benutzer ist in den Schutzregeln
-als Ausnahme von der Pull-Request-Pflicht für den administrativen Rollout
-hinterlegt. Die Liefer-Tags `rnnn.nnn` fallen nicht unter die Schutzregeln für
-Release-Tags aus dem Git-Leitfaden.
+Mandanten-Repositories und benötigt dort `Contents: read and write`. Die
+Liefer-Tags `rnnn.nnn` fallen nicht unter die Schutzregeln für Release-Tags aus
+dem Git-Leitfaden.
 
 Jedes Mandanten-Repository erhält `MTEXT_ACTIONS_TOKEN` als Repository-Secret.
 Der Fine-grained PAT ist auf `mtext_actions` begrenzt und besitzt dort
@@ -46,29 +44,29 @@ GitHub Environments werden nicht verwendet.
 Eine Lieferung wird im Mandanten-Repository in zwei Schritten gestartet:
 
 1. **Lieferung vorbereiten** prüft den ausgewählten Branchstand, hält seine
-   SHA und den Lieferumfang fest und zeigt die Vorbereitungs-ID.
-2. **Vorbereitete Lieferung ausführen** lädt die festgehaltene Vorbereitung.
-   Dieselbe Person bestätigt eine Direktlieferung. Eine andere Person erfüllt
-   das empfohlene Vier-Augenprinzip.
+   SHA und den Lieferumfang unter dem geplanten Liefer-Tag fest.
+2. **Lieferung ausführen** erhält diesen Liefer-Tag und lädt die neueste
+   festgehaltene Vorbereitung. Eine andere Person erfüllt das empfohlene
+   Vier-Augenprinzip. Dieselbe Person muss die Direktlieferung als Abweichung
+   davon bewusst bestätigen.
 
 Der zentrale Workflow erstellt den Liefer-Tag `rnnn.nnn` auf der
 festgehaltenen SHA und ruft anschließend Paketbau und Mainframe-Übergabe auf.
-Ein Tag-Push allein löst keine Übergabe aus. **Lieferung erneut übergeben**
-verarbeitet einen vorhandenen Liefer-Tag ein weiteres Mal.
+Ein Tag-Push allein löst keine Übergabe aus. Wird **Lieferung ausführen** mit
+einem vorhandenen Liefer-Tag gestartet, verarbeitet der Workflow diesen Stand
+ein weiteres Mal.
 
 Die `.100`-Lieferung einer Releaselinie ist ein FULL. Spätere Lieferungen sind
 kumulative DELTAs gegen diesen `.100`-Tag. Teillieferungen werden im
 Mandanten-Repository auf `bereitstellung/nnn.nnn` zusammengestellt.
 
-## Mandanten-Workflows aktualisieren
+## Zentrale CI/CD-Version
 
-Der manuell gestartete Workflow erhält die Commit-SHA der gewünschten
-CI/CD-Version. Er aktualisiert in `main` und den vorhandenen `release/nnn`
-jedes Mandanten die Workflowdateien, die einen wiederverwendbaren Workflow aus
-`mtext_actions` aufrufen, und pusht den Commit direkt. Nicht vorhandene
-Repositories und Branches werden mit einer Warnung übersprungen.
-Feature-Branches sind keine Ziele. Der Rollout startet keine
-M/Text-Synchronisation.
+`main` enthält die freigegebene Version von `mtext_actions`. Die
+Mandanten-Workflows rufen diese Version über `@main` auf. Eine Änderung an
+`main` steht damit allen Mandanten bei ihrem nächsten Workflow-Lauf zur
+Verfügung. Änderungen werden nach erfolgreicher **Zentraler Testsuite** über
+einen Pull Request in `main` zusammengeführt.
 
 ## Tests
 

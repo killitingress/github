@@ -1,4 +1,4 @@
-name: Wiederverwendbare M/Text-Ressourcensynchronisierung
+name: Shared Workflow – M/Text-Ressourcensynchronisierung
 
 # Dieser Workflow synchronisiert Ressourcen mit M/Text
 'on':
@@ -8,13 +8,9 @@ name: Wiederverwendbare M/Text-Ressourcensynchronisierung
         description: Commit im Mandanten-Repository, dessen Ressourcen synchronisiert werden
         required: true
         type: string
-      automation_ref:
-        description: CI/CD-Version, aus der dieser Workflow geladen wurde
-        required: true
-        type: string
     secrets:
       automation_token:
-        description: Token zum Laden der festgelegten CI/CD-Version
+        description: Token zum Laden der zentralen CI/CD-Implementierung
         required: true
 
 permissions:
@@ -24,7 +20,7 @@ jobs:
   sync:
     name: Ressourcen mit M/Text synchronisieren
     runs-on: [self-hosted, linux]
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       # Lädt den angegebenen Commit mit seiner Historie
       - name: Check-Out Mandanten-Repository
@@ -40,7 +36,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
-          ref: ${{ inputs.automation_ref }}
+          ref: main
           path: automation
           persist-credentials: false
           token: ${{ secrets.automation_token }}

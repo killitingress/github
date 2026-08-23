@@ -1,0 +1,116 @@
+name: Shared Workflow – Liefer-Ausführung
+
+# Ein geplanter Liefer-Tag lädt seine neueste Vorbereitung. Ein vorhandener
+# Liefer-Tag wird ohne neue Bestätigung erneut übergeben.
+'on':
+  workflow_call:
+    inputs:
+      source_repository:
+        description: Mandanten-Repository
+        required: true
+        type: string
+      lieferung_tag:
+        description: Geplanter oder vorhandener Liefer-Tag
+        required: true
+        type: string
+      actor:
+        description: ausführende Person
+        required: true
+        type: string
+      direktlieferung_bestaetigt:
+        description: bewusste Bestätigung einer Direktlieferung
+        required: true
+        type: boolean
+    secrets:
+      automation_token:
+        description: Token zum Laden der zentralen CI/CD-Implementierung
+        required: true
+      dispatch_token:
+        description: Token zum Starten der zentralen Lieferung
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  pruefen:
+    name: Liefer-Tag prüfen
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 10
+    outputs:
+      source_sha: >-
+        ${{ steps.aufloesen.outputs.wiederholung == 'true' &&
+        steps.aufloesen.outputs.source_sha || steps.bestaetigen.outputs.source_sha }}
+      source_branch: ${{ steps.bestaetigen.outputs.source_branch }}
+      wiederholung: ${{ steps.aufloesen.outputs.wiederholung }}
+    steps:
+      # Lädt die freigegebene Implementierung der Lieferausführung.
+      - name: Check-Out CI/CD-Version
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
+          ref: main
+          path: automation
+          persist-credentials: false
+          token: ${{ secrets.automation_token }}
+
+      - name: Python-Runtime ermitteln
+        id: runtime
+        run: bash automation/scripts/runner-preflight.sh
+
+      # Ein vorhandener Git-Tag bezeichnet eine Wiederholung. Sonst wird der
+      # neueste Vorbereitungslauf zum geplanten Liefer-Tag ermittelt.
+      - name: Liefer-Tag auflösen
+        id: aufloesen
+        env:
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          LIEFERUNG_TAG: ${{ inputs.lieferung_tag }}
+        run: >-
+          "${{ steps.runtime.outputs.python }}"
+          automation/src/mtext.py lieferung aufloesen
+          --tag "$LIEFERUNG_TAG"
+          --api-url "$GITHUB_API_URL"
+
+      # Die offizielle Action lädt die ermittelte Vorbereitung. Sie übernimmt
+      # dabei auch den geschützten Wechsel zum Artefaktspeicher.
+      - name: Vorbereitung laden
+        if: steps.aufloesen.outputs.wiederholung != 'true'
+        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
+        with:
+          name: ${{ steps.aufloesen.outputs.vorbereitung_name }}
+          path: vorbereitung
+          github-token: ${{ github.token }}
+          repository: ${{ inputs.source_repository }}
+          run-id: ${{ steps.aufloesen.outputs.vorbereitung_id }}
+
+      # Die vorbereitende und die ausführende Person bestimmen den Lieferweg.
+      - name: Lieferung bestätigen
+        id: bestaetigen
+        if: steps.aufloesen.outputs.wiederholung != 'true'
+        env:
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          ACTOR: ${{ inputs.actor }}
+          LIEFERUNG_TAG: ${{ inputs.lieferung_tag }}
+        run: >-
+          "${{ steps.runtime.outputs.python }}"
+          automation/src/mtext.py lieferung ausfuehren
+          --tag "$LIEFERUNG_TAG"
+          --vorbereitung vorbereitung/vorbereitung.json
+          --actor "$ACTOR"
+          ${{ inputs.direktlieferung_bestaetigt && '--direktlieferung-bestaetigt' || '' }}
+
+  # Nach der Prüfung startet immer derselbe zentrale Lieferworkflow. Dieser
+  # entscheidet anhand der Wiederholung, ob zuvor ein Liefer-Tag entsteht.
+  ausfuehren:
+    name: Zentrale Lieferung starten
+    needs: pruefen
+    uses: ./.github/workflows/shared-dispatch.yml
+    with:
+      workflow: lieferung.yml
+      workflow_inputs: >-
+        {"source_repository":${{ toJSON(inputs.source_repository) }},"lieferung_tag":${{ toJSON(inputs.lieferung_tag) }},"source_sha":${{ toJSON(needs.pruefen.outputs.source_sha) }},"source_branch":${{ toJSON(needs.pruefen.outputs.source_branch) }},"wiederholung":${{ toJSON(needs.pruefen.outputs.wiederholung == 'true') }}}
+    secrets:
+      dispatch_token: ${{ secrets.dispatch_token }}

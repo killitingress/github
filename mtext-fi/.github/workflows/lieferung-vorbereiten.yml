@@ -16,14 +16,12 @@ permissions:
 jobs:
   vorpruefen:
     name: Lieferung vorprüfen
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-lieferung-check.yml@0000000000000000000000000000000000000000
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-check.yml@main
     with:
       source_repository: ${{ github.repository }}
       source_branch: ${{ github.ref_name }}
       source_sha: ${{ github.sha }}
       lieferung_tag: ${{ inputs.lieferung_tag }}
       actor: ${{ github.actor }}
-      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
-      automation_ref: 0000000000000000000000000000000000000000
     secrets:
       automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

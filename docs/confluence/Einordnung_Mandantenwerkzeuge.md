@@ -46,7 +46,7 @@ Ein Befund beendet den Lauf zunächst nicht als Fehler und verhindert damit den
 Pull Request nicht. Welche Befunde später verbindlich werden, erfordert eine
 eigene fachliche Entscheidung.
 
-Die gemeinsame Prüflogik und der wiederverwendbare Workflow liegen in
+Die gemeinsame Prüflogik und der Shared Workflow liegen in
 `mtext_actions`. Die Mandanten-Repositories enthalten den Trigger-Workflow und
 zeigen die Warnungen beim betroffenen Pull Request an.
 
@@ -71,6 +71,7 @@ Zusammenhang zwischen Abnahme- und Lieferstand wie folgt her:
 3. **Lieferung vorbereiten** hält die ausgewählte SHA und den Lieferumfang
    fest. Bei einer Teillieferung enthält `bereitstellung/nnn.nnn` die
    ausgewählten, bereits abgenommenen Squash-Commits.
-4. **Vorbereitete Lieferung ausführen** bestätigt diesen festgehaltenen Stand.
+4. **Lieferung ausführen** bestätigt diesen festgehaltenen Stand anhand des
+   geplanten Liefer-Tags.
    Der Liefer-Tag und der Paketbau verwenden dieselbe SHA.
 5. Das GitHub Release nennt die SHA und enthält die Lieferinformationen.

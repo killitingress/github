@@ -1,7 +1,7 @@
 name: Zentrale Lieferung
 
-# Erzeugt den Liefer-Tag auf der festgehaltenen SHA und startet die
-# Mainframe-Übergabe. Der Branchstand wird nicht erneut gelesen.
+# Erstmalige Lieferungen erhalten ihren Liefer-Tag auf der festgehaltenen SHA.
+# Danach startet ebenso wie bei einer Wiederholung die Mainframe-Übergabe.
 'on':
   workflow_dispatch:
     inputs:
@@ -14,31 +14,26 @@ name: Zentrale Lieferung
         required: true
         type: string
       source_sha:
-        description: festgehaltene SHA der Vorbereitung
+        description: Commit des Liefer-Tags oder der Vorbereitung
         required: true
         type: string
       source_branch:
-        description: Branch der Vorbereitung
-        required: true
+        description: Branch der Vorbereitung bei einer erstmaligen Lieferung
+        required: false
         type: string
-      prepare_actor:
-        description: vorbereitende Person
+      wiederholung:
+        description: vorhandenen Liefer-Tag erneut ausführen
         required: true
-        type: string
-      execute_actor:
-        description: ausführende Person
-        required: true
-        type: string
+        type: boolean
 permissions:
   contents: read
 
 jobs:
   tag:
     name: Liefer-Tag erstellen
+    if: ${{ !inputs.wiederholung }}
     runs-on: [self-hosted, linux]
-    timeout-minutes: 15
-    outputs:
-      lieferung_tag: ${{ steps.tag.outputs.lieferung_tag }}
+    timeout-minutes: 10
     steps:
       # Lädt die festgehaltene SHA mit ihrer Historie. Die aktuelle
       # Branchspitze wird nicht als neuer Lieferstand gelesen.
@@ -66,7 +61,6 @@ jobs:
 
       # Der Tag zeigt auf die in der bestätigten Vorbereitung festgehaltene SHA.
       - name: Liefer-Tag erstellen
-        id: tag
         env:
           PYTHON: ${{ steps.runtime.outputs.python }}
           SOURCE_REPOSITORY: ${{ inputs.source_repository }}
@@ -74,16 +68,12 @@ jobs:
           LIEFERUNG_TAG: ${{ inputs.lieferung_tag }}
           SOURCE_BRANCH: ${{ inputs.source_branch }}
           SOURCE_SHA: ${{ inputs.source_sha }}
-          PREPARE_ACTOR: ${{ inputs.prepare_actor }}
-          EXECUTE_ACTOR: ${{ inputs.execute_actor }}
           GITHUB_API_URL: ${{ github.api_url }}
         run: >-
           "$PYTHON" automation/src/mtext.py lieferung tag
           --tag "$LIEFERUNG_TAG"
           --branch "$SOURCE_BRANCH"
           --source-sha "$SOURCE_SHA"
-          --prepare-actor "$PREPARE_ACTOR"
-          --execute-actor "$EXECUTE_ACTOR"
           --api-url "$GITHUB_API_URL"
 
   # Nach dem Liefer-Tag startet derselbe Lauf den Paketbau. Ein Tag-Push allein
@@ -91,9 +81,10 @@ jobs:
   start-release:
     name: Zentralen Release-Workflow starten
     needs: tag
+    if: ${{ always() && (needs.tag.result == 'success' || needs.tag.result == 'skipped') }}
     uses: ./.github/workflows/release.yml
     with:
       source_repository: ${{ inputs.source_repository }}
-      release_tag: ${{ needs.tag.outputs.lieferung_tag }}
+      release_tag: ${{ inputs.lieferung_tag }}
       trigger_sha: ${{ inputs.source_sha }}
     secrets: inherit

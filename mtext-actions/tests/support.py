@@ -11,7 +11,6 @@ from pathlib import Path
 from lbs_delivery.config import Configuration, MANDANT_CONFIG_PATH, load_configuration
 
 AUTOMATION_ROOT = Path(__file__).resolve().parents[1]
-ZERO_SHA = "0" * 40
 
 
 class TempDirTestCase(unittest.TestCase):

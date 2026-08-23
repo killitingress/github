@@ -1,39 +1,33 @@
-name: Vorbereitete Lieferung ausführen
+name: Lieferung ausführen
 
-# Die ausführende Person nennt die Vorbereitungs-ID. Dieselbe Person bestätigt
-# eine Direktlieferung, eine andere Person erfüllt das Vier-Augenprinzip.
+# Ein geplanter Liefer-Tag wird aus seiner neuesten Vorbereitung ausgeführt.
+# Ein vorhandener Liefer-Tag wird erneut an den Mainframe übergeben.
 'on':
   workflow_dispatch:
     inputs:
-      vorbereitung_id:
-        description: Vorbereitungs-ID aus der Liefer-Vorprüfung
+      lieferung_tag:
+        description: Geplanter oder vorhandener Liefer-Tag, zum Beispiel r261.108
         required: true
         type: string
+      direktlieferung_bestaetigt:
+        description: Direktlieferung, Abweichung vom Vier-Augenprinzip und Risiko bewusst bestätigen
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   actions: read
 
 jobs:
-  vorbereitung-lesen:
-    name: Vorbereitung prüfen
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-lieferung-ausfuehren.yml@0000000000000000000000000000000000000000
+  lieferung-ausfuehren:
+    name: Lieferung ausführen
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@main
     with:
       source_repository: ${{ github.repository }}
-      vorbereitung_id: ${{ inputs.vorbereitung_id }}
+      lieferung_tag: ${{ inputs.lieferung_tag }}
       actor: ${{ github.actor }}
-      # Der Rollout trägt hier dieselbe CI/CD-Version wie in uses ein
-      automation_ref: 0000000000000000000000000000000000000000
+      direktlieferung_bestaetigt: ${{ inputs.direktlieferung_bestaetigt }}
     secrets:
       automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}
-
-  ausfuehren:
-    name: Lieferung ausführen
-    needs: vorbereitung-lesen
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/reusable-dispatch.yml@0000000000000000000000000000000000000000
-    with:
-      workflow: lieferung.yml
-      workflow_inputs: >-
-        {"source_repository":${{ toJSON(github.repository) }},"lieferung_tag":${{ toJSON(needs.vorbereitung-lesen.outputs.lieferung_tag) }},"source_sha":${{ toJSON(needs.vorbereitung-lesen.outputs.source_sha) }},"source_branch":${{ toJSON(needs.vorbereitung-lesen.outputs.source_branch) }},"prepare_actor":${{ toJSON(needs.vorbereitung-lesen.outputs.prepare_actor) }},"execute_actor":${{ toJSON(github.actor) }}}
-    secrets:
       dispatch_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

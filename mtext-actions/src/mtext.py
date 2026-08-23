@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from lbs_delivery import config, github, lieferung, mainframe_release, process, resource_check, rollout, sync
+from lbs_delivery import config, github, lieferung, mainframe_release, process, resource_check, sync
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -39,7 +39,7 @@ def _build_parser() -> argparse.ArgumentParser:
     synchronize.set_defaults(handler=sync.run_command)
 
     # Lieferung vorprüfen, ihre Ausführung bestätigen oder den Liefer-Tag erzeugen.
-    delivery = commands.add_parser("lieferung", help="Lieferung vorprüfen, freigeben oder tagen")
+    delivery = commands.add_parser("lieferung", help="Lieferung vorprüfen, auflösen, freigeben oder tagen")
     delivery_commands = delivery.add_subparsers(dest="lieferung_command", required=True)
 
     # Branchstand festhalten und Lieferumfang anzeigen.
@@ -50,10 +50,18 @@ def _build_parser() -> argparse.ArgumentParser:
     check_delivery.add_argument("--actor", required=True)
     check_delivery.set_defaults(handler=lieferung.run_command)
 
-    # Lokal geladenen Vorbereitungsstand durch dieselbe oder eine zweite Person bestätigen.
+    # Geplanten oder vorhandenen Liefer-Tag dem nächsten Schritt zuordnen.
+    resolve_delivery = delivery_commands.add_parser("aufloesen")
+    resolve_delivery.add_argument("--tag", required=True)
+    resolve_delivery.add_argument("--api-url", required=True)
+    resolve_delivery.set_defaults(handler=lieferung.run_aufloesen)
+
+    # Lokal geladene Vorbereitung durch dieselbe oder eine zweite Person bestätigen.
     execute_delivery = delivery_commands.add_parser("ausfuehren")
+    execute_delivery.add_argument("--tag", required=True)
     execute_delivery.add_argument("--vorbereitung", type=Path, required=True)
     execute_delivery.add_argument("--actor", required=True)
+    execute_delivery.add_argument("--direktlieferung-bestaetigt", action="store_true")
     execute_delivery.set_defaults(handler=lieferung.run_command)
 
     # Liefer-Tag auf der festgehaltenen SHA erzeugen.
@@ -61,8 +69,6 @@ def _build_parser() -> argparse.ArgumentParser:
     tag_delivery.add_argument("--tag", required=True)
     tag_delivery.add_argument("--branch", required=True)
     tag_delivery.add_argument("--source-sha", required=True)
-    tag_delivery.add_argument("--prepare-actor", required=True)
-    tag_delivery.add_argument("--execute-actor", required=True)
     tag_delivery.add_argument("--api-url", required=True)
     tag_delivery.set_defaults(handler=lieferung.run_command)
 
@@ -77,28 +83,6 @@ def _build_parser() -> argparse.ArgumentParser:
     commands.add_parser("publish-github-release", help="Lieferinformationen veröffentlichen").set_defaults(
         handler=github.run_publish_command
     )
-
-    # Gebundene CI/CD-Version in den Mandanten-Workflows aktualisieren.
-    rollout_parser = commands.add_parser("rollout", help="Mandanten-Workflows aktualisieren")
-    rollout_commands = rollout_parser.add_subparsers(dest="rollout_command", required=True)
-
-    # Gewünschte Revision prüfen und die Mandanten-Matrix erzeugen.
-    rollout_prepare = rollout_commands.add_parser("prepare-rollout")
-    rollout_prepare.add_argument("--automation-sha", required=True)
-    rollout_prepare.set_defaults(handler=rollout.run_command)
-
-    # Workflow-Aufrufe eines Mandanten auf die Rollout-SHA umstellen.
-    rollout_mandant = rollout_commands.add_parser("prepare-mandant")
-    rollout_mandant.add_argument("--mandant-root", type=Path, required=True)
-    rollout_mandant.add_argument("--rollout-sha", required=True)
-    rollout_mandant.set_defaults(handler=rollout.run_command)
-
-    # Zielbranch der Rollout-Matrix auf Vorhandensein prüfen.
-    rollout_branch = rollout_commands.add_parser("check-target-branch")
-    rollout_branch.add_argument("--api-url", required=True)
-    rollout_branch.add_argument("--repository", required=True)
-    rollout_branch.add_argument("--branch", required=True)
-    rollout_branch.set_defaults(handler=rollout.run_command)
 
     return parser
 

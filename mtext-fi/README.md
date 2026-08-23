@@ -44,9 +44,10 @@ geprüft und mit Squash Merge zusammengeführt.
 
 Eine Lieferung wird über den Workflow **Lieferung vorbereiten** auf dem
 ausgewählten Branch vorbereitet. Die Vorprüfung hält SHA und Lieferumfang fest
-und zeigt die Vorbereitungs-ID. Danach startet eine Person **Vorbereitete
-Lieferung ausführen** mit dieser ID. Dieselbe Person bestätigt eine
-Direktlieferung. Eine andere Person erfüllt das empfohlene Vier-Augenprinzip.
+und ordnet sie dem geplanten Liefer-Tag zu. Danach startet eine Person
+**Lieferung ausführen** mit diesem Tag. Dieselbe Person bestätigt eine
+Direktlieferung bewusst als Abweichung. Eine andere Person erfüllt das
+empfohlene Vier-Augenprinzip.
 Der zentrale Lauf setzt den Liefer-Tag auf der festgehaltenen SHA.
 
 - `r261.100` entsteht auf `main` oder `release/261` und erzeugt ein FULL
@@ -58,8 +59,8 @@ Ausführungslauf startet die zentrale Mainframe-Lieferung in
 `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Ein Tag-Push allein startet
 keine Mainframe-Übergabe. Das FTPS-Passwort liegt nicht in diesem Repository.
 
-Ein vorhandener Liefer-Tag lässt sich über **Lieferung erneut übergeben**
-ohne erneute Bestätigung noch einmal an den Mainframe übertragen.
+Wird **Lieferung ausführen** mit einem vorhandenen Liefer-Tag gestartet, wird
+sein Stand ohne erneute Bestätigung noch einmal an den Mainframe übertragen.
 
 ## Mandantenkonfiguration
 

@@ -2,13 +2,14 @@
 
 Die Workflowdateien starten die Läufe dieses Mandanten-Repositories. Die
 eigentliche CI/CD-Implementierung kommt aus
-`FinanzInformatik/fi_lbs_entw_oms_mtext_actions` (`mtext_actions`) über eine
-Commit-SHA.
+`FinanzInformatik/fi_lbs_entw_oms_mtext_actions` (`mtext_actions`). Dessen
+`main` enthält die freigegebene Version und wird von den Mandanten-Workflows
+direkt verwendet.
 
 ## Voraussetzungen
 
-`MTEXT_ACTIONS_TOKEN` ist ein Fine-grained PAT eines technischen
-GitHub-Benutzers für `mtext_actions` mit:
+Der aktuelle Workflowvertrag erwartet `MTEXT_ACTIONS_TOKEN` als Fine-grained
+PAT für `mtext_actions` mit:
 
 - `Contents: read` zum Laden der CI/CD-Version
 - `Actions: write` zum Starten der zentralen Lieferworkflows
@@ -42,33 +43,28 @@ ein vollständiger Abgleich mit M/Text-Entwicklung und M/Text-Funktionstest.
 ## `lieferung-vorbereiten.yml`
 
 Der manuelle Start verwendet den in GitHub ausgewählten Branch. Die Vorprüfung
-hält SHA und Lieferumfang fest und zeigt die Vorbereitungs-ID. `.100` entsteht
+hält SHA und Lieferumfang unter dem geplanten Liefer-Tag fest. `.100` entsteht
 auf `main` oder `release/nnn` und erzeugt ein FULL des vollständigen Stands.
 Jede spätere Version derselben Releaselinie erzeugt ein kumulatives DELTA gegen
 `.100`. Teillieferungen werden auf `bereitstellung/nnn.nnn` zusammengestellt.
 
-Nach der Prüfung startet eine Person **Vorbereitete Lieferung ausführen** mit
-der angezeigten Vorbereitungs-ID. Dieselbe Person bestätigt eine
-Direktlieferung. Eine andere Person erfüllt das empfohlene Vier-Augenprinzip.
+Bestehen mehrere Vorbereitungen desselben Tags, verwendet **Lieferung
+ausführen** die neueste noch verfügbare Vorbereitung. Eine andere Person
+erfüllt das empfohlene Vier-Augenprinzip. Dieselbe Person muss die
+Direktlieferung im manuellen Start bewusst bestätigen.
 
 ## `lieferung-ausfuehren.yml`
 
-Die ausführende Person nennt die Vorbereitungs-ID. Der Lauf lädt die
-festgehaltenen Angaben, nennt den ermittelten Lieferweg und startet den
-zentralen Workflow `lieferung.yml`. Dort entsteht der Liefer-Tag. Anschließend
-startet `release.yml`. Ein Tag-Push allein startet keine
-Mainframe-Übergabe. Paketbau und Mainframe-Übergabe laufen in
-`mtext_actions`.
+Die ausführende Person nennt den Liefer-Tag. Fehlt der Git-Tag, lädt der Lauf
+die neueste Vorbereitung und nennt den ermittelten Lieferweg. Anschließend
+startet der zentrale Ablauf `lieferung.yml`. Dieser erstellt bei einer
+erstmaligen Lieferung den Tag und ruft danach `release.yml` auf. Bei einem
+vorhandenen Git-Tag entfällt die erneute Bestätigung und `lieferung.yml` ruft
+direkt `release.yml` auf. Ein Tag-Push allein startet keine
+Mainframe-Übergabe. Paketbau und Mainframe-Übergabe laufen in `mtext_actions`.
 
-## `lieferung-erneut-uebergeben.yml`
+## Zentrale CI/CD-Version
 
-Der manuelle Start nennt einen vorhandenen Liefer-Tag. Der zentrale Workflow
-`release.yml` überträgt denselben Stand erneut. Eine erneute Bestätigung
-entsteht nicht.
-
-## Aktualisierung
-
-Der zentrale Workflow **Mandanten-Workflows aktualisieren** schreibt die
-Verweise auf `mtext_actions` direkt in `main` und die vorhandenen
-Release-Branches. Workflows ohne Aufruf von `mtext_actions` bleiben
-unverändert.
+Die Mandanten-Workflows verweisen auf `mtext_actions@main`. Eine neue
+freigegebene Version steht nach ihrer Zusammenführung in `main` bei den
+nächsten Workflow-Läufen zur Verfügung.
