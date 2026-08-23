@@ -1,6 +1,11 @@
 name: M/Text-Ressourcen synchronisieren
 
-# Dieser Workflow synchronisiert die Ressourcen mit der zugehörigen M/Text-Stufe
+# Dieser Workflow startet die Ressourcensynchronisierung für Feature-, main- und
+# Release-Branches. Bei einem Push übergibt er den aktuellen Commit und den
+# vorherigen Ereignisstand an die zentrale Verarbeitung. Ein manueller Start
+# gleicht die angegebene vollständige Commit-SHA ab. Änderungen an
+# Workflow-Dateien lösen keine Synchronisierung aus. Die Warteschlange bewahrt
+# die Reihenfolge der Mandantenstände und führt die Läufe nacheinander aus.
 'on':
   push:
     branches:

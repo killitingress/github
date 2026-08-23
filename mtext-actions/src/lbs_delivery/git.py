@@ -109,16 +109,6 @@ def require_ancestor(repository: str | Path, ancestor: str, descendant: str) -> 
     )
 
 
-def read_file(repository: str | Path, commit: str, path: str | Path) -> bytes:
-    """Liest eine Datei aus einem bestimmten Commit.
-
-    Beim Wechsel der führenden Releaselinie wird damit die bisherige
-    Mandantenkonfiguration ohne zweiten Checkout gelesen.
-    """
-
-    return run(repository, "show", f"{resolve(repository, commit)}:{path}")  # Dateiinhalt aus dem Commit
-
-
 def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str, str]:
     """Ordnet einen zulässigen Quellbranch Releaselinie und M/Text-Zielstufe zu.
 
@@ -140,16 +130,6 @@ def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str
         return feature_match.group(1), MTEXT_ZIEL_ENTWICKLUNG
 
     raise DeliveryError(Status.VALIDATION_FAILED, "Branch ist kein Synchronisationszweig")
-
-
-def resolve_tag_commit(repository: str | Path, tag: str) -> str:
-    """Gibt den Commit eines Liefer-Tags zurück und prüft den Checkout."""
-
-    target = resolve(repository, f"refs/tags/{tag}")
-    if resolve(repository, "HEAD") != target:
-        raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Tag")
-
-    return target
 
 
 def require_commit_on_branches(repository: str | Path, commit: str, branches: tuple[str, ...]) -> None:

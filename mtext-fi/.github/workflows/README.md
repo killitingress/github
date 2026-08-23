@@ -58,10 +58,11 @@ Direktlieferung im manuellen Start bewusst bestätigen.
 Die ausführende Person nennt den Liefer-Tag. Fehlt der Git-Tag, lädt der Lauf
 die neueste Vorbereitung und nennt den ermittelten Lieferweg. Anschließend
 startet der zentrale Ablauf `lieferung.yml`. Dieser erstellt bei einer
-erstmaligen Lieferung den Tag und ruft danach `release.yml` auf. Bei einem
-vorhandenen Git-Tag entfällt die erneute Bestätigung und `lieferung.yml` ruft
-direkt `release.yml` auf. Ein Tag-Push allein startet keine
-Mainframe-Übergabe. Paketbau und Mainframe-Übergabe laufen in `mtext_actions`.
+erstmaligen Lieferung den Tag und baut und überträgt anschließend die
+Lieferung. Bei einem vorhandenen Git-Tag entfällt die erneute Bestätigung und
+`lieferung.yml` verarbeitet den Lieferstand erneut. Ein Tag-Push allein startet
+keine Mainframe-Übergabe. Paketbau und Mainframe-Übergabe laufen in
+`mtext_actions`.
 
 ## Zentrale CI/CD-Version
 

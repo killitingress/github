@@ -8,13 +8,22 @@ import unittest
 from lbs_delivery.config import load_mandanten_zuordnung, load_releaselinien_zuordnung
 from lbs_delivery.process import DeliveryError
 
-from tests.support import TempDirTestCase, load_test_configuration, setup_repository
+from tests.support import TempDirTestCase, git, init_repository, load_test_configuration
 
 
 class ConfigTests(TempDirTestCase):
     def setUp(self) -> None:
+        """Bereitet ein Mandanten-Repository mit FI-Referenzprojekten vor."""
+
         super().setUp()
-        self.repository = setup_repository(self.root, branch="main")
+        # Mandanten-Repository mit den hinterlegten FI-Referenzprojekten erzeugen.
+        self.repository = init_repository(self.root, branch="main")
+        for project_name in ("Configuration", "Fonts", "LOMS_Framework", "LOMS_Basis", "LOMS_PKA"):
+            project = self.repository / project_name
+            project.mkdir()
+            (project / "value.txt").write_text("content\n", encoding="utf-8")
+        git(self.repository, "add", ".")
+        git(self.repository, "commit", "-m", "init")
 
     def test_derives_fragment_project_codes_for_by(self) -> None:
         for project in ("Configuration", "Fonts", "LOMS_Framework", "LOMS_PKA"):

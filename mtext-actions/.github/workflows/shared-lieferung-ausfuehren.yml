@@ -1,12 +1,16 @@
-name: Shared Workflow – Liefer-Ausführung
+name: Shared Workflow – Lieferung ausführen
 
-# Ein geplanter Liefer-Tag lädt seine neueste Vorbereitung. Ein vorhandener
-# Liefer-Tag wird ohne neue Bestätigung erneut übergeben.
+# Dieser Workflow löst einen geplanten oder vorhandenen Liefer-Tag im
+# Mandanten-Repository auf. Für einen geplanten Tag lädt er die neueste
+# Vorbereitung und prüft sie mit der ausführenden Person. Eine Direktlieferung
+# erfordert die übergebene bewusste Bestätigung. Ein vorhandener Liefer-Tag
+# bezeichnet eine Wiederholung und benötigt keine neue Vorbereitung. Danach
+# startet der Workflow die zentrale Lieferung mit SHA, Branch und Lieferweg.
 'on':
   workflow_call:
     inputs:
       source_repository:
-        description: Mandanten-Repository
+        description: Mandanten-Repository, dessen Lieferstand verarbeitet wird
         required: true
         type: string
       lieferung_tag:
@@ -14,11 +18,11 @@ name: Shared Workflow – Liefer-Ausführung
         required: true
         type: string
       actor:
-        description: ausführende Person
+        description: Ausführende Person
         required: true
         type: string
       direktlieferung_bestaetigt:
-        description: bewusste Bestätigung einer Direktlieferung
+        description: Bewusste Bestätigung einer Direktlieferung
         required: true
         type: boolean
     secrets:
@@ -34,6 +38,8 @@ permissions:
   actions: read
 
 jobs:
+  # Löst den Liefer-Tag auf und prüft bei einer erstmaligen Lieferung die
+  # festgehaltene Vorbereitung
   pruefen:
     name: Liefer-Tag prüfen
     runs-on: [self-hosted, linux]
@@ -55,6 +61,7 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.automation_token }}
 
+      # Prüft Git und Python und stellt den Python-Pfad bereit
       - name: Python-Runtime ermitteln
         id: runtime
         run: bash automation/scripts/runner-preflight.sh
@@ -74,8 +81,8 @@ jobs:
           --tag "$LIEFERUNG_TAG"
           --api-url "$GITHUB_API_URL"
 
-      # Die offizielle Action lädt die ermittelte Vorbereitung. Sie übernimmt
-      # dabei auch den geschützten Wechsel zum Artefaktspeicher.
+      # Lädt die ermittelte Vorbereitung aus dem Laufartefakt des
+      # Mandanten-Repositories
       - name: Vorbereitung laden
         if: steps.aufloesen.outputs.wiederholung != 'true'
         uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
@@ -86,7 +93,7 @@ jobs:
           repository: ${{ inputs.source_repository }}
           run-id: ${{ steps.aufloesen.outputs.vorbereitung_id }}
 
-      # Die vorbereitende und die ausführende Person bestimmen den Lieferweg.
+      # Prüft die Vorbereitung und hält den gewählten Lieferweg fest
       - name: Lieferung bestätigen
         id: bestaetigen
         if: steps.aufloesen.outputs.wiederholung != 'true'
@@ -102,7 +109,7 @@ jobs:
           --actor "$ACTOR"
           ${{ inputs.direktlieferung_bestaetigt && '--direktlieferung-bestaetigt' || '' }}
 
-  # Nach der Prüfung startet immer derselbe zentrale Lieferworkflow. Dieser
+  # Nach der Prüfung startet der zentrale Lieferworkflow. Dieser
   # entscheidet anhand der Wiederholung, ob zuvor ein Liefer-Tag entsteht.
   ausfuehren:
     name: Zentrale Lieferung starten

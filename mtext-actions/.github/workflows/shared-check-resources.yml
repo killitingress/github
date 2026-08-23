@@ -1,7 +1,11 @@
-name: Shared Workflow – Konfigurations- und Ressourcenprüfung
+name: Shared Workflow – Mandantenkonfiguration und Ressourcen prüfen
 
-# Dieser Workflow prüft die Mandantenkonfiguration. Die Prüfung der JSON- und
-# XML-Ressourcen ist optional und bei Pull Requests auf geänderte Dateien begrenzt.
+# Dieser Workflow prüft einen festgelegten Commit aus dem Mandanten-Repository.
+# Die Mandantenkonfiguration wird in jedem Lauf gegen die zentralen Zuordnungen
+# geprüft. Die Prüfung der JSON- und XML-Ressourcen kann abgewählt oder auf die
+# geänderten Dateien begrenzt werden. Für den Änderungsvergleich lädt der Lauf
+# zusätzlich den vorherigen Commit. Die Prüfung greift nicht auf M/Text oder den
+# Mainframe zu.
 'on':
   workflow_call:
     inputs:
@@ -10,12 +14,12 @@ name: Shared Workflow – Konfigurations- und Ressourcenprüfung
         required: true
         type: string
       check_resources:
-        description: JSON- und XML-Ressourcen prüfen
+        description: JSON- und XML-Ressourcen des Mandantenstands prüfen
         required: false
         default: true
         type: boolean
       changed_only:
-        description: Nur geänderte Ressourcen prüfen
+        description: Prüfung auf geänderte Ressourcen begrenzen
         required: false
         default: false
         type: boolean
@@ -33,15 +37,17 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 10
     steps:
-      - name: Check-Out Mandanten-Repository
+      # Lädt den zu prüfenden Mandantenstand. Für den Änderungsvergleich wird
+      # zusätzlich sein Vorgänger benötigt.
+      - name: Check-Out Mandantenstand
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           path: source
-          # Bei geänderten Ressourcen wird der vorherige Commit für den Diff benötigt
           fetch-depth: ${{ inputs.check_resources && inputs.changed_only && 2 || 1 }}
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
 
+      # Lädt die freigegebene Implementierung der Prüfung
       - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -51,10 +57,12 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.automation_token }}
 
+      # Prüft Git und Python und stellt den Python-Pfad bereit
       - name: Python-Runtime ermitteln
         id: runtime
         run: bash automation/scripts/runner-preflight.sh
 
+      # Prüft die zentrale Zuordnung und die Konfiguration des Mandanten
       - name: Mandantenkonfiguration prüfen
         run: >-
           "${{ steps.runtime.outputs.python }}" automation/src/mtext.py

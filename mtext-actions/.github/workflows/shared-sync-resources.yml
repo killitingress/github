@@ -1,6 +1,11 @@
-name: Shared Workflow – M/Text-Ressourcensynchronisierung
+name: Shared Workflow – Ressourcen mit M/Text synchronisieren
 
-# Dieser Workflow synchronisiert Ressourcen mit M/Text
+# Dieser Workflow synchronisiert den festgelegten Commit eines
+# Mandanten-Repositories mit der zugehörigen M/Text-Stufe. Er lädt den
+# Mandantenstand mit seiner Historie und die freigegebene zentrale
+# Implementierung. Der Python-Ablauf bestimmt aus Branch und Ereignis die
+# Releaselinie, die Zielstufe und den benötigten Lieferumfang. Anschließend legt
+# er die Übergabe für den M/Text-Adapter auf dem gemeinsamen CIFS-Pfad ab.
 'on':
   workflow_call:
     inputs:
@@ -23,7 +28,7 @@ jobs:
     timeout-minutes: 10
     steps:
       # Lädt den angegebenen Commit mit seiner Historie
-      - name: Check-Out Mandanten-Repository
+      - name: Check-Out Mandantenstand
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
@@ -31,7 +36,7 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.commit_sha }}
 
-      # Lädt die Skripte für die Synchronisierung
+      # Lädt die freigegebene Implementierung der Synchronisierung
       - name: Check-Out CI/CD-Version
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:

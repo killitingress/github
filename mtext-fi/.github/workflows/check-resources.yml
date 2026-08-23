@@ -1,7 +1,11 @@
 name: Mandantenkonfiguration und Ressourcen prüfen
 
-# Bei Pull Requests prüft dieser Workflow die Mandantenkonfiguration und die
-# geänderten Ressourcen. Manuell kann die Ressourcenprüfung abgewählt werden.
+# Dieser Workflow startet die zentrale Prüfung für den aktuellen
+# Mandantenstand. Bei Pull Requests prüft er den Merge-Commit, die
+# Mandantenkonfiguration und die geänderten JSON- und XML-Ressourcen. Bei einem
+# manuellen Start verwendet er den ausgewählten Branchstand und erlaubt das
+# Abwählen der Ressourcenprüfung. Die Verarbeitung erfolgt im Shared Workflow
+# aus der freigegebenen Version von mtext_actions.
 'on':
   pull_request:
   workflow_dispatch:
@@ -20,11 +24,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Übergibt den gewählten Mandantenstand an die zentrale Prüfung
   check:
     name: Mandantenkonfiguration und Ressourcen prüfen
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
     with:
-      # Pull Requests prüfen den Merge-Commit, manuelle Starts den gewählten Branchstand
+      # Pull Requests prüfen den Merge-Commit, manuelle Starts den gewählten
+      # Branchstand
       commit_sha: ${{ github.sha }}
       check_resources: ${{ github.event_name != 'workflow_dispatch' || inputs.check_resources }}
       changed_only: ${{ github.event_name == 'pull_request' }}

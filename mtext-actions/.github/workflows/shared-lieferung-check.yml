@@ -1,28 +1,32 @@
-name: Shared Workflow – Liefer-Vorprüfung
+name: Shared Workflow – Lieferung vorprüfen
 
-# Hält den ausgewählten Branchstand fest, prüft den Liefer-Tag und zeigt den
-# Lieferumfang. Das Artefakt gehört zum aufrufenden Mandantenlauf.
+# Dieser Workflow bereitet den ausgewählten Branchstand für eine spätere
+# Lieferung vor. Er lädt die festzuhaltende SHA mit ihrer Historie und prüft den
+# vorgesehenen Liefer-Tag, den Branch und den Lieferumfang. Das Ergebnis wird in
+# der Actions-Zusammenfassung angezeigt. Die geprüften Angaben werden als
+# Vorbereitung für 30 Tage im aufrufenden Mandantenlauf gespeichert. In diesem
+# Lauf entstehen weder ein Liefer-Tag noch eine Mainframe-Übergabe.
 'on':
   workflow_call:
     inputs:
       source_repository:
-        description: Mandanten-Repository
+        description: Mandanten-Repository, dessen Stand vorbereitet wird
         required: true
         type: string
       source_branch:
-        description: ausgewählter Branch der Vorbereitung
+        description: Ausgewählter Branch der Vorbereitung
         required: true
         type: string
       source_sha:
-        description: festzuhaltender Branchstand
+        description: Festzuhaltender Branchstand
         required: true
         type: string
       lieferung_tag:
-        description: vorgesehener Liefer-Tag
+        description: Vorgesehener Liefer-Tag
         required: true
         type: string
       actor:
-        description: vorbereitende Person
+        description: Vorbereitende Person
         required: true
         type: string
     secrets:
@@ -33,6 +37,8 @@ permissions:
   contents: read
 
 jobs:
+  # Prüft den vorgesehenen Lieferstand und hält seine Angaben für die spätere
+  # Ausführung fest
   check:
     name: Lieferung vorprüfen
     runs-on: [self-hosted, linux]
@@ -59,6 +65,7 @@ jobs:
           persist-credentials: false
           token: ${{ secrets.automation_token }}
 
+      # Prüft Git und Python und stellt den Python-Pfad bereit
       - name: Python-Runtime ermitteln
         id: runtime
         run: bash automation/scripts/runner-preflight.sh
@@ -82,6 +89,7 @@ jobs:
           --source-sha "$SOURCE_SHA"
           --actor "$ACTOR"
 
+      # Speichert die geprüften Angaben als Artefakt des Mandantenlaufs
       - name: Vorbereitung festhalten
         uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de
         with:

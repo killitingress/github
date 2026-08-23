@@ -138,11 +138,8 @@
         <mxCell id="release-delivery-title" value="&lt;b&gt;Lieferung bauen und übertragen&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontFamily=Arial;fontSize=12;fontColor=#666666" vertex="1" parent="1">
           <mxGeometry x="35" y="1320" width="260" height="25" as="geometry"/>
         </mxCell>
-        <mxCell id="rel-caller" value="&lt;b&gt;lieferung.yml&lt;/b&gt;&lt;br&gt;Liefer-Tag bei Erstlieferung erstellen&lt;br&gt;Paketbau aufrufen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
+        <mxCell id="rel-caller" value="&lt;b&gt;lieferung.yml in mtext_actions&lt;/b&gt;&lt;br&gt;Liefer-Tag bei Erstlieferung erstellen&lt;br&gt;Lieferung bauen und übertragen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="535" y="1355" width="185" height="95" as="geometry"/>
-        </mxCell>
-        <mxCell id="release-workflow" value="&lt;b&gt;release.yml in mtext_actions&lt;/b&gt;&lt;br&gt;Liefer-Tag und Quelle prüfen" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
-          <mxGeometry x="795" y="1355" width="170" height="95" as="geometry"/>
         </mxCell>
         <mxCell id="build-job" value="&lt;b&gt;Paketbau&lt;/b&gt;&lt;br&gt;FULL oder DELTA&lt;br&gt;JCL und Lieferbelege" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;fontFamily=Arial;fontSize=11;spacing=5" vertex="1" parent="1">
           <mxGeometry x="995" y="1340" width="170" height="125" as="geometry"/>
@@ -209,8 +206,7 @@
           <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="938" y="1280"/><mxPoint x="740" y="1280"/></Array></mxGeometry>
         </mxCell>
         <mxCell id="e-rel-10" value="im selben Lieferlauf" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=9;exitX=0.5;exitY=1;entryX=0.5;entryY=0" edge="1" parent="1" source="rel-tag" target="rel-caller"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-rel-dispatch" value="workflow_dispatch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;fontFamily=Arial;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="rel-caller" target="release-workflow"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="e-release-build" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="release-workflow" target="build-job"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e-release-build" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="rel-caller" target="build-job"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-build-artifact" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="build-job" target="artifact"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-artifact-publish" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5" edge="1" parent="1" source="artifact" target="publish-job"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="e-jcl-build" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeWidth=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1" edge="1" parent="1" source="jcl-template" target="build-job"><mxGeometry relative="1" as="geometry"/></mxCell>

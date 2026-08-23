@@ -96,7 +96,14 @@ def _plan_sync(
         return releaselinie, (zielstufe,), previous_commit
 
     # Push auf main mit Releaselinienwechsel: alle Zielstufen als FULL abgleichen.
-    document = json.loads(git.read_file(repository_root, previous_commit, config.MANDANT_CONFIG_PATH))
+    # Die bisherige Mandantenkonfiguration aus dem Vorgängercommit lesen. Dadurch
+    # wird für den Vergleich kein zweiter Checkout benötigt.
+    previous_configuration = git.run(
+        repository_root,
+        "show",
+        f"{git.resolve(repository_root, previous_commit)}:{config.MANDANT_CONFIG_PATH}",  # Dateiinhalt aus dem Commit
+    )
+    document = json.loads(previous_configuration)
     if document["mandant"]["releaselinie"] == configuration.releaselinie:
         return releaselinie, (zielstufe,), previous_commit
 

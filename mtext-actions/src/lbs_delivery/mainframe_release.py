@@ -155,7 +155,11 @@ def _build_release(
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
 
-    target_sha = git.resolve_tag_commit(root, tag)
+    # Commit des Liefer-Tags auflösen und prüfen, dass der Checkout diesem Stand entspricht.
+    target_sha = git.resolve(root, f"refs/tags/{tag}")
+    if git.resolve(root, "HEAD") != target_sha:
+        raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Tag")
+
     if trigger_sha and trigger_sha != target_sha:
         raise DeliveryError(Status.SOURCE_FAILED, "auslösender Commit stimmt nicht zum Tag")
 

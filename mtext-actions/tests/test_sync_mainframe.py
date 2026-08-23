@@ -14,7 +14,7 @@ from lbs_delivery import sync as sync_command
 from lbs_delivery.process import DeliveryError, Status
 from lbs_delivery.sync import _sync_resources
 
-from tests.support import TempDirTestCase, git, load_test_configuration, setup_sync_repository
+from tests.support import TempDirTestCase, git, init_repository, load_test_configuration
 
 
 # Ein fester GitHub-Kontext macht die Weitergabe des Ereignisvergleichs prüfbar.
@@ -36,9 +36,18 @@ class SyncTests(TempDirTestCase):
         """Bereitet Repository, Konfiguration und CIFS-Testwurzel vor."""
 
         super().setUp()
-        self.repository = setup_sync_repository(self.root)
-        self.configuration = load_test_configuration(self.repository)
         self.branch = "feature/261/test-sync"
+
+        # Einen für die Synchronisation gültigen Entwicklungsstand erzeugen.
+        self.repository = init_repository(self.root, branch=self.branch)
+        project = self.repository / "LOMS_Basis"
+        project.mkdir()
+        (project / "value.txt").write_text("new", encoding="utf-8")
+        git(self.repository, "add", ".")
+        git(self.repository, "commit", "-m", "sync")
+        self.track_branch()
+
+        self.configuration = load_test_configuration(self.repository)
         self.handoff_root = self.root / "cifs"
         self.handoff_root.mkdir()
 
@@ -78,7 +87,8 @@ class SyncTests(TempDirTestCase):
         with (
             patch.dict(os.environ, environment, clear=True),
             patch.object(sync_command.config, "load_configuration", return_value=configuration),
-            patch.object(sync_command.git, "read_file", return_value=PREVIOUS_CONFIG),
+            patch.object(sync_command.git, "resolve", return_value=GITHUB_CONTEXT["previous_commit"]),
+            patch.object(sync_command.git, "run", return_value=PREVIOUS_CONFIG),
             patch.object(
                 sync_command,
                 "_sync_resources",
@@ -119,7 +129,8 @@ class SyncTests(TempDirTestCase):
         with (
             patch.dict(os.environ, environment, clear=True),
             patch.object(sync_command.config, "load_configuration", return_value=configuration),
-            patch.object(sync_command.git, "read_file", return_value=PREVIOUS_CONFIG),
+            patch.object(sync_command.git, "resolve", return_value=GITHUB_CONTEXT["previous_commit"]),
+            patch.object(sync_command.git, "run", return_value=PREVIOUS_CONFIG),
             patch.object(
                 sync_command,
                 "_sync_resources",

@@ -1,7 +1,11 @@
 name: Lieferung vorbereiten
 
-# Der manuelle Start verwendet den in GitHub ausgewählten Branch. Die
-# Vorprüfung hält SHA und Lieferumfang für die spätere Bestätigung fest.
+# Dieser Workflow bereitet den in GitHub ausgewählten Branchstand für eine
+# Lieferung vor. Die vorbereitende Person gibt den vorgesehenen Liefer-Tag beim
+# manuellen Start an. Repository, Branch, SHA und Person werden an die zentrale
+# Vorprüfung übergeben. Diese prüft den Stand und hält SHA und Lieferumfang für
+# die spätere Bestätigung als Laufartefakt fest. Die Vorbereitung erstellt noch
+# keinen Liefer-Tag und startet keine Mainframe-Übergabe.
 'on':
   workflow_dispatch:
     inputs:
@@ -14,6 +18,7 @@ permissions:
   contents: read
 
 jobs:
+  # Übergibt den ausgewählten Branchstand an die zentrale Vorprüfung
   vorpruefen:
     name: Lieferung vorprüfen
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-check.yml@main

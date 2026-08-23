@@ -1,16 +1,20 @@
 name: Shared Workflow – Zentralen Workflow starten
 
-# Zentrale Abläufe wechseln in das zentrale Repository. Dort liegen die
-# technische Identität und die Zugangsdaten für ihre weiteren Schritte.
+# Dieser Workflow startet einen benannten zentralen Workflow über die GitHub-API.
+# Der aufrufende Mandantenlauf übergibt den Dateinamen und dessen Eingaben als
+# JSON-Objekt. Der API-Aufruf startet auf main einen eigenen Lauf im zentralen
+# Repository. Dort stehen die technische Identität und die Zugangsdaten für die
+# weiteren Schritte zur Verfügung. Die zentralen Secrets werden nicht an den
+# Mandantenlauf übergeben.
 'on':
   workflow_call:
     inputs:
       workflow:
-        description: Datei des zentral zu startenden Workflows
+        description: Dateiname des zentral zu startenden Workflows
         required: true
         type: string
       workflow_inputs:
-        description: JSON-Objekt mit den Eingaben des zentralen Workflows
+        description: JSON-Objekt mit Eingaben für den zentralen Workflow
         required: true
         type: string
     secrets:

@@ -46,22 +46,6 @@ def jcl_template() -> str:
     return (AUTOMATION_ROOT / "templates/mainframe-upload.jcl").read_text(encoding="ascii")
 
 
-def write_mandant(path: Path, **overrides: object) -> None:
-    """Schreibt eine minimale FI-Mandantenkonfiguration."""
-
-    mandant: dict[str, object] = {
-        "kuerzel": "FI",
-        "releaselinie": "270",
-        "ispw": "P",
-        "hostprofile": {
-            "FKT": {"assignment": "LOMS000066", "stage": "FKTE"},
-            "JUR": {"assignment": "LOMS000067", "stage": "JURP"},
-        },
-    }
-    mandant.update(overrides)
-    path.write_text(json.dumps({"mandant": mandant}), encoding="utf-8")
-
-
 def init_repository(root: Path, *, branch: str) -> Path:
     """Erzeugt ein leeres Mandanten-Repository."""
 
@@ -75,32 +59,6 @@ def track_remote_branch(repository: Path, branch: str) -> None:
     """Legt die von der Quellprüfung erwartete Remote-Branch-Referenz an."""
 
     git(repository, "update-ref", f"refs/remotes/origin/{branch}", "HEAD")
-
-
-def setup_repository(root: Path, *, branch: str) -> Path:
-    """Erzeugt ein Mandanten-Repository mit FI-Referenzprojekten."""
-
-    repository = init_repository(root, branch=branch)
-    for project_name in ("Configuration", "Fonts", "LOMS_Framework", "LOMS_Basis", "LOMS_PKA"):
-        project = repository / project_name
-        project.mkdir()
-        (project / "value.txt").write_text("content\n", encoding="utf-8")
-    git(repository, "add", ".")
-    git(repository, "commit", "-m", "init")
-    return repository
-
-
-def setup_sync_repository(root: Path) -> Path:
-    """Erzeugt einen für die Synchronisation gültigen Entwicklungsstand."""
-
-    repository = init_repository(root, branch="feature/261/test-sync")
-    project = repository / "LOMS_Basis"
-    project.mkdir()
-    (project / "value.txt").write_text("new", encoding="utf-8")
-    git(repository, "add", ".")
-    git(repository, "commit", "-m", "sync")
-    track_remote_branch(repository, "feature/261/test-sync")
-    return repository
 
 
 def setup_release_repository(root: Path) -> Path:
@@ -139,5 +97,18 @@ def load_test_configuration(
 
     path = repository / MANDANT_CONFIG_PATH
     path.parent.mkdir(exist_ok=True)
-    write_mandant(path, **(mandant or {}))
+
+    # Minimale FI-Mandantenkonfiguration schreiben und gezielte Abweichungen des
+    # jeweiligen Tests übernehmen.
+    values: dict[str, object] = {
+        "kuerzel": "FI",
+        "releaselinie": "270",
+        "ispw": "P",
+        "hostprofile": {
+            "FKT": {"assignment": "LOMS000066", "stage": "FKTE"},
+            "JUR": {"assignment": "LOMS000067", "stage": "JURP"},
+        },
+    }
+    values.update(mandant or {})
+    path.write_text(json.dumps({"mandant": values}), encoding="utf-8")
     return load_configuration(repository, repository_name)

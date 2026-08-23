@@ -1,7 +1,10 @@
 name: Zentrale Testsuite
 
-# Dieser Workflow führt die zentralen Python-Tests bei Pull Requests und
-# Änderungen an main aus
+# Dieser Workflow prüft die zentrale CI/CD-Implementierung bei Pull Requests und
+# Änderungen an main. Er lädt den betroffenen Repository-Stand, ermittelt die
+# verfügbare Python-Runtime und führt die Unit-Tests mit src als Python-Pfad aus.
+# Die Tests sprechen weder M/Text noch den Mainframe an. Ein erfolgreicher Lauf
+# bestätigt die Ausführbarkeit der zentralen Python-Abläufe auf dem Runner.
 'on':
   pull_request:
   push:

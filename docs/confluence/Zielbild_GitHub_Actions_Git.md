@@ -529,7 +529,6 @@ mtext-actions/
     workflows/
       ci.yml
       lieferung.yml
-      release.yml
       shared-check-resources.yml
       shared-dispatch.yml
       shared-lieferung-ausfuehren.yml
@@ -587,8 +586,8 @@ vorgesehen ist und in welchen Repositories sie installiert werden darf.
 | M/Text-Entwicklung synchronisieren | Push auf `feature/nnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `shared-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Entwicklungsumgebung synchronisieren |
 | M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/nnn` sowie manueller Start | `sync-resources.yml` | `shared-sync-resources.yml` | `mtext.py sync-resources` | Projekte aus dem Commit mit der M/Text-Funktionstestumgebung synchronisieren |
 | Lieferung vorbereiten | Manueller Start auf `main`, `release/nnn` oder `bereitstellung/nnn.nnn` | `lieferung-vorbereiten.yml` | `shared-lieferung-check.yml` | `mtext.py lieferung check` | SHA und Lieferumfang unter dem geplanten Liefer-Tag festgehalten |
-| Lieferung ausführen | Manueller Start mit einem geplanten oder vorhandenen Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` → `shared-dispatch.yml` → `lieferung.yml` → `release.yml` | `mtext.py lieferung aufloesen`, bei einer Vorbereitung `mtext.py lieferung ausfuehren` und `mtext.py lieferung tag` | Vorbereitung bestätigt und erstmalige Übergabe gestartet oder vorhandener Lieferstand erneut übergeben |
-| Lieferung bauen und übertragen | Aufruf durch den zentralen Lieferworkflow | `lieferung-ausfuehren.yml` | `lieferung.yml` → `release.yml` | `mtext.py build-release`, `publish-mainframe`, danach `publish-github-release` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
+| Lieferung ausführen | Manueller Start mit einem geplanten oder vorhandenen Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` → `shared-dispatch.yml` → `lieferung.yml` | `mtext.py lieferung aufloesen`, bei einer Vorbereitung `mtext.py lieferung ausfuehren` und `mtext.py lieferung tag` | Vorbereitung bestätigt und erstmalige Übergabe gestartet oder vorhandener Lieferstand erneut übergeben |
+| Lieferung bauen und übertragen | Erstellter oder vorhandener Liefer-Tag | `lieferung-ausfuehren.yml` | `lieferung.yml` | `mtext.py build-release`, `publish-mainframe`, danach `publish-github-release` | FULL oder DELTA an den Mainframe übertragen, GitHub Release mit Lieferinformationen erstellt |
 | `mtext_actions` testen | Pull Request oder Push auf `main` in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` | Zentrale Tests ausgeführt |
 
 ### Trigger-Workflows in den Mandanten-Repositories
@@ -615,8 +614,7 @@ Merge nicht.
 | `shared-sync-resources.yml` | Aufruf durch `sync-resources.yml` | Projekte nach M/Text übertragen |
 | `shared-lieferung-check.yml` | Aufruf durch `lieferung-vorbereiten.yml` | Liefer-Tag und Branchstand prüfen, Lieferumfang anzeigen und Vorbereitung festhalten |
 | `shared-lieferung-ausfuehren.yml` | Aufruf durch `lieferung-ausfuehren.yml` | Liefer-Tag auflösen, eine Vorbereitung bestätigen und `lieferung.yml` starten |
-| `lieferung.yml` | Start durch `shared-dispatch.yml` | Bei einer erstmaligen Lieferung den Tag erstellen und `release.yml` aufrufen |
-| `release.yml` | Aufruf durch `lieferung.yml` oder manueller Start | FULL- und DELTA-Pakete erstellen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
+| `lieferung.yml` | Start durch `shared-dispatch.yml` | Bei einer erstmaligen Lieferung den Tag erstellen, FULL- oder DELTA-Pakete bauen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
 | `ci.yml` | Pull Request oder Push auf `main` in `mtext_actions` | Tests ausführen |
 
 Die als `shared-*.yml` abgelegten Shared Workflows werden direkt in einen

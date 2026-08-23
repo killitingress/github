@@ -1,7 +1,12 @@
 name: Lieferung ausführen
 
-# Ein geplanter Liefer-Tag wird aus seiner neuesten Vorbereitung ausgeführt.
-# Ein vorhandener Liefer-Tag wird erneut an den Mainframe übergeben.
+# Dieser Workflow startet eine Lieferung mit einem geplanten oder vorhandenen
+# Liefer-Tag. Ein geplanter Tag wird aus seiner neuesten Vorbereitung ausgeführt
+# und mit der ausführenden Person geprüft. Für eine Direktlieferung muss die
+# Abweichung vom Vier-Augenprinzip bewusst bestätigt werden. Ein vorhandener
+# Liefer-Tag wird als Wiederholung erneut verarbeitet. Bei einer erstmaligen
+# Lieferung erstellt mtext_actions den Liefer-Tag. Paketbau, Mainframe-Übergabe
+# und Bereitstellungsbericht laufen ebenfalls zentral.
 'on':
   workflow_dispatch:
     inputs:
@@ -20,6 +25,7 @@ permissions:
   actions: read
 
 jobs:
+  # Übergibt Liefer-Tag und ausführende Person an den zentralen Lieferablauf
   lieferung-ausfuehren:
     name: Lieferung ausführen
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@main

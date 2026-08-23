@@ -74,15 +74,6 @@ class DeliveryError(RuntimeError):
         super().__init__(message)
         self.status = status
 
-    @property
-    def exit_code(self) -> int:
-        """Gibt den zum Status gehörenden Exitcode zurück.
-
-        Statuswerte ohne eigenen Eintrag verwenden Exitcode 1.
-        """
-
-        return _EXIT_CODES.get(self.status, 1)
-
     def __str__(self) -> str:
         """Setzt den Statuswert vor die Fehlermeldung."""
 
@@ -103,7 +94,9 @@ def execute(operation: Callable[[], dict[str, object]]) -> int:
         result = operation()
     except DeliveryError as exc:
         print(str(exc), file=sys.stderr)
-        return exc.exit_code
+        # Zum Status gehörenden Exitcode zurückgeben. Statuswerte ohne eigenen
+        # Eintrag verwenden Exitcode 1.
+        return _EXIT_CODES.get(exc.status, 1)
     except KeyError as exc:
         print(f"{Status.VALIDATION_FAILED.value}: fehlender Eingabewert: {exc.args[0]}", file=sys.stderr)
         return 2

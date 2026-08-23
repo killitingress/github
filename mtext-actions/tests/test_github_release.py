@@ -17,14 +17,6 @@ from tests.support import (
     setup_release_repository,
 )
 
-PUBLISH_KWARGS = {
-    "api_url": "https://github.example/api/v3",
-    "server_url": "https://github.example",
-    "release_tag": "r261.108",
-    "source_sha": "1" * 40,
-    "token": "secret",
-}
-
 
 class GitHubReleaseTests(TempDirTestCase):
     def setUp(self) -> None:
@@ -43,25 +35,18 @@ class GitHubReleaseTests(TempDirTestCase):
             trigger_sha=git(self.repository, "rev-parse", "HEAD"),
         )
 
-    def publish(self, handler) -> tuple[list[dict[str, object]], dict[str, object]]:
+    def test_creates_release_and_uploads_information_file(self) -> None:
+        """Prüft Anlage, Beschreibung und Informationsdatei des Releases."""
+
         calls: list[dict[str, object]] = []
 
         def request(**arguments: object) -> object:
+            """Zeichnet den GitHub-Aufruf auf und liefert die passende Testantwort."""
+
             calls.append(arguments)
-            return handler(arguments)
-
-        with patch("lbs_delivery.github.request", side_effect=request):
-            result = _publish_release(
-                artifact_root=self.dist,
-                repository=self.configuration.repository,
-                **PUBLISH_KWARGS,
-            )
-        return calls, result
-
-    def test_creates_release_and_uploads_information_file(self) -> None:
-        def handler(arguments: dict[str, object]) -> object:
             if arguments["method"] == "GET":
                 return None
+
             if arguments.get("payload") is not None:
                 return {
                     "id": 41,
@@ -71,7 +56,18 @@ class GitHubReleaseTests(TempDirTestCase):
                 }
             return {"id": 51}
 
-        calls, result = self.publish(handler)
+        # Veröffentlichung und GitHub-Antworten gemeinsam im geprüften Ablauf halten.
+        with patch("lbs_delivery.github.request", side_effect=request):
+            result = _publish_release(
+                artifact_root=self.dist,
+                api_url="https://github.example/api/v3",
+                server_url="https://github.example",
+                repository=self.configuration.repository,
+                release_tag="r261.108",
+                source_sha="1" * 40,
+                token="secret",
+            )
+
         self.assertEqual(result["status"], Status.GITHUB_RELEASE_PUBLISHED.value)
         body = next(call for call in calls if call.get("payload") is not None)["payload"]["body"]
         self.assertIn("## Lieferung", body)
