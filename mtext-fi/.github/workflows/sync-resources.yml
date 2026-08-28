@@ -1,44 +1,33 @@
 name: M/Text-Ressourcen synchronisieren
 
 # Dieser Workflow startet die Ressourcensynchronisierung für Feature-, main- und
-# Release-Branches. Bei einem Push übergibt er den aktuellen Commit und den
-# vorherigen Ereignisstand an die zentrale Verarbeitung. Ein manueller Start
-# gleicht die angegebene vollständige Commit-SHA ab. Änderungen an
-# Workflow-Dateien lösen keine Synchronisierung aus. Die Warteschlange bewahrt
-# die Reihenfolge der Mandantenstände und führt die Läufe nacheinander aus.
+# Release-Branches. Der Shared Workflow verwendet den Branchstand des
+# auslösenden Ereignisses. Ein manueller Start gleicht den in GitHub
+# ausgewählten Branch vollständig ab. Verschiedene Branches dürfen
+# ihre Aufträge parallel an den gewählten Transportweg übergeben.
 'on':
   push:
     branches:
       - main
       - release/[0-9][0-9][0-9]
       - feature/[0-9][0-9][0-9]/**
-    # Änderungen an Workflow-Dateien lösen keine Ressourcensynchronisierung aus
-    paths-ignore:
-      - .github/workflows/**
-    # Ein manueller Start gleicht den angegebenen Commit vollständig ab
+  # Der manuelle Start verwendet die Branchwahl von GitHub.
   workflow_dispatch:
-    inputs:
-      commit_sha:
-        description: Vollständige Commit-SHA auf dem ausgewählten Branch
-        required: true
-        type: string
+
+# Ein aktiver Lauf wird beendet, bevor der nächste Lauf desselben Branches
+# beginnt. Neuere Pushes können wartende Läufe ersetzen, weil ihr DELTA alle
+# Änderungen seit dem letzten erfolgreichen Lauf enthält.
+concurrency:
+  group: mtext-sync-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
-
-# Die Warteschlange behält bis zu 100 Synchronisierungen und führt sie
-# nacheinander aus
-concurrency:
-  group: mtext-sync-${{ github.repository }}
-  cancel-in-progress: false
-  queue: max
+  # Der Shared Workflow liest den letzten erfolgreichen Vergleichsstand.
+  actions: read
 
 jobs:
-  # Der zentrale Workflow führt die Synchronisierung aus
+  # Der Shared Workflow führt die Synchronisierung aus
   sync:
     name: Ressourcen mit M/Text synchronisieren
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-sync-resources.yml@main
-    with:
-      commit_sha: ${{ github.event_name == 'workflow_dispatch' && inputs.commit_sha || github.sha }}
-    secrets:
-      automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}
+    uses: FI_Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-sync-resources.yml@main

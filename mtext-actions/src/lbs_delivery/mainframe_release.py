@@ -16,9 +16,9 @@ import ssl
 from pathlib import Path
 
 from . import config, git
-from .config import CODEPIPELINE_STAGES, ISPW_INSTANZEN, Configuration, release_branches
+from .config import Configuration, mandant_source
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
-from .project_package import build_project_package, release_scope
+from .project_package import PackageStand, build_project_package, release_scope
 
 
 # FULL- und DELTA-Pakete werden als Member in diesem Mainframe-Dataset abgelegt.
@@ -27,14 +27,24 @@ _MAINFRAME_DATASET = "IEA.LOMS.TONICZ"
 # Die erzeugte JCL wird an dieses JES-Ziel übergeben.
 _MAINFRAME_JES_TARGET = "LIT9028A"
 
-# Prüft ein Mainframe-Subsystem anhand des Zeichenvorrats und der Feldlänge,
-# die Vorlage und Zielsystem akzeptieren.
+# Alle Mandanten übertragen ihre Lieferpakete an diesen zentralen Mainframe-Host.
+_MAINFRAME_FTPS_HOST = "ize9.lbs-it.de"
+
+# Explizites FTPS verwendet den FTP-Standardport des zentralen Mainframe-Zugangs.
+_MAINFRAME_FTPS_PORT = 21
+
+# Dieser technische Benutzer führt die zentrale FTPS- und JES-Übergabe aus.
+_MAINFRAME_FTPS_USER = "LIT9028"
+
+# Dateierweiterung der JCL-Datei zum jeweiligen Paket-Member im Release-Artefakt.
+_MAINFRAME_JCL_SUFFIX = ".jcl"
+
+# Vorlage für die JCL-Übergabe eines Paket-Members an JES.
+_MAINFRAME_JCL_TEMPLATE = config.AUTOMATION_ROOT / "templates/mainframe-upload.jcl"
+
+# Reguläre Ausdrücke
 _SUBSYSTEM_RE = re.compile(r"[A-Z0-9]{2,8}")
-
-# Prüft den erzeugten Dataset-Member nach den Namensregeln des Mainframes.
 _MEMBER_RE = re.compile(r"[A-Z0-9]{1,8}")
-
-# Prüft das CodePipeline-Assignment, bevor es in die JCL eingesetzt wird.
 _ASSIGNMENT_RE = re.compile(r"[A-Z0-9]{1,12}")
 
 
@@ -43,9 +53,7 @@ def _render_jcl(template: str, *, ispw: str, level: str, subsystem: str, assignm
 
     # Nur Werte einsetzen, die von der Vorlage und dem Mainframe akzeptiert werden.
     if (
-        ispw not in ISPW_INSTANZEN
-        or level not in CODEPIPELINE_STAGES
-        or _SUBSYSTEM_RE.fullmatch(subsystem) is None
+        _SUBSYSTEM_RE.fullmatch(subsystem) is None
         or _ASSIGNMENT_RE.fullmatch(assignment) is None
         or _MEMBER_RE.fullmatch(member) is None
     ):
@@ -67,27 +75,28 @@ def _render_jcl(template: str, *, ispw: str, level: str, subsystem: str, assignm
     return rendered
 
 
-def _submit_package(
-    package_path: str | Path, jcl_path: str | Path, member: str, *, host: str, port: int, user: str,
-    password: str,
-) -> None:
+def _submit_package(package_path: Path) -> None:
     """Lädt ein Paket-Member per FTPS hoch und übergibt die gerenderte JCL an JES."""
 
+    member = package_path.stem
+    jcl_path = package_path.with_suffix(_MAINFRAME_JCL_SUFFIX)
+    # Das Passwort ist das einzige Mainframe-Zugangsdatum aus einem Secret.
+    password = os.environ["MAINFRAME_FTPS_PASSWORD"]
     session = ftplib.FTP_TLS(context=ssl.create_default_context())
     try:
-        session.connect(host, port, timeout=NETWORK_TIMEOUT)
-        session.login(user, password)
+        session.connect(_MAINFRAME_FTPS_HOST, _MAINFRAME_FTPS_PORT, timeout=NETWORK_TIMEOUT)
+        session.login(_MAINFRAME_FTPS_USER, password)
         session.prot_p()
         # Passive Datenverbindungen werden vom Runner aufgebaut und benötigen
         # deshalb keine eingehende Firewall-Freischaltung auf dem Runner.
         session.set_pasv(True)
 
-        with Path(package_path).open("rb") as package:
+        with package_path.open("rb") as package:
             session.storbinary(f"STOR '{_MAINFRAME_DATASET}({member})'", package)
 
         session.sendcmd("SITE FILETYPE=JES")
 
-        with Path(jcl_path).open("rb") as jcl:
+        with jcl_path.open("rb") as jcl:
             session.storlines(f"STOR {_MAINFRAME_JES_TARGET}", jcl)
 
         session.quit()
@@ -96,104 +105,58 @@ def _submit_package(
         raise DeliveryError(Status.MAINFRAME_TRANSFER_FAILED, "FTPS-/JES-Übergabe fehlgeschlagen") from exc
 
 
-def _publish_mainframe(*, artifact_root: str | Path) -> dict[str, object]:
+def _publish_mainframe(*, artifact_root: Path) -> dict[str, object]:
     """Übergibt alle vorbereiteten Pakete und JCL-Dateien an den Mainframe."""
 
     # Pakete und JCL im Artefaktverzeichnis voraussetzen.
-    root = Path(artifact_root)
-    packages = sorted(root.glob("*.tgz"))
-    if not packages or any(not package.with_suffix(".jcl").is_file() for package in packages):
+    packages = sorted(artifact_root.glob("*.tgz"))
+    if not packages or any(not package.with_suffix(_MAINFRAME_JCL_SUFFIX).is_file() for package in packages):
         raise DeliveryError(Status.PACKAGE_FAILED, "Releasepakete oder JCL fehlen")
-
-    # FTPS-Zugang aus der Runner-Umgebung lesen.
-    host = os.environ["MAINFRAME_FTPS_HOST"]
-    user = os.environ["MAINFRAME_FTPS_USER"]
-    password = os.environ["MAINFRAME_FTPS_PASSWORD"]
-    try:
-        port = int(os.environ["MAINFRAME_FTPS_PORT"])
-    except ValueError as exc:
-        raise DeliveryError(Status.VALIDATION_FAILED, "FTPS-Port ist ungültig") from exc
-
-    if not 1 <= port <= 65_535:
-        raise DeliveryError(Status.VALIDATION_FAILED, "FTPS-Port ist ungültig")
 
     # Jedes Paket mit seiner JCL an den Mainframe übergeben.
     for package in packages:
-        _submit_package(
-            package,
-            package.with_suffix(".jcl"),
-            package.stem,
-            host=host,
-            port=port,
-            user=user,
-            password=password,
-        )
+        _submit_package(package)
 
     return {"status": Status.MAINFRAME_SUBMITTED.value}
 
 
 # Der Paketbau wird vom gleichnamigen Workflow-Einstieg aufgerufen.
-def _build_release(
-    configuration: Configuration,
-    *, repository_root: str | Path, output_directory: str | Path, jcl_template: str, tag: str,
-    trigger_sha: str,
-) -> None:
-    """Prüft den Liefer-Tag und erzeugt Pakete, JCL und Informationsdateien.
+def _build_release(configuration: Configuration, *, output_directory: Path, tag: str) -> None:
+    """Erzeugt Pakete, JCL und Informationsdateien für den Liefer-Tag am ausgecheckten Stand."""
 
-    `.100` muss auf `main` oder `release/nnn` liegen. Spätere Lieferungen
-    vergleichen kumulativ mit dieser FULL-Basis.
-    """
-
-    root = Path(repository_root)
-
-    # Liefer-Tag, Releaselinie und optional auslösenden Commit prüfen.
+    repository_root = mandant_source()
     tag_match = git.LIEFER_TAG_RE.fullmatch(tag)
-    if tag_match is None:
-        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Liefer-Tag")
-
     releaselinie = tag_match.group("releaselinie")
-    if releaselinie not in configuration.releaselinien:
-        raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
+    zwischenrelease = tag_match.group("zwischenrelease")
+    target_sha = git.resolve(repository_root, f"refs/tags/{tag}")
 
-    # Commit des Liefer-Tags auflösen und prüfen, dass der Checkout diesem Stand entspricht.
-    target_sha = git.resolve(root, f"refs/tags/{tag}")
-    if git.resolve(root, "HEAD") != target_sha:
-        raise DeliveryError(Status.SOURCE_FAILED, "Checkout stimmt nicht zum Tag")
-
-    if trigger_sha and trigger_sha != target_sha:
-        raise DeliveryError(Status.SOURCE_FAILED, "auslösender Commit stimmt nicht zum Tag")
-
-    # FULL- oder DELTA-Lieferung und ihren tatsächlichen Paketvergleich bestimmen.
-    base, cumulative = release_scope(root, tag, target_sha)
-    if base is None:
-        git.require_commit_on_branches(root, target_sha, release_branches(configuration, releaselinie))
-
-    # Neues Ausgabeverzeichnis anlegen.
-    output = Path(output_directory)
-    try:
-        output.mkdir(parents=True)
-    except OSError as exc:
-        raise DeliveryError(Status.PACKAGE_FAILED, "Release-Ausgabeverzeichnis ist nicht neu") from exc
+    base, cumulative = release_scope(
+        repository_root,
+        target_sha,
+        releaselinie=releaselinie,
+        zwischenrelease=zwischenrelease,
+    )
 
     # Das Hostprofil bestimmt die JCL-Werte für diese Releaselinie.
     hostprofil = configuration.hostprofile[configuration.releaselinien[releaselinie]["hostprofil"]]
+    jcl_template = _MAINFRAME_JCL_TEMPLATE.read_text(encoding="ascii")
 
     # Gemeinsame Projektpakete und die zugehörige Mainframe-JCL erzeugen.
-    for project, projektcode in configuration.projects.items():
-        archives = build_project_package(
+    for project in configuration.projects:
+        package = build_project_package(
             configuration,
-            repository_root=root,
-            output_directory=output,
+            repository_root=repository_root,
+            output_directory=output_directory,
             project=project,
-            project_code=projektcode,
-            changes=cumulative,
-            base=base,
-            target=(tag, target_sha),
+            stand=PackageStand(von=base, bis=(tag, target_sha), changes=cumulative),
         )
 
-        for package_path in archives:
+        for package_path in (package.f_archiv, package.d_archiv):
+            if package_path is None:
+                continue
+
             member = package_path.stem
-            package_path.with_suffix(".jcl").write_text(
+            package_path.with_suffix(_MAINFRAME_JCL_SUFFIX).write_text(
                 _render_jcl(
                     jcl_template,
                     ispw=configuration.ispw,
@@ -206,28 +169,15 @@ def _build_release(
             )
 
 
-def run_build_command(arguments: argparse.Namespace) -> dict[str, object]:
-    """Erzeugt Release-Dateien aus dem GitHub-Workflow-Kontext."""
+def run(arguments: argparse.Namespace) -> dict[str, object]:
+    """Erzeugt Release-Dateien oder übergibt sie an den Mainframe."""
 
-    workspace = Path(os.environ.get("GITHUB_WORKSPACE", "."))
-    source = workspace / "source"
-    configuration = config.load_configuration(source, os.environ["SOURCE_REPOSITORY"])
+    if arguments.release_command == "build":
+        configuration = Configuration.load(mandant_source(), os.environ["GITHUB_REPOSITORY"])
+        _build_release(configuration, output_directory=Path(os.environ["RUNNER_TEMP"]) / "dist", tag=arguments.tag)
 
-    _build_release(
-        configuration,
-        repository_root=source,
-        output_directory=workspace / "dist",
-        jcl_template=(config.AUTOMATION_ROOT / "templates/mainframe-upload.jcl").read_text(encoding="ascii"),
-        tag=arguments.tag,
-        trigger_sha=arguments.trigger_sha,
-    )
+        return {"status": Status.ARTIFACT_READY.value} | (
+            {"warnungen": list(configuration.warnungen)} if configuration.warnungen else {}
+        )
 
-    return {"status": Status.ARTIFACT_READY.value} | (
-        {"warnungen": list(configuration.warnungen)} if configuration.warnungen else {}
-    )
-
-
-def run_publish_command(_arguments: argparse.Namespace) -> dict[str, object]:
-    """Übergibt die vorbereiteten Release-Dateien an den Mainframe."""
-
-    return _publish_mainframe(artifact_root=Path(os.environ["RELEASE_DIRECTORY"]))
+    return _publish_mainframe(artifact_root=Path(os.environ["RUNNER_TEMP"]) / "release")

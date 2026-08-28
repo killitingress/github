@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from lbs_delivery.config import load_mandanten_zuordnung, load_releaselinien_zuordnung
+from lbs_delivery.config import Configuration
 from lbs_delivery.process import DeliveryError
 
 from tests.support import TempDirTestCase, git, init_repository, load_test_configuration
@@ -58,7 +58,7 @@ class ConfigTests(TempDirTestCase):
             encoding="utf-8",
         )
         with self.assertRaises(DeliveryError):
-            load_mandanten_zuordnung(mandanten_path)
+            Configuration.load_mandanten_zuordnung(mandanten_path)
 
         releaselinien_path = self.root / "releaselinien.json"
         releaselinien_path.write_text(
@@ -71,7 +71,7 @@ class ConfigTests(TempDirTestCase):
             encoding="utf-8",
         )
         with self.assertRaisesRegex(DeliveryError, "M/Text-Ziele"):
-            load_releaselinien_zuordnung(releaselinien_path)
+            Configuration.load_releaselinien_zuordnung(releaselinien_path)
 
         (self.repository / "LOMS_Basisdaten").mkdir()
         with self.assertRaises(DeliveryError):

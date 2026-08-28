@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import unittest
 from unittest.mock import patch
 
-from lbs_delivery.lieferung import _require_lieferung_source, _summary, run_aufloesen, run_command
+from lbs_delivery.git import BEREITSTELLUNG_BRANCH_RE, LIEFER_TAG_RE
+from lbs_delivery.lieferung import _pruefe_lieferquelle, _summary, run
 from lbs_delivery.process import DeliveryError
+from mtext import _build_parser
 
 from tests.support import TempDirTestCase, git, load_test_configuration, setup_release_repository, track_remote_branch
 
@@ -31,13 +32,12 @@ class LieferungTests(TempDirTestCase):
 
         git(self.repository, "switch", "-c", "bereitstellung/261.108")
         track_remote_branch(self.repository, "bereitstellung/261.108")
-        releaselinie, release = _require_lieferung_source(
+        releaselinie, zwischenrelease = _pruefe_lieferquelle(
             self.configuration,
             self.repository,
             "r261.108",
             "bereitstellung/261.108",
             self.source_sha,
-            require_current_tip=True,
         )
         summary = _summary(
             self.configuration,
@@ -46,9 +46,9 @@ class LieferungTests(TempDirTestCase):
             "bereitstellung/261.108",
             self.source_sha,
             releaselinie,
-            release,
+            zwischenrelease,
         )
-        self.assertEqual((releaselinie, release), ("261", "108"))
+        self.assertEqual((releaselinie, zwischenrelease), ("261", "108"))
         self.assertIn("`DELTA`", summary)
         self.assertIn("`r261.100`", summary)
         self.assertIn("Änderungen seit `r261.107`", summary)
@@ -56,7 +56,31 @@ class LieferungTests(TempDirTestCase):
         self.assertIn("`A` `new.txt`", summary)
 
     def test_rejects_full_on_bereitstellung_and_mismatched_branch(self) -> None:
-        """Lehnt .100 und einen abweichenden Bereitstellungsbranch ab."""
+        """Prüft Zwischenrelease-Grenzen und die passende Branchzuordnung."""
+
+        # Tag und Bereitstellungsbranch verwenden denselben Lieferstand mit
+        # Zwischenrelease 100–999. Ungültige Werte scheitern vor dem Git-Zugriff.
+        for zwischenrelease in ("100", "108", "999"):
+            for pattern, value in (
+                (LIEFER_TAG_RE, f"r260.{zwischenrelease}"),
+                (BEREITSTELLUNG_BRANCH_RE, f"bereitstellung/260.{zwischenrelease}"),
+            ):
+                with self.subTest(value=value):
+                    match = pattern.fullmatch(value)
+                    self.assertIsNotNone(match)
+                    self.assertEqual(match.groupdict(), {"releaselinie": "260", "zwischenrelease": zwischenrelease})
+
+        for zwischenrelease in ("000", "099", "1000"):
+            with self.subTest(zwischenrelease=zwischenrelease):
+                self.assertIsNone(BEREITSTELLUNG_BRANCH_RE.fullmatch(f"bereitstellung/261.{zwischenrelease}"))
+                with self.assertRaisesRegex(DeliveryError, "ungültiges Format des Liefer-Tags"):
+                    _pruefe_lieferquelle(
+                        self.configuration,
+                        self.repository,
+                        f"r261.{zwischenrelease}",
+                        "release/261",
+                        self.source_sha,
+                    )
 
         git(self.repository, "checkout", "--detach", "r261.100")
         git(self.repository, "switch", "-c", "bereitstellung/261.100")
@@ -64,55 +88,43 @@ class LieferungTests(TempDirTestCase):
         track_remote_branch(self.repository, "bereitstellung/261.100")
         sha = git(self.repository, "rev-parse", "HEAD")
         with self.assertRaisesRegex(DeliveryError, r"\.100 entsteht"):
-            _require_lieferung_source(
+            _pruefe_lieferquelle(
                 self.configuration,
                 self.repository,
                 "r261.100",
                 "bereitstellung/261.100",
                 sha,
-                require_current_tip=True,
             )
 
         git(self.repository, "checkout", "release/261")
         git(self.repository, "switch", "-c", "bereitstellung/261.109")
         track_remote_branch(self.repository, "bereitstellung/261.109")
         with self.assertRaisesRegex(DeliveryError, "passt nicht zum Liefer-Tag"):
-            _require_lieferung_source(
+            _pruefe_lieferquelle(
                 self.configuration,
                 self.repository,
                 "r261.108",
                 "bereitstellung/261.109",
                 self.source_sha,
-                require_current_tip=True,
             )
 
-    def test_rejects_stale_tip_only_during_prepare(self) -> None:
-        """Die Vorbereitung verlangt die aktuelle Branchspitze, die Ausführung nicht."""
+    def test_rejects_stale_tip_during_prepare(self) -> None:
+        """Die Vorbereitung verlangt den aktuellen Stand des Branches."""
 
         git(self.repository, "commit", "--allow-empty", "-m", "später")
         track_remote_branch(self.repository, "release/261")
         git(self.repository, "checkout", "--detach", self.source_sha)
         with self.assertRaisesRegex(DeliveryError, "nicht mehr aktuell"):
-            _require_lieferung_source(
+            _pruefe_lieferquelle(
                 self.configuration,
                 self.repository,
                 "r261.108",
                 "release/261",
                 self.source_sha,
-                require_current_tip=True,
             )
-        releaselinie, release = _require_lieferung_source(
-            self.configuration,
-            self.repository,
-            "r261.108",
-            "release/261",
-            self.source_sha,
-            require_current_tip=False,
-        )
-        self.assertEqual((releaselinie, release), ("261", "108"))
 
-    def test_confirms_direct_and_four_eyes_from_local_artifact(self) -> None:
-        """Verlangt die bewusste Direktlieferung und erlaubt den Vier-Augen-Weg."""
+    def test_confirms_direct_and_4_augenfall_from_local_artifact(self) -> None:
+        """Verlangt die bewusste Direktlieferung und erlaubt den 4-Augenfall."""
 
         payload = {
             "tag": "r261.108",
@@ -121,45 +133,37 @@ class LieferungTests(TempDirTestCase):
             "repository": "FinanzInformatik/fi_lbs_entw_oms_fi",
             "prepare_actor": "alice",
         }
-        preparation = self.root / "vorbereitung.json"
+        preparation = self.root / "vorbereitung" / "vorbereitung.json"
+        preparation.parent.mkdir()
         preparation.write_text(json.dumps(payload), encoding="utf-8")
 
         with patch.dict(
             os.environ,
-            {"SOURCE_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi"},
+            {
+                "GITHUB_WORKSPACE": str(self.root),
+                "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
+                "GITHUB_ACTOR": "alice",
+            },
         ):
             with self.assertRaisesRegex(DeliveryError, "Direktlieferung muss .* bewusst bestätigt werden"):
-                run_command(
-                    argparse.Namespace(
-                        lieferung_command="ausfuehren",
-                        tag="r261.108",
-                        vorbereitung=preparation,
-                        actor="alice",
-                        direktlieferung_bestaetigt=False,
-                    )
-                )
-            direct = run_command(
-                argparse.Namespace(
-                    lieferung_command="ausfuehren",
-                    tag="r261.108",
-                    vorbereitung=preparation,
-                    actor="alice",
-                    direktlieferung_bestaetigt=True,
+                run(_build_parser().parse_args(["delivery", "confirm", "--tag", "r261.108"]))
+            direct = run(
+                _build_parser().parse_args(
+                    ["delivery", "confirm", "--tag", "r261.108", "--confirm-direct-delivery"]
                 )
             )
-            four_eyes = run_command(
-                argparse.Namespace(
-                    lieferung_command="ausfuehren",
-                    tag="r261.108",
-                    vorbereitung=preparation,
-                    actor="bob",
-                    direktlieferung_bestaetigt=False,
-                )
-            )
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_WORKSPACE": str(self.root),
+                "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
+                "GITHUB_ACTOR": "bob",
+            },
+        ):
+            lieferung_4_augenfall = run(_build_parser().parse_args(["delivery", "confirm", "--tag", "r261.108"]))
 
-        self.assertIn("Direktlieferung", direct["summary"])
-        self.assertIn("Risiko bewusst bestätigt", direct["summary"])
-        self.assertIn("Vier-Augen-Freigabe", four_eyes["summary"])
+        self.assertIn("- Lieferweg: Direktlieferung", direct["summary"])
+        self.assertIn("- Lieferweg: 4-Augenfall", lieferung_4_augenfall["summary"])
         self.assertEqual(direct["outputs"]["source_sha"], self.source_sha)
 
     def test_resolves_latest_preparation_or_existing_tag(self) -> None:
@@ -171,10 +175,17 @@ class LieferungTests(TempDirTestCase):
                 {"id": 20, "created_at": "2026-08-21T10:00:00Z", "expired": False, "workflow_run": {"id": 200}},
             ]
         }
-        arguments = argparse.Namespace(tag="r261.108", api_url="https://github.example/api/v3")
-        with patch.dict(os.environ, {"SOURCE_REPOSITORY": "FI/mandant", "GITHUB_TOKEN": "secret"}):
+        arguments = _build_parser().parse_args(["delivery", "resolve", "--tag", "r261.108"])
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_REPOSITORY": "FI/mandant",
+                "GITHUB_TOKEN": "secret",
+                "GITHUB_API_URL": "https://github.example/api/v3",
+            },
+        ):
             with patch("lbs_delivery.lieferung.github.request", side_effect=(None, artifacts)):
-                planned = run_aufloesen(arguments)
+                planned = run(arguments)
         self.assertEqual(
             planned["outputs"],
             {
@@ -185,9 +196,16 @@ class LieferungTests(TempDirTestCase):
         )
 
         reference = {"object": {"sha": self.source_sha, "type": "commit"}}
-        with patch.dict(os.environ, {"SOURCE_REPOSITORY": "FI/mandant", "GITHUB_TOKEN": "secret"}):
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_REPOSITORY": "FI/mandant",
+                "GITHUB_TOKEN": "secret",
+                "GITHUB_API_URL": "https://github.example/api/v3",
+            },
+        ):
             with patch("lbs_delivery.lieferung.github.request", return_value=reference):
-                repeated = run_aufloesen(arguments)
+                repeated = run(arguments)
         self.assertEqual(
             repeated["outputs"],
             {
@@ -196,63 +214,47 @@ class LieferungTests(TempDirTestCase):
             },
         )
 
-    def test_resolves_preparations_across_all_artifact_pages(self) -> None:
-        """Berücksichtigt bei häufigen Vorbereitungen alle Artefaktseiten."""
+    def test_uses_newest_preparation_when_several_exist(self) -> None:
+        """Verwendet die neueste noch gültige Vorbereitung zum Liefer-Tag."""
 
-        first_page = {
+        artifacts = {
             "artifacts": [
-                {
-                    "id": artifact_id,
-                    "created_at": "2026-08-20T10:00:00Z",
-                    "expired": False,
-                    "workflow_run": {"id": artifact_id},
-                }
-                for artifact_id in range(1, 101)
+                {"id": 10, "created_at": "2026-08-20T10:00:00Z", "expired": True, "workflow_run": {"id": 100}},
+                {"id": 20, "created_at": "2026-08-19T10:00:00Z", "expired": False, "workflow_run": {"id": 200}},
+                {"id": 30, "created_at": "2026-08-21T10:00:00Z", "expired": False, "workflow_run": {"id": 300}},
             ]
         }
-        second_page = {
-            "artifacts": [
-                {
-                    "id": 101,
-                    "created_at": "2026-08-21T10:00:00Z",
-                    "expired": False,
-                    "workflow_run": {"id": 501},
-                }
-            ]
-        }
-        calls: list[dict[str, object]] = []
 
-        def request(**arguments: object) -> object:
-            """Liefert Tag-Prüfung und zwei aufeinanderfolgende Artefaktseiten."""
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_REPOSITORY": "FI/mandant",
+                "GITHUB_TOKEN": "secret",
+                "GITHUB_API_URL": "https://github.example/api/v3",
+            },
+        ):
+            with patch("lbs_delivery.lieferung.github.request", side_effect=(None, artifacts)):
+                result = run(_build_parser().parse_args(["delivery", "resolve", "--tag", "r261.108"]))
 
-            calls.append(arguments)
-            return (None, first_page, second_page)[len(calls) - 1]
-
-        with patch.dict(os.environ, {"SOURCE_REPOSITORY": "FI/mandant", "GITHUB_TOKEN": "secret"}):
-            with patch("lbs_delivery.lieferung.github.request", side_effect=request):
-                result = run_aufloesen(
-                    argparse.Namespace(tag="r261.108", api_url="https://github.example/api/v3")
-                )
-
-        self.assertEqual(result["outputs"]["vorbereitung_id"], 501)
-        self.assertIn("page=1", calls[1]["url"])
-        self.assertIn("page=2", calls[2]["url"])
+        self.assertEqual(result["outputs"]["vorbereitung_id"], 300)
 
     def test_rejects_invalid_or_mismatched_preparation(self) -> None:
         """Lehnt beschädigte Artefakte und einen abweichenden Liefer-Tag ab."""
 
-        preparation = self.root / "vorbereitung.json"
-        arguments = argparse.Namespace(
-            lieferung_command="ausfuehren",
-            tag="r261.108",
-            vorbereitung=preparation,
-            actor="alice",
-            direktlieferung_bestaetigt=False,
-        )
-        with patch.dict(os.environ, {"SOURCE_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi"}):
+        preparation = self.root / "vorbereitung" / "vorbereitung.json"
+        preparation.parent.mkdir()
+        arguments = _build_parser().parse_args(["delivery", "confirm", "--tag", "r261.108"])
+        with patch.dict(
+            os.environ,
+            {
+                "GITHUB_WORKSPACE": str(self.root),
+                "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
+                "GITHUB_ACTOR": "alice",
+            },
+        ):
             preparation.write_text("kein JSON", encoding="utf-8")
             with self.assertRaisesRegex(DeliveryError, "Vorbereitungsartefakt ist ungültig"):
-                run_command(arguments)
+                run(arguments)
 
             preparation.write_text(
                 json.dumps(
@@ -267,7 +269,7 @@ class LieferungTests(TempDirTestCase):
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(DeliveryError, "anderen Liefer-Tag"):
-                run_command(arguments)
+                run(arguments)
 
     def test_creates_tag(self) -> None:
         """Erzeugt den Liefer-Tag über die GitHub-API."""
@@ -280,24 +282,19 @@ class LieferungTests(TempDirTestCase):
             calls.append(arguments)
             return {"ref": "refs/tags/r261.108"}
 
-        with patch("lbs_delivery.lieferung.github.request", side_effect=request):
-            with patch.dict(
+        with (
+            patch("lbs_delivery.lieferung.github.request", side_effect=request),
+            patch("lbs_delivery.lieferung.git.resolve", return_value=self.source_sha),
+            patch.dict(
                 os.environ,
                 {
-                    "GITHUB_WORKSPACE": str(self.root),
-                    "SOURCE_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
-                    "WORKFLOW_CONFIGURATION_TOKEN": "secret",
+                    "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
+                    "GITHUB_TOKEN": "secret",
+                    "GITHUB_API_URL": "https://github.example/api/v3",
                 },
-            ):
-                result = run_command(
-                    argparse.Namespace(
-                        lieferung_command="tag",
-                        tag="r261.108",
-                        branch="release/261",
-                        source_sha=self.source_sha,
-                        api_url="https://github.example/api/v3",
-                    )
-                )
+            ),
+        ):
+            result = run(_build_parser().parse_args(["delivery", "tag", "--tag", "r261.108"]))
         self.assertEqual(result, {"status": "LIEFERUNG_TAGGED"})
         self.assertEqual(calls[-1]["payload"], {"ref": "refs/tags/r261.108", "sha": self.source_sha})
 

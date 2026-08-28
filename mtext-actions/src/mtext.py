@@ -1,4 +1,4 @@
-"""Stellt die Kommandos der zentralen M/Text-Automatisierung bereit.
+"""Stellt die Kommandos der gemeinsamen M/Text-Automatisierung bereit.
 
 Der Einstieg liest die Workflow-Eingaben und übergibt sie ohne eigene
 Fachlogik an die zugehörigen Module.
@@ -7,7 +7,6 @@ Fachlogik an die zugehörigen Module.
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 from lbs_delivery import config, github, lieferung, mainframe_release, process, resource_check, sync
 
@@ -18,71 +17,49 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mtext")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    # Konfiguration und Ressourcen der Mandantenquelle prüfen.
-    commands.add_parser("validate-config", help="Mandantenkonfiguration prüfen").set_defaults(handler=config.run_validation)
+    config_parser = commands.add_parser("config", help="Mandantenkonfiguration prüfen")
+    config_commands = config_parser.add_subparsers(dest="config_command", required=True)
+    config_commands.add_parser("validate", help="Mandantenkonfiguration prüfen").set_defaults(handler=config.run)
 
-    check = commands.add_parser("check-resources", help="JSON- und XML-Ressourcen prüfen")
-    check.add_argument("--root", type=Path, required=True)
-    check.add_argument("--formats", type=Path, required=True)
-    check.add_argument("--changed-only", action="store_true")
-    check.set_defaults(
-        handler=lambda arguments: resource_check.run(
-            root=arguments.root.resolve(),
-            formats_path=arguments.formats,
-            changed_only=arguments.changed_only,
-        )
-    )
+    resources = commands.add_parser("resources", help="Ressourcen prüfen oder mit M/Text synchronisieren")
+    resource_commands = resources.add_subparsers(dest="resources_command", required=True)
+    resource_commands.add_parser("check", help="JSON- und XML-Ressourcen prüfen").set_defaults(handler=resource_check.run)
+    resource_commands.add_parser("sync", help="Ressourcen mit M/Text synchronisieren").set_defaults(handler=sync.run)
 
-    # Projektpakete bereitstellen und den M/Text-Adapter benachrichtigen.
-    synchronize = commands.add_parser("sync-resources", help="Ressourcen mit M/Text synchronisieren")
-    synchronize.add_argument("--commit", required=True)
-    synchronize.set_defaults(handler=sync.run_command)
+    delivery = commands.add_parser("delivery", help="Lieferstand vorbereiten, ermitteln, bestätigen oder taggen")
+    delivery_commands = delivery.add_subparsers(dest="delivery_command", required=True)
 
-    # Lieferung vorprüfen, ihre Ausführung bestätigen oder den Liefer-Tag erzeugen.
-    delivery = commands.add_parser("lieferung", help="Lieferung vorprüfen, auflösen, freigeben oder tagen")
-    delivery_commands = delivery.add_subparsers(dest="lieferung_command", required=True)
-
-    # Branchstand festhalten und Lieferumfang anzeigen.
     check_delivery = delivery_commands.add_parser("check")
     check_delivery.add_argument("--tag", required=True)
-    check_delivery.add_argument("--branch", required=True)
-    check_delivery.add_argument("--source-sha", required=True)
-    check_delivery.add_argument("--actor", required=True)
-    check_delivery.set_defaults(handler=lieferung.run_command)
+    check_delivery.set_defaults(handler=lieferung.run)
 
-    # Geplanten oder vorhandenen Liefer-Tag dem nächsten Schritt zuordnen.
-    resolve_delivery = delivery_commands.add_parser("aufloesen")
+    resolve_delivery = delivery_commands.add_parser("resolve")
     resolve_delivery.add_argument("--tag", required=True)
-    resolve_delivery.add_argument("--api-url", required=True)
-    resolve_delivery.set_defaults(handler=lieferung.run_aufloesen)
+    resolve_delivery.set_defaults(handler=lieferung.run)
 
-    # Lokal geladene Vorbereitung durch dieselbe oder eine zweite Person bestätigen.
-    execute_delivery = delivery_commands.add_parser("ausfuehren")
-    execute_delivery.add_argument("--tag", required=True)
-    execute_delivery.add_argument("--vorbereitung", type=Path, required=True)
-    execute_delivery.add_argument("--actor", required=True)
-    execute_delivery.add_argument("--direktlieferung-bestaetigt", action="store_true")
-    execute_delivery.set_defaults(handler=lieferung.run_command)
+    confirm_delivery = delivery_commands.add_parser("confirm")
+    confirm_delivery.add_argument("--tag", required=True)
+    confirm_delivery.add_argument("--confirm-direct-delivery", action="store_true")
+    confirm_delivery.set_defaults(handler=lieferung.run)
 
-    # Liefer-Tag auf der festgehaltenen SHA erzeugen.
     tag_delivery = delivery_commands.add_parser("tag")
     tag_delivery.add_argument("--tag", required=True)
-    tag_delivery.add_argument("--branch", required=True)
-    tag_delivery.add_argument("--source-sha", required=True)
-    tag_delivery.add_argument("--api-url", required=True)
-    tag_delivery.set_defaults(handler=lieferung.run_command)
+    tag_delivery.set_defaults(handler=lieferung.run)
 
-    # Release-Dateien erzeugen, an den Mainframe übergeben und Lieferinformationen veröffentlichen.
-    release = commands.add_parser("build-release", help="Release-Dateien erstellen")
-    release.add_argument("--tag", required=True)
-    release.add_argument("--trigger-sha", default="")
-    release.set_defaults(handler=mainframe_release.run_build_command)
-    commands.add_parser("publish-mainframe", help="Release an den Mainframe übergeben").set_defaults(
-        handler=mainframe_release.run_publish_command
+    release = commands.add_parser("release", help="Lieferdateien bauen, übertragen oder veröffentlichen")
+    release_commands = release.add_subparsers(dest="release_command", required=True)
+
+    build_release = release_commands.add_parser("build", help="Release-Dateien erstellen")
+    build_release.add_argument("--tag", required=True)
+    build_release.set_defaults(handler=mainframe_release.run)
+
+    release_commands.add_parser("mainframe", help="Release an den Mainframe übergeben").set_defaults(
+        handler=mainframe_release.run
     )
-    commands.add_parser("publish-github-release", help="Lieferinformationen veröffentlichen").set_defaults(
-        handler=github.run_publish_command
-    )
+
+    github_release = release_commands.add_parser("github", help="Lieferinformationen veröffentlichen")
+    github_release.add_argument("--tag", required=True)
+    github_release.set_defaults(handler=github.run)
 
     return parser
 

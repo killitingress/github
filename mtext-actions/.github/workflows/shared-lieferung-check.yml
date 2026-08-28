@@ -13,10 +13,6 @@ name: Shared Workflow – Lieferung vorprüfen
         description: Vorgesehener Liefer-Tag
         required: true
         type: string
-    secrets:
-      automation_token:
-        description: Token zum Laden der zentralen CI/CD-Implementierung
-        required: true
 permissions:
   contents: read
 
@@ -33,38 +29,22 @@ jobs:
           path: source
           persist-credentials: false
 
-      # Lädt die freigegebene Implementierung der Vorprüfung.
-      - name: Check-Out CI/CD-Version
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
-          ref: main
-          path: automation
-          persist-credentials: false
-          token: ${{ secrets.automation_token }}
-
-      # Prüft Git und Python und stellt den Python-Pfad bereit
-      - name: Python-Runtime ermitteln
-        id: runtime
-        run: bash automation/scripts/runner-preflight.sh
+      # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
+      - name: M/Text-Automatisierung laden
+        id: automation
+        uses: FI_Actions/fi_lbs_entw_oms_mtext_actions@main
 
       # Prüft Liefer-Tag, Branch und Lieferumfang, schreibt die Vorprüfung in die
       # Actions-Zusammenfassung und legt vorbereitung.json an
       - name: Lieferung und Lieferumfang prüfen
         id: check
         env:
-          SOURCE_REPOSITORY: ${{ github.repository }}
+          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
           LIEFER_TAG: ${{ inputs.liefer_tag }}
-          SOURCE_BRANCH: ${{ github.ref_name }}
-          SOURCE_SHA: ${{ github.sha }}
-          ACTOR: ${{ github.actor }}
         run: >-
-          "${{ steps.runtime.outputs.python }}"
-          automation/src/mtext.py lieferung check
+          "${{ steps.automation.outputs.python }}"
+          "$AUTOMATION_PATH/src/mtext.py" delivery check
           --tag "$LIEFER_TAG"
-          --branch "$SOURCE_BRANCH"
-          --source-sha "$SOURCE_SHA"
-          --actor "$ACTOR"
 
       - name: Vorbereitung festhalten
         uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de

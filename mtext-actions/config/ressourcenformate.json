@@ -1,10 +1,14 @@
 {
   "dateiendungen": {
-    ".conf": "xml",
     ".datamodel": "xml",
+    ".mapping": "xml",
+    ".model": "xml",
+    ".pageLayout*": "xml",
+    ".outputSettings": "xml",
+    ".template": "xml",
+    ".xml": "xml",
     ".formio": "json",
     ".json": "json",
-    ".model": "xml",
-    ".xml": "xml"
+    ".js": "js"
   }
 }

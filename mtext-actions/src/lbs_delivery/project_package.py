@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import tempfile
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import git
@@ -23,47 +24,66 @@ from .process import DeliveryError, Status
 
 # Der gemeinsame Dateiname ordnet die Informationsdatei eindeutig einem
 # Mandanten und Projekt zu.
-_INFORMATION_NAME = "_INFO_{kuerzel}-{project}.json"
+INFORMATION_NAME = "_INFO_{kuerzel}-{project}.json"
 
 # Beim Prüfsummenvergleich werden Archive blockweise gelesen, damit auch große
 # FULL-Pakete keinen entsprechend großen Arbeitsspeicher benötigen.
 _HASH_BLOCK_SIZE = 1024 * 1024
 
-# Die Release-Version `100` bezeichnet die FULL-Lieferung einer Releaselinie.
-# Jedes weitere Release der Linie liefert die Änderungen gegenüber diesem Stand.
+# Zwischenrelease `100` bezeichnet das Hauptrelease und wird als FULL geliefert.
+# Spätere Zwischenreleases liefern die Änderungen gegenüber diesem Stand.
 _FULL_RELEASE = "100"
+
+
+@dataclass(frozen=True)
+class PackageStand:
+    """Bezugsstand, Zielstand und Git-Änderungen für Sync und Release."""
+
+    von: tuple[str, str] | None
+    bis: tuple[str, str]
+    changes: Iterable[git.GitChange]
+
+
+@dataclass(frozen=True)
+class ProjectPackage:
+    """Erzeugtes Projektpaket mit Informationsdatei und Archiven."""
+
+    # JSON mit Stand, Elementliste und Prüfsummen
+    information: Path
+    # D-Archiv mit Änderungen und Löschliste, bei FULL ohne Änderungen
+    d_archiv: Path
+    # Vollständiger Projektbaum eines FULL, bei DELTA nicht vorhanden
+    f_archiv: Path | None
 
 
 # Bezugsstand und projektbezogene Elementliste für FULL- und DELTA-Lieferungen.
 def release_scope(
-    repository_root: str | Path,
-    tag: str,
+    repository_root: Path,
     target_sha: str,
+    *,
+    releaselinie: str,
+    zwischenrelease: str,
 ) -> tuple[tuple[str, str] | None, list[git.GitChange]]:
-    """Bestimmt Bezugsstand und kumulativen Git-Vergleich eines Release-Tags.
+    """Bestimmt den Git-Vergleich aus den geprüften Bestandteilen des Liefer-Tags.
 
     Ein FULL hat keinen Bezugsstand. Ein DELTA vergleicht mit dem FULL-Tag
-    derselben Releaselinie, damit jede Lieferung ohne die Zwischenreleases
+    derselben Releaselinie, damit jede Lieferung ohne die vorherigen DELTA-Lieferungen
     eingespielt werden kann.
     """
 
-    tag_match = git.LIEFER_TAG_RE.fullmatch(tag)
-    if tag_match is None:
-        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Liefer-Tag")
-
     # FULL hat keinen Bezugsstand und keinen Git-Vergleich.
-    if tag_match.group("release") == _FULL_RELEASE:
+    if zwischenrelease == _FULL_RELEASE:
         return None, []
 
     # DELTA vergleicht kumulativ mit der `.100`-Lieferung derselben Releaselinie.
-    base_reference = f"r{tag_match.group('releaselinie')}.{_FULL_RELEASE}"
+    base_reference = f"r{releaselinie}.{_FULL_RELEASE}"
     base_sha = git.resolve(repository_root, f"refs/tags/{base_reference}")
     git.require_ancestor(repository_root, base_sha, target_sha)
     return (base_reference, base_sha), git.changes(repository_root, base_sha, target_sha)
 
 
 def project_elements(
-    repository_root: str | Path,
+    repository_root: Path,
     project: str,
     *,
     base: tuple[str, str] | None,
@@ -76,12 +96,11 @@ def project_elements(
     bereits bestimmten Git-Vergleich.
     """
 
-    root = Path(repository_root)
     # FULL: alle Projektdateien als hinzugefügt melden.
     if base is None:
         return [
-            ["A", path.relative_to(root / project).as_posix()]
-            for path in sorted((root / project).rglob("*"))
+            ["A", path.relative_to(repository_root / project).as_posix()]
+            for path in sorted((repository_root / project).rglob("*"))
             if path.is_file()
         ]
 
@@ -134,12 +153,9 @@ def _write_delta_archive(
                     deleted.append(repository_relative.as_posix())
                     continue
 
-                source = repository_root / repository_relative
-                if not source.is_file():
-                    raise DeliveryError(Status.PACKAGE_FAILED, "DELTA-Datei fehlt")
                 destination = staging / repository_relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(source, destination)
+                shutil.copyfile(repository_root / repository_relative, destination)
 
             # Löschliste und Archivinhalt im Staging bereitstellen.
             (staging / deletion_list).write_text(
@@ -166,66 +182,65 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-# Öffentliche Paketerzeugung für Sync und Release.
+# Gemeinsame Paketerzeugung für Sync und Release.
 def build_project_package(
     configuration: Configuration,
     *,
-    repository_root: str | Path,
-    output_directory: str | Path,
+    repository_root: Path,
+    output_directory: Path,
     project: str,
-    project_code: str,
-    changes: Iterable[git.GitChange],
-    base: tuple[str, str] | None,
-    target: tuple[str, str],
-) -> tuple[Path, ...]:
+    stand: PackageStand,
+) -> ProjectPackage:
     """Erzeugt Archive und JSON-Informationsdatei für ein Projekt.
 
-    `base` und `target` enthalten jeweils Referenz und Commit-SHA. Bei einem
-    FULL entfällt `base`. Bei einem DELTA bestimmt `changes` die gemeinsame
-    Elementliste für Archiv, Löschliste und Informationsdatei.
+    Sync und Release verwenden dasselbe Paketformat. `stand` beschreibt den
+    Vergleichsrahmen: Bei FULL entfällt `stand.von`, bei DELTA liefert
+    `stand.changes` die gemeinsame Elementliste für Archiv, Löschliste und
+    Informationsdatei.
     """
 
-    root = Path(repository_root)
-    output = Path(output_directory)
     try:
-        output.mkdir(parents=True, exist_ok=True)
+        output_directory.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         raise DeliveryError(Status.PACKAGE_FAILED, "Paketausgabeverzeichnis kann nicht erstellt werden") from exc
 
     # Gemeinsame Elementliste für Archiv, Löschliste und Informationsdatei.
-    elements = project_elements(root, project, base=base, changes=changes)
+    elements = project_elements(repository_root, project, base=stand.von, changes=stand.changes)
 
-    prefix = f"{configuration.kuerzel}{project_code}"
-    archives: list[Path] = []
-    if base is None:
-        full_archive = output / f"{prefix}F.tgz"
-        _write_archive(full_archive, root, [f"./{project}"])
-        archives.append(full_archive)
+    prefix = f"{configuration.kuerzel}{configuration.projects[project]}"
+    full_archive = None
+    if stand.von is None:
+        full_archive = output_directory / f"{prefix}F.tgz"
+        _write_archive(full_archive, repository_root, [f"./{project}"])
 
     # D-Archiv entsteht immer. Bei FULL bleibt die Änderungsmenge leer.
-    delta_archive = output / f"{prefix}D.tgz"
+    delta_archive = output_directory / f"{prefix}D.tgz"
     _write_delta_archive(
         delta_archive,
-        root,
+        repository_root,
         project,
         f"{prefix}D.txt",
-        [] if base is None else elements,
+        [] if stand.von is None else elements,
     )
-    archives.append(delta_archive)
 
     # Stand, Prüfsummen und Elementliste in der Informationsdatei ablegen.
-    stand: dict[str, object] = {"bis": {"referenz": target[0], "commit": target[1]}}
-    if base is not None:
-        stand["von"] = {"referenz": base[0], "commit": base[1]}
+    stand_json: dict[str, object] = {
+        "bis": {"referenz": stand.bis[0], "commit": stand.bis[1]},
+    }
+    if stand.von is not None:
+        stand_json["von"] = {"referenz": stand.von[0], "commit": stand.von[1]}
 
-    checksums = {archive.stem[-1]: _sha256(archive) for archive in archives}
-    information = output / _INFORMATION_NAME.format(kuerzel=configuration.kuerzel, project=project)
+    checksums = {"D": _sha256(delta_archive)}
+    if full_archive is not None:
+        checksums["F"] = _sha256(full_archive)
+
+    information = output_directory / INFORMATION_NAME.format(kuerzel=configuration.kuerzel, project=project)
     try:
         information.write_text(
             json.dumps(
                 {
                     "projekt": project,
-                    "stand": stand,
+                    "stand": stand_json,
                     "elemente": elements,
                     "sha256": checksums,
                 },
@@ -238,4 +253,4 @@ def build_project_package(
     except OSError as exc:
         raise DeliveryError(Status.PACKAGE_FAILED, "Informationsdatei kann nicht geschrieben werden") from exc
 
-    return tuple(archives)
+    return ProjectPackage(information=information, d_archiv=delta_archive, f_archiv=full_archive)

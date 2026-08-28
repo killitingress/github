@@ -3,7 +3,7 @@ name: Lieferung vorbereiten
 # Dieser Workflow bereitet den in GitHub ausgewählten Branchstand für eine
 # Lieferung vor. Die vorbereitende Person gibt den vorgesehenen Liefer-Tag beim
 # manuellen Start an. Repository, Branch, SHA und Person stammen aus dem
-# auslösenden Mandantenlauf. Die zentrale Vorprüfung prüft den Stand und hält SHA
+# auslösenden Mandantenlauf. Der Shared Workflow prüft den Stand und hält SHA
 # und Lieferumfang für die spätere Bestätigung als Laufartefakt fest. Die
 # Vorbereitung erstellt noch keinen Liefer-Tag und startet keine
 # Mainframe-Übergabe.
@@ -19,11 +19,9 @@ permissions:
   contents: read
 
 jobs:
-  # Startet die zentrale Vorprüfung für den ausgewählten Branchstand
+  # Startet den Shared Workflow für den ausgewählten Branchstand
   vorpruefen:
     name: Lieferung vorprüfen
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-check.yml@main
+    uses: FI_Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-check.yml@main
     with:
       liefer_tag: ${{ inputs.liefer_tag }}
-    secrets:
-      automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}

@@ -1,4 +1,4 @@
-"""Lädt und prüft `.github/config.json` eines Mandanten-Repositories.
+"""Lädt (und prüft) `.github/config.json` eines Mandanten-Repositories.
 
 Die Angaben werden mit den Mandanten- und Releaselinienzuordnungen sowie den
 vorhandenen Projektverzeichnissen abgeglichen. Das Ergebnis enthält alles, was
@@ -17,8 +17,8 @@ from typing import Any
 from .process import DeliveryError, Status
 
 
-# Wurzel des zentralen CI/CD-Checkouts mit den versionierten Zuordnungen für
-# Mandanten und Releaselinien.
+# Stammverzeichnis dieses Repositories. Darunter liegen die gemeinsamen
+# Konfigurationsdateien und Vorlagen.
 AUTOMATION_ROOT = Path(__file__).resolve().parents[2]
 
 # Zuordnung vom Mandantenkürzel zum GitHub-Repository und Mainframe-Subsystem.
@@ -31,12 +31,21 @@ RELEASELINIEN_ZUORDNUNG_PATH = AUTOMATION_ROOT / "config/releaselinien.json"
 # Mandantenkonfiguration im ausgecheckten Repository.
 MANDANT_CONFIG_PATH = Path(".github/config.json")
 
+# Verzeichnis des ausgecheckten Mandanten-Repositories im GitHub-Workflow-Arbeitsbereich.
+WORKFLOW_MANDANT_SOURCE = Path("source")
+
+# Dateiname der Liefer-Vorbereitung im Arbeitsbereich und im Vorbereitungsverzeichnis.
+WORKFLOW_VORBEREITUNG_DATEI = Path("vorbereitung.json")
+
+# Zuordnung der zu prüfenden Ressourcenformate in mtext-actions.
+RESOURCE_FORMATS_PATH = AUTOMATION_ROOT / "config/ressourcenformate.json"
+
 # Fachliche Bezeichnungen der M/Text-Zielstufen in `releaselinien.json`.
 MTEXT_ZIEL_ENTWICKLUNG = "Entwicklung"
 MTEXT_ZIEL_FUNKTIONSTEST = "Funktionstest"
 
 # Die Reihenfolge der M/Text-Ziele gilt beim vollständigen Abgleich nach einem
-# Releaselinienwechsel. Dieselben Ziele müssen zentral konfiguriert sein.
+# Releaselinienwechsel.
 MTEXT_ZIEL_REIHENFOLGE = (MTEXT_ZIEL_ENTWICKLUNG, MTEXT_ZIEL_FUNKTIONSTEST)
 
 # Erlaubte CodePipeline-Umgebungen: `P` für Produktion und `T` für Test.
@@ -61,8 +70,8 @@ _PROJEKTREFERENZ = {
 class Configuration:
     """Enthält die geprüften Angaben eines Mandanten-Repositories.
 
-    `load_configuration()` liest sie aus der Mandantenkonfiguration, den
-    zentralen Zuordnungen und den Projektverzeichnissen. Paketbau,
+    `Configuration.load()` liest sie aus der Mandantenkonfiguration, den
+    gemeinsamen Zuordnungen und den Projektverzeichnissen. Paketbau,
     Synchronisation und Übergabe verwenden anschließend diese Angaben.
     """
 
@@ -82,7 +91,7 @@ class Configuration:
     projects: dict[str, str]
     # In `.github/config.json` benannte Hostprofile mit CodePipeline-Stage und Assignment.
     hostprofile: dict[str, dict[str, str]]
-    # Zentrale Zuordnung aller aktiven Linien aus `releaselinien.json`. Die
+    # Gemeinsame Zuordnung aller aktiven Linien aus `releaselinien.json`. Die
     # Schlüssel sind Linien wie `270`, die Werte nennen den Zahlenteil der
     # ETAPS-Linie und das Hostprofil.
     releaselinien: dict[str, dict[str, str]]
@@ -91,26 +100,101 @@ class Configuration:
     # Warnungen zu fehlenden oder zusätzlichen Projektverzeichnissen.
     warnungen: tuple[str, ...]
 
+    def release_branches(self, releaselinie: str) -> tuple[str, ...]:
+        """Gibt die zulässigen Lieferbranches einer Releaselinie zurück."""
 
-@dataclass(frozen=True)
-class MandantStamm:
-    """Ordnet einem Mandantenkürzel Repository und Mainframe-Subsystem zu.
+        if self.releaselinie == releaselinie:
+            return "main", f"release/{releaselinie}"
 
-    Die Zuordnung verhindert, dass eine Datei im Repository das `kuerzel` oder
-    Mainframe-Subsystem eines anderen Mandanten beansprucht.
-    """
+        return (f"release/{releaselinie}",)
 
-    repository: str
-    subsystem: str
+    @classmethod
+    def load_releaselinien_zuordnung(cls, path: str | Path) -> tuple[dict[str, str], dict[str, Any]]:
+        """Lädt M/Text-Ziele und aktive Releaselinien aus releaselinien.json."""
 
+        document = _read_json(path)
+        mtext_ziele = document["mtext_ziele"]
 
-def release_branches(configuration: Configuration, releaselinie: str) -> tuple[str, ...]:
-    """Gibt die zulässigen Lieferbranches einer Releaselinie zurück."""
+        if set(mtext_ziele) != set(MTEXT_ZIEL_REIHENFOLGE):
+            raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Ziele sind ungültig")
 
-    if configuration.releaselinie == releaselinie:
-        return "main", f"release/{releaselinie}"
+        mtext_ziel_prefixe = {zielstufe: mtext_ziele[zielstufe] for zielstufe in MTEXT_ZIEL_REIHENFOLGE}
+        return mtext_ziel_prefixe, document["releaselinien"]
 
-    return (f"release/{releaselinie}",)
+    @classmethod
+    def load_mandanten_zuordnung(cls, path: str | Path) -> dict[str, dict[str, str]]:
+        """Lädt Repository und Mainframe-Subsystem je Mandantenkürzel aus mandanten.json."""
+
+        mandanten = _read_json(path)
+        zuordnung: dict[str, dict[str, str]] = {}
+        repositories: set[str] = set()
+
+        # Jedes Mandantenkürzel braucht ein eindeutiges Repository.
+        for kuerzel, values in mandanten.items():
+            repository = values["repository"]
+            subsystem = values["subsystem"]
+
+            if repository in repositories:
+                raise DeliveryError(Status.VALIDATION_FAILED, "Mandantenzuordnung ist nicht eindeutig")
+
+            repositories.add(repository)
+            zuordnung[kuerzel] = {"repository": repository, "subsystem": subsystem}
+
+        return zuordnung
+
+    @classmethod
+    def load(cls, repository_root: str | Path, repository_name: str) -> Configuration:
+        """Lädt und prüft die Konfiguration eines ausgecheckten Mandanten-Repositories."""
+
+        root = Path(repository_root)
+
+        # Gemeinsame Zuordnungen und Mandantenkonfiguration laden.
+        mandant_configuration = _read_json(root / MANDANT_CONFIG_PATH)
+        mandanten_zuordnung = cls.load_mandanten_zuordnung(MANDANTEN_ZUORDNUNG_PATH)
+        mtext_ziel_prefixe, releaselinien = cls.load_releaselinien_zuordnung(RELEASELINIEN_ZUORDNUNG_PATH)
+
+        mandant = mandant_configuration["mandant"]
+        kuerzel = mandant["kuerzel"]
+        releaselinie = mandant["releaselinie"]
+        ispw = mandant["ispw"]
+        hostprofile = mandant["hostprofile"]
+        excluded_projects = mandant.get("excluded_projects", [])
+        if not isinstance(excluded_projects, list):
+            raise DeliveryError(Status.VALIDATION_FAILED, "ausgeschlossene Projekte sind ungültig")
+
+        if releaselinie not in releaselinien:
+            raise DeliveryError(Status.VALIDATION_FAILED, "führende Releaselinie ist ungültig")
+
+        # Mandantenidentität und Hostprofile prüfen.
+        stammdaten = mandanten_zuordnung.get(kuerzel)
+        if stammdaten is None or repository_name != stammdaten["repository"]:
+            raise DeliveryError(Status.VALIDATION_FAILED, "Mandant passt nicht zum Repository")
+
+        if ispw not in ISPW_INSTANZEN:
+            raise DeliveryError(Status.VALIDATION_FAILED, "ISPW-Instanz ist ungültig")
+
+        for profile in hostprofile.values():
+            if profile["stage"] not in CODEPIPELINE_STAGES or not profile.get("assignment"):
+                raise DeliveryError(Status.VALIDATION_FAILED, "Hostprofil ist ungültig")
+
+        # Lieferbare Projekte ermitteln und Releaselinien abgleichen.
+        projects = _scan_projects(root, kuerzel, tuple(excluded_projects))
+        for values in releaselinien.values():
+            if values["hostprofil"] not in hostprofile:
+                raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist ungültig")
+
+        return cls(
+            repository=repository_name,
+            kuerzel=kuerzel,
+            releaselinie=releaselinie,
+            ispw=ispw,
+            subsystem=stammdaten["subsystem"],
+            projects=projects,
+            hostprofile=hostprofile,
+            releaselinien=releaselinien,
+            mtext_ziel_prefixe=mtext_ziel_prefixe,
+            warnungen=_reference_warnings(kuerzel, projects),
+        )
 
 
 def _read_json(path: str | Path) -> Any:
@@ -121,97 +205,6 @@ def _read_json(path: str | Path) -> Any:
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         message = f"Konfiguration kann nicht gelesen werden: {Path(path).name}"
         raise DeliveryError(Status.VALIDATION_FAILED, message) from exc
-
-
-def load_mandanten_zuordnung(path: str | Path) -> dict[str, MandantStamm]:
-    """Lädt Repository und Mainframe-Subsystem je Mandantenkürzel."""
-
-    mandanten = _read_json(path)
-    zuordnung: dict[str, MandantStamm] = {}
-    repositories: set[str] = set()
-
-    # Jede Zuordnung braucht ein eindeutiges Repository und Subsystem.
-    for kuerzel, values in mandanten.items():
-        repository = values["repository"]
-        subsystem = values["subsystem"]
-
-        if repository in repositories:
-            raise DeliveryError(Status.VALIDATION_FAILED, "Mandantenzuordnung ist nicht eindeutig")
-
-        repositories.add(repository)
-        zuordnung[kuerzel] = MandantStamm(repository=repository, subsystem=subsystem)
-
-    return zuordnung
-
-
-def load_releaselinien_zuordnung(path: str | Path) -> tuple[dict[str, str], dict[str, Any]]:
-    """Lädt M/Text-Ziele und aktive Releaselinien aus releaselinien.json."""
-
-    document = _read_json(path)
-    mtext_ziele = document["mtext_ziele"]
-
-    if set(mtext_ziele) != set(MTEXT_ZIEL_REIHENFOLGE):
-        raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Ziele sind ungültig")
-
-    mtext_ziel_prefixe = {zielstufe: mtext_ziele[zielstufe] for zielstufe in MTEXT_ZIEL_REIHENFOLGE}
-    return mtext_ziel_prefixe, document["releaselinien"]
-
-
-def load_configuration(repository_root: str | Path, repository_name: str) -> Configuration:
-    """Lädt und prüft die Konfiguration eines ausgecheckten Mandanten-Repositories."""
-
-    root = Path(repository_root)
-
-    # Zentrale Zuordnungen und Mandantenkonfiguration laden.
-    mandant_configuration = _read_json(root / MANDANT_CONFIG_PATH)
-    mandanten_zuordnung = load_mandanten_zuordnung(MANDANTEN_ZUORDNUNG_PATH)
-    mtext_ziel_prefixe, releaselinien = load_releaselinien_zuordnung(
-        RELEASELINIEN_ZUORDNUNG_PATH
-    )
-
-    mandant = mandant_configuration["mandant"]
-    kuerzel = mandant["kuerzel"]
-    releaselinie = mandant["releaselinie"]
-    ispw = mandant["ispw"]
-    hostprofile = mandant["hostprofile"]
-    excluded_projects = mandant.get("excluded_projects", [])
-    if not isinstance(excluded_projects, list):
-        raise DeliveryError(Status.VALIDATION_FAILED, "ausgeschlossene Projekte sind ungültig")
-
-    if releaselinie not in releaselinien:
-        raise DeliveryError(Status.VALIDATION_FAILED, "führende Releaselinie ist ungültig")
-
-    # Mandantenidentität und Hostprofile prüfen.
-    mandant_stammdaten = mandanten_zuordnung.get(kuerzel)
-    if mandant_stammdaten is None or repository_name != mandant_stammdaten.repository:
-        raise DeliveryError(Status.VALIDATION_FAILED, "Mandant passt nicht zum Repository")
-
-    if ispw not in ISPW_INSTANZEN:
-        raise DeliveryError(Status.VALIDATION_FAILED, "ISPW-Instanz ist ungültig")
-
-    for profile in hostprofile.values():
-        if profile["stage"] not in CODEPIPELINE_STAGES or not profile.get("assignment"):
-            raise DeliveryError(Status.VALIDATION_FAILED, "Hostprofil ist ungültig")
-
-    # Lieferbare Projekte ermitteln und Releaselinien abgleichen.
-    projects = _scan_projects(root, kuerzel, tuple(excluded_projects))
-    for values in releaselinien.values():
-        if values["hostprofil"] not in hostprofile:
-            raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist ungültig")
-
-
-    return Configuration(
-        repository=repository_name,
-        kuerzel=kuerzel,
-        releaselinie=releaselinie,
-        ispw=ispw,
-        subsystem=mandant_stammdaten.subsystem,
-        projects=projects,
-        hostprofile=hostprofile,
-        releaselinien=releaselinien,
-        mtext_ziel_prefixe=mtext_ziel_prefixe,
-        warnungen=_reference_warnings(kuerzel, projects),
-    )
 
 
 def _scan_projects(root: Path, kuerzel: str, excluded_projects: tuple[str, ...]) -> dict[str, str]:
@@ -227,7 +220,6 @@ def _scan_projects(root: Path, kuerzel: str, excluded_projects: tuple[str, ...])
     if not projects or len(projects) != len(set(projects.values())):
         raise DeliveryError(Status.VALIDATION_FAILED, "abgeleitete Projektcodes sind nicht eindeutig")
 
-
     return projects
 
 
@@ -239,25 +231,36 @@ def _reference_warnings(kuerzel: str, projects: dict[str, str]) -> tuple[str, ..
         return (f"Mandant besitzt keinen aktuellen Projekt-Referenzstand: {kuerzel}",)
 
     names = set(projects)
-    warnungen: list[str] = []
+    warnings: list[str] = []
 
-    fehlend = sorted(referenz - names)
-    if fehlend:
-        warnungen.append("Projekte fehlen gegenüber dem aktuellen Referenzstand: " + ", ".join(fehlend))
+    missing = sorted(referenz - names)
+    if missing:
+        warnings.append("Projekte fehlen gegenüber dem aktuellen Referenzstand: " + ", ".join(missing))
 
-    zusaetzlich = sorted(names - referenz)
+    additional = sorted(names - referenz)
 
-    if zusaetzlich:
-        warnungen.append("Projekte sind gegenüber dem aktuellen Referenzstand zusätzlich: " + ", ".join(zusaetzlich))
+    if additional:
+        warnings.append("Projekte sind gegenüber dem aktuellen Referenzstand zusätzlich: " + ", ".join(additional))
 
-    return tuple(warnungen)
+    return tuple(warnings)
 
 
-def run_validation(_arguments: argparse.Namespace) -> dict[str, object]:
+def workflow_workspace() -> Path:
+    """Gibt den Arbeitsbereich des aktuellen GitHub-Actions-Laufs zurück."""
+
+    return Path(os.environ.get("GITHUB_WORKSPACE", "."))
+
+
+def mandant_source() -> Path:
+    """Gibt den Pfad des ausgecheckten Mandanten-Repositories zurück."""
+
+    return workflow_workspace() / WORKFLOW_MANDANT_SOURCE
+
+
+def run(_arguments: argparse.Namespace) -> dict[str, object]:
     """Prüft die Mandantenkonfiguration des Workflow-Arbeitsbereichs."""
 
-    source = Path(os.environ.get("GITHUB_WORKSPACE", ".")) / "source"
-    configuration = load_configuration(source, os.environ["GITHUB_REPOSITORY"])
+    configuration = Configuration.load(mandant_source(), os.environ["GITHUB_REPOSITORY"])
     return {
         "status": Status.CONFIG_VALIDATED.value,
         "mandanten_kuerzel": configuration.kuerzel,

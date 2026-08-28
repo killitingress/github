@@ -21,27 +21,30 @@ Python-Standardbibliothek erleichtert dabei die Ausführbarkeit auf dem Runner.
 | **QS-Checker** | Bleibt zunächst beim Mandanten. Glossar, QS-Regeln und weitere fachliche Prüfungen liegen dort. Eine spätere gemeinsame Lösung kann getrennt entschieden werden. |
 | **Fehler-Trace** | Datenquelle, geprüfte Fehler und interaktive Funktionen müssen erläutert werden. Wahrscheinlich keine Aufgabe für GitHub. |
 | **WorkspaceSVNHelfer** | Gehört nicht in GitHub Actions. Arbeiten am privaten Arbeitsbereich bleiben eine lokale Aufgabe. |
-| **JSON- und XML-Prüfung** | Ist als zentrale technische Prüfung in `mtext_actions` sinnvoll. Ein kleiner Trigger-Workflow startet sie in jedem Mandanten-Repository. |
+| **JSON- und XML-Prüfung** | Ist als gemeinsame technische Prüfung in `mtext_actions` sinnvoll. Ein kleiner Trigger-Workflow startet sie in jedem Mandanten-Repository. |
 
-## Zentrale Prüfung von Ressourcen
+## Gemeinsame Prüfung von Ressourcen
 
-Unabhängig vom mandanteneigenen QS-Checker prüft ein erster zentraler Workflow,
-ob versionierte Ressourcen technisch wohlgeformt sind (Linting).
+Unabhängig vom mandanteneigenen QS-Checker prüft der Shared Workflow
+`shared-check-resources.yml`, ob versionierte Ressourcen technisch wohlgeformt
+sind (Linting).
 
 Die Python-Standardbibliothek unterstützt die Prüfung der JSON-Syntax und der
-XML-Wohlgeformtheit. Die XSD-Validierung benötigt ein zusätzliches, für den
-Runner festgelegtes Werkzeug oder eine Bibliothek. Form.io beschreibt Formulare
-als Form JSON, ob hier eine zusätzliche Korrektheitsprüfung möglich ist, ist
-noch zu klären.
+XML-Wohlgeformtheit. Ist Node.js auf dem Runner verfügbar, werden auch
+JavaScript-Dateien auf Syntaxfehler geprüft. Die XSD-Validierung benötigt ein
+zusätzliches, für den Runner festgelegtes Werkzeug oder eine Bibliothek. Form.io
+beschreibt Formulare als Form JSON, ob hier eine zusätzliche Korrektheitsprüfung
+möglich ist, ist noch zu klären.
 
 Desweiteren ist ein automatisierter Regressionstest vorgesehen (Lars).
 
 Die Prüfung läuft bei Pull Requests und berücksichtigt die hinzugefügten,
-geänderten und umbenannten Ressourcen. Eine zentrale Zuordnungsdatei legt fest,
-welche Dateiendungen als JSON oder XML geprüft werden. Dazu gehören auch
-Tonic-Ressourcen mit Endungen wie `.model`, `.datamodel` oder `.conf` sowie
-Form.io-Dateien mit der Endung `.formio`. Eine Vollprüfung kann manuell gestartet
-werden. Befunde erscheinen mit Datei und, soweit verfügbar, Zeile und Spalte.
+geänderten und umbenannten Ressourcen. Eine gemeinsame Zuordnungsdatei legt fest,
+welche Dateiendungen als JSON, XML oder JavaScript geprüft werden. Dazu gehören
+auch Tonic-Ressourcen mit Endungen wie `.model`, `.datamodel` oder `.mapping`,
+Form.io-Dateien mit der Endung `.formio` und JavaScript-Dateien mit der Endung
+`.js`. Eine Vollprüfung kann manuell gestartet werden. Befunde erscheinen mit
+Datei und, soweit verfügbar, Zeile und Spalte.
 Ein Befund beendet den Lauf zunächst nicht als Fehler und verhindert damit den
 Pull Request nicht. Welche Befunde später verbindlich werden, erfordert eine
 eigene fachliche Entscheidung.

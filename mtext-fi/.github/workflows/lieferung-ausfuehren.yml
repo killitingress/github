@@ -3,10 +3,10 @@ name: Lieferung ausführen
 # Dieser Workflow startet eine Lieferung mit einem geplanten oder vorhandenen
 # Liefer-Tag. Ein geplanter Tag wird aus seiner neuesten Vorbereitung ausgeführt
 # und mit der ausführenden Person geprüft. Für eine Direktlieferung muss die
-# Abweichung vom Vier-Augenprinzip bewusst bestätigt werden. Ein vorhandener
+# Abweichung vom 4-Augenfall bewusst bestätigt werden. Ein vorhandener
 # Liefer-Tag wird als Wiederholung erneut verarbeitet. Bei einer erstmaligen
-# Lieferung erstellt mtext_actions den Liefer-Tag. Paketbau, Mainframe-Übergabe
-# und Bereitstellungsbericht laufen ebenfalls zentral.
+# Lieferung erstellt der wiederverwendbare Workflow den Liefer-Tag. Paketbau,
+# Mainframe-Übergabe und Bereitstellungsbericht bleiben Teil dieses Laufs.
 'on':
   workflow_dispatch:
     inputs:
@@ -15,23 +15,22 @@ name: Lieferung ausführen
         required: true
         type: string
       direktlieferung_bestaetigt:
-        description: Direktlieferung, Abweichung vom Vier-Augenprinzip und Risiko bewusst bestätigen
+        description: Direktlieferung, Abweichung vom 4-Augenfall und Risiko bewusst bestätigen
         required: false
         type: boolean
         default: false
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
-  # Startet den zentralen Lieferablauf für den gewählten Liefer-Tag
+  # Startet den Shared Workflow für den gewählten Liefer-Tag
   lieferung-ausfuehren:
     name: Lieferung ausführen
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@main
+    uses: FI_Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@main
     with:
       liefer_tag: ${{ inputs.liefer_tag }}
       direktlieferung_bestaetigt: ${{ inputs.direktlieferung_bestaetigt }}
     secrets:
-      automation_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}
-      dispatch_token: ${{ secrets.MTEXT_ACTIONS_TOKEN }}
+      mainframe_ftps_password: ${{ secrets.MAINFRAME_FTPS_PASSWORD }}

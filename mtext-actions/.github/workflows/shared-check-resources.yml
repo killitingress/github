@@ -1,23 +1,13 @@
 name: Shared Workflow – Mandantenkonfiguration und Ressourcen prüfen
 
 # Dieser Workflow prüft den Mandantenstand des aufrufenden Laufs. Die
-# Mandantenkonfiguration wird in jedem Lauf gegen die zentralen Zuordnungen
-# geprüft. Die Prüfung der JSON- und XML-Ressourcen kann abgewählt werden.
-# Pull Requests prüfen geänderte Dateien und laden dafür den Vorgänger.
-# Manuelle Läufe prüfen den gesamten Stand. Die Prüfung greift nicht auf M/Text
-# oder den Mainframe zu.
+# Mandantenkonfiguration wird in jedem Lauf gegen die gemeinsamen Zuordnungen
+# geprüft. Pull Requests prüfen geänderte JSON- und XML-Ressourcen sowie bei
+# verfügbarem Node.js auch JavaScript und laden dafür den Vorgänger. Manuelle
+# Läufe prüfen den gesamten Stand. Die Prüfung greift nicht auf M/Text oder den
+# Mainframe zu.
 'on':
   workflow_call:
-    inputs:
-      check_resources:
-        description: JSON- und XML-Ressourcen des Mandantenstands prüfen
-        required: false
-        default: true
-        type: boolean
-    secrets:
-      automation_token:
-        description: Token zum Laden der zentralen CI/CD-Implementierung
-        required: true
 
 permissions:
   contents: read
@@ -33,37 +23,24 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           path: source
-          fetch-depth: ${{ inputs.check_resources && github.event_name == 'pull_request' && 2 || 1 }}
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
           persist-credentials: false
 
-      # Lädt die freigegebene Implementierung der Prüfung
-      - name: Check-Out CI/CD-Version
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
-          ref: main
-          path: automation
-          persist-credentials: false
-          token: ${{ secrets.automation_token }}
+      # Lädt Implementierung und Konfiguration aus der gemeinsamen Action und
+      # prüft zugleich die Python-Runtime des Runners.
+      - name: M/Text-Automatisierung laden
+        id: automation
+        uses: FI_Actions/fi_lbs_entw_oms_mtext_actions@main
 
-      # Prüft Git und Python und stellt den Python-Pfad bereit
-      - name: Python-Runtime ermitteln
-        id: runtime
-        run: bash automation/scripts/runner-preflight.sh
-
-      # Prüft die zentrale Zuordnung und die Konfiguration des Mandanten
+      # Prüft die gemeinsame Zuordnung und die Konfiguration des Mandanten
       - name: Mandantenkonfiguration prüfen
-        run: >-
-          "${{ steps.runtime.outputs.python }}" automation/src/mtext.py
-          validate-config
+        env:
+          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
+        run: '"${{ steps.automation.outputs.python }}" "$AUTOMATION_PATH/src/mtext.py" config validate'
 
       # Pull Requests prüfen geänderte Ressourcen, manuelle Läufe den gesamten Stand
       - name: Ressourcen prüfen
-        if: inputs.check_resources
         env:
-          CHANGED_ONLY: ${{ github.event_name == 'pull_request' && '--changed-only' || '' }}
+          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
         run: >-
-          "${{ steps.runtime.outputs.python }}" automation/src/mtext.py check-resources
-          --root source
-          --formats automation/config/ressourcenformate.json
-          $CHANGED_ONLY
+          "${{ steps.automation.outputs.python }}" "$AUTOMATION_PATH/src/mtext.py" resources check

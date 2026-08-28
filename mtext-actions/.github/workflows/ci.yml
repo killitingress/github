@@ -1,12 +1,14 @@
-name: Zentrale Testsuite
+name: M/Text-Automatisierung testen
 
-# Dieser Workflow prüft mtext_actions bei Pull Requests und Änderungen an main.
+# Dieser Workflow prüft mtext_actions bei Pull Requests, Änderungen an main und
+# einem manuellen Start.
 # Er lädt den betroffenen Repository-Stand, ermittelt die verfügbare
 # Python-Runtime und führt die Unit-Tests aus. Die Tests sprechen natürlich
 # weder M/Text noch den Mainframe an.
 # Ein erfolgreicher Lauf bestätigt die Ausführbarkeit der Python-Abläufe auf dem
 # Runner und deren Korrektheit.
 'on':
+  workflow_dispatch:
   pull_request:
   push:
     branches:
@@ -18,12 +20,12 @@ permissions:
 
 # Neuere Commits ersetzen laufende Tests derselben Änderung
 concurrency:
-  group: central-tests-${{ github.repository }}-${{ github.event.pull_request.number || github.ref }}
+  group: mtext-actions-tests-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
-    name: Zentrale CI/CD-Implementierung testen
+    name: CI/CD-Implementierung testen
     runs-on: [self-hosted, linux]
     timeout-minutes: 10
     steps:
@@ -33,10 +35,10 @@ jobs:
         with:
           persist-credentials: false
 
-      # Prüft Git und Python auf dem Runner und stellt den Python-Pfad bereit
-      - name: Python-Runtime ermitteln
-        id: runtime
-        run: bash scripts/runner-preflight.sh
+      # Prüft denselben Ladevertrag, den die Mandanten-Workflows verwenden.
+      - name: M/Text-Automatisierung laden
+        id: automation
+        uses: ./
 
       # Workflow-Dateien mit actionlint prüfen, sobald der Runner das Kommando
       # bereitstellt.
@@ -46,7 +48,6 @@ jobs:
       # Führt alle Unit-Tests aus
       - name: Unit-Tests ausführen
         env:
-          PYTHONPATH: src
-        run: >-
-          "${{ steps.runtime.outputs.python }}" -m unittest discover
-          -s tests -v
+          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
+          PYTHONPATH: ${{ steps.automation.outputs.automation_path }}/src
+        run: '"${{ steps.automation.outputs.python }}" -m unittest discover -s "$AUTOMATION_PATH/tests" -v'

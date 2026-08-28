@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import argparse
+import json
+import os
 import unittest
+import urllib.parse
 from unittest.mock import patch
 
-from lbs_delivery.github import _publish_release
+from lbs_delivery.github import run
 from lbs_delivery.process import Status
 from lbs_delivery.mainframe_release import _build_release
 
 from tests.support import (
     TempDirTestCase,
     git,
-    jcl_template,
     load_test_configuration,
     setup_release_repository,
 )
@@ -20,65 +23,83 @@ from tests.support import (
 
 class GitHubReleaseTests(TempDirTestCase):
     def setUp(self) -> None:
+        """Bereitet die Releasehistorie und den GitHub-Kontext für den Berichtsjob vor."""
+
         super().setUp()
         self.repository = setup_release_repository(self.root)
         self.configuration = load_test_configuration(self.repository)
-        self.dist = self.root / "dist"
+        environment = patch.dict(os.environ, {
+            "GITHUB_WORKSPACE": str(self.root),
+            "GITHUB_API_URL": "https://github.example/api/v3",
+            "GITHUB_REPOSITORY": self.configuration.repository,
+            "GITHUB_TOKEN": "secret",
+        })
+        environment.start()
+        self.addCleanup(environment.stop)
 
-        git(self.repository, "checkout", "--detach", "r261.108")
-        _build_release(
-            self.configuration,
-            repository_root=self.repository,
-            output_directory=self.dist,
-            jcl_template=jcl_template(),
-            tag="r261.108",
-            trigger_sha=git(self.repository, "rev-parse", "HEAD"),
-        )
+        self.release = {
+            "id": 41,
+            "html_url": "https://github.example/FI/mandant/releases/tag/r261.108",
+            "upload_url": "https://uploads.github.example/repos/FI/mandant/releases/41/assets{?name,label}",
+            "assets": [],
+        }
 
-    def test_creates_release_and_uploads_information_file(self) -> None:
-        """Prüft Anlage, Beschreibung und Informationsdatei des Releases."""
+    def test_publishes_release_and_refreshes_information_file(self) -> None:
+        """Prüft FULL, DELTA und das Ersetzen der Informationsdatei bei Wiederholung."""
 
-        calls: list[dict[str, object]] = []
+        for tag, delivery_type, wiederholung in (
+            ("r261.108", "DELTA", False),
+            ("r261.100", "FULL", False),
+            ("r261.108", "DELTA", True),
+        ):
+            with self.subTest(tag=tag, wiederholung=wiederholung):
+                git(self.repository, "checkout", "--detach", tag)
+                runner_temp = self.root / tag
+                _build_release(self.configuration, output_directory=runner_temp / "release", tag=tag)
+                information = next((runner_temp / "release").glob("_INFO_*.json"))
+                content = information.read_bytes()
+                source_sha = json.loads(content)["stand"]["bis"]["commit"]
+                release = self.release | {"html_url": f"https://github.example/FI/mandant/releases/tag/{tag}"}
+                existing = None
+                if wiederholung:
+                    existing = release | {"assets": [
+                        {"name": information.name, "id": 51},
+                        {"name": "handbuch.pdf", "id": 52},
+                    ]}
 
-        def request(**arguments: object) -> object:
-            """Zeichnet den GitHub-Aufruf auf und liefert die passende Testantwort."""
+                responses = [existing, release]
+                if wiederholung:
+                    responses.append(None)
 
-            calls.append(arguments)
-            if arguments["method"] == "GET":
-                return None
+                responses.append({"id": 61})
 
-            if arguments.get("payload") is not None:
-                return {
-                    "id": 41,
-                    "html_url": "https://github.example/FI/mandant/releases/tag/r261.108",
-                    "upload_url": "https://uploads.github.example/repos/FI/mandant/releases/41/assets{?name,label}",
-                    "assets": [],
-                }
-            return {"id": 51}
+                with (
+                    patch.dict(os.environ, {"RUNNER_TEMP": str(runner_temp)}),
+                    patch("lbs_delivery.github.request", side_effect=responses) as api,
+                ):
+                    result = run(argparse.Namespace(tag=tag))
 
-        # Veröffentlichung und GitHub-Antworten gemeinsam im geprüften Ablauf halten.
-        with patch("lbs_delivery.github.request", side_effect=request):
-            result = _publish_release(
-                artifact_root=self.dist,
-                api_url="https://github.example/api/v3",
-                server_url="https://github.example",
-                repository=self.configuration.repository,
-                liefer_tag="r261.108",
-                source_sha="1" * 40,
-                token="secret",
-            )
+                calls = [call.kwargs for call in api.call_args_list]
+                expected_methods = ["GET", "PATCH", "DELETE", "POST"] if wiederholung else ["GET", "POST", "POST"]
+                self.assertEqual([call["method"] for call in calls], expected_methods)
+                self.assertTrue(calls[0]["url"].endswith(f"/releases/tags/{tag}"))
+                self.assertTrue(calls[1]["url"].endswith("/releases/41" if wiederholung else "/releases"))
 
-        self.assertEqual(result["status"], Status.GITHUB_RELEASE_PUBLISHED.value)
-        self.assertEqual(result["liefer_tag"], "r261.108")
-        body = next(call for call in calls if call.get("payload") is not None)["payload"]["body"]
-        self.assertIn("## Lieferung", body)
-        self.assertIn("- Liefer-Tag: `r261.108`", body)
-        self.assertIn("LOMS_Basis", body)
-        self.assertIn("releases/download/r261.108/_INFO_FI-LOMS_Basis.json", body)
-        uploads = [call for call in calls if call.get("content") is not None]
-        self.assertEqual(len(uploads), 1)
-        self.assertIn("_INFO_FI-LOMS_Basis.json", uploads[0]["url"])
-        self.assertEqual(uploads[0]["content_type"], "application/json")
+                if wiederholung:
+                    self.assertTrue(calls[2]["url"].endswith("/releases/assets/51"))
+
+                body = calls[1]["payload"]["body"]
+                self.assertIn(f"- Liefer-Tag: `{tag}`", body)
+                self.assertIn(f"- Lieferart: `{delivery_type}`", body)
+                self.assertIn(f"- Commit: `{source_sha}`", body)
+                self.assertEqual(calls[-1]["content"], content)
+                self.assertEqual(calls[-1]["content_type"], "application/json")
+                self.assertEqual(
+                    urllib.parse.parse_qs(urllib.parse.urlsplit(calls[-1]["url"]).query),
+                    {"name": [information.name]},
+                )
+                self.assertEqual(result["status"], Status.GITHUB_RELEASE_PUBLISHED.value)
+                self.assertEqual(result["release_url"], release["html_url"])
 
 
 if __name__ == "__main__":

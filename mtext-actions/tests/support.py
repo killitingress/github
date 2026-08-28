@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lbs_delivery.config import Configuration, MANDANT_CONFIG_PATH, load_configuration
+from lbs_delivery.config import Configuration, MANDANT_CONFIG_PATH
 
 AUTOMATION_ROOT = Path(__file__).resolve().parents[1]
 
@@ -111,4 +111,4 @@ def load_test_configuration(
     }
     values.update(mandant or {})
     path.write_text(json.dumps({"mandant": values}), encoding="utf-8")
-    return load_configuration(repository, repository_name)
+    return Configuration.load(repository, repository_name)

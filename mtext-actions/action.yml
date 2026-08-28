@@ -1,0 +1,19 @@
+name: M/Text-Automatisierung laden
+description: Stellt die gemeinsame Python-Implementierung und die geprüfte Python-Runtime bereit
+
+outputs:
+  python:
+    description: Absoluter Pfad zur verwendeten Python-Runtime
+    value: ${{ steps.runtime.outputs.python }}
+  automation_path:
+    description: Absoluter Pfad zur CI/CD-Implementierung
+    value: ${{ steps.runtime.outputs.automation_path }}
+
+runs:
+  using: composite
+  steps:
+    # Prüft die auf dem Runner benötigten Programme und die Python-Version.
+    - name: Python-Runtime ermitteln
+      id: runtime
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/scripts/runner-preflight.sh"

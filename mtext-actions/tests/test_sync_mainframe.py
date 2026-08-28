@@ -1,262 +1,219 @@
-"""Prüft Projektpakete, CIFS-Übergabe und Adapterauftrag des Sync-Wegs."""
+"""Prüft Sync-Vergleichsstände, Paketübergabe und den HTTPS-Adaptervertrag."""
 
 from __future__ import annotations
 
 import json
 import os
-import tarfile
 import unittest
-from pathlib import Path
+import urllib.error
+from contextlib import nullcontext
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, call, patch
 
-from lbs_delivery import sync as sync_command
+from lbs_delivery import adapter, github, sync
 from lbs_delivery.process import DeliveryError, Status
-from lbs_delivery.sync import _sync_resources
-
-from tests.support import TempDirTestCase, git, init_repository, load_test_configuration
-
-
-# Ein fester GitHub-Kontext macht die Weitergabe des Ereignisvergleichs prüfbar.
-GITHUB_CONTEXT = {
-    "commit": "2" * 40,
-    "source_branch": "main",
-    "event_name": "push",
-    "previous_commit": "1" * 40,
-}
-
-# Der Vorgängerstand einer Konfigurationsänderung führt noch die alte Releaselinie.
-PREVIOUS_CONFIG = json.dumps({"mandant": {"releaselinie": "261"}}).encode()
+from lbs_delivery.project_package import ProjectPackage
+from tests.support import TempDirTestCase, git, load_test_configuration, setup_release_repository
 
 
 class SyncTests(TempDirTestCase):
-    """Prüft die fachlichen Sync-Umfänge und ihre technische Übergabe."""
+    """Prüft die Sync-Regeln mit gemeinsamer Git-Historie und simuliertem Adapter."""
 
     def setUp(self) -> None:
-        """Bereitet Repository, Konfiguration und CIFS-Testwurzel vor."""
+        """Stellt Mandantenstand und Workflow-Umgebung für die Sync-Aufrufe bereit."""
 
         super().setUp()
-        self.branch = "feature/261/test-sync"
-
-        # Einen für die Synchronisation gültigen Entwicklungsstand erzeugen.
-        self.repository = init_repository(self.root, branch=self.branch)
-        project = self.repository / "LOMS_Basis"
-        project.mkdir()
-        (project / "value.txt").write_text("new", encoding="utf-8")
-        git(self.repository, "add", ".")
-        git(self.repository, "commit", "-m", "sync")
-        self.track_branch()
-
-        self.configuration = load_test_configuration(self.repository)
-        self.handoff_root = self.root / "cifs"
-        self.handoff_root.mkdir()
-
-    def sync(self, commit: str, previous_commit: str | None, **kwargs: object) -> dict[str, object]:
-        """Startet einen Sync-Lauf mit den gemeinsamen Testangaben."""
-
-        return _sync_resources(
-            self.configuration,
-            repository_root=self.repository,
-            commit=commit,
-            previous_commit=previous_commit,
-            source_branch=self.branch,
-            releaselinie="261",
-            zielstufe="Entwicklung",
-            handoff_root=self.handoff_root,
-            **kwargs,
-        )
-
-    def track_branch(self) -> None:
-        """Aktualisiert den vom Produktivcode geprüften Remote-Branch."""
-
-        git(self.repository, "update-ref", f"refs/remotes/origin/{self.branch}", "HEAD")
+        self.repository = setup_release_repository(self.root)
+        configuration = load_test_configuration(self.repository)
+        self.enterContext(patch.dict(os.environ, {
+            "GITHUB_WORKSPACE": str(self.root),
+            "GITHUB_REPOSITORY": configuration.repository,
+            "GITHUB_REF_NAME": "release/261",
+            "GITHUB_EVENT_NAME": "push",
+            "GITHUB_RUN_ID": "test",
+            "GITHUB_API_URL": "https://github.test/api/v3",
+            "GITHUB_TOKEN": "test-token",
+            "MTEXT_PREVIOUS_COMMIT": "before",
+        }))
+        self.package = ProjectPackage(self.root / "info.json", self.root / "namedF.tgz", self.root / "full.tgz")
+        for path in (self.package.information, self.package.d_archiv, self.package.f_archiv):
+            path.write_bytes(b"Paketinhalt")
 
     def test_run_command(self) -> None:
-        """Prüft Vollabgleich, Feature-Vergleich und Fehlerkontext der Ablaufsteuerung."""
-
-        configuration = SimpleNamespace(releaselinie="270", warnungen=())
-        arguments = SimpleNamespace(commit=GITHUB_CONTEXT["commit"])
-        environment = {
-            "GITHUB_WORKSPACE": str(self.root),
-            "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
-            "GITHUB_REF_NAME": GITHUB_CONTEXT["source_branch"],
-            "GITHUB_EVENT_NAME": GITHUB_CONTEXT["event_name"],
-            "MTEXT_PREVIOUS_COMMIT": GITHUB_CONTEXT["previous_commit"],
-        }
+        """Prüft Erstlauf, DELTA-Basis, Linienwechsel, manuelles FULL und überholte Läufe."""
 
         with (
-            patch.dict(os.environ, environment, clear=True),
-            patch.object(sync_command.config, "load_configuration", return_value=configuration),
-            patch.object(sync_command.git, "resolve", return_value=GITHUB_CONTEXT["previous_commit"]),
-            patch.object(sync_command.git, "run", return_value=PREVIOUS_CONFIG),
-            patch.object(
-                sync_command,
-                "_sync_resources",
-                side_effect=({"status": Status.ADAPTER_ACCEPTED.value}, {"status": Status.ADAPTER_ACCEPTED.value}),
-            ) as synchronize,
+            patch.object(github, "request") as history,
+            patch.object(sync.git, "resolve", return_value="current"),
+            patch.object(sync.git, "require_ancestor") as ancestor,
+            patch.object(sync.git, "changes", return_value=[]),
+            patch.object(sync.git, "execute") as read_git,
+            patch.object(sync, "_sync_zielstufe", return_value={}) as transfer,
         ):
-            result = sync_command.run_command(arguments)
-        self.assertEqual([entry["zielstufe"] for entry in result["synchronisationen"]], ["Entwicklung", "Funktionstest"])
-        self.assertTrue(all(call.kwargs["previous_commit"] is None for call in synchronize.call_args_list))
-
-        with (
-            patch.dict(os.environ, environment | {"GITHUB_REF_NAME": "feature/271/test"}, clear=True),
-            patch.object(sync_command.config, "load_configuration", return_value=configuration),
-            patch.object(sync_command, "_sync_resources", return_value={"status": Status.ADAPTER_ACCEPTED.value}) as synchronize,
-        ):
-            sync_command.run_command(arguments)
-        self.assertEqual(synchronize.call_args.kwargs["previous_commit"], "1" * 40)
-
-        with (
-            patch.dict(
-                os.environ,
-                environment | {"GITHUB_REF_NAME": "feature/271/test", "MTEXT_PREVIOUS_COMMIT": sync_command._EMPTY_PUSH_COMMIT},
-                clear=True,
-            ),
-            patch.object(sync_command.config, "load_configuration", return_value=configuration),
-            patch.object(sync_command.git, "run", return_value=("3" * 40 + "\n").encode()) as merge_base,
-            patch.object(sync_command, "_sync_resources", return_value={"status": Status.ADAPTER_ACCEPTED.value}) as synchronize,
-        ):
-            sync_command.run_command(arguments)
-        self.assertEqual(synchronize.call_args.kwargs["previous_commit"], "3" * 40)
-        merge_base.assert_called_once_with(
-            self.root / "source",
-            "merge-base",
-            "HEAD",
-            "refs/remotes/origin/release/271",
-        )
-
-        with (
-            patch.dict(os.environ, environment, clear=True),
-            patch.object(sync_command.config, "load_configuration", return_value=configuration),
-            patch.object(sync_command.git, "resolve", return_value=GITHUB_CONTEXT["previous_commit"]),
-            patch.object(sync_command.git, "run", return_value=PREVIOUS_CONFIG),
-            patch.object(
-                sync_command,
-                "_sync_resources",
-                side_effect=(
-                    {"status": Status.ADAPTER_ACCEPTED.value},
-                    DeliveryError(Status.ADAPTER_FAILED, "Adapter nicht erreichbar"),
-                ),
-            ),
-            self.assertRaisesRegex(DeliveryError, "Bereits erfolgreich: Entwicklung"),
-        ):
-            sync_command.run_command(arguments)
-
-    def test_delta_package_uses_only_event_changes(self) -> None:
-        """Prüft D-Archiv, Löschliste, JSON und Adapterauftrag eines Pushs."""
-
-        project = self.repository / "LOMS_Basis"
-        (project / "unchanged.txt").write_text("same", encoding="utf-8")
-        (project / "deleted.txt").write_text("delete", encoding="utf-8")
-        (project / "rename-old.txt").write_text("rename", encoding="utf-8")
-        git(self.repository, "add", ".")
-        git(self.repository, "commit", "-m", "base")
-        previous_commit = git(self.repository, "rev-parse", "HEAD")
-
-        (project / "value.txt").write_text("changed", encoding="utf-8")
-        (project / "new.txt").write_text("new", encoding="utf-8")
-        (project / "deleted.txt").unlink()
-        git(self.repository, "mv", "LOMS_Basis/rename-old.txt", "LOMS_Basis/rename-new.txt")
-        git(self.repository, "add", "-A")
-        git(self.repository, "commit", "-m", "delta")
-        self.track_branch()
-        commit = git(self.repository, "rev-parse", "HEAD")
-
-        with (
-            patch("lbs_delivery.sync.uuid.uuid4", return_value=SimpleNamespace(hex="auftrag")),
-            patch("lbs_delivery.sync._call_adapter", return_value=(202, "angenommen")) as adapter,
-        ):
-            result = self.sync(commit, previous_commit)
-
-        request_path = Path(result["pfad"])
-        self.assertEqual(request_path, self.handoff_root / "en01" / f"FI-{commit[:12]}-auftrag")
-        self.assertEqual(sorted(path.name for path in request_path.iterdir()), [
-            "FIBASISD.tgz",
-            "_INFO_FI-LOMS_Basis.json",
-        ])
-
-        information = json.loads((request_path / "_INFO_FI-LOMS_Basis.json").read_text(encoding="utf-8"))
-        self.assertEqual(information["stand"]["von"]["commit"], previous_commit)
-        self.assertEqual(information["stand"]["bis"]["commit"], commit)
-        self.assertIn(["D", "deleted.txt"], information["elemente"])
-        self.assertNotIn(["M", "unchanged.txt"], information["elemente"])
-
-        with tarfile.open(request_path / "FIBASISD.tgz", "r:gz") as archive:
-            names = archive.getnames()
-            deletion = archive.extractfile("FIBASISD.txt")
-            self.assertIsNotNone(deletion)
-            deleted = deletion.read().decode()
-        self.assertIn("LOMS_Basis/new.txt", names)
-        self.assertIn("LOMS_Basis/deleted.txt", deleted)
-
-        payload = adapter.call_args.args[1]
-        self.assertEqual(payload["pfad"], str(request_path))
-        self.assertEqual(payload["projekte"], ["LOMS_Basis"])
-        self.assertEqual(payload["von"], previous_commit)
-        self.assertEqual(payload["bis"], commit)
-
-        with (
-            patch("lbs_delivery.sync.uuid.uuid4", return_value=SimpleNamespace(hex="wiederholung")),
-            patch("lbs_delivery.sync._call_adapter", return_value=(202, "angenommen")) as repeated_adapter,
-        ):
-            self.sync(commit, previous_commit)
-        repeated_payload = repeated_adapter.call_args.args[1]
-        self.assertEqual(repeated_payload["auftrag"], payload["auftrag"])
-        self.assertNotEqual(repeated_payload["pfad"], payload["pfad"])
-
-    def test_first_feature_push_uses_its_target_branch_as_comparison(self) -> None:
-        """Vergleicht den ersten Feature-Push mit main oder dem Release-Branch."""
-
-        configuration = SimpleNamespace(releaselinie="270")
-        for source_branch, expected_base in (
-            ("feature/270/main-feature", "refs/remotes/origin/main"),
-            ("feature/271/future-feature", "refs/remotes/origin/release/271"),
-        ):
-            with self.subTest(source_branch=source_branch):
-                with patch.object(sync_command.git, "run", return_value=("4" * 40 + "\n").encode()) as merge_base:
-                    releaselinie, zielstufen, previous = sync_command._plan_sync(
-                        configuration,
-                        repository_root=self.repository,
-                        source_branch=source_branch,
-                        event_name="push",
-                        previous_commit=sync_command._EMPTY_PUSH_COMMIT,
-                    )
-
-                self.assertEqual(zielstufen, ("Entwicklung",))
-                self.assertEqual(previous, "4" * 40)
-                self.assertEqual(releaselinie, source_branch.split("/")[1])
-                merge_base.assert_called_once_with(
-                    self.repository,
-                    "merge-base",
-                    "HEAD",
-                    expected_base,
+            # Der letzte Erfolg bestimmt das DELTA. Ein manueller Lauf bestätigt
+            # keinen ausstehenden Linienwechsel für beide Zielstufen.
+            for branch, event, commits, old_line, base, targets in (
+                ("feature/261/test", "push", ["previous"], "270", "previous", ["Entwicklung"]),
+                ("feature/261/test", "push", [None], "270", "base", ["Entwicklung"]),
+                ("release/261", "push", [None], "270", None, ["Funktionstest"]),
+                ("main", "push", ["previous", "previous"], "270", "previous", ["Funktionstest"]),
+                ("main", "push", ["current", "previous"], "261", None, ["Entwicklung", "Funktionstest"]),
+                ("main", "push", ["current", None], "261", None, ["Entwicklung", "Funktionstest"]),
+                ("main", "push", ["current", "current"], "270", "current", ["Funktionstest"]),
+                ("main", "workflow_dispatch", [], "261", None, ["Funktionstest"]),
+                ("feature/261/test", "workflow_dispatch", [], "270", None, ["Entwicklung"]),
+            ):
+                history.reset_mock()
+                history.side_effect = [
+                    {"workflow_runs": [{"head_sha": commit}] if commit else []} for commit in commits
+                ]
+                read_git.reset_mock()
+                read_git.return_value = (
+                    json.dumps({"mandant": {"releaselinie": old_line}}).encode() if branch == "main" else b"base"
                 )
+                transfer.reset_mock()
+                ancestor.reset_mock()
+                with self.subTest(branch=branch, event=event, commits=commits), patch.dict(os.environ, {
+                    "GITHUB_REF_NAME": branch, "GITHUB_EVENT_NAME": event,
+                }):
+                    result = sync.run(SimpleNamespace())
+                    self.assertEqual([entry["zielstufe"] for entry in result["synchronisationen"]], targets)
+                    for invocation in transfer.call_args_list:
+                        self.assertEqual(invocation.kwargs["stand"].von, (branch, base) if base else None)
+                    self.assertEqual(history.call_count, len(commits))
+                    branch_check = call(self.repository, "current", f"refs/remotes/origin/{branch}")
+                    self.assertEqual(ancestor.call_args_list.count(branch_check), 1)
 
-    def test_full_package_and_empty_sync(self) -> None:
-        """Prüft FULL beim fehlenden Vorgänger und den Lauf ohne Projektänderung."""
+                    if len(commits) == 2:
+                        self.assertIn("event=push", history.call_args.kwargs["url"])
+                        reference = f"{commits[1] or 'before'}:{sync.config.MANDANT_CONFIG_PATH}"
+                        read_git.assert_called_once_with(self.repository, "show", reference)
 
+                    if base == "base":
+                        read_git.assert_called_with(
+                            self.repository, "merge-base", "current", "refs/remotes/origin/release/261",
+                        )
+
+            history.side_effect = [{"workflow_runs": [{"head_sha": "previous"}]}]
+            ancestor.side_effect = DeliveryError(Status.SOURCE_FAILED, "kein Vorfahr")
+            transfer.reset_mock()
+            with self.assertRaisesRegex(DeliveryError, "Der Lauf ist überholt"):
+                sync.run(SimpleNamespace())
+            transfer.assert_not_called()
+
+    def test_sync_packages(self) -> None:
+        """Prüft kumulative Sync-Änderungen, FULL und das Auslassen reiner Konfigurationsänderungen."""
+
+        baseline = git(self.repository, "rev-parse", "r261.100")
         commit = git(self.repository, "rev-parse", "HEAD")
-        with patch("lbs_delivery.sync._call_adapter", return_value=(202, "angenommen")) as adapter:
-            result = self.sync(commit, None)
-        request_path = Path(result["pfad"])
-        self.assertTrue((request_path / "FIBASISF.tgz").is_file())
-        self.assertTrue((request_path / "FIBASISD.tgz").is_file())
-        information = json.loads((request_path / "_INFO_FI-LOMS_Basis.json").read_text(encoding="utf-8"))
-        self.assertNotIn("von", information["stand"])
-        self.assertEqual(set(information["sha256"]), {"F", "D"})
-        self.assertNotIn("von", adapter.call_args.args[1])
-        adapter.assert_called_once()
+        documents = []
 
-        (self.repository / ".github/note.txt").write_text("keine Projektänderung", encoding="utf-8")
-        git(self.repository, "add", ".github")
-        git(self.repository, "commit", "-m", "Metadaten")
-        self.track_branch()
-        metadata_commit = git(self.repository, "rev-parse", "HEAD")
-        with patch("lbs_delivery.sync._call_adapter") as adapter:
-            result = self.sync(metadata_commit, commit)
-        self.assertEqual(result["projekte"], [])
-        adapter.assert_not_called()
+        def capture_packages(*_args, packages, **_kwargs) -> str:
+            """Liest die erzeugten Paketinformationen während ihrer Übergabe."""
+
+            for _project, package in packages:
+                documents.append(json.loads(package.information.read_text()))
+            return "auftrag"
+
+        with (
+            patch.object(github, "last_sync_commit", return_value=baseline),
+            patch.object(adapter, "synchronize", side_effect=capture_packages) as transfer,
+        ):
+            for event in ("push", "workflow_dispatch"):
+                with patch.dict(os.environ, {"GITHUB_EVENT_NAME": event}):
+                    sync.run(SimpleNamespace())
+            self.assertEqual(documents[0]["stand"]["von"]["commit"], baseline)
+            self.assertEqual(documents[0]["stand"]["bis"]["commit"], commit)
+            self.assertIn(["M", "baseline.txt"], documents[0]["elemente"])
+            self.assertNotIn("von", documents[1]["stand"])
+            self.assertEqual([set(document["sha256"]) for document in documents], [{"D"}, {"D", "F"}])
+
+            git(self.repository, "add", ".github")
+            git(self.repository, "commit", "-m", "Konfiguration")
+            git(self.repository, "update-ref", "refs/remotes/origin/release/261", "HEAD")
+            transfer.reset_mock()
+            with patch.object(github, "last_sync_commit", return_value=commit):
+                result = sync.run(SimpleNamespace())
+            self.assertEqual(result["synchronisationen"][0]["projekte"], [])
+            transfer.assert_not_called()
+
+    def test_adapter_protocol(self) -> None:
+        """Prüft HTTP-Ablauf, Multipart-Felder, Wiederaufnahme und Fehler bis zum Löschen."""
+
+        uploading = {"auftrag_id": "auftrag", "status": "uploading"}
+        queued = uploading | {"status": "queued"}
+        succeeded = uploading | {"status": "succeeded"}
+        failed = uploading | {"status": "failed", "meldung": "M/Text-Fehler"}
+        network_error = urllib.error.URLError("Verbindung abgebrochen")
+        response = MagicMock(status=200)
+        response.__enter__.return_value = response
+
+        def receive(request, **_kwargs) -> MagicMock:
+            """Liest den echten Multipart-Datenstrom und prüft dessen Feldzuordnung."""
+
+            if request.get_method() == "PUT":
+                self.assertNotIsInstance(request.data, bytes)
+                body = b"".join(request.data)
+                self.assertEqual(request.get_header("Content-length"), str(len(body)))
+                self.assertIn(b'name="d_archiv"; filename="namedF.tgz"', body)
+                self.assertIn(b'name="f_archiv"; filename="full.tgz"', body)
+            return response
+
+        for replies, error, methods in (
+            ([uploading, uploading, queued, queued, succeeded, {"ok": True}], None,
+             ["POST", "PUT", "POST", "GET", "GET", "DELETE"]),
+            ([queued, succeeded, {"ok": True}], None, ["POST", "GET", "DELETE"]),
+            ([uploading, b""], "gültigem JSON", ["POST", "PUT"]),
+            ([uploading, uploading, {}], "keinen Auftragsstatus", ["POST", "PUT", "POST"]),
+            ([{"status": "queued"}], "Auftrags-ID", ["POST"]),
+            ([queued, queued | {"status": "unbekannt"}], "unbekannten Auftragsstatus", ["POST", "GET"]),
+            ([failed, failed, {"ok": True}], "M/Text-Fehler", ["POST", "GET", "DELETE"]),
+            ([failed, failed, network_error], "M/Text-Fehler.*Adapteraufruf", ["POST", "GET", "DELETE"]),
+            ([succeeded, succeeded, network_error], "Adapteraufruf", ["POST", "GET", "DELETE"]),
+            ([succeeded, succeeded, b""], "gültigem JSON", ["POST", "GET", "DELETE"]),
+        ):
+            response.read.side_effect = [
+                reply if isinstance(reply, (bytes, Exception)) else json.dumps(reply).encode() for reply in replies
+            ]
+            packages = iter([("LOMS_Basis", self.package)])
+            with (
+                self.subTest(replies=replies),
+                patch.object(adapter.urllib.request, "urlopen", side_effect=receive) as http,
+                patch.object(adapter.time, "sleep") as wait,
+            ):
+                outcome = self.assertRaisesRegex(DeliveryError, error) if error else nullcontext()
+                with outcome:
+                    auftrag_id = adapter.synchronize(
+                        "en", "01", kuerzel="FI", projekte=["LOMS_Basis"],
+                        packages=packages, idempotency_key="github-run-test-Entwicklung",
+                    )
+                    self.assertEqual(auftrag_id, "auftrag")
+            requests = [invocation.args[0] for invocation in http.call_args_list]
+            self.assertEqual([request.get_method() for request in requests], methods)
+            self.assertEqual(requests[0].full_url, "https://en01.ltoma.intern/vMtextAdapter/sync")
+            self.assertEqual(requests[0].get_header("Idempotency-key"), "github-run-test-Entwicklung")
+            self.assertEqual(wait.call_args_list, [call(5)] if methods.count("GET") == 2 else [])
+
+            if replies[0] == queued:
+                self.assertEqual(list(packages), [("LOMS_Basis", self.package)])
+
+    def test_upload_abort_closes_stream(self) -> None:
+        """Prüft, dass bei einem Verbindungsabbruch auch der Upload-Datenstrom geschlossen wird."""
+
+        def disconnect(request, **_kwargs) -> None:
+            """Bricht nach dem ersten Dateiblock ab."""
+
+            next(request.data)
+            next(request.data)
+            raise urllib.error.URLError("Verbindung abgebrochen")
+
+        with (
+            patch.object(adapter.urllib.request, "urlopen", side_effect=disconnect) as http,
+            self.assertRaisesRegex(DeliveryError, "Adapteraufruf") as failure,
+        ):
+            adapter._upload_project("https://adapter.test/sync/auftrag", "LOMS_Basis", self.package)
+        self.assertEqual(failure.exception.status, Status.ADAPTER_FAILED)
+        self.assertEqual(list(http.call_args.args[0].data), [])
 
 
 if __name__ == "__main__":

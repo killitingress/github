@@ -1,62 +1,47 @@
 name: Shared Workflow – Ressourcen mit M/Text synchronisieren
 
-# Dieser Workflow synchronisiert den festgelegten Commit eines
+# Dieser Workflow synchronisiert den ausgewählten Branchstand eines
 # Mandanten-Repositories mit M/Text. Er lädt den Mandantenstand mit seiner
-# Historie und die freigegebene zentrale Implementierung. Der Python-Ablauf
+# Historie und die freigegebene Implementierung aus mtext_actions. Der Python-Ablauf
 # bestimmt aus Branch und Ereignis Releaselinie, Zielstufen und den
-# Änderungsumfang, legt die Pakete auf dem gemeinsamen CIFS-Pfad ab und meldet
-# sie dem M/Text-Adapter.
+# Änderungsumfang, lädt die Projektpakete zum Adapter und wartet auf das
+# Ergebnis der M/Text-Synchronisation.
 'on':
   workflow_call:
-    inputs:
-      commit_sha:
-        description: Commit im Mandanten-Repository, dessen Ressourcen synchronisiert werden
-        required: true
-        type: string
-    secrets:
-      automation_token:
-        description: Token zum Laden der zentralen CI/CD-Implementierung
-        required: true
 
 permissions:
   contents: read
+  # Der Vergleichsstand kommt aus den erfolgreichen Läufen des Mandanten.
+  actions: read
 
 jobs:
   sync:
     name: Ressourcen mit M/Text synchronisieren
     runs-on: [self-hosted, linux]
-    timeout-minutes: 10
+    # Begrenzt Upload, Warteschlange und Verarbeitung gemeinsam, falls der
+    # Adapter keinen Endstatus liefert.
+    timeout-minutes: 30
     steps:
+      # Checkout lädt den zum Push oder manuellen Start gehörenden Branchstand.
       - name: Check-Out Mandantenstand
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
           path: source
           persist-credentials: false
-          ref: ${{ inputs.commit_sha }}
 
-      # Lädt die freigegebene Implementierung der Synchronisierung
-      - name: Check-Out CI/CD-Version
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          repository: FinanzInformatik/fi_lbs_entw_oms_mtext_actions
-          ref: main
-          path: automation
-          persist-credentials: false
-          token: ${{ secrets.automation_token }}
+      # Lädt die gemeinsame Implementierung und prüft die Python-Runtime des
+      # Runners, bevor Ziel und Pakete bestimmt werden.
+      - name: M/Text-Automatisierung laden
+        id: automation
+        uses: FI_Actions/fi_lbs_entw_oms_mtext_actions@main
 
-      # Prüft Git und Python und stellt den Python-Pfad bereit
-      - name: Python-Runtime ermitteln
-        id: runtime
-        run: bash automation/scripts/runner-preflight.sh
-
+      # Python bestimmt den Vergleichsstand und überträgt die Projektänderungen.
       - name: Ressourcen synchronisieren
         env:
-          INPUT_COMMIT_SHA: ${{ inputs.commit_sha }}
-          # Der Runner und der Adapter greifen auf denselben CIFS-Basispfad zu
-          MTEXT_CIFS_ROOT: ${{ vars.MTEXT_CIFS_ROOT }}
+          GITHUB_TOKEN: ${{ github.token }}
+          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
           MTEXT_PREVIOUS_COMMIT: ${{ github.event.before || '' }}
         run: >-
-          "${{ steps.runtime.outputs.python }}"
-          automation/src/mtext.py sync-resources
-          --commit "$INPUT_COMMIT_SHA"
+          "${{ steps.automation.outputs.python }}"
+          "$AUTOMATION_PATH/src/mtext.py" resources sync

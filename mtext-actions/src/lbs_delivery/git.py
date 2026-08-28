@@ -17,9 +17,13 @@ from .process import DeliveryError, Status
 
 
 # Reguläre Ausdrücke prüfen die von Git und den Workflows gelieferten Namen.
-# Prüft einen Liefer-Tag wie `r261.108` und erfasst Releaselinie
-# sowie Versionsnummer. `.100` ist die FULL-Basis der Releaselinie.
-LIEFER_TAG_RE = re.compile(r"r(?P<releaselinie>[0-9]{3})\.(?P<release>[0-9]{3})")
+# Prüft einen Lieferstand aus Hauptrelease als dreistelliger Releaselinie und
+# Zwischenrelease von 100 bis 999. Dieselbe Regel gilt für Tag und Bereitstellungsbranch.
+_LIEFERSTAND_PATTERN = r"(?P<releaselinie>[0-9]{3})\.(?P<zwischenrelease>[1-9][0-9]{2})"
+
+# Prüft einen Liefer-Tag wie `r260.108`. `.100` bezeichnet das Hauptrelease
+# und ist die FULL-Basis für die späteren Zwischenreleases.
+LIEFER_TAG_RE = re.compile("r" + _LIEFERSTAND_PATTERN)
 
 # Prüft einen geschützten Branch einer gepflegten Releaselinie und erfasst die
 # Releaselinie für die Auswahl des M/Text-Ziels.
@@ -30,8 +34,8 @@ _RELEASE_BRANCH_RE = re.compile(r"release/([0-9]{3})")
 _FEATURE_BRANCH_RE = re.compile(r"feature/([0-9]{3})/(.+)")
 
 # Prüft den temporären Arbeitsbranch einer Teillieferung und erfasst
-# Releaselinie sowie Versionsnummer, zum Beispiel `bereitstellung/261.108`.
-BEREITSTELLUNG_BRANCH_RE = re.compile(r"bereitstellung/([0-9]{3})\.([0-9]{3})")
+# Releaselinie sowie Zwischenrelease, zum Beispiel `bereitstellung/261.108`.
+BEREITSTELLUNG_BRANCH_RE = re.compile("bereitstellung/" + _LIEFERSTAND_PATTERN)
 
 
 @dataclass(frozen=True)
@@ -44,7 +48,7 @@ class GitChange:
     path: str
 
 
-def run(repository: str | Path, *arguments: str, returncodes: tuple[int, ...] = (0,)) -> bytes:
+def execute(repository: Path, *arguments: str, returncodes: tuple[int, ...] = (0,)) -> bytes:
     """Führt einen Git-Befehl aus und gibt seine Standardausgabe zurück.
 
     Bei einem unerwarteten Rückgabecode wird der Schritt mit `SOURCE_FAILED`
@@ -52,7 +56,7 @@ def run(repository: str | Path, *arguments: str, returncodes: tuple[int, ...] = 
     """
 
     result = subprocess.run(
-        ["git", "-C", str(repository), *arguments],  # -C: Befehl im Repository ausführen
+        ["git", "-C", repository.as_posix(), *arguments],  # -C: Befehl im Repository ausführen
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
@@ -65,11 +69,11 @@ def run(repository: str | Path, *arguments: str, returncodes: tuple[int, ...] = 
     return result.stdout
 
 
-def resolve(repository: str | Path, reference: str) -> str:
+def resolve(repository: Path, reference: str) -> str:
     """Löst eine bekannte Referenz in eine Commit-SHA auf."""
 
     # `^{commit}` löst die Referenz bis zum Commit auf und lehnt Tree- und Blob-Objekte ab.
-    output = run(
+    output = execute(
         repository,
         "rev-parse",
         "--verify",  # fehlende Referenzen als Fehler melden
@@ -79,10 +83,10 @@ def resolve(repository: str | Path, reference: str) -> str:
     return output.decode("ascii").strip()
 
 
-def reference_exists(repository: str | Path, reference: str) -> bool:
+def reference_exists(repository: Path, reference: str) -> bool:
     """Prüft, ob eine vollständige Git-Referenz vorhanden ist."""
 
-    output = run(
+    output = execute(
         repository,
         "show-ref",
         "--verify",  # nur die angegebene vollständige Referenz prüfen
@@ -92,7 +96,7 @@ def reference_exists(repository: str | Path, reference: str) -> bool:
     return bool(output)
 
 
-def require_ancestor(repository: str | Path, ancestor: str, descendant: str) -> None:
+def require_ancestor(repository: Path, ancestor: str, descendant: str) -> None:
     """Fordert, dass ein Commit oder eine Referenz von einer anderen Referenz erreichbar ist.
 
     Damit lässt sich prüfen, ob ein Commit zum erwarteten Remote-Branch gehört
@@ -100,7 +104,7 @@ def require_ancestor(repository: str | Path, ancestor: str, descendant: str) -> 
     """
 
     # `--is-ancestor` liefert Exit 0 nur bei echter Abstammung.
-    run(
+    execute(
         repository,
         "merge-base",
         "--is-ancestor",
@@ -132,25 +136,7 @@ def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str
     raise DeliveryError(Status.VALIDATION_FAILED, "Branch ist kein Synchronisationszweig")
 
 
-def require_commit_on_branches(repository: str | Path, commit: str, branches: tuple[str, ...]) -> None:
-    """Fordert, dass der Commit auf einem der genannten Remote-Branches liegt."""
-
-    output = run(
-        repository,
-        "for-each-ref",  # nur die angegebenen Referenzen unter `refs/remotes/origin`
-        "--format=%(refname:short)",  # Kurzname, zum Beispiel `origin/main`
-        "--contains",  # nur Branches, deren Historie den Commit enthält
-        commit,
-        "refs/remotes/origin",  # Remote-Tracking-Branches, keine Tags
-    )
-
-    containing = set(output.decode().splitlines())
-
-    if not any(f"origin/{branch}" in containing for branch in branches):
-        raise DeliveryError(Status.SOURCE_FAILED, "Liefer-Tag liegt auf keinem zulässigen Branch")
-
-
-def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:
+def changes(repository: Path, base: str, target: str) -> list[GitChange]:
     """Gibt Status und Pfade der Änderungen zwischen zwei Commits zurück.
 
     Die nullgetrennte Ausgabe erhält gültige Git-Pfade ohne Mehrdeutigkeit durch
@@ -160,7 +146,7 @@ def changes(repository: str | Path, base: str, target: str) -> list[GitChange]:
 
     # `--no-renames` liefert Umbenennungen als Löschung und Hinzufügung,
     # so wie DELTA-Pakete und die Synchronisation sie benötigen.
-    output = run(
+    output = execute(
         repository,
         "diff",
         "--name-status",  # Statusbuchstabe und Pfad je Änderung

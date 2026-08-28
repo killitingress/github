@@ -33,10 +33,8 @@ class Status(str, Enum):
     PACKAGE_FAILED = "PACKAGE_FAILED"
     # Pakete, JCL-Dateien und Informationsdateien wurden erstellt.
     ARTIFACT_READY = "ARTIFACT_READY"
-    # Projektpakete konnten nicht vollständig auf CIFS bereitgestellt werden.
-    RESOURCE_TRANSFER_FAILED = "RESOURCE_TRANSFER_FAILED"
-    # Der Adapter hat die Synchronisationsanfrage angenommen.
-    ADAPTER_ACCEPTED = "ADAPTER_ACCEPTED"
+    # Der Adapter hat die M/Text-Synchronisation erfolgreich abgeschlossen.
+    ADAPTER_COMPLETED = "ADAPTER_COMPLETED"
     # Adapteraufruf oder HTTP-Antwort sind fehlgeschlagen.
     ADAPTER_FAILED = "ADAPTER_FAILED"
     # FTPS und JES haben Paket und JCL angenommen.
@@ -55,14 +53,13 @@ _EXIT_CODES = {
     Status.VALIDATION_FAILED: 2,
     Status.SOURCE_FAILED: 3,
     Status.PACKAGE_FAILED: 4,
-    Status.RESOURCE_TRANSFER_FAILED: 5,
     Status.ADAPTER_FAILED: 6,
     Status.MAINFRAME_TRANSFER_FAILED: 7,
     Status.GITHUB_RELEASE_FAILED: 8,
 }
 
 # Externe FTPS- und HTTP-Aufrufe werden nach so vielen Sekunden abgebrochen.
-NETWORK_TIMEOUT = 10.0
+NETWORK_TIMEOUT = 15.0
 
 
 class DeliveryError(RuntimeError):
@@ -99,9 +96,6 @@ def execute(operation: Callable[[], dict[str, object]]) -> int:
         return _EXIT_CODES.get(exc.status, 1)
     except KeyError as exc:
         print(f"{Status.VALIDATION_FAILED.value}: fehlender Eingabewert: {exc.args[0]}", file=sys.stderr)
-        return 2
-    except (TypeError, AttributeError) as exc:
-        print(f"{Status.VALIDATION_FAILED.value}: ungültige Eingabestruktur: {exc}", file=sys.stderr)
         return 2
     except (OSError, UnicodeError) as exc:
         print(f"{Status.VALIDATION_FAILED.value}: lokale Dateioperation fehlgeschlagen: {exc}", file=sys.stderr)

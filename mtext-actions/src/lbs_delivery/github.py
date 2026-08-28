@@ -1,4 +1,4 @@
-"""Liest Pull Requests und veröffentlicht Releases über die GitHub-REST-API.
+"""Liest Workflow-Läufe und veröffentlicht Releases über die GitHub-REST-API.
 
 Header, Fehlerauswertung und die fachlichen GitHub-Aktionen liegen zusammen,
 damit die Workflows einen gemeinsamen Weg zu GitHub verwenden.
@@ -23,7 +23,6 @@ _API_VERSION = "2022-11-28"
 
 # GitHub empfiehlt diesen Medientyp für JSON-Antworten der REST-API.
 _JSON_MEDIA_TYPE = "application/vnd.github+json"
-
 
 # Gemeinsamer HTTP-Zugang zur GitHub-REST-API für alle Aufrufe dieses Moduls.
 def request(
@@ -51,159 +50,148 @@ def request(
         "Authorization": f"Bearer {token}",
         "X-GitHub-Api-Version": _API_VERSION,
     }
-
     if payload is not None:
         headers["Content-Type"] = "application/json"
     elif content_type is not None:
         headers["Content-Type"] = content_type
 
+    # Anfrage erstellen und ausführen
     http_request = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
+        # Antwort lesen
         with urllib.request.urlopen(http_request, timeout=NETWORK_TIMEOUT) as response:
             response_body = response.read()
-    except urllib.error.HTTPError as exc:
+    except urllib.error.HTTPError as ex:
         # Fehlende Ressourcen darf der Aufrufer als leeres Ergebnis behandeln.
-        if missing_ok and exc.code == 404:
+        if missing_ok and ex.code == 404:
             return None
+
+        # Fehlermeldung auslesen
         try:
-            message = json.loads(exc.read()).get("message")
+            message = json.loads(ex.read()).get("message")
         except (UnicodeError, json.JSONDecodeError, AttributeError, TypeError):
             message = None
-        suffix = f": {message}" if isinstance(message, str) and message else ""
-        raise DeliveryError(failure, f"GitHub antwortet mit HTTP {exc.code}{suffix}") from exc
-    except (urllib.error.URLError, TimeoutError) as exc:
-        raise DeliveryError(failure, "GitHub ist nicht erreichbar") from exc
 
-    # Leere Antworten sind zulässig, sonst muss der Body gültiges JSON sein.
+        suffix = f": {message}" if isinstance(message, str) and message else ""
+        raise DeliveryError(failure, f"GitHub antwortet mit HTTP {ex.code}{suffix}") from ex
+    except (urllib.error.URLError, TimeoutError) as ex:
+        raise DeliveryError(failure, "GitHub ist nicht erreichbar") from ex
+
+    # Leere Antworten sind zulässig, ansonsten muss der Body gültiges JSON sein
     if not response_body:
         return None
-
     try:
         return json.loads(response_body)
-    except (UnicodeError, json.JSONDecodeError) as exc:
-        raise DeliveryError(failure, "GitHub-Antwort ist ungültig") from exc
+    except (UnicodeError, json.JSONDecodeError) as ex:
+        raise DeliveryError(failure, "GitHub-Antwort ist ungültig") from ex
 
 
-def _publish_release(
-    *,
-    artifact_root: str | Path,
-    api_url: str,
-    server_url: str,
-    repository: str,
-    liefer_tag: str,
-    source_sha: str,
-    token: str,
-) -> dict[str, object]:
-    """Legt das GitHub Release an und hängt die Informationsdateien an.
+def last_sync_commit(*, event: str | None = None) -> str | None:
+    """Liest den Commit des jüngsten erfolgreichen Sync-Laufs dieses Branches.
+
+    GitHub speichert den zum Lauf gehörenden Branchstand als `head_sha`.
+    Die Abfrage dient als Vergleichsstand für das nächste DELTA. Beim Wechsel
+    der Releaselinie auf main wird zusätzlich der erfolgreiche Push-Lauf
+    benötigt, weil ein manueller Abgleich eine einzelne Zielstufe bedient.
+    """
+
+    repository = urllib.parse.quote(os.environ["GITHUB_REPOSITORY"])
+    actions_url = f"{os.environ['GITHUB_API_URL'].rstrip('/')}/repos/{repository}/actions"
+    parameters = {"branch": os.environ["GITHUB_REF_NAME"], "status": "success", "per_page": 1}
+    if event:
+        parameters["event"] = event
+
+    query = urllib.parse.urlencode(parameters)
+    document = request(
+        method="GET",
+        url=f"{actions_url}/workflows/sync-resources.yml/runs?{query}",
+        token=os.environ["GITHUB_TOKEN"],
+        failure=Status.SOURCE_FAILED,
+    )
+    runs = document["workflow_runs"]
+    return runs[0]["head_sha"] if runs else None
+
+
+def run(arguments: argparse.Namespace) -> dict[str, object]:
+    """Veröffentlicht den Lieferbericht und die Informationsdateien aus dem Artefakt.
 
     Ein vorhandenes Release wird aktualisiert. Gleichnamige, hier erzeugte
     Informationsdateien werden dabei ersetzt.
     """
 
-    # Informationsdateien aus dem Release-Artefakt lesen und Lieferart bestimmen.
-    information_files = sorted(Path(artifact_root).glob("_INFO_*.json"))
+    repository = os.environ["GITHUB_REPOSITORY"]
+    liefer_tag = arguments.tag
+    token = os.environ["GITHUB_TOKEN"]
+    releases_url = f"{os.environ['GITHUB_API_URL'].rstrip('/')}/repos/{urllib.parse.quote(repository)}/releases"
+    information_files = sorted((Path(os.environ["RUNNER_TEMP"]) / "release").glob("_INFO_*.json"))
     if not information_files:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien fehlen")
 
-    delivery_types: set[str] = set()
+    # Der Paketbau schreibt denselben Lieferstand in die Informationsdateien
+    # aller Projekte. Die erste Datei liefert die Angaben für den Bericht.
     try:
-        for information in information_files:
-            document = json.loads(information.read_text(encoding="utf-8"))
-            delivery_types.add("DELTA" if "von" in document["stand"] else "FULL")
-    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
-        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdatei ist ungültig") from exc
+        stand = json.loads(information_files[0].read_text(encoding="utf-8"))["stand"]
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdatei kann nicht gelesen werden") from exc
+    delivery_type = "DELTA" if "von" in stand else "FULL"
 
-    if len(delivery_types) != 1:
-        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien haben verschiedene Lieferarten")
-    delivery_type = delivery_types.pop()
-
-    # Release-Beschreibung mit Stand und Download-Links der Informationsdateien.
-    download_root = f"{server_url.rstrip('/')}/{repository}/releases/download/{urllib.parse.quote(liefer_tag, safe='')}"
-    lines = [
-        "## Lieferung",
-        "",
-        f"- Liefer-Tag: `{liefer_tag}`",
-        f"- Lieferart: `{delivery_type}`",
-        f"- Commit: `{source_sha}`",
-        "",
-        "Die Pakete und die zugehörige JCL wurden von FTPS und JES angenommen.",
-        "",
-        "## Informationsdateien",
-        "",
-    ]
-
-    for information in information_files:
-        name = information.name
-        lines.append(f"- [Herunterladen]({download_root}/{urllib.parse.quote(name, safe='')}): `{name}`")
-
+    # GitHub zeigt die hochgeladenen Informationsdateien als Release-Anhänge an.
     release_values = {
         "tag_name": liefer_tag,
         "name": f"Release {liefer_tag}",
-        "body": "\n".join(lines) + "\n",
+        "body": (
+            "## Lieferung\n\n"
+            f"- Liefer-Tag: `{liefer_tag}`\n"
+            f"- Lieferart: `{delivery_type}`\n"
+            f"- Commit: `{stand['bis']['commit']}`\n\n"
+            "Die Pakete und die zugehörige JCL wurden von FTPS und JES angenommen.\n"
+        ),
         "draft": False,
         "prerelease": False,
     }
 
-    repository_path = urllib.parse.quote(repository)
-    release_path = urllib.parse.quote(liefer_tag, safe="")
-    releases_url = f"{api_url.rstrip('/')}/repos/{repository_path}/releases"
-
     # Vorhandenes Release aktualisieren, sonst neu anlegen.
     release = request(
         method="GET",
-        url=f"{releases_url}/tags/{release_path}",
+        url=f"{releases_url}/tags/{urllib.parse.quote(liefer_tag, safe='')}",
         token=token,
         failure=Status.GITHUB_RELEASE_FAILED,
         missing_ok=True,
     )
-    existing_assets: list[dict[str, Any]] = []
-    if release is None:
-        release = request(
-            method="POST", url=releases_url, token=token, failure=Status.GITHUB_RELEASE_FAILED, payload=release_values
-        )
-    else:
-        match release:
-            case {"id": int(release_id), "assets": list(existing_assets)}:
-                pass
-            case _:
-                raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Vorhandenes GitHub Release ist ungültig")
-        release = request(
-            method="PATCH",
-            url=f"{releases_url}/{release_id}",
-            token=token,
-            failure=Status.GITHUB_RELEASE_FAILED,
-            payload=release_values,
-        )
+    assets = {asset["name"]: asset["id"] for asset in release["assets"]} if release is not None else {}
+    release = request(
+        method="POST" if release is None else "PATCH",
+        url=releases_url if release is None else f"{releases_url}/{release['id']}",
+        token=token,
+        failure=Status.GITHUB_RELEASE_FAILED,
+        payload=release_values,
+    )
+    # GitHub liefert eine URI-Vorlage mit dem Suffix `{?name,label}`. Den
+    # eigentlichen Query-String für den Dateinamen setzen wir beim Upload selbst.
+    upload_url = release["upload_url"].split("{", 1)[0]
 
-    # Upload- und Anzeigeadresse aus der Release-Antwort übernehmen.
-    match release:
-        case {"upload_url": str(upload_url), "html_url": str(release_url)}:
-            upload_url = upload_url.split("{", 1)[0]
-        case _:
-            raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub Release ist unvollständig")
-
-    # Gleichnamige Assets eines Wiederanlaufs ersetzen und Informationsdateien anhängen.
-    assets_by_name: dict[str, int] = {}
-    for asset in existing_assets:
-        match asset:
-            case {"name": str(name), "id": int(asset_id)}:
-                assets_by_name[name] = asset_id
-            case _:
-                raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "GitHub-Asset ist ungültig")
-
+    # Informationsdateien als Release-Anhänge hochladen. PATCH auf Assets ändert nur
+    # Name und Label, nicht den Dateiinhalt. Gleichnamige Anhänge lehnt GitHub beim
+    # Upload ab, deshalb ersetzen wir sie bei einem Wiederanlauf per DELETE und POST.
     for information in information_files:
-        name = information.name
-        if (asset_id := assets_by_name.get(name)) is not None:
+        try:
+            content = information.read_bytes()
+        except OSError as exc:
+            raise DeliveryError(
+                Status.GITHUB_RELEASE_FAILED, f"Informationsdatei kann nicht gelesen werden: {information.name}"
+            ) from exc
+
+        if (asset_id := assets.get(information.name)) is not None:
             request(
                 method="DELETE", url=f"{releases_url}/assets/{asset_id}", token=token, failure=Status.GITHUB_RELEASE_FAILED
             )
 
         request(
             method="POST",
-            url=f"{upload_url}?{urllib.parse.urlencode({'name': name})}",
+            url=f"{upload_url}?{urllib.parse.urlencode({'name': information.name})}",
             token=token,
             failure=Status.GITHUB_RELEASE_FAILED,
-            content=information.read_bytes(),
+            content=content,
             content_type="application/json",
         )
 
@@ -211,20 +199,5 @@ def _publish_release(
         "status": Status.GITHUB_RELEASE_PUBLISHED.value,
         "repository": repository,
         "liefer_tag": liefer_tag,
-        "release_url": release_url,
+        "release_url": release["html_url"],
     }
-
-
-# Workflow-Einstieg: Umgebungsvariablen des Berichtsjobs an die Veröffentlichung übergeben.
-def run_publish_command(_arguments: argparse.Namespace) -> dict[str, object]:
-    """Veröffentlicht die Lieferinformationen aus dem Workflow-Arbeitsbereich."""
-
-    return _publish_release(
-        artifact_root=Path(os.environ["RELEASE_DIRECTORY"]),
-        api_url=os.environ["GITHUB_API_URL"],
-        server_url=os.environ["GITHUB_SERVER_URL"],
-        repository=os.environ["SOURCE_REPOSITORY"],
-        liefer_tag=os.environ["LIEFER_TAG"],
-        source_sha=os.environ["TRIGGER_SHA"],
-        token=os.environ["MANDANT_REPOSITORY_TOKEN"],
-    )

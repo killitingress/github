@@ -1,78 +1,71 @@
 # `fi_lbs_entw_oms_mtext_actions`
 
-Das Repository `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`, kurz
-`mtext_actions`, enthält die zentrale CI/CD-Automatisierung für
-Mandantenkonfiguration, M/Text-Synchronisation, Paketbau und
-Mainframe-Übergabe.
+Das Repository enthält wiederverwendbare GitHub-Workflows und eine
+Python-Anwendung für M/Text-Mandanten-Repositories. Die vorhandenen Abläufe
+prüfen Mandantenkonfigurationen und Ressourcen, synchronisieren Projekte mit
+M/Text und erstellen Mainframe-Lieferungen.
 
-## Aufbau
+## Schnittstellen
 
-- `src/mtext.py`: Kommandozeileneinstieg für die Workflow-Schritte
-- `src/lbs_delivery/`: Implementierung der einzelnen Arbeitsschritte
-- `config/mandanten.json`: Mandantenkürzel, Repositories und Subsysteme
-- `config/releaselinien.json`: M/Text-Zielpräfixe, aktive Releaselinien,
-  ETAPS-Linien und Hostprofile
-- `config/ressourcenformate.json`: Dateiendungen und ihr technisches Format
-- `templates/mainframe-upload.jcl`: JCL-Vorlage für die Mainframe-Übergabe
+`action.yml` ist eine Composite Action. Sie prüft die Programme auf dem Runner
+und stellt den Pfad der Python-Runtime sowie den Pfad dieses Repositories als
+Outputs bereit.
 
-## GitHub-Konfiguration
+Die wiederverwendbaren Workflows unter `.github/workflows` sind:
 
-| Name | Art | Verwendung |
-|---|---|---|
-| `MAINFRAME_FTPS_HOST` | Repositoryvariable | FTPS-Ziel |
-| `MAINFRAME_FTPS_PORT` | Repositoryvariable | Steuerungsport des expliziten FTPS-Zugangs |
-| `MAINFRAME_FTPS_USER` | Repositoryvariable | zentraler technischer FTPS-Benutzer |
-| `MAINFRAME_FTPS_PASSWORD` | Repository-Secret | FTPS-Passwort für den zentralen Übergabejob |
-| `WORKFLOW_CONFIGURATION_TOKEN` | Repository-Secret | Liefer-Tags erstellen und Lieferinformationen veröffentlichen |
+| Datei | Aufgabe |
+|---|---|
+| `shared-check-resources.yml` | Mandantenkonfiguration und konfigurierte Ressourcen prüfen |
+| `shared-sync-resources.yml` | Den ausgewählten Branchstand mit M/Text synchronisieren |
+| `shared-lieferung-check.yml` | Branchstand und Lieferumfang prüfen und als Vorbereitung speichern |
+| `shared-lieferung-ausfuehren.yml` | Lieferstand ermitteln, Lieferdateien bauen, an den Mainframe übertragen und ein GitHub Release veröffentlichen |
+| `ci.yml` | Python-Tests bei Pull Requests, Änderungen an `main` oder manuell ausführen |
 
-`WORKFLOW_CONFIGURATION_TOKEN` gilt für die zugeordneten
-Mandanten-Repositories und benötigt dort `Contents: read and write`. Die
-Liefer-Tags `rnnn.nnn` fallen nicht unter die Schutzregeln für Release-Tags aus
-dem Git-Leitfaden.
+## Python-Anwendung
 
-Jedes Mandanten-Repository erhält `MTEXT_ACTIONS_TOKEN` als Repository-Secret.
-Der Fine-grained PAT ist auf `mtext_actions` begrenzt und besitzt dort
-`Contents: read` sowie `Actions: write`.
+`src/mtext.py` stellt die von den Workflows verwendeten Kommandos bereit:
 
-Die Organisationsvariable `MTEXT_CIFS_ROOT` enthält den auf dem Runner
-eingehängten CIFS-Basispfad für die Adapterübergabe.
+| Kommando | Aufgabe |
+|---|---|
+| `config validate` | Mandantenkonfiguration prüfen |
+| `resources check` | konfigurierte JSON-, XML- und verfügbare JavaScript-Ressourcen prüfen |
+| `resources sync` | Änderungen seit dem letzten erfolgreichen Branchstand mit M/Text synchronisieren |
+| `delivery check` | einen Lieferstand vorbereiten |
+| `delivery resolve` | eine Vorbereitung oder einen vorhandenen Liefer-Tag ermitteln |
+| `delivery confirm` | eine Vorbereitung bestätigen |
+| `delivery tag` | den Liefer-Tag auf der vorbereiteten SHA erstellen |
+| `release build` | FULL- oder DELTA-Lieferdateien erzeugen |
+| `release mainframe` | Lieferdateien per FTPS und JES an den Mainframe übergeben |
+| `release github` | Lieferinformationen als GitHub Release veröffentlichen |
 
-GitHub Environments werden nicht verwendet.
+Die Implementierung liegt in `src/lbs_delivery`. Das Repository verwendet
+dabei folgende versionierte Daten:
 
-## Mainframe-Lieferung
+| Pfad | Inhalt |
+|---|---|
+| `config/mandanten.json` | Zuordnung von Mandantenkürzeln zu GitHub-Repositories und Mainframe-Subsystemen |
+| `config/releaselinien.json` | M/Text-Zielpräfixe sowie ETAPS-Linie und Hostprofil je Releaselinie |
+| `config/ressourcenformate.json` | Zuordnung geprüfter Endungsmuster zu JSON, XML oder JavaScript |
+| `templates/mainframe-upload.jcl` | JCL-Vorlage für die Mainframe-Übergabe |
 
-Eine Lieferung wird im Mandanten-Repository in zwei Schritten gestartet:
+## Laufzeit und Tests
 
-1. **Lieferung vorbereiten** prüft den ausgewählten Branchstand, hält seine
-   SHA und den Lieferumfang unter dem geplanten Liefer-Tag fest.
-2. **Lieferung ausführen** erhält diesen Liefer-Tag und lädt die neueste
-   festgehaltene Vorbereitung. Eine andere Person erfüllt das empfohlene
-   Vier-Augenprinzip. Dieselbe Person muss die Direktlieferung als Abweichung
-   davon bewusst bestätigen.
+Die Mandantenquelle liegt unter `GITHUB_WORKSPACE/source`. Der Paketbau schreibt
+nach `RUNNER_TEMP/dist`, Übergabe und Berichtsjob lesen das heruntergeladene
+Artefakt aus `RUNNER_TEMP/release`. Das temporäre Basisverzeichnis wird vom
+Runner je Job bereinigt.
 
-Der zentrale Workflow erstellt den Liefer-Tag `rnnn.nnn` auf der
-festgehaltenen SHA und ruft anschließend Paketbau und Mainframe-Übergabe auf.
-Ein Tag-Push allein löst keine Übergabe aus. Wird **Lieferung ausführen** mit
-einem vorhandenen Liefer-Tag gestartet, verarbeitet der Workflow diesen Stand
-ein weiteres Mal.
+Die Ressourcenprüfung leitet ihren Umfang aus `GITHUB_EVENT_NAME` ab. Bei
+`pull_request` prüft sie geänderte Ressourcen, beim manuellen Start den gesamten
+Stand.
 
-Die `.100`-Lieferung einer Releaselinie ist ein FULL. Spätere Lieferungen sind
-kumulative DELTAs gegen diesen `.100`-Tag. Teillieferungen werden im
-Mandanten-Repository auf `bereitstellung/nnn.nnn` zusammengestellt.
+Die Mindestversion in `.python-version` ist Python 3.11. Die Runner-Prüfung in
+`scripts/runner-preflight.sh` erwartet außerdem Git und `tar`.
+Ist Node.js auf dem Runner verfügbar, prüft `resources check` zusätzlich
+JavaScript-Dateien mit `node --check`.
 
-## Zentrale CI/CD-Version
+Die Tests lassen sich aus der Repositorywurzel ausführen:
 
-`main` enthält die freigegebene Version von `mtext_actions`. Die
-Mandanten-Workflows rufen diese Version über `@main` auf. Eine Änderung an
-`main` steht damit allen Mandanten bei ihrem nächsten Workflow-Lauf zur
-Verfügung. Änderungen werden nach erfolgreicher **Zentraler Testsuite** über
-einen Pull Request in `main` zusammengeführt.
-
-## Tests
-
-Jeder Pull Request und jede Änderung an `main` startet die **Zentrale
-Testsuite**. Der Job **Zentrale CI/CD-Implementierung testen** muss vor dem
-Merge erfolgreich sein. Die Tests sprechen weder M/Text noch den Mainframe an.
-
-Benötigt werden Python ab Version 3.11, Git und `tar`. Die Produktivlogik
-nutzt die Standardbibliothek.
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests
+```
