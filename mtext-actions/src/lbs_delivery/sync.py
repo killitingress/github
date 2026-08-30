@@ -1,4 +1,4 @@
-"""Bestimmt den Sync-Umfang und übergibt Projektpakete an den M/Text-Adapter."""
+"""Bestimmt den Sync-Umfang und übergibt Archive an den M/Text-Adapter."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 from . import adapter, config, git, github
 from .process import DeliveryError, Status
-from .project_package import PackageStand, build_project_package
+from .project_artifacts import ChangeStand, build_project_artifacts
 
 
 # GitHub liefert für den ersten Push eines Branches diese Null-SHA als Vorgänger.
@@ -21,14 +21,14 @@ def _sync_zielstufe(
     configuration: config.Configuration,
     *,
     repository_root: Path,
-    stand: PackageStand,
+    stand: ChangeStand,
     releaselinie: str,
     zielstufe: str,
 ) -> dict[str, object]:
-    """Stellt die Projektpakete für eine Zielstufe bis zum Adapterabschluss bereit.
+    """Stellt Archive und Informationen bis zum Adapterabschluss bereit.
 
-    Das temporäre Verzeichnis hält die Dateien während ihrer Übertragung.
-    Der Adapter fordert die Pakete bei Bedarf aus dem Iterator an.
+    Das temporäre Verzeichnis hält Archive und Informationen während ihrer
+    Übertragung. Der Adapter liest sie beim Anlegen des Auftrags aus dem Iterator.
     """
 
     projects = [
@@ -42,31 +42,31 @@ def _sync_zielstufe(
         return {"status": Status.ADAPTER_COMPLETED.value, "projekte": []}
 
     with tempfile.TemporaryDirectory() as temporary:
-        packages = (
+        artifacts = (
             (
                 project,
-                build_project_package(
+                build_project_artifacts(
                     configuration,
                     repository_root=repository_root,
                     output_directory=Path(temporary) / project,
                     project=project,
                     stand=stand,
+                    include_empty_delta=False,
                 ),
             )
             for project in projects
         )
-        auftrag_id = adapter.synchronize(
+        adapter_result = adapter.synchronize(
             configuration.mtext_ziel_prefixe[zielstufe],
             configuration.releaselinien[releaselinie]["etaps_linie"],
             kuerzel=configuration.kuerzel,
-            projekte=projects,
-            packages=packages,
+            artifacts=artifacts,
             idempotency_key=f"github-run-{os.environ['GITHUB_RUN_ID']}-{zielstufe}",
         )
 
     return {
         "status": Status.ADAPTER_COMPLETED.value,
-        "auftrag_id": auftrag_id,
+        **adapter_result,
         "projekte": projects,
     }
 
@@ -124,7 +124,7 @@ def run(_arguments: argparse.Namespace) -> dict[str, object]:
             ).decode("ascii").strip()
 
     git.require_ancestor(source, commit, f"refs/remotes/origin/{source_branch}")
-    stand = PackageStand(
+    stand = ChangeStand(
         von=None if previous_commit is None else (source_branch, previous_commit),
         bis=(source_branch, commit),
         changes=[] if previous_commit is None else git.changes(source, previous_commit, commit),
@@ -155,6 +155,17 @@ def run(_arguments: argparse.Namespace) -> dict[str, object]:
                 f"Synchronisation mit dem M/Text-Ziel {zielstufe} fehlgeschlagen.{detail} {exc.args[0]}",
             ) from exc
 
-    return {"status": Status.ADAPTER_COMPLETED.value, "synchronisationen": results} | (
-        {"warnungen": list(configuration.warnungen)} if configuration.warnungen else {}
-    )
+    # Den unveränderten M/Text-Output der Zielstufen im Workflow anzeigen.
+    summary = ["## M/Text-Synchronisation"]
+    for result in results:
+        if "ergebnis" not in result:
+            continue
+        output = result["ergebnis"]
+        rendered = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False, indent=2)
+        summary.extend((f"### {result['zielstufe']}", "```text", rendered, "```"))
+
+    return {
+        "status": Status.ADAPTER_COMPLETED.value,
+        "synchronisationen": results,
+        "summary": "\n".join(summary) + "\n",
+    } | ({"warnungen": list(configuration.warnungen)} if configuration.warnungen else {})

@@ -1,9 +1,8 @@
 """Erzeugt und übergibt FULL- und DELTA-Lieferungen an den Mainframe.
 
-Der Releasebau prüft die Git-Quelle und verpackt jedes konfigurierte Projekt.
-Zu jedem Paket entstehen die benötigte JCL und eine JSON-Informationsdatei.
-Die Übergabe lädt die vorbereiteten Pakete per FTPS und reicht ihre JCL bei JES
-ein.
+Der Releasebau prüft die Git-Quelle und erstellt die Archive,
+JSON-Informationsdateien und JCL. Die Übergabe lädt die Archive per FTPS und
+reicht ihre JCL bei JES ein.
 """
 
 from __future__ import annotations
@@ -18,16 +17,16 @@ from pathlib import Path
 from . import config, git
 from .config import Configuration, mandant_source
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
-from .project_package import PackageStand, build_project_package, release_scope
+from .project_artifacts import ChangeStand, build_project_artifacts, release_scope
 
 
-# FULL- und DELTA-Pakete werden als Member in diesem Mainframe-Dataset abgelegt.
+# F- und D-Archive werden als Member in diesem Mainframe-Dataset abgelegt.
 _MAINFRAME_DATASET = "IEA.LOMS.TONICZ"
 
 # Die erzeugte JCL wird an dieses JES-Ziel übergeben.
 _MAINFRAME_JES_TARGET = "LIT9028A"
 
-# Alle Mandanten übertragen ihre Lieferpakete an diesen zentralen Mainframe-Host.
+# Alle Mandanten übertragen ihre Archive an diesen zentralen Mainframe-Host.
 _MAINFRAME_FTPS_HOST = "ize9.lbs-it.de"
 
 # Explizites FTPS verwendet den FTP-Standardport des zentralen Mainframe-Zugangs.
@@ -36,10 +35,10 @@ _MAINFRAME_FTPS_PORT = 21
 # Dieser technische Benutzer führt die zentrale FTPS- und JES-Übergabe aus.
 _MAINFRAME_FTPS_USER = "LIT9028"
 
-# Dateierweiterung der JCL-Datei zum jeweiligen Paket-Member im Release-Artefakt.
+# Dateierweiterung der JCL-Datei zum jeweiligen Archiv-Member im Release-Artefakt.
 _MAINFRAME_JCL_SUFFIX = ".jcl"
 
-# Vorlage für die JCL-Übergabe eines Paket-Members an JES.
+# Vorlage für die JCL-Übergabe eines Archiv-Members an JES.
 _MAINFRAME_JCL_TEMPLATE = config.AUTOMATION_ROOT / "templates/mainframe-upload.jcl"
 
 # Reguläre Ausdrücke
@@ -75,11 +74,11 @@ def _render_jcl(template: str, *, ispw: str, level: str, subsystem: str, assignm
     return rendered
 
 
-def _submit_package(package_path: Path) -> None:
-    """Lädt ein Paket-Member per FTPS hoch und übergibt die gerenderte JCL an JES."""
+def _submit_archive(archive_path: Path) -> None:
+    """Lädt ein Archiv-Member per FTPS hoch und übergibt die gerenderte JCL an JES."""
 
-    member = package_path.stem
-    jcl_path = package_path.with_suffix(_MAINFRAME_JCL_SUFFIX)
+    member = archive_path.stem
+    jcl_path = archive_path.with_suffix(_MAINFRAME_JCL_SUFFIX)
     # Das Passwort ist das einzige Mainframe-Zugangsdatum aus einem Secret.
     password = os.environ["MAINFRAME_FTPS_PASSWORD"]
     session = ftplib.FTP_TLS(context=ssl.create_default_context())
@@ -91,8 +90,8 @@ def _submit_package(package_path: Path) -> None:
         # deshalb keine eingehende Firewall-Freischaltung auf dem Runner.
         session.set_pasv(True)
 
-        with package_path.open("rb") as package:
-            session.storbinary(f"STOR '{_MAINFRAME_DATASET}({member})'", package)
+        with archive_path.open("rb") as archive:
+            session.storbinary(f"STOR '{_MAINFRAME_DATASET}({member})'", archive)
 
         session.sendcmd("SITE FILETYPE=JES")
 
@@ -106,23 +105,23 @@ def _submit_package(package_path: Path) -> None:
 
 
 def _publish_mainframe(*, artifact_root: Path) -> dict[str, object]:
-    """Übergibt alle vorbereiteten Pakete und JCL-Dateien an den Mainframe."""
+    """Übergibt alle vorbereiteten Archive und JCL-Dateien an den Mainframe."""
 
-    # Pakete und JCL im Artefaktverzeichnis voraussetzen.
-    packages = sorted(artifact_root.glob("*.tgz"))
-    if not packages or any(not package.with_suffix(_MAINFRAME_JCL_SUFFIX).is_file() for package in packages):
-        raise DeliveryError(Status.PACKAGE_FAILED, "Releasepakete oder JCL fehlen")
+    # Archive und JCL im Artefaktverzeichnis voraussetzen.
+    archives = sorted(artifact_root.glob("*.tgz"))
+    if not archives or any(not archive.with_suffix(_MAINFRAME_JCL_SUFFIX).is_file() for archive in archives):
+        raise DeliveryError(Status.PACKAGE_FAILED, "Archive oder JCL fehlen")
 
-    # Jedes Paket mit seiner JCL an den Mainframe übergeben.
-    for package in packages:
-        _submit_package(package)
+    # Jedes Archiv mit seiner JCL an den Mainframe übergeben.
+    for archive in archives:
+        _submit_archive(archive)
 
     return {"status": Status.MAINFRAME_SUBMITTED.value}
 
 
-# Der Paketbau wird vom gleichnamigen Workflow-Einstieg aufgerufen.
+# Der Releasebau wird vom gleichnamigen Workflow-Einstieg aufgerufen.
 def _build_release(configuration: Configuration, *, output_directory: Path, tag: str) -> None:
-    """Erzeugt Pakete, JCL und Informationsdateien für den Liefer-Tag am ausgecheckten Stand."""
+    """Erzeugt Archive, Informationsdateien und JCL für den Liefer-Tag."""
 
     repository_root = mandant_source()
     tag_match = git.LIEFER_TAG_RE.fullmatch(tag)
@@ -141,22 +140,23 @@ def _build_release(configuration: Configuration, *, output_directory: Path, tag:
     hostprofil = configuration.hostprofile[configuration.releaselinien[releaselinie]["hostprofil"]]
     jcl_template = _MAINFRAME_JCL_TEMPLATE.read_text(encoding="ascii")
 
-    # Gemeinsame Projektpakete und die zugehörige Mainframe-JCL erzeugen.
+    # Archive, Informationsdateien und die zugehörige Mainframe-JCL erzeugen.
     for project in configuration.projects:
-        package = build_project_package(
+        project_artifacts = build_project_artifacts(
             configuration,
             repository_root=repository_root,
             output_directory=output_directory,
             project=project,
-            stand=PackageStand(von=base, bis=(tag, target_sha), changes=cumulative),
+            stand=ChangeStand(von=base, bis=(tag, target_sha), changes=cumulative),
+            include_empty_delta=True,
         )
 
-        for package_path in (package.f_archiv, package.d_archiv):
-            if package_path is None:
+        for archive_path in (project_artifacts.f_archiv, project_artifacts.d_archiv):
+            if archive_path is None:
                 continue
 
-            member = package_path.stem
-            package_path.with_suffix(_MAINFRAME_JCL_SUFFIX).write_text(
+            member = archive_path.stem
+            archive_path.with_suffix(_MAINFRAME_JCL_SUFFIX).write_text(
                 _render_jcl(
                     jcl_template,
                     ispw=configuration.ispw,

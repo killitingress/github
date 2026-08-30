@@ -1,4 +1,4 @@
-"""Prüft FULL- und DELTA-Pakete sowie ihre Mainframe-Übergabe."""
+"""Prüft FULL- und DELTA-Archive sowie ihre Mainframe-Übergabe."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from lbs_delivery.mainframe_release import _submit_package, _build_release, _publish_mainframe, run
+from lbs_delivery.mainframe_release import _submit_archive, _build_release, _publish_mainframe, run
 from lbs_delivery.process import DeliveryError, NETWORK_TIMEOUT, Status
 
 from tests.support import (
@@ -40,7 +40,7 @@ class ReleaseTests(TempDirTestCase):
         _build_release(self.configuration, output_directory=output_directory, tag=tag)
 
     def test_release_files_and_mainframe_transfer(self) -> None:
-        """Prüft Paketinhalt, JCL und die vorbereitete Mainframe-Übergabe."""
+        """Prüft Archive, Informationsdateien und die Mainframe-Übergabe."""
 
         git(self.repository, "checkout", "--detach", "r261.108")
         first = self.root / "first"
@@ -76,7 +76,7 @@ class ReleaseTests(TempDirTestCase):
                     "MAINFRAME_FTPS_PASSWORD": "password",
                 },
             ),
-            patch("lbs_delivery.mainframe_release._submit_package") as submit,
+            patch("lbs_delivery.mainframe_release._submit_archive") as submit,
         ):
             result = _publish_mainframe(artifact_root=first)
         self.assertEqual(result["status"], Status.MAINFRAME_SUBMITTED.value)
@@ -86,13 +86,13 @@ class ReleaseTests(TempDirTestCase):
         self.assertNotIn("@@", rendered)
 
         (second / "FIBASISD.jcl").unlink()
-        with self.assertRaisesRegex(DeliveryError, "Releasepakete oder JCL fehlen"):
+        with self.assertRaisesRegex(DeliveryError, "Archive oder JCL fehlen"):
             _publish_mainframe(artifact_root=second)
 
         git(self.repository, "checkout", "--detach", "r261.100")
         full = self.root / "full"
         _build_release(self.configuration, output_directory=full, tag="r261.100")
-        self.assertEqual(sorted(package.stem for package in full.glob("*.tgz")), ["FIBASISD", "FIBASISF"])
+        self.assertEqual(sorted(archive.stem for archive in full.glob("*.tgz")), ["FIBASISD", "FIBASISF"])
         full_information = json.loads(next(full.glob("_INFO_*.json")).read_text(encoding="utf-8"))
         self.assertNotIn("von", full_information["stand"])
         self.assertEqual(set(full_information["sha256"]), {"F", "D"})
@@ -101,8 +101,8 @@ class ReleaseTests(TempDirTestCase):
     def test_submits_package_and_jcl_with_explicit_ftps(self) -> None:
         """Prüft TLS-Aushandlung, geschützte Datenverbindung und JES-Übergabe."""
 
-        package = self.root / "FIBASISD.tgz"
-        package.write_bytes(b"package")
+        archive = self.root / "FIBASISD.tgz"
+        archive.write_bytes(b"archive")
         jcl = self.root / "FIBASISD.jcl"
         jcl.write_text("//TEST JOB\n", encoding="ascii")
 
@@ -111,7 +111,7 @@ class ReleaseTests(TempDirTestCase):
             patch("lbs_delivery.mainframe_release.ssl.create_default_context") as create_context,
             patch("lbs_delivery.mainframe_release.ftplib.FTP_TLS") as ftp_tls,
         ):
-            _submit_package(package)
+            _submit_archive(archive)
 
         create_context.assert_called_once_with()
         ftp_tls.assert_called_once_with(context=create_context.return_value)
@@ -143,7 +143,7 @@ class ReleaseTests(TempDirTestCase):
 
             # Bildet das Herunterladen des Build-Artefakts im Übergabejob nach.
             shutil.copytree(runner_temp / "dist", runner_temp / "release")
-            with patch("lbs_delivery.mainframe_release._submit_package") as submit:
+            with patch("lbs_delivery.mainframe_release._submit_archive") as submit:
                 result = run(argparse.Namespace(release_command="mainframe"))
 
         self.assertEqual(result["status"], Status.MAINFRAME_SUBMITTED.value)

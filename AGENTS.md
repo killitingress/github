@@ -2,197 +2,137 @@
 
 ## Formulierungen
 
-- Kommentare oder Dokumentation darf nicht von Dingen sprechen die im Rahmen
-  dieser Implementierung mal anders gemacht wurden - das ist irrelevant und
-  verwirrt nur. Abgrenzungen zu früheren Überlegungen oder Erklärungen warum
-  etwas jetzt auf eine bestimmte Weise, und nicht wie anders ggf. mal überlegt
-  wurde, gemacht wird sollen nicht enthalten sein, es sei denn wichtige für den
-  Leser zur Nachvollziehbarkeit der Entscheidungsfindung interessante Fakten
-  sind enthalten.
-- z.B. wenn etwas in früheren Überlegungen als "vielfältig möglich" vor kam
-  aber sich herauskristalisiert hat, dass es nur "einzigartig" sein kann, dann
-  muss dieses Einzigartigkeit nicht extra hervorgehoben werden, da sie sowieso
-  klar ist.
-- keine Semikolons zur Satz-Trennung/Strukturierung verwenden (im Deutschen
-  unüblich, Gedankenstriche sinnvoller, oder eigene Sätz)
-- keine übermäßig komplizierte, technische oder gestraffte Sprache verwenden
-  Leser sind teils technisch unbedarft und sollen nicht verwirrt werden
-- Aussagen dürfen den bestätigten fachlichen oder technischen Sachverhalt nicht
-  erweitern. Plausibel erscheinende Komponenten, Abläufe, Rollen,
-  Schutzmaßnahmen oder Automatisierungen dürfen nicht ohne Anforderung als
-  Bestandteil des Soll-Konzepts dargestellt werden. Ungeklärte Punkte sind als
-  offene Frage zu benennen.
-- Mengenangaben, Ausschlüsse und Verstärkungen wie `genau`, `nur`,
-  `ausschließlich`, `immer`, `vollständig` oder `zwingend` dürfen verwendet
-  werden, wenn die damit ausgedrückte Einschränkung bestätigt und für die
-  Aussage wichtig ist. Sie dürfen nicht zur bloßen Betonung ergänzt werden.
-- Eine einfache positive Aussage ist einer unbegründeten Ausschlussformulierung
-  vorzuziehen. Beispielsweise heißt es `Repository X darf zugreifen` statt
-  `Nur Repository X darf zugreifen` und `einen Lauf` statt `genau einen Lauf`,
-  sofern keine fachliche Einschränkung beschrieben werden soll.
+- Kommentare und Dokumentation beschreiben den geltenden Stand. Frühere Varianten und
+  verworfene Überlegungen entfallen, außer sie sind für eine Entscheidung wichtig.
+- Einfach und auch für technisch unbedarfte Leser schreiben. Keine Semikolons zur
+  Satztrennung verwenden.
+- Aussagen nicht über bestätigte fachliche oder technische Sachverhalte hinaus erweitern.
+  Ungeklärte Komponenten, Abläufe, Rollen oder Schutzmaßnahmen als offene Frage benennen.
+- Verstärkungen und Einschränkungen wie `genau`, `nur`, `immer`, `vollständig` oder
+  `zwingend` nur verwenden, wenn sie bestätigt und inhaltlich wichtig sind.
+- Positive Aussagen unbegründeten Ausschlüssen vorziehen, etwa `Repository X darf
+  zugreifen` statt `Nur Repository X darf zugreifen`.
 
 ## Dokumentation
 
-- Dokumentation enthält die Informationen, die ihre Leser zum Verständnis,
-  für eine Entscheidung oder zur Ausführung benötigen. Technische
-  Vollständigkeit ist dort erforderlich, wo ein verbindlicher Vertrag
-  beschrieben wird.
-- Bevor ein Detail aufgenommen wird, ist sein Nutzen für den Zweck der Seite
-  zu prüfen. Herleitungen, vorsorgliche Absicherungen, hypothetische
-  Sonderfälle und mögliche spätere Betriebsabläufe entfallen, wenn sie für den
-  beschriebenen Stand nicht benötigt werden.
-- Jeder Sachverhalt hat eine passende Dokumentationsseite als Eigentümer.
-  Andere Seiten verweisen darauf oder nennen die für ihren eigenen Zweck
-  benötigte Kurzfassung. Ausführliche Wiederholungen zwischen Zielbild,
-  Benutzeranleitung und Arbeitsliste sind zu vermeiden.
-- Ein Zielbild beschreibt den Sollzustand, den Hauptablauf, verbindliche
-  Schnittstellen und offene Entscheidungen. Implementierungsdetails und
-  Bedienhinweise gehören nur hinein, wenn sie den Sollzustand bestimmen.
-- Eine Benutzeranleitung beschreibt Voraussetzungen, konkrete Handlungen,
-  erwartete Ergebnisse und notwendige Kontrollen. Technische Einrichtung,
-  interne Implementierung und nicht benötigte Begründungen gehören nicht in
-  den Bedienablauf.
-- Eine Arbeitsliste enthält je Punkt eine Tätigkeit, ihren Status und ein
-  prüfbares Ergebnis. Einleitende Meta-Erklärungen, wiederholte Begründungen
-  und vorweggenommene Detailkonzepte sind zu vermeiden.
-- Rollen werden in der Granularität genannt, die für die konkrete Aussage
-  erforderlich ist. Mehrere Verantwortlichkeitskreise werden nicht aufgezählt,
-  wenn eine gemeinsame, im Betrieb verwendete Bezeichnung genügt.
-- Beispiele, technische Namen, Eingaben und Statuswerte bleiben erhalten,
-  wenn sie einen Vertrag oder Bedienweg eindeutig machen. Beispiele ohne
-  zusätzlichen Erkenntniswert entfallen.
-- Nach dem ersten Entwurf ist gezielt zu kürzen. Zu entfernen sind
-  Wiederholungen, entbehrliche Nebensätze, Meta-Navigation und Details, die
-  weder eine Entscheidung noch eine Handlung oder einen Vertrag beeinflussen.
+- `docs/confluence/Naechste_Schritte.md` und `docs/confluence/Benutzeranleitung.md` nur
+  ändern, wenn der Benutzer die jeweilige Datei ausdrücklich nennt.
+- Informationen aufnehmen, die Leser zum Verständnis, für Entscheidungen oder zur
+  Ausführung benötigen. Verbindliche Verträge technisch vollständig beschreiben.
+  Herleitungen, vorsorgliche Absicherungen und hypothetische Betriebsabläufe entfallen,
+  wenn sie dem Zweck der Seite nicht direkt dienen.
+- Ein Zielbild beschreibt Sollzustand, Hauptablauf und verbindliche Schnittstellen.
+  Implementierungs- oder Bedienhinweise gehören hinein, wenn sie den Sollzustand bestimmen.
+- Eine Benutzeranleitung beschreibt Voraussetzungen, Handlungen, erwartete Ergebnisse und
+  notwendige Kontrollen, nicht interne Implementierung oder technische Einrichtung.
+- Eine Arbeitsliste nennt je Punkt Tätigkeit, Status und prüfbares Ergebnis, ohne
+  Meta-Erklärungen, wiederholte Begründungen oder vorweggenommene Detailkonzepte.
+- Rollen nur in der benötigten Granularität nennen. Beispiele, technische Namen, Eingaben
+  und Statuswerte erhalten, wenn sie einen Vertrag oder Bedienweg eindeutig machen.
+- Nach dem Entwurf Wiederholungen, entbehrliche Nebensätze, Meta-Navigation und folgenlose
+  Details entfernen.
 
-## Kommentare
+## Kommentare: Der Code liest sich wie ein Comic
 
-- **jede** Python-Funktion muss einen Kommentar oder eine Docstring bekommen,
-  der ihren Zweck beschreibt und sie bei Bedarf in den Ablauf einordnet.
-- **jede** Konstante muss eine aussagekräftige Beschreibung erhalten. Der
-  Kommentar muss ihre fachliche Bedeutung, Randbedingung oder Rolle im Ablauf
-  erklären und darf nicht lediglich den Namen der Konstante umformulieren.
-- Vor einem zusammengehörigen Block regulärer Ausdrücke muss ein Kommentar den
-  Block als reguläre Ausdrücke einordnen. Zusätzlich muss unmittelbar vor jedem
-  einzelnen Ausdruck stehen, welchen konkreten Wert und welche reale Regel er
-  prüft.
-- Nicht-triviale Codeblöcke müssen kommentiert werden, wenn der fachliche Grund,
-  eine Sicherheitsgrenze oder die Rolle im Ablauf nicht unmittelbar erkennbar
-  ist.
-- Jeder YAML-Workflow muss ausreichend viele Kommentare enthalten, die seine
-  Jobs, Sicherheitsgrenzen und betrieblichen Regeln verständlich machen.
-- Kommentare sollen Dritten Orientierung geben. Sie dürfen Namen, Typen oder
-  unmittelbar lesbaren Code nicht bloß wiederholen und dieselbe Regel nicht an
-  mehreren direkt aufeinanderfolgenden Stellen erneut erzählen.
+- Docstring und Blockkommentare sollen Zweck, Schritte und Ergebnis einer Funktion in
+  Ausführungsreihenfolge verständlich machen, ohne dass jede Codezeile gelesen werden muss.
+- Jede Python-Funktion erhält einen Docstring oder Kommentar zu Zweck und Einordnung.
+  Mehrschrittige Funktionen werden in Codeabschnitte gegliedert, vor denen unmittelbar ein
+  kurzer narrativer Kommentar steht. Der Funktionskommentar ersetzt diese Gliederung nicht.
+- Eigene Abschnitte bilden insbesondere Eingaben, Prüfungen, Vorbereitungen, externe
+  Aufrufe, Zustandsänderungen, Ergebnisaufbau und Bereinigung. Ein kurzer, unmittelbar
+  verständlicher Einzelschritt benötigt keinen künstlichen Blockkommentar.
+- Kommentare benennen den Schritt und bei Bedarf Grund, Sicherheitsgrenze oder Bedeutung
+  für den weiteren Ablauf. Lokale Detailkommentare erklären unerwartete Formate,
+  Randbedingungen oder technische Eigenschaften.
+- Jede Konstante erhält einen Kommentar zu ihrer fachlichen Bedeutung, Randbedingung oder
+  Rolle. Nicht offensichtliche Zustandswechsel, Wiederholungsregeln, I/O-Grenzen,
+  Sicherheitsprüfungen und mögliche Teilzustände werden an ihrer Wirkungsstelle erklärt.
+- Längere Tests werden nach Vorbereitung, Ausführung und geprüftem Zusammenhang narrativ
+  gegliedert. Kommentare wiederholen weder Mock, Assert noch unmittelbar lesbaren Code.
+- Kurze Stichpunkte, Kleinschreibung und fehlende Satzzeichen sind gegenüber
+  grammatikalisch korrekten Voll-Sätzen zu bevorzugen. Kommentare bleiben
+  konkret, beschreiben den aktuellen Code und wiederholen weder Namen, Typen
+  noch dieselbe Regel an direkt aufeinanderfolgenden Stellen.
+- Betroffene Kommentare bei jeder Codeänderung mitprüfen. Falsche oder überholte
+  Kommentare gelten als Codefehler.
+
+```python
+def upload_archive(path: Path) -> Response:
+    """Überträgt ein Archiv und gibt die geprüfte Adapterantwort zurück."""
+
+    # Dateigröße ankündigen, damit der Empfänger die erwarteten Bytes kennt
+    headers = {"Content-Length": str(path.stat().st_size)}
+
+    # großes FULL blockweise übertragen, statt den Arbeitsspeicher zu belegen
+    with path.open("rb") as archive:
+        response = send(archive, headers)
+
+    # geprüfte Antwort an den weiteren Ablauf übergeben
+    return validate_response(response)
+```
 
 ## Python
 
-- Unabhängige `if`-Blöcke werden durch Leerzeilen abgesetzt. Dazu gehört eine
-  Leerzeile vor dem Block und nach ihm, wenn der nächste Abschnitt fachlich
-  getrennt ist.
-- Wird ein Wert unmittelbar vor der Abfrage berechnet, die ihn verwendet, gehört
-  diese Zeile zum `if`-Block. Zwischen Vorberechnung und `if` steht keine
-  Leerzeile.
-- Eine `if`-/`elif`-/`else`-Kette bleibt ohne Leerzeilen zwischen ihren
-  Zweigen zusammen. Erst danach folgt die Trennung zum nächsten Block.
+- Fachlich getrennte `if`-Blöcke durch eine Leerzeile davor und durch Kommentare absetzen.
+  Ist auch der nächste Abschnitt getrennt, folgt eine Leerzeile nach dem Block.
+- Eine unmittelbar verwendete Vorberechnung bleibt ohne Leerzeile bei ihrem `if`.
+- `if`-/`elif`-/`else`-Ketten bleiben zusammen. Erst danach folgt die Trennung zum nächsten
+  Abschnitt.
 
 ## YAML-Workflows
 
-- Anzeigenamen von Workflows, Jobs und Schritten werden auf Deutsch formuliert.
-  Sie sind kurz und benennen die ausgeführte Handlung oder das Ergebnis.
+- Anzeigenamen von Workflows, Jobs und Schritten kurz und auf Deutsch formulieren.
   Unveränderliche technische Namen externer Komponenten bleiben erhalten.
-- Kommentare beschreiben den tatsächlichen Ablauf kurz und handlungsbezogen.
-  Technische Nebendetails, die aus dem YAML unmittelbar hervorgehen oder für
-  das Verständnis des Ablaufs nicht benötigt werden, entfallen.
-- Notwendige Sicherheitsgrenzen und betriebliche Regeln bleiben in den
-  Kommentaren erhalten. Sie werden an der Stelle beschrieben, an der sie den
-  Ablauf bestimmen.
+- Kommentare beschreiben Ablauf, Sicherheitsgrenzen und betriebliche Regeln an ihrer
+  Wirkungsstelle. Aus dem YAML erkennbare oder für den Ablauf unwichtige Details entfallen.
 
 ## Fachsprache und Namen
 
-- Für fachliche Begriffe sind die in Dokumentation und Betrieb verwendeten
-  deutschen Bezeichnungen zu übernehmen. Keine neuen englischen Übersetzungen
-  für bereits eindeutig benannte Fachbegriffe erfinden.
-- Insbesondere heißt es `Releaselinie`, nicht `Release-Line` oder
-  `release_line`, und `Mandantenkürzel`, nicht `Mandant-Code`.
-- Die zugehörigen JSON-Felder heißen `kuerzel`, `releaselinie`,
-  `etaps_linie`, `hostprofil` und `hostprofile`. Bei Feldnamen werden
-  Umlaute als `ae`, `oe` und `ue` geschrieben.
-- Namen in Code, Fehlermeldungen, Kommentaren und Dokumentation müssen dieselbe
-  Fachsprache verwenden. Unveränderliche technische Namen externer Verträge
-  wie Git, JCL, SHA oder CodePipeline bleiben unverändert.
+- In Dokumentation und Betrieb verwendete deutsche Fachbegriffe übernehmen. Keine neuen
+  englischen Übersetzungen für bestehende Begriffe einführen.
+- Es heißt `Releaselinie` und `Mandantenkürzel`, nicht `Release-Line`, `release_line` oder
+  `Mandant-Code`. Die JSON-Felder heißen `kuerzel`, `releaselinie`, `etaps_linie`,
+  `hostprofil` und `hostprofile`. Umlaute in Feldnamen als `ae`, `oe` und `ue` schreiben.
+- Code, Fehlermeldungen, Kommentare und Dokumentation verwenden dieselbe Fachsprache.
+  Unveränderliche Namen externer Verträge wie Git, JCL, SHA oder CodePipeline bleiben.
 
 ## Einfachheit zuerst
 
-- Bevorzugt wird der kleinste Code, der die aktuelle Aufgabe vollständig löst.
-  Eine etwas umfangreichere Lösung ist nur dann vorzuziehen, wenn sie deutlich
-  klarer und angenehmer zu verstehen ist. Nichts Spekulatives implementieren.
-- Klarheit geht vor Cleverness. Direkte, naheliegende Kontrollflüsse verwenden
-  und Sprachmittel nur einsetzen, wenn sie das Lesen tatsächlich erleichtern.
-- Keine vorzeitigen Abstraktionen, Framework-Konstrukte oder allgemeinen
-  Mechanismen für einmalige Fälle einführen.
-- Keine unaufgeforderte Konfigurierbarkeit und kein Future-Proofing ergänzen.
-- Den erfolgreichen Hauptablauf linear halten. Frühe Prüfungen und Rückgaben
-  verwenden, statt tiefe Verschachtelungen aufzubauen.
-- Keine Fehlerbehandlung für Fälle ergänzen, die nach dem geltenden Vertrag
-  nicht auftreten können. Fehler an echten I/O-, Sicherheits- und
-  Systemgrenzen weiterhin klar behandeln.
-- Wenn eine Implementierung 200 Zeilen umfasst, obwohl 50 verständliche Zeilen
-  genügen würden, ist sie neu und kompakter zu schreiben.
-- Oberstes Ziel ist insgesamt kompakter, linear lesbarer Code mit möglichst
-  wenigen Konzepten, Abstraktionsebenen, Sprüngen zwischen Funktionen und
-  Verzweigungen. Nicht einzelne Funktionen isoliert optimieren, sondern die
-  Verständlichkeit und Größe des gesamten Ablaufs bewerten.
+- Den kleinsten Code wählen, der die Aufgabe vollständig löst. Eine umfangreichere Lösung
+  ist vorzuziehen, wenn sie deutlich klarer und einfacher verständlich ist.
+- Klarheit vor Cleverness. Keine spekulativen Abstraktionen, Framework-Konstrukte,
+  unaufgeforderte Konfigurierbarkeit oder Mechanismen für mögliche spätere Anforderungen.
+- Den erfolgreichen Hauptablauf mit frühen Prüfungen und Rückgaben linear halten.
+- Keine Fehlerfälle behandeln, die laut Vertrag nicht auftreten können. Daten und Fehler an
+  echten I/O-, Sicherheits- und Systemgrenzen behandeln und nachgelagert nicht erneut prüfen.
+- Eine 200-zeilige Lösung neu schreiben, wenn 50 verständliche Zeilen genügen. Die
+  Gesamtkomplexität aus Konzepten, Abstraktionsebenen, Verzweigungen und Lesesprüngen zählt.
 
 ### Validierung
 
-- Nur Regeln prüfen, die im aktuellen fachlichen oder technischen Vertrag
-  tatsächlich existieren. Keine regulären Ausdrücke, Grenzwerte, Allowlists
-  oder Sonderfälle aus vermutetem Future-Proofing erfinden.
-- Werte einer kleinen zentralen und versionierten Zuordnung nicht zusätzlich
-  durch eine abgeleitete Namenskonvention einschränken. Beispielsweise legt
-  `releaselinien.json` die `etaps_linie` selbst verbindlich fest; dafür gibt es
-  keine zusätzliche Regex-Regel.
-- Jede Formatregel hat genau einen Eigentümer. Andere Module importieren diese
-  Regel oder leiten ihre Prüfung daraus ab, statt dieselbe Regel erneut zu
-  formulieren.
-- Für Hostprofile werden keine erlaubten Profilnamen fest verdrahtet. Die
-  vorhandenen Profile stehen unter `hostprofile`; fachlich erlaubt sind
-  ausschließlich die sechs CodePipeline-Stages `FKTE`, `FKTF`, `JURJ`, `JURP`,
-  `SVTS` und `VPTV`.
+- Nur bestehende Vertragsregeln prüfen. Keine Regex, Grenzwerte, Allowlists oder Sonderfälle
+  aus vermutetem Future-Proofing ergänzen.
+- Kleine zentrale Zuordnungen nicht zusätzlich durch abgeleitete Namensregeln einschränken.
+  `releaselinien.json` legt beispielsweise `etaps_linie` ohne weitere Regex fest.
+- Jede Formatregel hat einen Eigentümer. Andere Module importieren sie oder leiten ihre
+  Prüfung daraus ab, statt sie erneut zu formulieren.
 
 ### Helferfunktionen
 
-- Vor dem Anlegen oder Beibehalten einer Helferfunktion müssen ihre produktiven
-  Aufrufstellen mit der Textsuche geprüft werden. Aufrufe aus Tests zählen nicht
-  als Wiederverwendung der Produktionslogik.
-- Eine Helferfunktion mit nur einer produktiven Aufrufstelle ist ein deutliches
-  Warnsignal. Sie wird eingebettet, wenn dadurch insgesamt Code, Begriffe oder
-  Lesesprünge entfallen.
-- Insbesondere keine Einmal-Helfer anlegen, die lediglich eine Bedingung, einen
-  Dictionary-Zugriff, eine einzelne Validierung, eine Stringformatierung oder
-  einen direkten Funktionsaufruf weiterreichen.
-- Dünne Durchreichungshelfer, deren Rumpf nur auf verschachtelte Felder zugreift,
-  sind direkt am Aufrufort einzubetten. Ein Helfer muss über das bloße
-  Projizieren oder Weiterreichen von Feldern hinaus eigene Logik enthalten.
-- Ein Einmal-Helfer darf bleiben, wenn er eine eigenständige, nicht-triviale
-  I/O-, Sicherheits- oder fachliche Grenze kapselt oder einen langen Ablauf am
-  Aufrufort deutlich verständlicher macht. Er darf dabei nicht lediglich Code
-  und Begriffe an eine andere Stelle verschieben. Der Grund muss an der Funktion
-  kommentiert sein.
-- Ein sprechender Funktionsname allein rechtfertigt keine zusätzliche
-  Abstraktion. Ein kurzer Kommentar über wenigen direkten Zeilen ist dann zu
-  bevorzugen.
-- Keine Abstraktion allein für mögliche spätere Wiederverwendung einführen.
-  Wenige direkte, gut kommentierte Zeilen am tatsächlichen Aufrufort sind zu
-  bevorzugen.
-- Bei der Entscheidung den Gesamtunterschied vergleichen: Zeilenanzahl,
-  zusätzliche Namen und Typen, Verzweigungen sowie notwendige Lesesprünge. Die
-  Variante mit der geringeren Gesamtkomplexität ist zu bevorzugen.
-- Bei jeder KISS-Überarbeitung bestehende Helfer mitzählen und triviale
-  Einmal-Helfer entfernen; nicht nur neu hinzukommende Helfer bewerten.
+- Vor dem Anlegen oder Beibehalten einer Helferfunktion produktive Aufrufstellen suchen.
+  Testaufrufe zählen nicht als Wiederverwendung der Produktionslogik.
+- Eine produktive Aufrufstelle ist ein Warnsignal. Triviale Einmal-Helfer für Bedingungen,
+  Zugriffe, Validierungen, Formatierungen, Projektionen oder Weiterleitungen einbetten, wenn
+  dadurch Code, Begriffe oder Lesesprünge entfallen.
+- Ein Einmal-Helfer darf eine nicht triviale I/O-, Sicherheits- oder fachliche Grenze
+  kapseln oder einen langen Ablauf deutlich klären. Er muss eigene Logik enthalten und darf
+  Code nicht bloß verschieben. Den Grund an der Funktion kommentieren.
+- Ein sprechender Name oder mögliche spätere Wiederverwendung rechtfertigt keine
+  Abstraktion. Wenige direkte, narrativ kommentierte Zeilen sind dann vorzuziehen.
+- Gesamtunterschied aus Zeilen, Namen, Typen, Verzweigungen und Lesesprüngen vergleichen.
+  Bei KISS-Überarbeitungen bestehende Helfer einbeziehen und triviale entfernen.
 
 ## Sonstiges
 
-- der alte Bash Hook ist read-only und darf nie verändert werden - ist nur
-  Referenzmaterial
+- Der alte Bash-Hook ist schreibgeschütztes Referenzmaterial und darf nie geändert werden.

@@ -1,8 +1,8 @@
 """Spricht den M/Text-Adapter per HTTPS an.
 
-Der Sync-Workflow legt hier einen Auftrag an, lädt Projektpakete hoch,
-schließt den Upload ab und fragt den Verarbeitungsstatus ab. Dieses Modul
-kapselt den Adaptervertrag und die HTTP-Grenze zur LTOMA-Umgebung.
+Der Sync-Workflow legt hier einen Auftrag an, lädt dessen Archive hoch und
+fragt den Verarbeitungsstatus ab. Dieses Modul kapselt den Adaptervertrag und
+die HTTP-Grenze zur LTOMA-Umgebung.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-import uuid
 from collections.abc import Iterator
 from contextlib import closing
 from http.client import HTTPException
@@ -20,21 +19,21 @@ from pathlib import Path
 from typing import Literal
 
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
-from .project_package import ProjectPackage
+from .project_artifacts import ProjectArtifacts
 
 
 # Begrenzt gelesene Adapterantworten, damit fehlerhafte Antworten nicht den
 # Arbeitsspeicher vollständig belegen.
 _RESPONSE_LIMIT = 1024 * 1024
 
-# Blockgröße beim Streaming großer Projektarchive in den Multipart-Upload.
+# Blockgröße beim Streaming großer Archive zum Adapter.
 _UPLOAD_BLOCK_SIZE = 1024 * 1024
 
 # Abstand zwischen Statusabfragen, solange der Adapter noch verarbeitet.
 _POLL_INTERVAL_SECONDS = 5
 
 # Auftragszustände, in denen der Adapter noch arbeitet oder Dateien erwartet.
-_ACTIVE_STATUSES = frozenset({"uploading", "queued", "processing"})
+_ACTIVE_STATUSES = frozenset({"ready", "uploading", "processing"})
 
 # Auftragszustände, die die Verarbeitung beim Adapter beenden.
 _TERMINAL_STATUSES = frozenset({"succeeded", "failed"})
@@ -49,39 +48,63 @@ def synchronize(
     etaps_linie: str,
     *,
     kuerzel: str,
-    projekte: list[str],
-    packages: Iterator[tuple[str, ProjectPackage]],
+    artifacts: Iterator[tuple[str, ProjectArtifacts]],
     idempotency_key: str,
-) -> str:
+) -> dict[str, object]:
     """Führt einen Adapterauftrag von der Anlage bis zum Endstatus und Löschen aus.
 
-    Pakete werden erst beim Upload aus dem Iterator angefordert. Ein bereits
-    abgeschlossener Upload wird über den Idempotency-Key wiederaufgenommen,
-    ohne die Pakete erneut zu erzeugen oder zu übertragen.
+    Die Informationen zu allen Archiven werden beim Anlegen übertragen.
+    Danach folgt ein PUT mit den unveränderten Bytes je F- oder D-Archiv.
     """
+
+    prepared_artifacts = list(artifacts)
+    full = {project_artifacts.f_archiv is not None for _project, project_artifacts in prepared_artifacts}
+    if len(full) != 1:
+        raise DeliveryError(Status.ADAPTER_FAILED, "Archive des Auftrags haben unterschiedliche Auftragsarten")
+
+    auftragsart = "FULL" if full.pop() else "DELTA"
+    archive_uploads: list[tuple[Path, dict[str, object]]] = []
+    for _project, project_artifacts in prepared_artifacts:
+        archive = project_artifacts.f_archiv if auftragsart == "FULL" else project_artifacts.d_archiv
+        if archive is None:
+            raise DeliveryError(Status.ADAPTER_FAILED, "Zur Auftragsart fehlt ein passendes Archiv")
+        try:
+            information = json.loads(project_artifacts.information.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise DeliveryError(Status.ADAPTER_FAILED, "Informationsdatei kann nicht gelesen werden") from exc
+        if not isinstance(information, dict):
+            raise DeliveryError(Status.ADAPTER_FAILED, "Informationsdatei ist ungültig")
+        archive_uploads.append((archive, information))
 
     adapter_url = _SYNC_URL.format(umgebung=f"{target_prefix}{etaps_linie}")
     created = _call_adapter(
         "POST",
         adapter_url,
-        {"kuerzel": kuerzel, "projekte": projekte},
+        {
+            "kuerzel": kuerzel,
+            "auftragsart": auftragsart,
+            "archive": [
+                {"name": archive.name, "information": information}
+                for archive, information in archive_uploads
+            ],
+        },
         {"Idempotency-Key": idempotency_key},
     )
     auftrag_id = created["auftrag_id"]
     auftrag_url = f"{adapter_url}/{urllib.parse.quote(auftrag_id, safe='')}"
+    result = created
 
-    if created["status"] == "uploading":
-        for project, package in packages:
-            _upload_project(auftrag_url, project, package)
-        _call_adapter("POST", f"{auftrag_url}/complete")
+    if created["status"] in {"ready", "uploading"}:
+        for archive, _information in archive_uploads:
+            result = _upload_archive(auftrag_url, archive)
+            if result["status"] in _TERMINAL_STATUSES:
+                break
 
     # Der Workflow begrenzt Upload und Warten gemeinsam auf 30 Minuten.
-    while True:
+    while result["status"] not in _TERMINAL_STATUSES:
         result = _call_adapter("GET", auftrag_url)
-        if result["status"] in _TERMINAL_STATUSES:
-            break
-
-        time.sleep(_POLL_INTERVAL_SECONDS)
+        if result["status"] in _ACTIVE_STATUSES:
+            time.sleep(_POLL_INTERVAL_SECONDS)
 
     # Auftrag entfernen, ohne eine M/Text-Fehlermeldung zu überschreiben.
     message = result.get("meldung") or "M/Text-Synchronisation ist fehlgeschlagen"
@@ -98,46 +121,23 @@ def synchronize(
     if result["status"] == "failed":
         raise DeliveryError(Status.ADAPTER_FAILED, message)
 
-    return auftrag_id
+    return {"auftrag_id": auftrag_id} | (
+        {"ergebnis": result["ergebnis"]} if "ergebnis" in result else {}
+    )
 
 
-def _upload_project(auftrag_url: str, project: str, package: ProjectPackage) -> None:
-    """Bündelt Informationsdatei und Archive an der Multipart-Upload-Grenze."""
+def _upload_archive(auftrag_url: str, archive: Path) -> dict[str, object]:
+    """Streamt ein angekündigtes Archiv mit unverändertem Inhalt zum Adapter."""
 
-    project_url = f"{auftrag_url}/projekte/{urllib.parse.quote(project, safe='')}"
-    boundary = f"mtext-{uuid.uuid4().hex}"
-    upload_parts: list[tuple[str, Path, str]] = [
-        ("informationsdatei", package.information, "application/json"),
-        ("d_archiv", package.d_archiv, "application/gzip"),
-    ]
-
-    if package.f_archiv is not None:
-        upload_parts.append(("f_archiv", package.f_archiv, "application/gzip"))
-
-    # `Content-Length` verlangt die Gesamtgröße vor dem Senden, obwohl Archive erst
-    # beim Streaming gelesen werden.
-    encoded_parts: list[tuple[bytes, Path]] = []
-    body_length = 0
-    for field_name, path, mime_type in upload_parts:
-        part_header = (
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="{field_name}"; filename="{path.name}"\r\n'
-            f"Content-Type: {mime_type}\r\n\r\n"
-        ).encode()
-        encoded_parts.append((part_header, path))
-        body_length += len(part_header) + path.stat().st_size + 2
-    body_footer = f"--{boundary}--\r\n".encode()
-    body_length += len(body_footer)
-
-    # Bei Upload-Abbruch kann noch eine Archivdatei geöffnet sein.
-    with closing(_iter_multipart_body(encoded_parts, body_footer)) as data:
-        _call_adapter(
+    archive_url = f"{auftrag_url}/archive/{urllib.parse.quote(archive.name, safe='')}"
+    with closing(_iter_file(archive)) as data:
+        return _call_adapter(
             "PUT",
-            project_url,
+            archive_url,
             data,
             {
-                "Content-Type": f"multipart/form-data; boundary={boundary}",
-                "Content-Length": str(body_length),
+                "Content-Type": "application/gzip",
+                "Content-Length": str(archive.stat().st_size),
             },
         )
 
@@ -148,13 +148,13 @@ def _call_adapter(
     payload: dict[str, object] | Iterator[bytes] | None = None,
     headers: dict[str, str] | None = None,
 ) -> dict[str, object]:
-    """Sendet JSON oder Multipart-Daten und prüft die HTTP- und JSON-Antwort.
+    """Sendet JSON oder Archivdaten und prüft die HTTP- und JSON-Antwort.
 
-    Steueraufrufe und Projektuploads verwenden dieselbe I/O-Grenze. Multipart-
-    Daten werden während des Sendens aus dem übergebenen Iterator gelesen.
+    Steueraufrufe und Archivuploads verwenden dieselbe I/O-Grenze. Archive
+    werden während des Sendens aus dem übergebenen Iterator gelesen.
     """
 
-    # JSON-Anfragen serialisieren, Multipart-Daten unverändert durchreichen.
+    # JSON-Anfragen serialisieren, Archivdaten unverändert durchreichen.
     data = payload
     request_headers = dict(headers or {})
     if isinstance(payload, dict):
@@ -207,20 +207,13 @@ def _call_adapter(
     return document
 
 
-def _iter_multipart_body(
-    encoded_parts: list[tuple[bytes, Path]],
-    body_footer: bytes,
-) -> Iterator[bytes]:
-    """Liefert den Multipart-Request-Body blockweise für den Adapter-Upload.
+def _iter_file(path: Path) -> Iterator[bytes]:
+    """Liefert eine Archivdatei blockweise für den Adapter-Upload.
 
     `urllib` liest den Generator beim Senden aus, damit große Archive nicht
     vollständig im Arbeitsspeicher liegen.
     """
 
-    for header, path in encoded_parts:
-        yield header
-        with path.open("rb") as stream:
-            while block := stream.read(_UPLOAD_BLOCK_SIZE):
-                yield block
-        yield b"\r\n"
-    yield body_footer
+    with path.open("rb") as stream:
+        while block := stream.read(_UPLOAD_BLOCK_SIZE):
+            yield block

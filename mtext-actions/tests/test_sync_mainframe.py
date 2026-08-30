@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, call, patch
 
 from lbs_delivery import adapter, github, sync
 from lbs_delivery.process import DeliveryError, Status
-from lbs_delivery.project_package import ProjectPackage
+from lbs_delivery.project_artifacts import ProjectArtifacts
 from tests.support import TempDirTestCase, git, load_test_configuration, setup_release_repository
 
 
@@ -35,9 +35,15 @@ class SyncTests(TempDirTestCase):
             "GITHUB_TOKEN": "test-token",
             "MTEXT_PREVIOUS_COMMIT": "before",
         }))
-        self.package = ProjectPackage(self.root / "info.json", self.root / "namedF.tgz", self.root / "full.tgz")
-        for path in (self.package.information, self.package.d_archiv, self.package.f_archiv):
-            path.write_bytes(b"Paketinhalt")
+        self.artifacts = ProjectArtifacts(self.root / "info.json", self.root / "namedF.tgz", self.root / "full.tgz")
+        self.artifacts.information.write_text(json.dumps({
+            "projekt": "LOMS_Basis",
+            "stand": {"bis": {"referenz": "release/261", "commit": "current"}},
+            "elemente": [["A", "beispiel.xml"]],
+            "sha256": {"F": "checksum"},
+        }))
+        self.artifacts.d_archiv.write_bytes(b"D-Archiv")
+        self.artifacts.f_archiv.write_bytes(b"F-Archiv")
 
     def test_run_command(self) -> None:
         """Prüft Erstlauf, DELTA-Basis, Linienwechsel, manuelles FULL und überholte Läufe."""
@@ -101,32 +107,39 @@ class SyncTests(TempDirTestCase):
                 sync.run(SimpleNamespace())
             transfer.assert_not_called()
 
-    def test_sync_packages(self) -> None:
+    def test_sync_archives(self) -> None:
         """Prüft kumulative Sync-Änderungen, FULL und das Auslassen reiner Konfigurationsänderungen."""
 
         baseline = git(self.repository, "rev-parse", "r261.100")
         commit = git(self.repository, "rev-parse", "HEAD")
         documents = []
 
-        def capture_packages(*_args, packages, **_kwargs) -> str:
-            """Liest die erzeugten Paketinformationen während ihrer Übergabe."""
+        def capture_artifacts(*_args, artifacts, **_kwargs) -> dict[str, object]:
+            """Liest die erzeugten Projektinformationen während ihrer Übergabe."""
 
-            for _project, package in packages:
-                documents.append(json.loads(package.information.read_text()))
-            return "auftrag"
+            for _project, project_artifacts in artifacts:
+                documents.append(json.loads(project_artifacts.information.read_text()))
+                if "von" not in documents[-1]["stand"]:
+                    self.assertIsNone(project_artifacts.d_archiv)
+            return {"auftrag_id": "auftrag", "ergebnis": "Geändert: beispiel.xml\nGelöscht: alt.xml"}
 
         with (
             patch.object(github, "last_sync_commit", return_value=baseline),
-            patch.object(adapter, "synchronize", side_effect=capture_packages) as transfer,
+            patch.object(adapter, "synchronize", side_effect=capture_artifacts) as transfer,
         ):
             for event in ("push", "workflow_dispatch"):
                 with patch.dict(os.environ, {"GITHUB_EVENT_NAME": event}):
-                    sync.run(SimpleNamespace())
+                    result = sync.run(SimpleNamespace())
             self.assertEqual(documents[0]["stand"]["von"]["commit"], baseline)
             self.assertEqual(documents[0]["stand"]["bis"]["commit"], commit)
             self.assertIn(["M", "baseline.txt"], documents[0]["elemente"])
             self.assertNotIn("von", documents[1]["stand"])
-            self.assertEqual([set(document["sha256"]) for document in documents], [{"D"}, {"D", "F"}])
+            self.assertEqual([set(document["sha256"]) for document in documents], [{"D"}, {"F"}])
+            self.assertEqual(
+                result["synchronisationen"][0]["ergebnis"],
+                "Geändert: beispiel.xml\nGelöscht: alt.xml",
+            )
+            self.assertIn("Geändert: beispiel.xml\nGelöscht: alt.xml", result["summary"])
 
             git(self.repository, "add", ".github")
             git(self.repository, "commit", "-m", "Konfiguration")
@@ -138,44 +151,50 @@ class SyncTests(TempDirTestCase):
             transfer.assert_not_called()
 
     def test_adapter_protocol(self) -> None:
-        """Prüft HTTP-Ablauf, Multipart-Felder, Wiederaufnahme und Fehler bis zum Löschen."""
+        """Prüft Anlage, Archivupload, Wiederaufnahme und Fehler bis zum Löschen."""
 
-        uploading = {"auftrag_id": "auftrag", "status": "uploading"}
-        queued = uploading | {"status": "queued"}
-        succeeded = uploading | {"status": "succeeded"}
-        failed = uploading | {"status": "failed", "meldung": "M/Text-Fehler"}
+        ready = {"auftrag_id": "auftrag", "status": "ready"}
+        processing = ready | {"status": "processing"}
+        succeeded = ready | {"status": "succeeded", "ergebnis": {"geaendert": ["beispiel.xml"]}}
+        failed = ready | {"status": "failed", "meldung": "M/Text-Fehler"}
         network_error = urllib.error.URLError("Verbindung abgebrochen")
         response = MagicMock(status=200)
         response.__enter__.return_value = response
 
         def receive(request, **_kwargs) -> MagicMock:
-            """Liest den echten Multipart-Datenstrom und prüft dessen Feldzuordnung."""
+            """Prüft POST-Metadaten und liest den echten Archivdatenstrom."""
+
+            if request.get_method() == "POST":
+                payload = json.loads(request.data)
+                self.assertEqual(payload["auftragsart"], "FULL")
+                self.assertEqual(payload["archive"][0]["name"], "full.tgz")
+                self.assertEqual(payload["archive"][0]["information"]["projekt"], "LOMS_Basis")
 
             if request.get_method() == "PUT":
                 self.assertNotIsInstance(request.data, bytes)
                 body = b"".join(request.data)
                 self.assertEqual(request.get_header("Content-length"), str(len(body)))
-                self.assertIn(b'name="d_archiv"; filename="namedF.tgz"', body)
-                self.assertIn(b'name="f_archiv"; filename="full.tgz"', body)
+                self.assertEqual(request.get_header("Content-type"), "application/gzip")
+                self.assertEqual(body, b"F-Archiv")
+                self.assertTrue(request.full_url.endswith("/archive/full.tgz"))
             return response
 
         for replies, error, methods in (
-            ([uploading, uploading, queued, queued, succeeded, {"ok": True}], None,
-             ["POST", "PUT", "POST", "GET", "GET", "DELETE"]),
-            ([queued, succeeded, {"ok": True}], None, ["POST", "GET", "DELETE"]),
-            ([uploading, b""], "gültigem JSON", ["POST", "PUT"]),
-            ([uploading, uploading, {}], "keinen Auftragsstatus", ["POST", "PUT", "POST"]),
-            ([{"status": "queued"}], "Auftrags-ID", ["POST"]),
-            ([queued, queued | {"status": "unbekannt"}], "unbekannten Auftragsstatus", ["POST", "GET"]),
-            ([failed, failed, {"ok": True}], "M/Text-Fehler", ["POST", "GET", "DELETE"]),
-            ([failed, failed, network_error], "M/Text-Fehler.*Adapteraufruf", ["POST", "GET", "DELETE"]),
-            ([succeeded, succeeded, network_error], "Adapteraufruf", ["POST", "GET", "DELETE"]),
-            ([succeeded, succeeded, b""], "gültigem JSON", ["POST", "GET", "DELETE"]),
+            ([ready, processing, processing, succeeded, {"ok": True}], None,
+             ["POST", "PUT", "GET", "GET", "DELETE"]),
+            ([processing, succeeded, {"ok": True}], None, ["POST", "GET", "DELETE"]),
+            ([ready, b""], "gültigem JSON", ["POST", "PUT"]),
+            ([{"status": "ready"}], "Auftrags-ID", ["POST"]),
+            ([processing, processing | {"status": "unbekannt"}], "unbekannten Auftragsstatus", ["POST", "GET"]),
+            ([processing, failed, {"ok": True}], "M/Text-Fehler", ["POST", "GET", "DELETE"]),
+            ([processing, failed, network_error], "M/Text-Fehler.*Adapteraufruf", ["POST", "GET", "DELETE"]),
+            ([processing, succeeded, network_error], "Adapteraufruf", ["POST", "GET", "DELETE"]),
+            ([processing, succeeded, b""], "gültigem JSON", ["POST", "GET", "DELETE"]),
         ):
             response.read.side_effect = [
                 reply if isinstance(reply, (bytes, Exception)) else json.dumps(reply).encode() for reply in replies
             ]
-            packages = iter([("LOMS_Basis", self.package)])
+            artifacts = iter([("LOMS_Basis", self.artifacts)])
             with (
                 self.subTest(replies=replies),
                 patch.object(adapter.urllib.request, "urlopen", side_effect=receive) as http,
@@ -183,19 +202,17 @@ class SyncTests(TempDirTestCase):
             ):
                 outcome = self.assertRaisesRegex(DeliveryError, error) if error else nullcontext()
                 with outcome:
-                    auftrag_id = adapter.synchronize(
-                        "en", "01", kuerzel="FI", projekte=["LOMS_Basis"],
-                        packages=packages, idempotency_key="github-run-test-Entwicklung",
+                    adapter_result = adapter.synchronize(
+                        "en", "01", kuerzel="FI",
+                        artifacts=artifacts, idempotency_key="github-run-test-Entwicklung",
                     )
-                    self.assertEqual(auftrag_id, "auftrag")
+                    self.assertEqual(adapter_result["auftrag_id"], "auftrag")
+                    self.assertEqual(adapter_result["ergebnis"], succeeded["ergebnis"])
             requests = [invocation.args[0] for invocation in http.call_args_list]
             self.assertEqual([request.get_method() for request in requests], methods)
             self.assertEqual(requests[0].full_url, "https://en01.ltoma.intern/vMtextAdapter/sync")
             self.assertEqual(requests[0].get_header("Idempotency-key"), "github-run-test-Entwicklung")
             self.assertEqual(wait.call_args_list, [call(5)] if methods.count("GET") == 2 else [])
-
-            if replies[0] == queued:
-                self.assertEqual(list(packages), [("LOMS_Basis", self.package)])
 
     def test_upload_abort_closes_stream(self) -> None:
         """Prüft, dass bei einem Verbindungsabbruch auch der Upload-Datenstrom geschlossen wird."""
@@ -204,16 +221,69 @@ class SyncTests(TempDirTestCase):
             """Bricht nach dem ersten Dateiblock ab."""
 
             next(request.data)
-            next(request.data)
             raise urllib.error.URLError("Verbindung abgebrochen")
 
         with (
             patch.object(adapter.urllib.request, "urlopen", side_effect=disconnect) as http,
             self.assertRaisesRegex(DeliveryError, "Adapteraufruf") as failure,
         ):
-            adapter._upload_project("https://adapter.test/sync/auftrag", "LOMS_Basis", self.package)
+            adapter._upload_archive("https://adapter.test/sync/auftrag", self.artifacts.f_archiv)
         self.assertEqual(failure.exception.status, Status.ADAPTER_FAILED)
         self.assertEqual(list(http.call_args.args[0].data), [])
+
+    def test_delta_job_uploads_multiple_archives(self) -> None:
+        """Prüft einen DELTA-Auftrag mit Informationen und einem PUT je Archiv."""
+
+        artifacts = []
+        for project in ("LOMS_Basis", "LOMS_Autonom"):
+            information = self.root / f"{project}.json"
+            information.write_text(json.dumps({
+                "projekt": project,
+                "stand": {
+                    "von": {"referenz": "release/261", "commit": "before"},
+                    "bis": {"referenz": "release/261", "commit": "current"},
+                },
+                "elemente": [["M", "beispiel.xml"]],
+                "sha256": {"D": f"checksum-{project}"},
+            }))
+            archive = self.root / f"{project}D.tgz"
+            archive.write_bytes(project.encode())
+            artifacts.append((project, ProjectArtifacts(information, archive, None)))
+
+        ready = {"auftrag_id": "auftrag", "status": "ready"}
+        uploading = ready | {"status": "uploading"}
+        processing = ready | {"status": "processing"}
+        succeeded = ready | {"status": "succeeded", "ergebnis": "M/Text-Output"}
+        response = MagicMock(status=200)
+        response.__enter__.return_value = response
+        response.read.side_effect = [
+            json.dumps(reply).encode()
+            for reply in (ready, uploading, processing, succeeded, {"ok": True})
+        ]
+        uploaded = []
+
+        def receive(request, **_kwargs) -> MagicMock:
+            """Merkt POST-Inhalt und unveränderte Archivuploads für die Prüfung."""
+
+            if request.get_method() == "POST":
+                payload = json.loads(request.data)
+                self.assertEqual(payload["auftragsart"], "DELTA")
+                self.assertEqual(len(payload["archive"]), 2)
+            elif request.get_method() == "PUT":
+                uploaded.append((request.full_url, b"".join(request.data)))
+            return response
+
+        with patch.object(adapter.urllib.request, "urlopen", side_effect=receive) as http:
+            result = adapter.synchronize(
+                "en", "01", kuerzel="FI", artifacts=iter(artifacts),
+                idempotency_key="github-run-test-Entwicklung",
+            )
+
+        self.assertEqual(result, {"auftrag_id": "auftrag", "ergebnis": "M/Text-Output"})
+        self.assertEqual([invocation.args[0].get_method() for invocation in http.call_args_list], [
+            "POST", "PUT", "PUT", "GET", "DELETE",
+        ])
+        self.assertEqual([body for _url, body in uploaded], [b"LOMS_Basis", b"LOMS_Autonom"])
 
 
 if __name__ == "__main__":

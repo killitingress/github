@@ -144,7 +144,7 @@ def run(arguments: argparse.Namespace) -> dict[str, object]:
             f"- Liefer-Tag: `{liefer_tag}`\n"
             f"- Lieferart: `{delivery_type}`\n"
             f"- Commit: `{stand['bis']['commit']}`\n\n"
-            "Die Pakete und die zugehörige JCL wurden von FTPS und JES angenommen.\n"
+            "Die Archive und die zugehörige JCL wurden von FTPS und JES angenommen.\n"
         ),
         "draft": False,
         "prerelease": False,

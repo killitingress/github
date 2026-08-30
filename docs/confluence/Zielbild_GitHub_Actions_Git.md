@@ -97,7 +97,7 @@ Liefer-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
 | Feature-Push nach M/Text-Entwicklung | Eine Änderung kann vor dem Pull Request vom Entwickler getestet werden. Parallelentwicklungen mehrerer Entwickler werden unterstützt. |
 | Pull Request mit Squash Merge | Jeder Pull Request wird als ein fachlicher Commit in den Zielbranch übernommen und kann später Cherry-Picked werden. Review und Arbeitscommits bleiben im Pull Request sichtbar. |
 | GitHub Actions statt Jenkins | Natives Git-Feeling mit modernen Workflows in der zentralen Oberfläche in der auch das Repository liegt. |
-| Gemeinsames Lieferpaket-Format | Synchronisation und Mainframe-Lieferung verwenden das gleiche Paketformat (auf unterschiedlichen Transportwegen). |
+| Gemeinsames Format für Archive und Informationen | Synchronisation und Mainframe-Lieferung verwenden dieselben Dateiformate auf unterschiedlichen Transportwegen. |
 | Zweistufige Lieferbestätigung | Die Liefer-Workflows unterstützen den 4-Augenfall. |
 
 ## 2. Branch- und Pull-Request-Modell
@@ -227,17 +227,22 @@ Präfix und Zahlenteil bilden die Umgebungskennung, beispielsweise `en` und
 erreichbar. Der Sync-Endpunkt des Adapters wird unter
 `<Umgebungskennung>.ltoma.intern/vMtextAdapter/sync` aufgerufen.
 
-### Projektpakete und Lieferarten
+### Archive, Projektinformationen und Lieferarten
 
-Synchronisation und Mainframe-Lieferung verwenden dasselbe Paketformat. Wie im bisherigen
-Jenkins-Ablauf gibt es zwei Archivtypen. Ein F-Archiv enthält den vollständigen
-Projektbaum eines Tonic-(Fragment-)Projekts. Ein D-Archiv enthält neue und
-geänderte Dateien sowie eine Löschliste. Beide sind gzip-komprimierte
-TAR-Dateien mit der Endung `.tgz`.
+| Begriff | Bedeutung |
+|---|---|
+| Projekt | Ein M/Text-Projekt mit seinen Dateien |
+| Archiv | Eine gzip-komprimierte TAR-Datei (`.tgz`) für ein Projekt. Ein F-Archiv enthält dessen vollständigen Stand, ein D-Archiv neue und geänderte Dateien sowie eine Löschliste |
+| Synchronisationsauftrag, kurz Auftrag | Die beim Adapter gemeinsam zu verarbeitenden Archive und Informationen für ein M/Text-Ziel |
 
-| Lieferart | Inhalt | Vergleichsstand und Verwendung |
+Synchronisation und Mainframe-Lieferung verwenden dasselbe Format für Archive
+und Informationen. Bei der Synchronisation stehen die Informationen im POST,
+bei der Mainframe-Lieferung in einer Informationsdatei. Die benötigten Archive
+richten sich nach der Lieferart:
+
+| Lieferart | Archive je Projekt | Vergleichsstand und Verwendung |
 |---|---|---|
-| FULL | F-Archiv mit dem vollständigen Projektbaum und leeres D-Archiv | Ohne Vergleichsstand. Für die initiale Synchronisation eines dauerhaften Branchs, den Wechsel der produktiven Releaselinie, den manuellen Vollabgleich und Lieferungen des Hauptreleases (`.100`) |
+| FULL | F-Archiv mit dem vollständigen Projektbaum. Bei der Mainframe-Lieferung zusätzlich ein leeres D-Archiv | Ohne Vergleichsstand. Für die initiale Synchronisation eines dauerhaften Branchs, den Wechsel der produktiven Releaselinie, den manuellen Vollabgleich und Lieferungen des Hauptreleases (`.100`) |
 | DELTA | D-Archiv mit neuen und geänderten Dateien sowie einer Löschliste | Bei der Synchronisation zwischen dem letzten erfolgreichen und dem aktuellen Branchstand. Beim ersten Feature-Abgleich ab dem gemeinsamen Commit mit dem Zielbranch. Bei der Mainframe-Lieferung kumulativ zwischen dem `.100`-Tag und dem Liefer-Tag |
 
 Das F-Archiv enthält das Projektverzeichnis mit allen Dateien und ersetzt den
@@ -253,12 +258,11 @@ muss - das Format ist gegenüber dem Jenkins-Ablauf unverändert. Eine
 Umbenennung erscheint als Löschung des bisherigen und Hinzufügen des neuen
 Pfads.
 
-Eine Voll-Lieferung (FULL) besteht aus dem F-Archiv und einem leeren D-Archiv.
-Bei der Übernahme wird zuerst das F-Archiv und anschließend das leere D-Archiv
-verarbeitet. Bei der Mainframe-Übergabe ersetzt das leere D-Archiv das
-gleichnamige D-Archiv einer früheren Lieferung. Dadurch kann ein vorheriges
-DELTA den neuen FULL-Stand nicht wieder verändern. Eine Delta-Lieferung (DELTA)
-besteht aus dem D-Archiv.
+Bei der Mainframe-Übergabe wird bei FULL zuerst das F-Archiv und anschließend
+das leere D-Archiv verarbeitet. Das leere D-Archiv ersetzt das gleichnamige
+D-Archiv einer früheren Lieferung. Dadurch kann ein vorheriges DELTA den neuen
+FULL-Stand nicht wieder verändern. Für die M/Text-Synchronisation genügt bei
+FULL das F-Archiv. Bei DELTA wird das D-Archiv übertragen.
 
 Der Archivname besteht aus Mandantenkürzel, Projektcode und `F` oder `D`. Bei
 der Mainframe-Lieferung ist der Name ohne `.tgz` zugleich das Mainframe-Member.
@@ -307,9 +311,11 @@ SHA-256-Prüfsummen enthalten kann.
 ### Transport der Synchronisationsaufträge
 
 Adapter und M/Text greifen auf den gemeinsamen, per NFS eingebundenen Pfad
-`serverSync/` zu. Dort liegt der Workspace, den M/Text synchronisiert. Noch
-festzulegen ist der Transport der zuvor zusammengestellten Projektpakete und
-Informationsdateien aus GitHub Actions bis zu diesem Verarbeitungsschritt.
+`serverSync/` zu. Es enthält unmittelbar die Projektverzeichnisse aller
+Mandanten und bildet die Basis der M/Text-Synchronisation. Upload-Dateien und
+temporäre Auftragsverzeichnisse liegen außerhalb dieses Pfads. Noch
+festzulegen ist der Transport der zusammengestellten Archive und ihrer
+Informationen aus GitHub Actions bis zu diesem Verarbeitungsschritt.
 Folgende Möglichkeiten werden betrachtet:
 
 - NFS- oder CIFS-Share, das im Runner eingebunden ist
@@ -317,32 +323,59 @@ Folgende Möglichkeiten werden betrachtet:
 - Download eines GitHub-Actions-Artefakts durch LTOMA
 - ein weiterer noch festzulegender Transportweg
 
-Die aktuell präferierte Lösung ist ein HTTPS-Upload mit parallelen Uploads,
-einer FIFO-Warteschlange im Adapter und der Rückmeldung des finalen
-M/Text-Ergebnisses. Ein Auftrag fasst dabei die betroffenen Projekte eines
-Synchronisationslaufs für ein M/Text-Ziel zusammen:
+Die aktuell präferierte Lösung ist ein HTTPS-Upload. Ein
+Synchronisationsauftrag umfasst die Archive, die gemeinsam für ein M/Text-Ziel
+verarbeitet werden sollen. Der Ablauf ist:
 
-1. Der Workflow kündigt die Projekte beim Adapter an und erhält eine
-   Auftrags-ID.
-2. Für jedes Projekt sendet er einen eigenen Upload unter dieser Auftrags-ID.
-   Ein Upload enthält die JSON-Informationsdatei und beim DELTA das D-Archiv
-   als `.tgz`. Bei FULL kommen F- und D-Archiv mit. Die Dateien werden gemeinsam
-   in einem HTTP-Request übertragen.
-3. Nach allen Projektuploads schließt der Workflow den Auftrag ab. Der Adapter
-   reiht ihn in die Warteschlange ein, entpackt die Archive in einen eigenen
-   Workspace unter `serverSync/` und synchronisiert diesen mit M/Text.
-4. Der Workflow fragt den Auftragsstatus bis zum Ergebnis ab. Nach dessen
-   Auswertung lässt er den Auftragsdatensatz beim Adapter löschen.
+1. Der Workflow legt den Auftrag beim Adapter an. Er übergibt das
+   Mandantenkürzel, die Auftragsart `FULL` oder `DELTA` und die Informationen zu
+   allen Archiven einschließlich ihrer SHA-256-Prüfsummen. Ein Archiv enthält
+   ein komprimiertes Projekt. Bei `FULL` werden F-Archive angekündigt. Ein
+   leeres D-Archiv wird nicht übertragen. Bei `DELTA` werden D-Archive
+   angekündigt. Der Adapter antwortet mit der Auftragskennung und dem Status
+   `ready`.
+2. Der Workflow lädt jedes angekündigte Archiv mit einem eigenen PUT unter der
+   Auftragskennung hoch. Die URL enthält keine internen Ablagepfade. Der Adapter
+   speichert die Upload-Dateien außerhalb von `serverSync/` und antwortet
+   während des Uploads mit `uploading`. Nach jedem Upload prüft er die
+   SHA-256-Prüfsumme gegen die beim Anlegen übergebene Prüfsumme.
+3. Sobald alle angekündigten Archive vollständig und geprüft vorliegen, setzt
+   der Adapter den Auftrag auf `processing`. Ein gemeinsamer Lock verhindert,
+   dass mehrere Aufträge gleichzeitig den Projektbestand verändern oder eine
+   M/Text-Synchronisation ausführen. Ist der Lock belegt, bleibt der Auftrag im
+   Status `processing`, bis er verarbeitet werden kann.
+4. Unter dem Lock übernimmt der Adapter die Inhalte in `serverSync/`. Bei
+   `FULL` ersetzt er die betroffenen Projektverzeichnisse durch den Inhalt der
+   F-Archive. Bei `DELTA` wendet er die geänderten Dateien und Löschlisten aus
+   den D-Archiven an. `serverSync/` enthält unmittelbar die
+   Projektverzeichnisse aller Mandanten und keine Auftragsverzeichnisse. Danach
+   ruft der Adapter M/Text für diesen Bestand auf. Der Lock wird gelöst, sobald
+   M/Text beendet ist.
+5. Der Workflow fragt den Auftragsstatus ab, bis der Auftrag `succeeded` oder
+   `failed` erreicht. Der unveränderte M/Text-Output gehört zum Ergebnis und
+   wird im Workflow als informative Zusammenfassung angezeigt. Sein Inhalt
+   wird nicht automatisiert ausgewertet.
+6. Nach Auswertung des Ergebnisses sendet der Workflow DELETE. Der Adapter
+   löscht die Upload-Dateien, ein gegebenenfalls verwendetes temporäres
+   Arbeitsverzeichnis und die Auftragsdaten. Der Projektbestand in
+   `serverSync/` bleibt erhalten.
 
-Ein DELTA-Auftrag für zwei Projekte besteht damit aus zwei Projektuploads mit
-jeweils einem D-Archiv und einer JSON-Informationsdatei. Die Auftrags-ID ordnet
-beide Uploads demselben Auftrag zu.
+Eine aus Workflow-Lauf und M/Text-Ziel gebildete Idempotenzkennung sorgt dafür,
+dass ein wiederholtes Anlegen desselben Auftrags dieselbe Auftragskennung
+liefert und die Verarbeitung nicht erneut startet. Nach einem Fehler wird kein
+konsistenter Projektbestand automatisch zugesichert. Der Anwender überträgt die
+Archive als neuen Auftrag erneut. Ist inzwischen ein neuer Stand eingetroffen,
+wird ein FULL benötigt, um wieder einen sauberen Stand herzustellen.
+
+Offen ist, wie der Adapter nach einem Neustart mit unterbrochenen Aufträgen,
+einem möglicherweise noch laufenden M/Text-Prozess und zurückgebliebenen
+Upload-Dateien umgeht.
 
 ### Erfolg und Reihenfolge aufeinanderfolgender Synchronisationen
 
 Ein DELTA liefert die Änderungen seit dem letzten erfolgreichen Sync-Lauf
-desselben Branches. GitHub stellt dessen Commit bereit. Damit umfasst das
-Paket auch Änderungen zwischenzeitlich ausgefallener Läufe. Ein DELTA ohne
+desselben Branches. GitHub stellt dessen Commit bereit. Damit umfassen die
+D-Archive auch Änderungen zwischenzeitlich ausgefallener Läufe. Ein DELTA ohne
 Projektänderungen benötigt keine Übertragung.
 
 Auf `main` bestimmt der letzte erfolgreiche Push zusätzlich, ob ein
@@ -359,8 +392,8 @@ Abhängigkeiten bleiben in der Verantwortung der Benutzer.
 
 ## 4. Mainframe-Lieferung
 
-Die Mainframe-Lieferung verwendet dasselbe Paketformat wie die
-M/Text-Synchronisierung, aber einen anderen Transportweg über CodePipeline der
+Die Mainframe-Lieferung verwendet dieselben Archiv- und Informationsformate wie
+die M/Text-Synchronisierung, aber einen anderen Transportweg über CodePipeline der
 IZE9, MT91 und letztlich im Batch via LXT90#SV, Travic-Link und dem Folgejob
 `ressourcen_aktualisieren.sh`. Sie ist kein Release im Sinne des
 organisationsweiten Git-Leitfadens.
@@ -413,16 +446,16 @@ bevorzugen und eine Abweichung davon wird explizit im Laufprotokoll geloggt.
 
 In diesem zweiten Workflows soll eine explizite Vorab-Prüfung, erfolgen bevor
 der Tag freigegeben wird. Es kann so sichergestellt werden, dass das was
-mit dem Paket geliefert werden soll auch tatsächlich das ist was für das
+mit der Lieferung übergeben werden soll auch tatsächlich das ist was für das
 Release entwickelt wurde. Erst dann wird das Tag tatsächlichen auf dem Stand
 erzeugt und der Paketbau gestartet.
 
 ### Lieferung bauen und übertragen
 
-Der Shared Workflow checkt den markierten Commit aus, erzeugt je Projekt die
-in Kapitel 3 beschriebenen Projektpakete und überträgt sie per FTPS an den
-Mainframe. Die JSON-Informationsdatei wird weiterhin nicht als Mainframe-Member
-übertragen.
+Der Shared Workflow checkt den markierten Commit aus und erzeugt die in
+Kapitel 3 beschriebenen Archive und JSON-Informationsdateien. Er überträgt die
+Archive per FTPS an den Mainframe. Die Informationsdateien bleiben beim
+Lieferbericht.
 
 Wird **Lieferung ausführen** mit einem bereits vorhandenen Liefer-Tag
 gestartet, beginnt die Paketbildung und Mainframe-Übergabe für diesen Stand
@@ -574,7 +607,7 @@ mtext-actions/
       github.py
       mainframe_release.py
       process.py
-      project_package.py
+      project_artifacts.py
       lieferung.py
       resource_check.py
       sync.py
@@ -620,7 +653,7 @@ Merge nicht.
 | `shared-check-resources.yml` | Aufruf durch `check-resources.yml` | Mandantenkonfiguration und konfigurierte Ressourcen ohne Zugriff auf Zielsysteme prüfen |
 | `shared-sync-resources.yml` | Aufruf durch `sync-resources.yml` | Projekte nach M/Text übertragen |
 | `shared-lieferung-check.yml` | Aufruf durch `lieferung-vorbereiten.yml` | Liefer-Tag und Branchstand prüfen, Lieferumfang anzeigen und Vorbereitungs-Artefakt bauen |
-| `shared-lieferung-ausfuehren.yml` | Aufruf durch `lieferung-ausfuehren.yml` | Lieferstand ermitteln, eine Vorbereitung bestätigen, bei einer erstmaligen Lieferung den Tag erstellen, FULL- oder DELTA-Pakete bauen, an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
+| `shared-lieferung-ausfuehren.yml` | Aufruf durch `lieferung-ausfuehren.yml` | Lieferstand ermitteln, eine Vorbereitung bestätigen, bei einer erstmaligen Lieferung den Tag erstellen, Archive und Informationsdateien für FULL oder DELTA erzeugen, die Archive an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
 | `ci.yml` | Pull Request oder Push auf `main` oder manueller Start | Tests ausführen |
 
 Die Shared Workflows werden direkt in einen Mandantenlauf eingebunden. Die
@@ -665,10 +698,10 @@ mit dem zugehörigen Exitcode.
 | `SOURCE_FAILED` | Checkout, Commit, Branch oder Tag können nicht als Quelle verwendet werden | `3` |
 | `ADAPTER_FAILED` | Adapteraufruf oder M/Text-Synchronisation sind fehlgeschlagen | `6` |
 | `ADAPTER_COMPLETED` | Der M/Text-Adapter hat die Synchronisation erfolgreich abgeschlossen | – |
-| `PACKAGE_FAILED` | Projektpaket, Informationsdatei oder JCL konnten nicht erstellt oder verwendet werden | `4` |
-| `ARTIFACT_READY` | Projektpakete, Informationsdateien und JCL wurden erstellt | – |
+| `PACKAGE_FAILED` | Archiv, Informationsdatei oder JCL konnten nicht erstellt oder verwendet werden | `4` |
+| `ARTIFACT_READY` | Archive, Informationsdateien und JCL wurden erstellt | – |
 | `MAINFRAME_TRANSFER_FAILED` | Die FTPS- oder JES-Übergabe ist fehlgeschlagen | `7` |
-| `MAINFRAME_SUBMITTED` | Paket und JCL wurden per FTPS und JES übergeben | – |
+| `MAINFRAME_SUBMITTED` | Archive und JCL wurden per FTPS und JES übergeben | – |
 | `GITHUB_RELEASE_FAILED` | Das GitHub Release oder seine Informationsdateien konnten nicht bereitgestellt werden | `8` |
 | `GITHUB_RELEASE_PUBLISHED` | Zusammenfassung und Informationsdateien stehen im Mandanten-Repository bereit | – |
 

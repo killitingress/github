@@ -1,9 +1,9 @@
-"""Erzeugt das gemeinsame M/Text-Projektpaket für Sync und Release.
+"""Erzeugt Archive und Projektinformationen für Sync und Release.
 
-Ein Projektpaket besteht aus einem F- oder D-Archiv und einer danebenliegenden
-JSON-Informationsdatei. FULL-Lieferungen erhalten zusätzlich ein leeres
-D-Archiv. Die Löschliste und die JSON-Elementliste entstehen aus derselben
-ermittelten Änderungsmenge.
+Zu jedem Projekt entstehen ein F- oder D-Archiv und eine danebenliegende
+JSON-Informationsdatei. FULL-Lieferungen an den Mainframe erhalten zusätzlich
+ein leeres D-Archiv. Die Löschliste und die JSON-Elementliste entstehen aus
+derselben ermittelten Änderungsmenge.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from .process import DeliveryError, Status
 INFORMATION_NAME = "_INFO_{kuerzel}-{project}.json"
 
 # Beim Prüfsummenvergleich werden Archive blockweise gelesen, damit auch große
-# FULL-Pakete keinen entsprechend großen Arbeitsspeicher benötigen.
+# F-Archive keinen entsprechend großen Arbeitsspeicher benötigen.
 _HASH_BLOCK_SIZE = 1024 * 1024
 
 # Zwischenrelease `100` bezeichnet das Hauptrelease und wird als FULL geliefert.
@@ -36,7 +36,7 @@ _FULL_RELEASE = "100"
 
 
 @dataclass(frozen=True)
-class PackageStand:
+class ChangeStand:
     """Bezugsstand, Zielstand und Git-Änderungen für Sync und Release."""
 
     von: tuple[str, str] | None
@@ -45,13 +45,13 @@ class PackageStand:
 
 
 @dataclass(frozen=True)
-class ProjectPackage:
-    """Erzeugtes Projektpaket mit Informationsdatei und Archiven."""
+class ProjectArtifacts:
+    """Hält die erzeugte Informationsdatei und die Archive eines Projekts."""
 
     # JSON mit Stand, Elementliste und Prüfsummen
     information: Path
-    # D-Archiv mit Änderungen und Löschliste, bei FULL ohne Änderungen
-    d_archiv: Path
+    # D-Archiv mit Änderungen und Löschliste, bei Sync-FULL nicht vorhanden
+    d_archiv: Path | None
     # Vollständiger Projektbaum eines FULL, bei DELTA nicht vorhanden
     f_archiv: Path | None
 
@@ -89,7 +89,7 @@ def project_elements(
     base: tuple[str, str] | None,
     changes: Iterable[git.GitChange],
 ) -> list[list[str]]:
-    """Ermittelt die projektbezogene Elementliste für Paket und Vorprüfung.
+    """Ermittelt die projektbezogene Elementliste für Archive und Vorprüfung.
 
     Ein fehlender Bezugsstand bezeichnet ein FULL mit allen Dateien als
     hinzugefügt. Andernfalls übernimmt ein DELTA Status und Pfade aus dem
@@ -124,7 +124,7 @@ def _write_archive(archive_path: Path, source_directory: Path, entries: Iterable
             stderr=subprocess.PIPE,
         )
     except (OSError, subprocess.CalledProcessError) as exc:
-        raise DeliveryError(Status.PACKAGE_FAILED, "Projektarchiv kann nicht erzeugt werden") from exc
+        raise DeliveryError(Status.PACKAGE_FAILED, "Archiv kann nicht erzeugt werden") from exc
 
 
 def _write_delta_archive(
@@ -174,35 +174,36 @@ def _sha256(path: Path) -> str:
 
     digest = hashlib.sha256()
     try:
-        with path.open("rb") as package:
-            while block := package.read(_HASH_BLOCK_SIZE):
+        with path.open("rb") as archive_file:
+            while block := archive_file.read(_HASH_BLOCK_SIZE):
                 digest.update(block)
     except OSError as exc:
-        raise DeliveryError(Status.PACKAGE_FAILED, "Projektarchiv kann nicht geprüft werden") from exc
+        raise DeliveryError(Status.PACKAGE_FAILED, "Archiv kann nicht geprüft werden") from exc
     return digest.hexdigest()
 
 
-# Gemeinsame Paketerzeugung für Sync und Release.
-def build_project_package(
+# Gemeinsame Erzeugung der Archive und Informationen für Sync und Release.
+def build_project_artifacts(
     configuration: Configuration,
     *,
     repository_root: Path,
     output_directory: Path,
     project: str,
-    stand: PackageStand,
-) -> ProjectPackage:
+    stand: ChangeStand,
+    include_empty_delta: bool,
+) -> ProjectArtifacts:
     """Erzeugt Archive und JSON-Informationsdatei für ein Projekt.
 
-    Sync und Release verwenden dasselbe Paketformat. `stand` beschreibt den
-    Vergleichsrahmen: Bei FULL entfällt `stand.von`, bei DELTA liefert
-    `stand.changes` die gemeinsame Elementliste für Archiv, Löschliste und
-    Informationsdatei.
+    `stand` beschreibt den Vergleichsrahmen: Bei FULL entfällt `stand.von`, bei
+    DELTA liefert `stand.changes` die gemeinsame Elementliste für Archiv,
+    Löschliste und Informationsdatei. `include_empty_delta` ergänzt das leere
+    D-Archiv, das ein Mainframe-FULL benötigt.
     """
 
     try:
         output_directory.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise DeliveryError(Status.PACKAGE_FAILED, "Paketausgabeverzeichnis kann nicht erstellt werden") from exc
+        raise DeliveryError(Status.PACKAGE_FAILED, "Ausgabeverzeichnis kann nicht erstellt werden") from exc
 
     # Gemeinsame Elementliste für Archiv, Löschliste und Informationsdatei.
     elements = project_elements(repository_root, project, base=stand.von, changes=stand.changes)
@@ -213,15 +214,17 @@ def build_project_package(
         full_archive = output_directory / f"{prefix}F.tgz"
         _write_archive(full_archive, repository_root, [f"./{project}"])
 
-    # D-Archiv entsteht immer. Bei FULL bleibt die Änderungsmenge leer.
-    delta_archive = output_directory / f"{prefix}D.tgz"
-    _write_delta_archive(
-        delta_archive,
-        repository_root,
-        project,
-        f"{prefix}D.txt",
-        [] if stand.von is None else elements,
-    )
+    delta_archive = None
+    if stand.von is not None or include_empty_delta:
+        # Mainframe-FULL benötigt ein leeres D-Archiv, die Synchronisation nicht.
+        delta_archive = output_directory / f"{prefix}D.tgz"
+        _write_delta_archive(
+            delta_archive,
+            repository_root,
+            project,
+            f"{prefix}D.txt",
+            [] if stand.von is None else elements,
+        )
 
     # Stand, Prüfsummen und Elementliste in der Informationsdatei ablegen.
     stand_json: dict[str, object] = {
@@ -230,7 +233,9 @@ def build_project_package(
     if stand.von is not None:
         stand_json["von"] = {"referenz": stand.von[0], "commit": stand.von[1]}
 
-    checksums = {"D": _sha256(delta_archive)}
+    checksums = {}
+    if delta_archive is not None:
+        checksums["D"] = _sha256(delta_archive)
     if full_archive is not None:
         checksums["F"] = _sha256(full_archive)
 
@@ -253,4 +258,4 @@ def build_project_package(
     except OSError as exc:
         raise DeliveryError(Status.PACKAGE_FAILED, "Informationsdatei kann nicht geschrieben werden") from exc
 
-    return ProjectPackage(information=information, d_archiv=delta_archive, f_archiv=full_archive)
+    return ProjectArtifacts(information=information, d_archiv=delta_archive, f_archiv=full_archive)

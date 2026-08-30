@@ -111,7 +111,7 @@ jobs:
           "$AUTOMATION_PATH/src/mtext.py" delivery tag
           --tag "$LIEFER_TAG"
 
-  # Erstellt die Pakete mit ihrer JCL und den JSON-Informationsdateien.
+  # Erstellt die Projektpakete mit JCL und JSON-Informationsdateien.
   build:
     name: FULL- oder DELTA-Artefakt erstellen
     needs: [check, tag]
@@ -184,7 +184,7 @@ jobs:
           name: release
           path: ${{ runner.temp }}/release
 
-      # Überträgt jedes Paket per FTPS und reicht seine JCL bei JES ein.
+      # Überträgt jedes Archiv per FTPS und reicht seine JCL bei JES ein.
       - name: Lieferung an Mainframe übergeben
         env:
           AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}

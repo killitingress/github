@@ -20,7 +20,7 @@ from .config import (
     workflow_workspace,
 )
 from .process import DeliveryError, Status
-from .project_package import _FULL_RELEASE, project_elements, release_scope
+from .project_artifacts import _FULL_RELEASE, project_elements, release_scope
 
 
 # Das Artefakt das während der Vorbereitung erzeugt wird

@@ -4,8 +4,8 @@ name: Shared Workflow – Ressourcen mit M/Text synchronisieren
 # Mandanten-Repositories mit M/Text. Er lädt den Mandantenstand mit seiner
 # Historie und die freigegebene Implementierung aus mtext_actions. Der Python-Ablauf
 # bestimmt aus Branch und Ereignis Releaselinie, Zielstufen und den
-# Änderungsumfang, lädt die Projektpakete zum Adapter und wartet auf das
-# Ergebnis der M/Text-Synchronisation.
+# Änderungsumfang, übergibt Informationen und Archive an den Adapter und wartet
+# auf das Ergebnis der M/Text-Synchronisation.
 'on':
   workflow_call:
 
@@ -18,7 +18,7 @@ jobs:
   sync:
     name: Ressourcen mit M/Text synchronisieren
     runs-on: [self-hosted, linux]
-    # Begrenzt Upload, Warteschlange und Verarbeitung gemeinsam, falls der
+    # Begrenzt Upload, Lock-Wartezeit und Verarbeitung gemeinsam, falls der
     # Adapter keinen Endstatus liefert.
     timeout-minutes: 30
     steps:
@@ -31,7 +31,7 @@ jobs:
           persist-credentials: false
 
       # Lädt die gemeinsame Implementierung und prüft die Python-Runtime des
-      # Runners, bevor Ziel und Pakete bestimmt werden.
+      # Runners, bevor Ziel und Projektpakete bestimmt werden.
       - name: M/Text-Automatisierung laden
         id: automation
         uses: FI_Actions/fi_lbs_entw_oms_mtext_actions@main

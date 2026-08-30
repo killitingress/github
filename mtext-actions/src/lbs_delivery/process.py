@@ -29,15 +29,15 @@ class Status(str, Enum):
     LIEFERUNG_TAGGED = "LIEFERUNG_TAGGED"
     # Checkout, Commit, Branch oder Tag sind nicht als Quelle verwendbar.
     SOURCE_FAILED = "SOURCE_FAILED"
-    # Ein Paket, eine JCL oder eine lokale Lieferdatei ist nicht verwendbar.
+    # Ein Archiv, eine Informationsdatei oder eine JCL ist nicht verwendbar.
     PACKAGE_FAILED = "PACKAGE_FAILED"
-    # Pakete, JCL-Dateien und Informationsdateien wurden erstellt.
+    # Archive, Informationsdateien und JCL-Dateien wurden erstellt.
     ARTIFACT_READY = "ARTIFACT_READY"
     # Der Adapter hat die M/Text-Synchronisation erfolgreich abgeschlossen.
     ADAPTER_COMPLETED = "ADAPTER_COMPLETED"
     # Adapteraufruf oder HTTP-Antwort sind fehlgeschlagen.
     ADAPTER_FAILED = "ADAPTER_FAILED"
-    # FTPS und JES haben Paket und JCL angenommen.
+    # FTPS und JES haben Archive und JCL angenommen.
     MAINFRAME_SUBMITTED = "MAINFRAME_SUBMITTED"
     # FTPS-Verbindung, Paketübertragung oder JES-Übergabe sind fehlgeschlagen.
     MAINFRAME_TRANSFER_FAILED = "MAINFRAME_TRANSFER_FAILED"
