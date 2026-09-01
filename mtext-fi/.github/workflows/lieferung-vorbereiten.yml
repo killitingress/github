@@ -22,6 +22,6 @@ jobs:
   # Startet den Shared Workflow für den ausgewählten Branchstand
   vorpruefen:
     name: Lieferung vorprüfen
-    uses: FI_Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-check.yml@main
+    uses: FI-Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-check.yml@main
     with:
       liefer_tag: ${{ inputs.liefer_tag }}

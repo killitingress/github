@@ -30,4 +30,4 @@ jobs:
   # Der Shared Workflow führt die Synchronisierung aus
   sync:
     name: Ressourcen mit M/Text synchronisieren
-    uses: FI_Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-sync-resources.yml@main
+    uses: FI-Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-sync-resources.yml@main

@@ -6,7 +6,6 @@ damit die Workflows einen gemeinsamen Weg zu GitHub verwenden.
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import urllib.error
@@ -43,7 +42,7 @@ def request(
     Aufrufer festgelegten Status.
     """
 
-    # Request-Body und Header für JSON oder Binärupload aufbauen.
+    # JSON oder Binärinhalt in den gemeinsamen GitHub-Request übernehmen
     body = json.dumps(payload).encode() if payload is not None else content
     headers = {
         "Accept": _JSON_MEDIA_TYPE,
@@ -55,35 +54,35 @@ def request(
     elif content_type is not None:
         headers["Content-Type"] = content_type
 
-    # Anfrage erstellen und ausführen
+    # authentifizierte Anfrage mit festem API-Format erstellen
     http_request = urllib.request.Request(url, data=body, headers=headers, method=method)
+
+    # Antwort lesen und GitHub-Fehler in den Status des Aufrufers übersetzen
     try:
-        # Antwort lesen
         with urllib.request.urlopen(http_request, timeout=NETWORK_TIMEOUT) as response:
-            response_body = response.read()
+            body = response.read()
     except urllib.error.HTTPError as ex:
-        # Fehlende Ressourcen darf der Aufrufer als leeres Ergebnis behandeln.
-        if missing_ok and ex.code == 404:
-            return None
+        with ex:
+            # fehlende Ressourcen darf der Aufrufer als leeres Ergebnis behandeln
+            if missing_ok and ex.code == 404:
+                return None
 
-        # Fehlermeldung auslesen
-        try:
-            message = json.loads(ex.read()).get("message")
-        except (UnicodeError, json.JSONDecodeError, AttributeError, TypeError):
-            message = None
-
-        suffix = f": {message}" if isinstance(message, str) and message else ""
-        raise DeliveryError(failure, f"GitHub antwortet mit HTTP {ex.code}{suffix}") from ex
+            # technische GitHub-Meldung für die Workflow-Diagnose erhalten
+            try:
+                detail = json.loads(ex.read())["message"]
+            except (UnicodeError, json.JSONDecodeError, KeyError, TypeError):
+                detail = ex.reason
+            raise DeliveryError(failure, f"GitHub antwortet mit HTTP {ex.code}: {detail}") from ex
     except (urllib.error.URLError, TimeoutError) as ex:
-        raise DeliveryError(failure, "GitHub ist nicht erreichbar") from ex
+        raise DeliveryError(failure, f"GitHub ist nicht erreichbar: {ex}") from ex
 
-    # Leere Antworten sind zulässig, ansonsten muss der Body gültiges JSON sein
-    if not response_body:
+    # leere Antwort oder geparstes JSON an den fachlichen Aufrufer zurückgeben
+    if not body:
         return None
     try:
-        return json.loads(response_body)
+        return json.loads(body)
     except (UnicodeError, json.JSONDecodeError) as ex:
-        raise DeliveryError(failure, "GitHub-Antwort ist ungültig") from ex
+        raise DeliveryError(failure, f"GitHub-Antwort ist ungültig: {ex}") from ex
 
 
 def last_sync_commit(*, event: str | None = None) -> str | None:
@@ -92,7 +91,7 @@ def last_sync_commit(*, event: str | None = None) -> str | None:
     GitHub speichert den zum Lauf gehörenden Branchstand als `head_sha`.
     Die Abfrage dient als Vergleichsstand für das nächste DELTA. Beim Wechsel
     der Releaselinie auf main wird zusätzlich der erfolgreiche Push-Lauf
-    benötigt, weil ein manueller Abgleich eine einzelne Zielstufe bedient.
+    benötigt, weil ein manueller Abgleich eine einzelne Umgebung bedient.
     """
 
     repository = urllib.parse.quote(os.environ["GITHUB_REPOSITORY"])
@@ -102,102 +101,99 @@ def last_sync_commit(*, event: str | None = None) -> str | None:
         parameters["event"] = event
 
     query = urllib.parse.urlencode(parameters)
-    document = request(
-        method="GET",
-        url=f"{actions_url}/workflows/sync-resources.yml/runs?{query}",
-        token=os.environ["GITHUB_TOKEN"],
-        failure=Status.SOURCE_FAILED,
-    )
+    url = f"{actions_url}/workflows/sync-resources.yml/runs?{query}"
+    document = request(method="GET", url=url, token=os.environ["GITHUB_TOKEN"], failure=Status.SOURCE_FAILED)
     runs = document["workflow_runs"]
     return runs[0]["head_sha"] if runs else None
 
 
-def run(arguments: argparse.Namespace) -> dict[str, object]:
-    """Veröffentlicht den Lieferbericht und die Informationsdateien aus dem Artefakt.
+def _replace_information_files(
+    information_files: list[Path],
+    assets: dict[str, int],
+    releases_url: str,
+    upload_url: str,
+    token: str,
+) -> None:
+    """Ersetzt die Informationsdateien eines GitHub Releases.
+
+    GitHub kann den Inhalt eines Release-Anhangs nicht per PATCH ändern.
+    Gleichnamige Dateien werden deshalb gelöscht und anschließend neu hochgeladen.
+    """
+
+    for information in information_files:
+        # Datei erst unmittelbar vor ihrem Upload aus dem Release-Verzeichnis lesen
+        try:
+            content = information.read_bytes()
+        except OSError as exc:
+            raise DeliveryError(Status.GITHUB_RELEASE_FAILED, f"Informationsdatei kann nicht gelesen werden: {information.name}: {exc}") from exc
+
+        # vorhandenen Anhang entfernen, damit GitHub denselben Namen erneut annimmt
+        if (asset_id := assets.get(information.name)) is not None:
+            url = f"{releases_url}/assets/{asset_id}"
+            request(method="DELETE", url=url, token=token, failure=Status.GITHUB_RELEASE_FAILED)
+
+        # unveränderte JSON-Datei unter ihrem bisherigen Namen neu hochladen
+        url = f"{upload_url}?{urllib.parse.urlencode({'name': information.name})}"
+        request(method="POST", url=url, token=token, failure=Status.GITHUB_RELEASE_FAILED, content=content, content_type="application/json")
+
+
+def run(tag: str) -> dict[str, object]:
+    """Veröffentlicht den Lieferbericht und die erzeugten Informationsdateien.
 
     Ein vorhandenes Release wird aktualisiert. Gleichnamige, hier erzeugte
     Informationsdateien werden dabei ersetzt.
     """
 
+    # GitHub-Ziel und erzeugte Informationsdateien des Releasebaus bestimmen
     repository = os.environ["GITHUB_REPOSITORY"]
-    liefer_tag = arguments.tag
     token = os.environ["GITHUB_TOKEN"]
     releases_url = f"{os.environ['GITHUB_API_URL'].rstrip('/')}/repos/{urllib.parse.quote(repository)}/releases"
     information_files = sorted((Path(os.environ["RUNNER_TEMP"]) / "release").glob("_INFO_*.json"))
     if not information_files:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien fehlen")
 
-    # Der Paketbau schreibt denselben Lieferstand in die Informationsdateien
-    # aller Projekte. Die erste Datei liefert die Angaben für den Bericht.
+    # gemeinsamen Scope aus der ersten projektbezogenen Informationsdatei lesen
     try:
-        stand = json.loads(information_files[0].read_text(encoding="utf-8"))["stand"]
+        scope = json.loads(information_files[0].read_text(encoding="utf-8"))["scope"]
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdatei kann nicht gelesen werden") from exc
-    delivery_type = "DELTA" if "von" in stand else "FULL"
+        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, f"Informationsdatei kann nicht gelesen werden: {information_files[0].name}: {exc}") from exc
+    delivery_type = "DELTA" if "von" in scope else "FULL"
 
-    # GitHub zeigt die hochgeladenen Informationsdateien als Release-Anhänge an.
+    # sichtbaren Lieferbericht aus Tag, Lieferart und Ziel-Commit aufbauen
     release_values = {
-        "tag_name": liefer_tag,
-        "name": f"Release {liefer_tag}",
+        "tag_name": tag,
+        "name": f"Release {tag}",
         "body": (
             "## Lieferung\n\n"
-            f"- Liefer-Tag: `{liefer_tag}`\n"
+            f"- Liefer-Tag: `{tag}`\n"
             f"- Lieferart: `{delivery_type}`\n"
-            f"- Commit: `{stand['bis']['commit']}`\n\n"
+            f"- Commit: `{scope['bis']['commit']}`\n\n"
             "Die Archive und die zugehörige JCL wurden von FTPS und JES angenommen.\n"
         ),
         "draft": False,
         "prerelease": False,
     }
 
-    # Vorhandenes Release aktualisieren, sonst neu anlegen.
-    release = request(
-        method="GET",
-        url=f"{releases_url}/tags/{urllib.parse.quote(liefer_tag, safe='')}",
-        token=token,
-        failure=Status.GITHUB_RELEASE_FAILED,
-        missing_ok=True,
-    )
-    assets = {asset["name"]: asset["id"] for asset in release["assets"]} if release is not None else {}
-    release = request(
-        method="POST" if release is None else "PATCH",
-        url=releases_url if release is None else f"{releases_url}/{release['id']}",
-        token=token,
-        failure=Status.GITHUB_RELEASE_FAILED,
-        payload=release_values,
-    )
-    # GitHub liefert eine URI-Vorlage mit dem Suffix `{?name,label}`. Den
-    # eigentlichen Query-String für den Dateinamen setzen wir beim Upload selbst.
+    # vorhandenes Release samt Anhängen lesen oder ein neues Release vorbereiten
+    url = f"{releases_url}/tags/{urllib.parse.quote(tag, safe='')}"
+    release = request(method="GET", url=url, token=token, failure=Status.GITHUB_RELEASE_FAILED, missing_ok=True)
+    assets = {e["name"]: e["id"] for e in release["assets"]} if release is not None else {}
+
+    # Lieferbericht durch Anlegen oder Aktualisieren veröffentlichen
+    url = releases_url if release is None else f"{releases_url}/{release['id']}"
+    method = "POST" if release is None else "PATCH"
+    release = request(method=method, url=url, token=token, failure=Status.GITHUB_RELEASE_FAILED, payload=release_values)
+
+    # URI-Vorlage auf den Upload-Endpunkt ohne GitHub-Platzhalter reduzieren
     upload_url = release["upload_url"].split("{", 1)[0]
 
-    # Informationsdateien als Release-Anhänge hochladen. PATCH auf Assets ändert nur
-    # Name und Label, nicht den Dateiinhalt. Gleichnamige Anhänge lehnt GitHub beim
-    # Upload ab, deshalb ersetzen wir sie bei einem Wiederanlauf per DELETE und POST.
-    for information in information_files:
-        try:
-            content = information.read_bytes()
-        except OSError as exc:
-            raise DeliveryError(
-                Status.GITHUB_RELEASE_FAILED, f"Informationsdatei kann nicht gelesen werden: {information.name}"
-            ) from exc
+    # Informationsdateien hochladen und gleichnamige Anhänge vorher ersetzen
+    _replace_information_files(information_files, assets, releases_url, upload_url, token)
 
-        if (asset_id := assets.get(information.name)) is not None:
-            request(
-                method="DELETE", url=f"{releases_url}/assets/{asset_id}", token=token, failure=Status.GITHUB_RELEASE_FAILED
-            )
-
-        request(
-            method="POST",
-            url=f"{upload_url}?{urllib.parse.urlencode({'name': information.name})}",
-            token=token,
-            failure=Status.GITHUB_RELEASE_FAILED,
-            content=content,
-            content_type="application/json",
-        )
-
+    # veröffentlichte Release-Adresse an den Workflow zurückgeben
     return {
         "status": Status.GITHUB_RELEASE_PUBLISHED.value,
         "repository": repository,
-        "liefer_tag": liefer_tag,
+        "liefer_tag": tag,
         "release_url": release["html_url"],
     }

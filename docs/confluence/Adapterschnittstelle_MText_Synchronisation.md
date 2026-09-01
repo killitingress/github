@@ -1,6 +1,6 @@
-# Technischer Vertrag des M/Text-Adapters
+# Technische Schnittstelle des M/Text-Adapters
 
-Diese Seite ist die Implementierungsgrundlage für den HTTPS-Client in
+Diese Seite ist die Implementierungsgrundlage für den HTTP-Client in
 `mtext_actions` und den M/Text-Adapter. Sie legt das HTTP-Protokoll, die
 Validierung, das Zustandsmodell, die Verarbeitung und das Verhalten bei
 Wiederholungen und Fehlern fest.
@@ -13,7 +13,7 @@ beschriebene Verhalten einhalten.
 Das Format der Projektinformationen sowie die Bedeutung von `FULL`, `DELTA`,
 F-Archiv und D-Archiv sind im
 [Zielbild](Zielbild_GitHub_Actions_Git.md#archive-projektinformationen-und-lieferarten)
-definiert. Dieser Vertrag übernimmt die Felder, die der Adapter für Prüfung und
+definiert. Diese Schnittstelle übernimmt die Felder, die der Adapter für Prüfung und
 Zuordnung benötigt. Er beschreibt keine Entscheidung darüber, wann ein FULL
 oder DELTA erstellt wird.
 
@@ -32,22 +32,22 @@ Der Adapter übernimmt folgende Aufgaben:
 - Idempotency-Key, Auftragsdaten und Uploads einander zuordnen
 - Archive streamend empfangen und vor der Verarbeitung prüfen
 - die Verarbeitung eines vollständigen Auftrags einmal starten
-- Änderungen am gemeinsamen Projektbestand und den M/Text-Aufruf
+- Änderungen am Projektbestand und den M/Text-Aufruf je Mandantenkürzel
   serialisieren
 - Status, Ergebnis und Fehlermeldung bis zum DELETE bereitstellen
 
 Der Client sendet keinen anwendungsspezifischen Authentifizierungsheader. Der
-Zugriffsschutz der HTTPS-Verbindung ist eine Vorgabe der LTOMA-Umgebung und
-nicht Bestandteil dieser Anwendungsschnittstelle.
+netzseitige Zugriffsschutz des HTTP-Endpunkts ist noch mit der LTOMA-Umgebung
+festzulegen und nicht Bestandteil dieser Anwendungsschnittstelle.
 
 ## Basis-URL
 
 ```text
-https://<Umgebungskennung>.ltoma.intern/vMtextAdapter/sync
+http://<Umgebungskennung>.ltoma.intern/vMtextAdapter/sync
 ```
 
-`mtext_actions` bestimmt die Umgebungskennung aus der Zielstufe und der
-ETAPS-Linie. Eine Adapterinstanz verarbeitet ein M/Text-Ziel. Der Pfad
+`mtext_actions` bestimmt die Umgebungskennung aus der M/Text-Umgebung und der
+ETAPS-Linie. Eine Adapterinstanz verarbeitet eine M/Text-Umgebung. Der Pfad
 `serverSync/` und die M/Text-Verbindung gehören deshalb zur Konfiguration
 dieser Instanz und werden nicht im Request übergeben.
 
@@ -69,7 +69,7 @@ dieser Instanz und werden nicht im Request übergeben.
   außerhalb der HTTP-Requests und unterliegt diesem Socket-Timeout nicht.
 - Eine Adapterantwort darf höchstens 1 MiB groß sein. Der Client behandelt
   größere oder unvollständige Antworten als ungültig.
-- Der Vertrag legt keine feste Obergrenze für Metadaten oder Archivuploads
+- Die Schnittstelle legt keine feste Obergrenze für Metadaten oder Archivuploads
   fest. Der Server darf Archive deshalb nicht vollständig im Arbeitsspeicher
   puffern. Betriebliche HTTP-Limits müssen die erzeugten Aufträge zulassen.
 - Der Client akzeptiert bei erfolgreicher Kommunikation jeden 2xx-Status,
@@ -120,7 +120,7 @@ Content-Type: application/json
       "name": "FIBASISF.tgz",
       "information": {
         "projekt": "LOMS_Basis",
-        "stand": {
+        "scope": {
           "bis": {
             "referenz": "release/261",
             "commit": "0123456789abcdef0123456789abcdef01234567"
@@ -163,13 +163,13 @@ keinen internen Ablagepfad ab.
 | Feld | Typ | Vorkommen |
 |---|---|---|
 | `projekt` | String | immer |
-| `stand` | Objekt | immer |
-| `stand.von` | Objekt | bei `DELTA` |
-| `stand.von.referenz` | String | bei `DELTA` |
-| `stand.von.commit` | String | bei `DELTA` |
-| `stand.bis` | Objekt | immer |
-| `stand.bis.referenz` | String | immer |
-| `stand.bis.commit` | String | immer |
+| `scope` | Objekt | immer |
+| `scope.von` | Objekt | bei `DELTA` |
+| `scope.von.referenz` | String | bei `DELTA` |
+| `scope.von.commit` | String | bei `DELTA` |
+| `scope.bis` | Objekt | immer |
+| `scope.bis.referenz` | String | immer |
+| `scope.bis.commit` | String | immer |
 | `elemente` | Array | immer, darf leer sein |
 | `elemente[]` | Array aus Status und Pfad | je enthaltenem Element |
 | `sha256` | Objekt | immer |
@@ -184,13 +184,13 @@ vor.
 
 Für `FULL` gelten folgende technische Zuordnungen:
 
-- `stand.von` fehlt
+- `scope.von` fehlt
 - `sha256` enthält `F`
 - der angekündigte Name bezeichnet das F-Archiv
 
 Für `DELTA` gelten folgende technische Zuordnungen:
 
-- `stand.von` ist vorhanden
+- `scope.von` ist vorhanden
 - `sha256` enthält `D`
 - der angekündigte Name bezeichnet das D-Archiv
 
@@ -238,7 +238,7 @@ mit HTTP 200 und dem aktuellen Auftrag. Bei einer Abweichung antwortet er mit
 HTTP 409. Der Idempotency-Key wird als undurchsichtiger String behandelt. Seine
 Zusammensetzung wird vom Client bestimmt und vom Adapter nicht ausgewertet.
 
-Der Vergleich erfolgt auf den deserialisierten, in diesem Vertrag definierten
+Der Vergleich erfolgt auf den deserialisierten, in dieser Schnittstelle definierten
 Feldern. Die Reihenfolge von JSON-Objektfeldern ist ohne Bedeutung. Die
 Reihenfolge der Einträge in `archive` und `elemente` bleibt Bestandteil des
 Requests. Unbekannte Felder gehen nicht in den Vergleich ein.
@@ -299,7 +299,7 @@ Datei wird entfernt.
 ### Archivinhaltsprüfung
 
 Nach dem Wechsel zu `processing` prüft der Adapter alle Archive außerhalb des
-Upload-Requests. Vor Abschluss dieser Prüfung erwirbt er den gemeinsamen Lock
+Upload-Requests. Vor Abschluss dieser Prüfung erwirbt er den Lock des Mandanten
 nicht und verändert `serverSync/` nicht:
 
 1. Die Datei ist ein lesbares gzip-komprimiertes TAR-Archiv.
@@ -387,7 +387,7 @@ Beispiel eines fehlgeschlagenen Auftrags:
 ```
 
 `ergebnis` wird als JSON-Wert übertragen. Sein Inhalt ist kein Bestandteil
-dieses Vertrags.
+dieser Schnittstelle.
 
 ## Statusmodell
 
@@ -417,9 +417,9 @@ derselben Synchronisationsgrenze wie die Auftragsdaten:
 4. Parallele oder wiederholte PUT-Requests sehen danach `processing` und dürfen
    keinen weiteren Verarbeitungslauf starten.
 
-Der Status `processing` umfasst Archivinhaltsprüfung, Warten auf die gemeinsame
-Synchronisationsgrenze und die eigentliche Verarbeitung. Ein zusätzlicher
-Status für die Warteschlange ist nicht Teil des Vertrags.
+Der Status `processing` umfasst Archivinhaltsprüfung, Warten auf den Lock des
+Mandanten und die eigentliche Verarbeitung. Ein zusätzlicher
+Status für die Warteschlange ist nicht Teil der Schnittstelle.
 
 ## Verarbeitung auf dem Adapter
 
@@ -428,16 +428,22 @@ des letzten PUT außerhalb des HTTP-Request-Threads. Ein Executor oder ein
 gleichwertiger Mechanismus darf den Start verzögern. Die Statusabfrage bleibt
 währenddessen erreichbar.
 
-### Gemeinsame Synchronisationsgrenze
+### Mandantenbezogene Synchronisationsgrenze
 
-Pro M/Text-Ziel darf ein Auftrag gleichzeitig den Projektbestand verändern
-oder M/Text aufrufen. Die gemeinsame Synchronisationsgrenze beginnt vor der
-ersten Änderung an `serverSync/` und endet nach dem M/Text-Aufruf einschließlich
-der Cache-Aktualisierung.
+Pro Mandantenkürzel und konkreter M/Text-Umgebung darf ein Auftrag gleichzeitig
+den Projektbestand verändern oder M/Text aufrufen. Die Synchronisationsgrenze
+beginnt vor der ersten Änderung an `serverSync/` und endet nach dem M/Text-Aufruf
+einschließlich der Cache-Aktualisierung.
 
-Eine einzelne Adapterinstanz kann dafür einen Prozess-Lock verwenden. Bei
-mehreren Instanzen müssen Auftragsdaten, Idempotenzzuordnung und Lock zwischen
-den Instanzen gemeinsam wirken. Alternativ wird pro M/Text-Ziel eine
+Die Projektverzeichnisse verschiedener Mandanten sind disjunkt. Aufträge mit
+unterschiedlichen Mandantenkürzeln dürfen daher innerhalb derselben M/Text-Umgebung
+parallel verarbeitet werden. Aufträge desselben Mandanten werden auch dann
+nacheinander verarbeitet, wenn sie aus unterschiedlichen Branches stammen.
+
+Eine einzelne Adapterinstanz kann dafür je Mandantenkürzel einen Prozess-Lock
+verwenden. Verarbeiten mehrere Adapterinstanzen dieselbe M/Text-Umgebung, müssen
+Auftragsdaten, Idempotenzzuordnung und die nach Mandantenkürzel unterschiedenen
+Locks zwischen ihnen gemeinsam wirken. Alternativ wird pro M/Text-Umgebung eine
 Adapterinstanz betrieben.
 
 ### Übernahme nach `serverSync/`
@@ -445,7 +451,7 @@ Adapterinstanz betrieben.
 `serverSync/` enthält unmittelbar die Projektverzeichnisse und keine
 Auftragsverzeichnisse, Archive, Informationsdateien oder Löschlisten.
 
-Für jedes Archiv führt der Adapter unter der gemeinsamen
+Für jedes Archiv führt der Adapter unter der mandantenbezogenen
 Synchronisationsgrenze folgende Schritte aus:
 
 - Bei `FULL` ersetzt er das durch `information.projekt` bezeichnete
@@ -460,7 +466,7 @@ Synchronisationsgrenze folgende Schritte aus:
   des bezeichneten Projektverzeichnisses auslösen.
 
 Ein temporäres Arbeitsverzeichnis darf außerhalb von `serverSync/` vorbereitet
-werden. Die Übernahme in den Projektbestand bleibt Teil der gemeinsamen
+werden. Die Übernahme in den Projektbestand bleibt Teil der mandantenbezogenen
 Synchronisationsgrenze.
 
 ### M/Text-Aufruf
@@ -472,7 +478,8 @@ aktualisiert er den M/Text-Ressourcen-Cache.
 Enden Übernahme, M/Text-Synchronisation und Cache-Aktualisierung ohne Exception,
 speichert der Adapter die M/Text-Rückgabe als `ergebnis` und setzt den Auftrag
 auf `succeeded`. Eine Exception setzt den Auftrag auf `failed` und wird als
-technische `meldung` gespeichert. Der Lock wird in beiden Fällen freigegeben.
+technische `meldung` gespeichert. Der Mandanten-Lock wird in beiden Fällen
+freigegeben.
 
 Vor `succeeded` prüft der Adapter, ob die serialisierte JSON-Antwort
 innerhalb der Antwortgrenze von 1 MiB bleibt. Überschreitet das M/Text-Ergebnis
@@ -514,7 +521,7 @@ zweiter DELETE derselben Auftrags-ID liefert HTTP 404.
 
 Auftragsdaten, Idempotenzzuordnung, Uploads und Ergebnis bleiben bis zum
 erfolgreichen DELETE oder bis zu einem Adapter-Neustart erhalten. Eine
-Persistenz über den Neustart hinaus ist nicht Bestandteil des Vertrags.
+Persistenz über den Neustart hinaus ist nicht Bestandteil der Schnittstelle.
 
 Beim Start entfernt der Adapter zurückgebliebene temporäre Upload- und
 Arbeitsdateien. Zuvor bekannte Auftrags-IDs liefern danach HTTP 404. Ein POST
@@ -555,7 +562,7 @@ Der Client verarbeitet einen Auftrag in dieser Reihenfolge:
    `FULL` oder gemeinsam `DELTA` sind.
 2. Er liest die Projektinformationen und sendet den POST mit einem über
    Wiederholungen des GitHub-Laufs stabilen Idempotency-Key. Der Schlüssel hat
-   das Format `github-run-<GITHUB_RUN_ID>-<Zielstufe>`.
+   das Format `github-run-<GITHUB_RUN_ID>-<Umgebung>`.
 3. Liefert der POST `ready` oder `uploading`, sendet er alle angekündigten
    Archive. Bereits vorhandene Uploads dürfen dadurch erneut übertragen
    werden.
@@ -625,9 +632,9 @@ Dateigröße. Der Dateiname wird mit Prozentkodierung als ein Pfadsegment
 
 ## Java-Beispiele zur Umsetzung
 
-Dieses Kapitel zeigt eine mögliche Umsetzung des Vertrags mit Spring und
-Jackson. Die Klassen- und Methodennamen sind keine Bestandteile des
-Schnittstellenvertrags. Imports, Konstruktoren und Getter sind nicht
+Dieses Kapitel zeigt eine mögliche Umsetzung der Schnittstelle mit Spring und
+Jackson. Die Klassen- und Methodennamen sind keine Bestandteile der
+Schnittstelle. Imports, Konstruktoren und Getter sind nicht
 dargestellt.
 
 Die Serverkonfiguration stellt mindestens folgende Werte bereit:
@@ -636,7 +643,7 @@ Die Serverkonfiguration stellt mindestens folgende Werte bereit:
 |---|---|
 | Context-Path `/vMtextAdapter` | gemeinsames Präfix der HTTP-Endpunkte |
 | Upload-Basis | Auftragsverzeichnisse, temporäre Uploads und Arbeitsverzeichnisse außerhalb von `serverSync/` |
-| `serverSync` | gemeinsamer Projektbestand dieses M/Text-Ziels |
+| `serverSync` | gemeinsamer Projektbestand dieser M/Text-Umgebung |
 | Executor | Verarbeitung außerhalb des HTTP-Request-Threads |
 | M/Text-Verbindungsdaten | technischer Benutzer und Zielverbindung des vorhandenen M/Text-Service |
 
@@ -648,7 +655,7 @@ ersetzen oder erweitern.
 |---|---|
 | `SynchronisationController` | Anlage, Archivupload, Status und Löschen eines Auftrags bereitstellen |
 | `SynchronisationsAuftraege` | Auftragsdaten, Uploadprüfung, Status und Ergebnis verwalten |
-| `SynchronisationProcessor` | Projektbestand und M/Text-Aufruf unter dem gemeinsamen Lock verarbeiten |
+| `SynchronisationProcessor` | Projektbestand und M/Text-Aufruf unter dem Lock des Mandanten verarbeiten |
 | `MtextRessourceSynchronisationService` | M/Text mit `serverSync/` aufrufen und das Ergebnis zurückgeben |
 
 ### Auftragsdaten und Antworten
@@ -675,7 +682,7 @@ public enum SynchronisationsStatus {
     READY,
     // Angekündigte Archive werden empfangen und geprüft.
     UPLOADING,
-    // Umfasst Lock-Warten, Projektübernahme und M/Text-Synchronisation.
+    // Umfasst Warten auf den Mandanten-Lock, Projektübernahme und M/Text-Synchronisation.
     PROCESSING,
     // Übernahme und M/Text-Aufruf sind ohne technischen Fehler beendet.
     SUCCEEDED,
@@ -851,8 +858,8 @@ public class SynchronisationController {
 ```
 
 Das Beispiel setzt voraus, dass `/vMtextAdapter` als Context-Path der
-Anwendung konfiguriert ist. `@RequestMapping("sync")` bildet darunter die im
-Vertrag genannten Pfade.
+Anwendung konfiguriert ist. `@RequestMapping("sync")` bildet darunter die in der
+Schnittstelle genannten Pfade.
 
 `anlegenOderLesen` ordnet den Idempotency-Key einem neuen Auftrag zu oder
 liefert den vorhandenen Auftrag. Die Zuordnung muss bei parallelen Requests
@@ -874,7 +881,7 @@ asynchronen Verarbeitung.
 
 Domänenspezifische Exceptions verhindern, dass Controller und
 Auftragsverwaltung Spring-Typen vermischen. Ein gemeinsamer Handler bildet sie
-auf den HTTP-Vertrag ab:
+auf die HTTP-Schnittstelle ab:
 
 ```java
 public record FehlerAntwort(String meldung) {
@@ -951,23 +958,24 @@ sie Dateien erzeugt oder löscht. Eine Verknüpfung darf die geprüfte Basis auc
 indirekt nicht verlassen.
 
 Für ein FULL wird das Archiv in ein neues Arbeitsverzeichnis entpackt. Nach
-vollständiger Prüfung wird das bisherige Projektverzeichnis unter dem Lock
-entfernt und das vorbereitete Projektverzeichnis an seine Stelle verschoben.
+vollständiger Prüfung wird das bisherige Projektverzeichnis unter dem
+Mandanten-Lock entfernt und das vorbereitete Projektverzeichnis an seine Stelle
+verschoben.
 Liegt das Arbeitsverzeichnis auf einem anderen Dateisystem, kopiert der Adapter
 das vorbereitete Projektverzeichnis stattdessen rekursiv an die Zielposition.
 Ein Fehler beim Verschieben oder Kopieren setzt den Auftrag auf `failed`.
 
 Für ein DELTA wird das Archiv ebenfalls in ein Arbeitsverzeichnis entpackt.
-Die Projektdateien werden unter dem Lock in das bestehende Projektverzeichnis
-kopiert. Danach werden die geprüften Einträge der Löschliste entfernt. Leere
-Verzeichnisse dürfen anschließend entfernt werden. Die Löschliste selbst wird
-nicht nach `serverSync/` kopiert.
+Die Projektdateien werden unter dem Mandanten-Lock in das bestehende
+Projektverzeichnis kopiert. Danach werden die geprüften Einträge der Löschliste
+entfernt. Leere Verzeichnisse dürfen anschließend entfernt werden. Die
+Löschliste selbst wird nicht nach `serverSync/` kopiert.
 
 ### Übernahme und Synchronisation
 
 Der Executor führt die Verarbeitung außerhalb des Upload-Requests aus. Der
-Lock umfasst die Änderungen am gemeinsamen Projektbestand und den
-M/Text-Aufruf:
+je Mandantenkürzel bestimmte Lock umfasst die Änderungen am Projektbestand und
+den M/Text-Aufruf:
 
 ```java
 @Component
@@ -977,11 +985,12 @@ public class SynchronisationProcessor {
     private final ArchivVerarbeitung archivVerarbeitung;
     private final MtextRessourceSynchronisationService synchronisationService;
 
-    // Gemeinsame Synchronisationsbasis aller Mandanten dieses M/Text-Ziels.
+    // Gemeinsame Synchronisationsbasis aller Mandanten dieser M/Text-Umgebung.
     private final Path serverSync;
 
-    // Schützt Projektübernahme und M/Text-Aufruf innerhalb dieser Adapterinstanz.
-    private final Lock synchronisationsLock = new ReentrantLock();
+    // Ein Lock je Mandantenkürzel lässt disjunkte Mandanten parallel arbeiten.
+    private final ConcurrentMap<String, Lock> mandantenLocks =
+            new ConcurrentHashMap<>();
 
     public void starten(String auftragId) {
         try {
@@ -1011,7 +1020,9 @@ public class SynchronisationProcessor {
             return;
         }
 
-        synchronisationsLock.lock();
+        Lock mandantenLock = mandantenLocks.computeIfAbsent(
+                auftrag.getRequest().kuerzel(), kuerzel -> new ReentrantLock());
+        mandantenLock.lock();
         try {
             for (Map.Entry<String, Path> upload : auftrag.getUploads().entrySet()) {
                 ArchivAnmeldung anmeldung = auftrag.getArchive().get(upload.getKey());
@@ -1038,15 +1049,15 @@ public class SynchronisationProcessor {
                     "Übernahme oder M/Text-Synchronisation fehlgeschlagen: "
                             + exception.getMessage());
         } finally {
-            // Der gemeinsame Bestand darf nach einem Fehler nicht gesperrt bleiben.
-            synchronisationsLock.unlock();
+            // Auch nach Fehlern muss der nächste Auftrag dieses Mandanten weiterlaufen.
+            mandantenLock.unlock();
         }
     }
 }
 ```
 
-Wenn mehrere Adapterinstanzen dasselbe Ziel verarbeiten, muss der Lock auch
-zwischen diesen Instanzen wirken.
+Wenn mehrere Adapterinstanzen dieselbe M/Text-Umgebung verarbeiten, muss der
+Lock desselben Mandanten auch zwischen diesen Instanzen wirken.
 
 ### M/Text-Aufruf und Ergebnis
 
@@ -1083,7 +1094,7 @@ public Object synchronisieren(Path serverSync)
 
 ## Abnahmekriterien
 
-Eine Client- und Serverimplementierung des Vertrags wird mindestens mit den
+Eine Client- und Serverimplementierung der Schnittstelle wird mindestens mit den
 folgenden Fällen geprüft:
 
 | Fall | Erwartetes Ergebnis |
@@ -1096,11 +1107,13 @@ folgenden Fällen geprüft:
 | Upload mit abweichender Prüfsumme | HTTP 202, `failed` und `meldung`, keine Änderung an `serverSync/` |
 | letzter gültiger Upload | HTTP 202 und `processing`, Verarbeitung startet einmal |
 | parallele letzte Uploads | ein Statuswechsel zu `processing` und ein Verarbeitungsstart |
+| parallele Aufträge desselben Mandanten | Projektübernahme und M/Text-Aufruf erfolgen nacheinander unter demselben Lock |
+| parallele Aufträge verschiedener Mandanten | Projektübernahme und M/Text-Aufruf dürfen innerhalb derselben Umgebung parallel erfolgen |
 | PUT nach Verarbeitungsbeginn | HTTP 202 mit aktuellem Status, kein weiterer Verarbeitungsstart |
 | GET eines bekannten Auftrags | HTTP 200 mit passender Auftrags-ID und aktuellem Status |
 | GET eines unbekannten Auftrags | HTTP 404 und `meldung` |
 | erfolgreicher M/Text-Aufruf | `succeeded` und vorhandenes Ergebnis wird als `ergebnis` übertragen |
-| fehlgeschlagene Übernahme oder M/Text-Aufruf | `failed`, technische `meldung` und freigegebener Lock |
+| fehlgeschlagene Übernahme oder M/Text-Aufruf | `failed`, technische `meldung` und freigegebener Mandanten-Lock |
 | DELETE eines aktiven Auftrags | HTTP 409, Auftrag bleibt erhalten |
 | DELETE eines Endstatus | HTTP 200 und `{"ok": true}` |
 | GET oder zweiter DELETE nach dem Löschen | HTTP 404 |
@@ -1108,5 +1121,5 @@ folgenden Fällen geprüft:
 | Archivpfad außerhalb des Projekts | Auftrag wird `failed`, außerhalb des Projekts erfolgt keine Dateioperation |
 
 Änderungen an Pfaden, erforderlichen Feldern, Statuswerten oder der Bedeutung
-eines bestehenden Feldes sind Vertragsänderungen. Neue optionale JSON-Felder
+eines bestehenden Feldes sind Schnittstellenänderungen. Neue optionale JSON-Felder
 sind kompatibel, solange das beschriebene Verhalten unverändert bleibt.

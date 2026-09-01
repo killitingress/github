@@ -32,7 +32,7 @@ jobs:
       # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
       - name: M/Text-Automatisierung laden
         id: automation
-        uses: FI_Actions/fi_lbs_entw_oms_mtext_actions@main
+        uses: FI-Actions/fi_lbs_entw_oms_mtext_actions@main
 
       # Prüft Liefer-Tag, Branch und Lieferumfang, schreibt die Vorprüfung in die
       # Actions-Zusammenfassung und legt vorbereitung.json an

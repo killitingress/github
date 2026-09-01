@@ -1,9 +1,4 @@
-"""Spricht den M/Text-Adapter per HTTPS an.
-
-Der Sync-Workflow legt hier einen Auftrag an, lädt dessen Archive hoch und
-fragt den Verarbeitungsstatus ab. Dieses Modul kapselt den Adaptervertrag und
-die HTTP-Grenze zur LTOMA-Umgebung.
-"""
+"""Führt M/Text-Synchronisationen über die HTTP-Schnittstelle des Adapters aus."""
 
 from __future__ import annotations
 
@@ -12,14 +7,14 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import closing
 from http.client import HTTPException
 from pathlib import Path
 from typing import Literal
 
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
-from .project_artifacts import ProjectArtifacts
+from .project_archives import ProjectArchives
 
 
 # Begrenzt gelesene Adapterantworten, damit fehlerhafte Antworten nicht den
@@ -38,108 +33,105 @@ _ACTIVE_STATUSES = frozenset({"ready", "uploading", "processing"})
 # Auftragszustände, die die Verarbeitung beim Adapter beenden.
 _TERMINAL_STATUSES = frozenset({"succeeded", "failed"})
 
-# URL-Muster der Adapter-Synchronisation. `{umgebung}` setzt sich aus
-# M/Text-Zielstufen-Prefix und ETAPS-Linie zusammen.
-_SYNC_URL = "https://{umgebung}.ltoma.intern/vMtextAdapter/sync"
+# URL-Muster der Adapter-Synchronisation. `{umgebung}` ist Präfix und ETAPS-Linie.
+_SYNC_URL = "http://{umgebung}.ltoma.intern/vMtextAdapter/sync"
 
 
-def synchronize(
-    target_prefix: str,
-    etaps_linie: str,
-    *,
-    kuerzel: str,
-    artifacts: Iterator[tuple[str, ProjectArtifacts]],
-    idempotency_key: str,
-) -> dict[str, object]:
-    """Führt einen Adapterauftrag von der Anlage bis zum Endstatus und Löschen aus.
+def synchronize(umgebung: str, project_archives: Iterable[ProjectArchives], idempotency_key: str) -> dict[str, object]:
+    """Legt einen Adapterauftrag an, lädt seine Archive hoch und wartet auf den Endstatus."""
 
-    Die Informationen zu allen Archiven werden beim Anlegen übertragen.
-    Danach folgt ein PUT mit den unveränderten Bytes je F- oder D-Archiv.
-    """
+    # alle Projektarchive für Prüfung, Auftragsanlage und Upload bereithalten
+    prepared_archives = list(project_archives)
 
-    prepared_artifacts = list(artifacts)
-    full = {project_artifacts.f_archiv is not None for _project, project_artifacts in prepared_artifacts}
+    # eine gemeinsame Auftragsart aus den vorhandenen Archivtypen ableiten
+    full = {e.f_archiv is not None for e in prepared_archives}
     if len(full) != 1:
         raise DeliveryError(Status.ADAPTER_FAILED, "Archive des Auftrags haben unterschiedliche Auftragsarten")
 
     auftragsart = "FULL" if full.pop() else "DELTA"
+    checksum_name = "F" if auftragsart == "FULL" else "D"
+
+    # passendes Archiv und seine geprüften Informationen je Projekt zusammenstellen
     archive_uploads: list[tuple[Path, dict[str, object]]] = []
-    for _project, project_artifacts in prepared_artifacts:
-        archive = project_artifacts.f_archiv if auftragsart == "FULL" else project_artifacts.d_archiv
-        if archive is None:
-            raise DeliveryError(Status.ADAPTER_FAILED, "Zur Auftragsart fehlt ein passendes Archiv")
+    for archives in prepared_archives:
+        archive = archives.f_archiv if auftragsart == "FULL" else archives.d_archiv
         try:
-            information = json.loads(project_artifacts.information.read_text(encoding="utf-8"))
+            information = json.loads(archives.information.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise DeliveryError(Status.ADAPTER_FAILED, "Informationsdatei kann nicht gelesen werden") from exc
+            raise DeliveryError(Status.ADAPTER_FAILED, f"Informationsdatei kann nicht gelesen werden: {exc}") from exc
+
         if not isinstance(information, dict):
             raise DeliveryError(Status.ADAPTER_FAILED, "Informationsdatei ist ungültig")
+
+        # Adaptervertrag nennt nur die Prüfsumme des tatsächlich angekündigten Archivs
+        checksums = information.get("sha256")
+        if not isinstance(checksums, dict) or not isinstance(checksums.get(checksum_name), str):
+            raise DeliveryError(
+                Status.ADAPTER_FAILED,
+                f"Informationsdatei enthält keine SHA-256-Prüfsumme für das {checksum_name}-Archiv",
+            )
+        information["sha256"] = {checksum_name: checksums[checksum_name]}
+
         archive_uploads.append((archive, information))
 
-    adapter_url = _SYNC_URL.format(umgebung=f"{target_prefix}{etaps_linie}")
-    created = _call_adapter(
-        "POST",
-        adapter_url,
-        {
-            "kuerzel": kuerzel,
-            "auftragsart": auftragsart,
-            "archive": [
-                {"name": archive.name, "information": information}
-                for archive, information in archive_uploads
-            ],
-        },
-        {"Idempotency-Key": idempotency_key},
-    )
+    # Mandantenkürzel steht im Dateinamen `_INFO_<kuerzel>-<projekt>.json`
+    name = prepared_archives[0].information.name
+    rest = name.removeprefix("_INFO_")
+    kuerzel, _hyphen, projekt = rest.removesuffix(".json").partition("-")
+    if rest == name or not rest.endswith(".json") or not _hyphen or not kuerzel or not projekt:
+        raise DeliveryError(Status.ADAPTER_FAILED, "Informationsdatei hat keinen Mandantennamen")
+
+    # Auftrag mit vollständiger Archivliste idempotent beim Ziel anlegen
+    adapter_url = _SYNC_URL.format(umgebung=umgebung)
+    archive_list = [
+        {"name": archive.name, "information": information} for archive, information in archive_uploads
+    ]
+    payload = {"kuerzel": kuerzel, "auftragsart": auftragsart, "archive": archive_list}
+    created = _call_adapter("POST", adapter_url, payload, {"Idempotency-Key": idempotency_key})
     auftrag_id = created["auftrag_id"]
     auftrag_url = f"{adapter_url}/{urllib.parse.quote(auftrag_id, safe='')}"
     result = created
 
+    # noch erwartete Archive nacheinander als unveränderten Datenstrom übertragen
     if created["status"] in {"ready", "uploading"}:
         for archive, _information in archive_uploads:
             result = _upload_archive(auftrag_url, archive)
-            if result["status"] in _TERMINAL_STATUSES:
+            if result["status"] not in {"ready", "uploading"}:
                 break
 
-    # Der Workflow begrenzt Upload und Warten gemeinsam auf 30 Minuten.
+    # Verarbeitung nach dem Upload bis zu einem Endstatus abfragen
     while result["status"] not in _TERMINAL_STATUSES:
         result = _call_adapter("GET", auftrag_url)
         if result["status"] in _ACTIVE_STATUSES:
             time.sleep(_POLL_INTERVAL_SECONDS)
 
-    # Auftrag entfernen, ohne eine M/Text-Fehlermeldung zu überschreiben.
+    # Auftrag entfernen, ohne eine M/Text-Fehlermeldung zu überschreiben
     message = result.get("meldung") or "M/Text-Synchronisation ist fehlgeschlagen"
     try:
         _call_adapter("DELETE", auftrag_url)
     except DeliveryError as exc:
         if result["status"] == "failed":
-            raise DeliveryError(
-                Status.ADAPTER_FAILED,
-                f"{message}. Auftrag konnte nicht entfernt werden: {exc.args[0]}",
-            ) from exc
+            detail = f"{message}. Auftrag konnte nicht entfernt werden: {exc.args[0]}"
+            raise DeliveryError(Status.ADAPTER_FAILED, detail) from exc
         raise
 
     if result["status"] == "failed":
         raise DeliveryError(Status.ADAPTER_FAILED, message)
 
-    return {"auftrag_id": auftrag_id} | (
-        {"ergebnis": result["ergebnis"]} if "ergebnis" in result else {}
-    )
+    # Auftrags-ID und optionales M/Text-Ergebnis an den Workflow zurückgeben
+    return {"auftrag_id": auftrag_id} | ({"ergebnis": result["ergebnis"]} if "ergebnis" in result else {})
 
 
 def _upload_archive(auftrag_url: str, archive: Path) -> dict[str, object]:
     """Streamt ein angekündigtes Archiv mit unverändertem Inhalt zum Adapter."""
 
+    # Archivname adressiert den beim Anlegen angekündigten Upload
     archive_url = f"{auftrag_url}/archive/{urllib.parse.quote(archive.name, safe='')}"
+
+    # Dateigröße ankündigen und Datei während des PUT blockweise lesen
+    headers = {"Content-Type": "application/gzip", "Content-Length": str(archive.stat().st_size)}
     with closing(_iter_file(archive)) as data:
-        return _call_adapter(
-            "PUT",
-            archive_url,
-            data,
-            {
-                "Content-Type": "application/gzip",
-                "Content-Length": str(archive.stat().st_size),
-            },
-        )
+        return _call_adapter("PUT", archive_url, data, headers)
 
 
 def _call_adapter(
@@ -148,13 +140,9 @@ def _call_adapter(
     payload: dict[str, object] | Iterator[bytes] | None = None,
     headers: dict[str, str] | None = None,
 ) -> dict[str, object]:
-    """Sendet JSON oder Archivdaten und prüft die HTTP- und JSON-Antwort.
+    """Sendet JSON oder Archivdaten und prüft die Antwort des Adapters."""
 
-    Steueraufrufe und Archivuploads verwenden dieselbe I/O-Grenze. Archive
-    werden während des Sendens aus dem übergebenen Iterator gelesen.
-    """
-
-    # JSON-Anfragen serialisieren, Archivdaten unverändert durchreichen.
+    # JSON-Anfragen serialisieren, Archivdaten unverändert durchreichen
     data = payload
     request_headers = dict(headers or {})
     if isinstance(payload, dict):
@@ -163,37 +151,47 @@ def _call_adapter(
 
     request = urllib.request.Request(url, method=method, data=data, headers=request_headers)
 
-    # Antwort lesen und Netzwerkfehler als Adapterfehler melden.
+    # Erfolgs- und Fehlerantworten über denselben begrenzten Lesepfad übernehmen
     try:
-        with urllib.request.urlopen(request, timeout=NETWORK_TIMEOUT) as response:
-            status = response.status
-            body = response.read(_RESPONSE_LIMIT).decode(errors="replace")
-    except urllib.error.HTTPError as exc:
-        with exc:
-            status = exc.code
-            body = exc.read(_RESPONSE_LIMIT).decode(errors="replace")
+        try:
+            response = urllib.request.urlopen(request, timeout=NETWORK_TIMEOUT)
+        except urllib.error.HTTPError as exc:
+            response = exc
+
+        with response:
+            http_status = response.code if isinstance(response, urllib.error.HTTPError) else response.status
+            body = response.read(_RESPONSE_LIMIT + 1)
     except (urllib.error.URLError, OSError, HTTPException) as exc:
-        raise DeliveryError(Status.ADAPTER_FAILED, "Adapteraufruf ist fehlgeschlagen") from exc
+        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapteraufruf ist fehlgeschlagen: {exc}") from exc
 
-    if not 200 <= status < 300:
-        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {status}: {body[:1000]}")
+    if len(body) > _RESPONSE_LIMIT:
+        raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort überschreitet 1 MiB")
 
+    # nicht erfolgreiche HTTP-Antwort vor der JSON-Verarbeitung melden
+    if not 200 <= http_status < 300:
+        detail = body[:1000].decode(errors="replace")
+        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {http_status}: {detail}")
+
+    # erfolgreichen Body als JSON-Objekt übernehmen
     try:
         document = json.loads(body)
-    except json.JSONDecodeError as exc:
-        raise DeliveryError(Status.ADAPTER_FAILED, "Adapter antwortet nicht mit gültigem JSON") from exc
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet nicht mit gültigem JSON: {exc}") from exc
 
     if not isinstance(document, dict):
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort ist ungültig")
 
     if method == "DELETE":
+        if document.get("ok") is not True:
+            raise DeliveryError(Status.ADAPTER_FAILED, "Adapter bestätigt das Löschen des Auftrags nicht")
         return document
 
-    status = document.get("status")
-    if not isinstance(status, str) or not status:
+    # gemeinsame Auftragsfelder aller übrigen Antworten prüfen
+    auftrag_status = document.get("status")
+    if not isinstance(auftrag_status, str) or not auftrag_status:
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapter meldet keinen Auftragsstatus")
 
-    if status not in _ACTIVE_STATUSES and status not in _TERMINAL_STATUSES:
+    if auftrag_status not in _ACTIVE_STATUSES and auftrag_status not in _TERMINAL_STATUSES:
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapter meldet einen unbekannten Auftragsstatus")
 
     auftrag_id = document.get("auftrag_id")
@@ -208,11 +206,7 @@ def _call_adapter(
 
 
 def _iter_file(path: Path) -> Iterator[bytes]:
-    """Liefert eine Archivdatei blockweise für den Adapter-Upload.
-
-    `urllib` liest den Generator beim Senden aus, damit große Archive nicht
-    vollständig im Arbeitsspeicher liegen.
-    """
+    """Liefert eine Archivdatei blockweise, statt sie vollständig zu laden."""
 
     with path.open("rb") as stream:
         while block := stream.read(_UPLOAD_BLOCK_SIZE):

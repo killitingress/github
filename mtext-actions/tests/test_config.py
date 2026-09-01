@@ -70,7 +70,7 @@ class ConfigTests(TempDirTestCase):
             ),
             encoding="utf-8",
         )
-        with self.assertRaisesRegex(DeliveryError, "M/Text-Ziele"):
+        with self.assertRaisesRegex(DeliveryError, "M/Text-Umgebungsarten"):
             Configuration.load_releaselinien_zuordnung(releaselinien_path)
 
         (self.repository / "LOMS_Basisdaten").mkdir()

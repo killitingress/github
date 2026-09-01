@@ -18,7 +18,7 @@
 - `docs/confluence/Naechste_Schritte.md` und `docs/confluence/Benutzeranleitung.md` nur
   ändern, wenn der Benutzer die jeweilige Datei ausdrücklich nennt.
 - Informationen aufnehmen, die Leser zum Verständnis, für Entscheidungen oder zur
-  Ausführung benötigen. Verbindliche Verträge technisch vollständig beschreiben.
+  Ausführung benötigen. Verbindliche Schnittstellen technisch vollständig beschreiben.
   Herleitungen, vorsorgliche Absicherungen und hypothetische Betriebsabläufe entfallen,
   wenn sie dem Zweck der Seite nicht direkt dienen.
 - Ein Zielbild beschreibt Sollzustand, Hauptablauf und verbindliche Schnittstellen.
@@ -28,7 +28,7 @@
 - Eine Arbeitsliste nennt je Punkt Tätigkeit, Status und prüfbares Ergebnis, ohne
   Meta-Erklärungen, wiederholte Begründungen oder vorweggenommene Detailkonzepte.
 - Rollen nur in der benötigten Granularität nennen. Beispiele, technische Namen, Eingaben
-  und Statuswerte erhalten, wenn sie einen Vertrag oder Bedienweg eindeutig machen.
+  und Statuswerte erhalten, wenn sie eine Schnittstelle oder einen Bedienweg eindeutig machen.
 - Nach dem Entwurf Wiederholungen, entbehrliche Nebensätze, Meta-Navigation und folgenlose
   Details entfernen.
 
@@ -74,6 +74,9 @@ def upload_archive(path: Path) -> Response:
 
 ## Python
 
+- In Comprehensions und Generatorausdrücken mit genau einer Iteration heißt die
+  kurzlebige, nicht entpackte Elementvariable `e`. Normale und verschachtelte
+  Schleifen verwenden beschreibende Namen.
 - Fachlich getrennte `if`-Blöcke durch eine Leerzeile davor und durch Kommentare absetzen.
   Ist auch der nächste Abschnitt getrennt, folgt eine Leerzeile nach dem Block.
 - Eine unmittelbar verwendete Vorberechnung bleibt ohne Leerzeile bei ihrem `if`.
@@ -95,7 +98,7 @@ def upload_archive(path: Path) -> Response:
   `Mandant-Code`. Die JSON-Felder heißen `kuerzel`, `releaselinie`, `etaps_linie`,
   `hostprofil` und `hostprofile`. Umlaute in Feldnamen als `ae`, `oe` und `ue` schreiben.
 - Code, Fehlermeldungen, Kommentare und Dokumentation verwenden dieselbe Fachsprache.
-  Unveränderliche Namen externer Verträge wie Git, JCL, SHA oder CodePipeline bleiben.
+  Unveränderliche Namen externer Schnittstellen wie Git, JCL, SHA oder CodePipeline bleiben.
 
 ## Einfachheit zuerst
 
@@ -104,14 +107,14 @@ def upload_archive(path: Path) -> Response:
 - Klarheit vor Cleverness. Keine spekulativen Abstraktionen, Framework-Konstrukte,
   unaufgeforderte Konfigurierbarkeit oder Mechanismen für mögliche spätere Anforderungen.
 - Den erfolgreichen Hauptablauf mit frühen Prüfungen und Rückgaben linear halten.
-- Keine Fehlerfälle behandeln, die laut Vertrag nicht auftreten können. Daten und Fehler an
+- Keine Fehlerfälle behandeln, die laut Schnittstelle nicht auftreten können. Daten und Fehler an
   echten I/O-, Sicherheits- und Systemgrenzen behandeln und nachgelagert nicht erneut prüfen.
 - Eine 200-zeilige Lösung neu schreiben, wenn 50 verständliche Zeilen genügen. Die
   Gesamtkomplexität aus Konzepten, Abstraktionsebenen, Verzweigungen und Lesesprüngen zählt.
 
 ### Validierung
 
-- Nur bestehende Vertragsregeln prüfen. Keine Regex, Grenzwerte, Allowlists oder Sonderfälle
+- Nur bestehende Schnittstellenregeln prüfen. Keine Regex, Grenzwerte, Allowlists oder Sonderfälle
   aus vermutetem Future-Proofing ergänzen.
 - Kleine zentrale Zuordnungen nicht zusätzlich durch abgeleitete Namensregeln einschränken.
   `releaselinien.json` legt beispielsweise `etaps_linie` ohne weitere Regex fest.

@@ -30,7 +30,7 @@ class CheckResourcesTests(TempDirTestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
-    def test_full_resource_check_contract(self) -> None:
+    def test_full_resource_check(self) -> None:
         """Prüft die Ressourcen beim manuellen Workflow-Start."""
 
         self.write("formular.formio", '{"components": [{"type": "textfield"}]}')

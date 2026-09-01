@@ -2,170 +2,210 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 
 from . import adapter, config, git, github
 from .process import DeliveryError, Status
-from .project_artifacts import ChangeStand, build_project_artifacts
+from .project_archives import ProjectArchives, Scope, build_project_archives
 
 
-# GitHub liefert für den ersten Push eines Branches diese Null-SHA als Vorgänger.
-EMPTY_PUSH_COMMIT = "0" * 40
+# GitHub liefert für den ersten Push eines Branches diese Null-SHA als Vorgänger
+_LEERER_PUSH_COMMIT = "0" * 40
+
+# Release-Branches tragen ihre Releaselinie im Branch-Namen
+_RELEASE_BRANCH_RE = re.compile(r"release/([0-9]{3})")
+
+# Feature-Branches tragen Releaselinie und Bezeichnung im Branch-Namen
+_FEATURE_BRANCH_RE = re.compile(r"feature/([0-9]{3})/(.+)")
 
 
-def _sync_zielstufe(
-    configuration: config.Configuration,
-    *,
-    repository_root: Path,
-    stand: ChangeStand,
-    releaselinie: str,
-    zielstufe: str,
-) -> dict[str, object]:
-    """Stellt Archive und Informationen bis zum Adapterabschluss bereit.
+def _previous_main_release_line(source: Path) -> str | None:
+    """Liest die Releaselinie des letzten erfolgreichen Pushs auf `main`."""
 
-    Das temporäre Verzeichnis hält Archive und Informationen während ihrer
-    Übertragung. Der Adapter liest sie beim Anlegen des Auftrags aus dem Iterator.
+    # GitHub-Historie verwenden und beim ersten Lauf auf dessen Vorgänger zurückfallen
+    reference = github.last_sync_commit(event="push") or os.environ.get("MTEXT_PREVIOUS_COMMIT", "")
+    if not reference or reference == _LEERER_PUSH_COMMIT:
+        return None
+
+    # historische Mandantenkonfiguration direkt aus dem betreffenden Commit lesen
+    try:
+        document = json.loads(git.execute(source, "show", f"{reference}:{config.MANDANT_CONFIG_PATH}"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise DeliveryError(Status.SOURCE_FAILED, f"Konfiguration kann nicht gelesen werden: {exc}") from exc
+
+    return document["mandant"]["releaselinie"]
+
+
+def _resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str, str]:
+    """Ermittelt aus dem Branch die Releaselinie und Art der M/Text-Umgebung.
+
+    `main` und `release/nnn` verwenden die Art Funktionstest,
+    `feature/nnn/<Bezeichnung>` die Art Entwicklung.
     """
 
-    projects = [
-        project
-        for project in configuration.projects
-        if stand.von is None or any(git.project_changes(stand.changes, project))
-    ]
+    # `main` führt die in der Mandantenkonfiguration hinterlegte Releaselinie
+    if source_branch == "main":
+        return main_releaselinie, config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST
 
-    # Änderungen außerhalb der Projektverzeichnisse erfordern keinen Adapterlauf.
-    if not projects:
-        return {"status": Status.ADAPTER_COMPLETED.value, "projekte": []}
+    release_match = _RELEASE_BRANCH_RE.fullmatch(source_branch)
+    if release_match is not None:
+        return release_match.group(1), config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST
 
-    with tempfile.TemporaryDirectory() as temporary:
-        artifacts = (
-            (
-                project,
-                build_project_artifacts(
-                    configuration,
-                    repository_root=repository_root,
-                    output_directory=Path(temporary) / project,
-                    project=project,
-                    stand=stand,
-                    include_empty_delta=False,
-                ),
-            )
-            for project in projects
-        )
-        adapter_result = adapter.synchronize(
-            configuration.mtext_ziel_prefixe[zielstufe],
-            configuration.releaselinien[releaselinie]["etaps_linie"],
-            kuerzel=configuration.kuerzel,
-            artifacts=artifacts,
-            idempotency_key=f"github-run-{os.environ['GITHUB_RUN_ID']}-{zielstufe}",
-        )
+    feature_match = _FEATURE_BRANCH_RE.fullmatch(source_branch)
+    if feature_match is not None:
+        return feature_match.group(1), config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG
 
-    return {
+    raise DeliveryError(Status.VALIDATION_FAILED, "Branch ist kein Synchronisationszweig")
+
+
+def _resolve_comparison_commit(source: Path, commit: str, basis_branch: str | None) -> str | None:
+    """Ermittelt den Vergleichscommit für den nächsten DELTA-Sync."""
+
+    # erfolgreicher Vorgängerlauf bildet die DELTA-Basis, ein überholter Lauf endet hier
+    vergleichsstand = github.last_sync_commit()
+    if vergleichsstand:
+        try:
+            git.require_ancestor(source, vergleichsstand, commit)
+        except DeliveryError as exc:
+            detail = "Der letzte erfolgreiche Sync-Stand liegt nicht vor diesem Branchstand. "
+            detail += f"Der Lauf ist überholt oder die Branchhistorie wurde geändert. {exc.args[0]}"
+            raise DeliveryError(Status.SOURCE_FAILED, detail) from exc
+
+    # mittels `merge-base` den letzten gemeinsamen Commit vom Feature-Branch und
+    # Basis-Branch bestimmen und diesen dann für das Delta nehmen
+    if vergleichsstand is None and basis_branch is not None:
+        vergleichsstand = git.execute(
+            source, "merge-base", commit, f"refs/remotes/origin/{basis_branch}",
+        ).decode("ascii").strip()
+
+    return vergleichsstand
+
+
+def _synchronize_environment(umgebung: str, archives: list[ProjectArchives]) -> dict[str, object]:
+    """Übergibt die vorbereiteten Archive an eine M/Text-Umgebung (z.B. en01)."""
+
+    try:
+        _key = f"github-run-{os.environ['GITHUB_RUN_ID']}-{umgebung}"
+        # Adapterauftrag anlegen, Archive hochladen und bis zum Endstatus warten
+        adapter_ergebnis = adapter.synchronize(umgebung, archives, _key)
+    except DeliveryError as exc:
+        message = f"Synchronisation mit der M/Text-Umgebung {umgebung} fehlgeschlagen. {exc.args[0]}"
+        raise DeliveryError(exc.status, message) from exc
+
+    # Projektname steht im Dateinamen `_INFO_<kuerzel>-<projekt>.json`
+    projects = [e.information.stem.removeprefix("_INFO_").partition("-")[2] for e in archives]
+
+    return {"umgebung": umgebung, **adapter_ergebnis, "projekte": projects}
+
+
+def _workflow_response(ergebnisse: list[dict[str, object]], warnungen: tuple[str, ...]) -> dict[str, object]:
+    """Erzeugt Ergebnis und Zusammenfassung des Sync-Workflows."""
+
+    # vorhandene M/Text-Ausgaben in die Workflow-Zusammenfassung übernehmen
+    summary = ["## M/Text-Synchronisation"]
+    for entry in ergebnisse:
+        if "ergebnis" not in entry:
+            continue
+        output = entry["ergebnis"]
+        rendered = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False, indent=2)
+        summary.extend((f"### {entry['umgebung']}", "```text", rendered, "```"))
+
+    response = {
         "status": Status.ADAPTER_COMPLETED.value,
-        **adapter_result,
-        "projekte": projects,
+        "ergebnisse": ergebnisse,
+        "summary": "\n".join(summary) + "\n",
     }
 
+    if warnungen:
+        response["warnungen"] = list(warnungen)
 
-def run(_arguments: argparse.Namespace) -> dict[str, object]:
-    """Synchronisiert die Änderungen seit dem letzten erfolgreichen Branchstand.
+    return response
 
-    Der Workflow führt Läufe desselben Branches nacheinander aus. So wird der
-    Vergleichsstand nach dem Abschluss des vorherigen Laufs gelesen. Ein API-
-    oder Übertragungsfehler beendet den Lauf, ohne einen Erfolg zu bestätigen.
-    """
 
+def run() -> dict[str, object]:
+    """Synchronisiert den aktuellen Branchstand mit den zugeordneten M/Text-Umgebungen."""
+
+    # ausgecheckten Mandantenstand und seine Konfiguration laden
     source = config.mandant_source()
-    commit = git.resolve(source, "HEAD")
-    source_branch = os.environ["GITHUB_REF_NAME"]
     configuration = config.Configuration.load(source, os.environ["GITHUB_REPOSITORY"])
-    releaselinie, zielstufe = git.resolve_sync_branch(source_branch, configuration.releaselinie)
+
+    # Branch der Releaselinie und der zugeordneten Umgebungsart zuordnen
+    branch = os.environ["GITHUB_REF_NAME"]
+    commit = git.resolve(source, "HEAD")
+    event = os.environ["GITHUB_EVENT_NAME"]
+    releaselinie, umgebung_art = _resolve_sync_branch(branch, configuration.releaselinie)
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
 
-    zielstufen = (zielstufe,)
-    previous_commit = None
+    etaps_linie = configuration.releaselinien[releaselinie]["etaps_linie"]
+    umgebung = f"{configuration.mtext_umgebung_prefixe[umgebung_art]}{etaps_linie}"
 
-    # Ein manueller Start überträgt FULL an die zum Branch gehörende Zielstufe.
-    if os.environ["GITHUB_EVENT_NAME"] != "workflow_dispatch":
-        previous_commit = github.last_sync_commit()
-        if previous_commit:
-            # Ein älterer wartender Lauf oder Wiederanlauf darf den inzwischen
-            # erfolgreich synchronisierten Branchstand nicht zurücksetzen.
-            try:
-                git.require_ancestor(source, previous_commit, commit)
-            except DeliveryError as exc:
-                raise DeliveryError(
-                    Status.SOURCE_FAILED,
-                    "Der letzte erfolgreiche Sync-Stand liegt nicht vor diesem Branchstand. "
-                    "Der Lauf ist überholt oder die Branchhistorie wurde geändert.",
-                ) from exc
+    # nur den noch aktuellen Stand des Remote-Branches synchronisieren
+    git.require_ancestor(source, commit, f"refs/remotes/origin/{branch}")
 
-        if source_branch == "main":
-            # Ein manueller Abgleich bestätigt Funktionstest. Der erfolgreiche
-            # Push zeigt, ob der Linienwechsel für beide Ziele erledigt ist.
-            # Ohne erfolgreichen Push dient der Stand vor dem Push als Vergleich.
-            reference = github.last_sync_commit(event="push") or os.environ.get("MTEXT_PREVIOUS_COMMIT", "")
-            if reference and reference != EMPTY_PUSH_COMMIT:
-                document = json.loads(git.execute(source, "show", f"{reference}:{config.MANDANT_CONFIG_PATH}"))
-                if document["mandant"]["releaselinie"] != configuration.releaselinie:
-                    # Der Linienwechsel initialisiert beide M/Text-Ziele mit FULL.
-                    previous_commit = None
-                    zielstufen = config.MTEXT_ZIEL_REIHENFOLGE
-        elif previous_commit is None and zielstufe == config.MTEXT_ZIEL_ENTWICKLUNG:
-            # Erstes Feature-DELTA ab dem gemeinsamen Commit mit seinem Zielbranch.
-            base_branch = "main" if releaselinie == configuration.releaselinie else f"release/{releaselinie}"
-            previous_commit = git.execute(
-                source, "merge-base", commit, f"refs/remotes/origin/{base_branch}",
-            ).decode("ascii").strip()
+    # Linienwechsel auf main initialisiert beide Umgebungen mit FULL
+    linienwechsel = False
+    if branch == "main" and event != "workflow_dispatch":
+        vorherige = _previous_main_release_line(source)
+        linienwechsel = bool(vorherige and vorherige != configuration.releaselinie)
 
-    git.require_ancestor(source, commit, f"refs/remotes/origin/{source_branch}")
-    stand = ChangeStand(
-        von=None if previous_commit is None else (source_branch, previous_commit),
-        bis=(source_branch, commit),
-        changes=[] if previous_commit is None else git.changes(source, previous_commit, commit),
+    # manueller Abgleich und Linienwechsel brauchen keinen DELTA-Vergleichsstand
+    vergleichsstand = None
+    if event != "workflow_dispatch" and not linienwechsel:
+        basis_branch = None
+        if umgebung_art == config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG:
+            basis_branch = "main" if releaselinie == configuration.releaselinie else f"release/{releaselinie}"
+        vergleichsstand = _resolve_comparison_commit(source, commit, basis_branch)
+
+    # Vergleichsstand und aktueller Branchstand bilden den gemeinsamen Archiv-Scope
+    scope = Scope(
+        von=(branch, vergleichsstand) if vergleichsstand is not None else None,
+        bis=(branch, commit),
+        changes=git.changes(source, vergleichsstand, commit) if vergleichsstand is not None else [],
     )
 
-    # Ein Abbruch nennt bereits erfolgreiche Zielstufen, damit der Betrieb
-    # den Stand nachvollziehen kann.
-    results: list[dict[str, object]] = []
-    for zielstufe in zielstufen:
-        try:
-            results.append(
-                {
-                    "zielstufe": zielstufe,
-                    **_sync_zielstufe(
-                        configuration,
-                        repository_root=source,
-                        stand=stand,
-                        releaselinie=releaselinie,
-                        zielstufe=zielstufe,
-                    ),
-                }
+    # FULL überträgt jedes M/Text-Projekt, DELTA nur geänderte
+    if scope.von is None:
+        projects = list(configuration.projects)
+    else:
+        projects = [
+            e
+            for e in configuration.projects
+            if any(git.project_changes(scope.changes, e))
+        ]
+
+    # Änderungen außerhalb der Projektverzeichnisse beenden den Workflow ohne Adapterauftrag
+    if not projects:
+        ergebnisse = [{"umgebung": umgebung, "projekte": []}]
+        return _workflow_response(ergebnisse, configuration.warnungen)
+
+    # Archive einmal bauen und bis zum Abschluss aller Adapteraufrufe bereithalten
+    with tempfile.TemporaryDirectory() as temporary:
+        archives = [
+            build_project_archives(configuration, source, e, scope, Path(temporary) / e)
+            for e in projects
+        ]
+
+        # beim Linienwechsel zuerst Entwicklung, danach Funktionstest
+        if linienwechsel:
+            entwicklungsumgebung = (
+                f"{configuration.mtext_umgebung_prefixe[config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG]}{etaps_linie}"
             )
-        except DeliveryError as exc:
-            done = [entry["zielstufe"] for entry in results]
-            detail = f" Bereits erfolgreich: {', '.join(done)}." if done else ""
-            raise DeliveryError(
-                exc.status,
-                f"Synchronisation mit dem M/Text-Ziel {zielstufe} fehlgeschlagen.{detail} {exc.args[0]}",
-            ) from exc
+            funktionstestumgebung = (
+                f"{configuration.mtext_umgebung_prefixe[config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST]}{etaps_linie}"
+            )
+            entwicklung_ergebnis = _synchronize_environment(entwicklungsumgebung, archives)
+            try:
+                funktionstest_ergebnis = _synchronize_environment(funktionstestumgebung, archives)
+            except DeliveryError as exc:
+                message = f"{exc.args[0]} Bereits erfolgreich: {entwicklungsumgebung}."
+                raise DeliveryError(exc.status, message) from exc
+            ergebnisse = [entwicklung_ergebnis, funktionstest_ergebnis]
+        else:
+            ergebnisse = [_synchronize_environment(umgebung, archives)]
 
-    # Den unveränderten M/Text-Output der Zielstufen im Workflow anzeigen.
-    summary = ["## M/Text-Synchronisation"]
-    for result in results:
-        if "ergebnis" not in result:
-            continue
-        output = result["ergebnis"]
-        rendered = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False, indent=2)
-        summary.extend((f"### {result['zielstufe']}", "```text", rendered, "```"))
-
-    return {
-        "status": Status.ADAPTER_COMPLETED.value,
-        "synchronisationen": results,
-        "summary": "\n".join(summary) + "\n",
-    } | ({"warnungen": list(configuration.warnungen)} if configuration.warnungen else {})
+    return _workflow_response(ergebnisse, configuration.warnungen)

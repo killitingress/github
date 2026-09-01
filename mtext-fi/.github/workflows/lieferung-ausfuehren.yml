@@ -28,7 +28,7 @@ jobs:
   # Startet den Shared Workflow für den gewählten Liefer-Tag
   lieferung-ausfuehren:
     name: Lieferung ausführen
-    uses: FI_Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@main
+    uses: FI-Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@main
     with:
       liefer_tag: ${{ inputs.liefer_tag }}
       direktlieferung_bestaetigt: ${{ inputs.direktlieferung_bestaetigt }}

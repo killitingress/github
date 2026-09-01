@@ -21,4 +21,4 @@ jobs:
   # Startet den Shared Workflow für den gewählten Mandantenstand
   check:
     name: Mandantenkonfiguration und Ressourcen prüfen
-    uses: FI_Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
+    uses: FI-Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main

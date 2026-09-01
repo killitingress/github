@@ -35,7 +35,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # Prüft denselben Ladevertrag, den die Mandanten-Workflows verwenden.
+      # Prüft dieselbe Ladeschnittstelle, die die Mandanten-Workflows verwenden.
       - name: M/Text-Automatisierung laden
         id: automation
         uses: ./

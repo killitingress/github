@@ -73,7 +73,7 @@ werden. Dafür ist keine neue Vorbereitung erforderlich.
 
 Die Dateien unter `.github/workflows` stellen die manuellen und automatischen
 Einstiege des Repositories bereit. Die Verarbeitungsschritte werden aus
-`FI_Actions/fi_lbs_entw_oms_mtext_actions` geladen.
+`FI-Actions/fi_lbs_entw_oms_mtext_actions` geladen.
 
 | Datei | Auslöser | Aufgerufener Shared Workflow |
 |---|---|---|
@@ -83,7 +83,7 @@ Einstiege des Repositories bereit. Die Verarbeitungsschritte werden aus
 | `lieferung-ausfuehren.yml` | manueller Start mit einem Liefer-Tag und optionaler Bestätigung der Direktlieferung | `shared-lieferung-ausfuehren.yml` |
 
 Die Workflow-Aufrufe verwenden jeweils `@main` aus dem Repository
-`FI_Actions/fi_lbs_entw_oms_mtext_actions`.
+`FI-Actions/fi_lbs_entw_oms_mtext_actions`.
 
 Für die Mainframe-Übergabe verwendet der Lieferworkflow dieses für das
 Mandanten-Repository freigegebene organisationsweite Secret:

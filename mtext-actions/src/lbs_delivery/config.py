@@ -7,7 +7,6 @@ Paketbau, Synchronisation und Übergabe aus der Konfiguration benötigen.
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 from dataclasses import dataclass
@@ -24,7 +23,7 @@ AUTOMATION_ROOT = Path(__file__).resolve().parents[2]
 # Zuordnung vom Mandantenkürzel zum GitHub-Repository und Mainframe-Subsystem.
 MANDANTEN_ZUORDNUNG_PATH = AUTOMATION_ROOT / "config/mandanten.json"
 
-# Zuordnung der M/Text-Ziele und aktiven Releaselinien zu Präfixen,
+# Zuordnung der M/Text-Umgebungsarten und aktiven Releaselinien zu Präfixen,
 # Zahlenteilen der ETAPS-Linien und Hostprofilen.
 RELEASELINIEN_ZUORDNUNG_PATH = AUTOMATION_ROOT / "config/releaselinien.json"
 
@@ -40,13 +39,12 @@ WORKFLOW_VORBEREITUNG_DATEI = Path("vorbereitung.json")
 # Zuordnung der zu prüfenden Ressourcenformate in mtext-actions.
 RESOURCE_FORMATS_PATH = AUTOMATION_ROOT / "config/ressourcenformate.json"
 
-# Fachliche Bezeichnungen der M/Text-Zielstufen in `releaselinien.json`.
-MTEXT_ZIEL_ENTWICKLUNG = "Entwicklung"
-MTEXT_ZIEL_FUNKTIONSTEST = "Funktionstest"
+# Arten der M/Text-Umgebungen in `releaselinien.json`.
+MTEXT_UMGEBUNG_ART_ENTWICKLUNG = "Entwicklung"
+MTEXT_UMGEBUNG_ART_FUNKTIONSTEST = "Funktionstest"
 
-# Die Reihenfolge der M/Text-Ziele gilt beim vollständigen Abgleich nach einem
-# Releaselinienwechsel.
-MTEXT_ZIEL_REIHENFOLGE = (MTEXT_ZIEL_ENTWICKLUNG, MTEXT_ZIEL_FUNKTIONSTEST)
+# Beide Umgebungsarten müssen in der gemeinsamen Zuordnung vorhanden sein.
+MTEXT_UMGEBUNG_ARTEN = (MTEXT_UMGEBUNG_ART_ENTWICKLUNG, MTEXT_UMGEBUNG_ART_FUNKTIONSTEST)
 
 # Erlaubte CodePipeline-Umgebungen: `P` für Produktion und `T` für Test.
 ISPW_INSTANZEN = {"T", "P"}
@@ -95,8 +93,8 @@ class Configuration:
     # Schlüssel sind Linien wie `270`, die Werte nennen den Zahlenteil der
     # ETAPS-Linie und das Hostprofil.
     releaselinien: dict[str, dict[str, str]]
-    # Präfix der M/Text-Umgebung für Entwicklung und Funktionstest.
-    mtext_ziel_prefixe: dict[str, str]
+    # Präfix der M/Text-Umgebung je Umgebungsart.
+    mtext_umgebung_prefixe: dict[str, str]
     # Warnungen zu fehlenden oder zusätzlichen Projektverzeichnissen.
     warnungen: tuple[str, ...]
 
@@ -110,16 +108,16 @@ class Configuration:
 
     @classmethod
     def load_releaselinien_zuordnung(cls, path: str | Path) -> tuple[dict[str, str], dict[str, Any]]:
-        """Lädt M/Text-Ziele und aktive Releaselinien aus releaselinien.json."""
+        """Lädt M/Text-Umgebungsarten und aktive Releaselinien."""
 
         document = _read_json(path)
-        mtext_ziele = document["mtext_ziele"]
+        umgebung_arten = document["mtext_ziele"]
 
-        if set(mtext_ziele) != set(MTEXT_ZIEL_REIHENFOLGE):
-            raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Ziele sind ungültig")
+        if set(umgebung_arten) != set(MTEXT_UMGEBUNG_ARTEN):
+            raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Umgebungsarten sind ungültig")
 
-        mtext_ziel_prefixe = {zielstufe: mtext_ziele[zielstufe] for zielstufe in MTEXT_ZIEL_REIHENFOLGE}
-        return mtext_ziel_prefixe, document["releaselinien"]
+        mtext_umgebung_prefixe = {e: umgebung_arten[e] for e in MTEXT_UMGEBUNG_ARTEN}
+        return mtext_umgebung_prefixe, document["releaselinien"]
 
     @classmethod
     def load_mandanten_zuordnung(cls, path: str | Path) -> dict[str, dict[str, str]]:
@@ -151,7 +149,7 @@ class Configuration:
         # Gemeinsame Zuordnungen und Mandantenkonfiguration laden.
         mandant_configuration = _read_json(root / MANDANT_CONFIG_PATH)
         mandanten_zuordnung = cls.load_mandanten_zuordnung(MANDANTEN_ZUORDNUNG_PATH)
-        mtext_ziel_prefixe, releaselinien = cls.load_releaselinien_zuordnung(RELEASELINIEN_ZUORDNUNG_PATH)
+        mtext_umgebung_prefixe, releaselinien = cls.load_releaselinien_zuordnung(RELEASELINIEN_ZUORDNUNG_PATH)
 
         mandant = mandant_configuration["mandant"]
         kuerzel = mandant["kuerzel"]
@@ -192,7 +190,7 @@ class Configuration:
             projects=projects,
             hostprofile=hostprofile,
             releaselinien=releaselinien,
-            mtext_ziel_prefixe=mtext_ziel_prefixe,
+            mtext_umgebung_prefixe=mtext_umgebung_prefixe,
             warnungen=_reference_warnings(kuerzel, projects),
         )
 
@@ -203,7 +201,7 @@ def _read_json(path: str | Path) -> Any:
     try:
         return json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        message = f"Konfiguration kann nicht gelesen werden: {Path(path).name}"
+        message = f"Konfiguration kann nicht gelesen werden: {Path(path).name}: {exc}"
         raise DeliveryError(Status.VALIDATION_FAILED, message) from exc
 
 
@@ -252,12 +250,12 @@ def workflow_workspace() -> Path:
 
 
 def mandant_source() -> Path:
-    """Gibt den Pfad des ausgecheckten Mandanten-Repositories zurück."""
+    """Gibt den Pfad des im Workflow ausgecheckten Mandanten-Repositories zurück."""
 
     return workflow_workspace() / WORKFLOW_MANDANT_SOURCE
 
 
-def run(_arguments: argparse.Namespace) -> dict[str, object]:
+def run() -> dict[str, object]:
     """Prüft die Mandantenkonfiguration des Workflow-Arbeitsbereichs."""
 
     configuration = Configuration.load(mandant_source(), os.environ["GITHUB_REPOSITORY"])

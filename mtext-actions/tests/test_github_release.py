@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import unittest
@@ -11,7 +10,7 @@ from unittest.mock import patch
 
 from lbs_delivery.github import run
 from lbs_delivery.process import Status
-from lbs_delivery.mainframe_release import _build_release
+from lbs_delivery.mainframe import _build_mainframe_files
 
 from tests.support import (
     TempDirTestCase,
@@ -55,10 +54,10 @@ class GitHubReleaseTests(TempDirTestCase):
             with self.subTest(tag=tag, wiederholung=wiederholung):
                 git(self.repository, "checkout", "--detach", tag)
                 runner_temp = self.root / tag
-                _build_release(self.configuration, output_directory=runner_temp / "release", tag=tag)
+                _build_mainframe_files(self.configuration, output_directory=runner_temp / "release", tag=tag)
                 information = next((runner_temp / "release").glob("_INFO_*.json"))
                 content = information.read_bytes()
-                source_sha = json.loads(content)["stand"]["bis"]["commit"]
+                source_sha = json.loads(content)["scope"]["bis"]["commit"]
                 release = self.release | {"html_url": f"https://github.example/FI/mandant/releases/tag/{tag}"}
                 existing = None
                 if wiederholung:
@@ -77,11 +76,11 @@ class GitHubReleaseTests(TempDirTestCase):
                     patch.dict(os.environ, {"RUNNER_TEMP": str(runner_temp)}),
                     patch("lbs_delivery.github.request", side_effect=responses) as api,
                 ):
-                    result = run(argparse.Namespace(tag=tag))
+                    result = run(tag)
 
-                calls = [call.kwargs for call in api.call_args_list]
+                calls = [e.kwargs for e in api.call_args_list]
                 expected_methods = ["GET", "PATCH", "DELETE", "POST"] if wiederholung else ["GET", "POST", "POST"]
-                self.assertEqual([call["method"] for call in calls], expected_methods)
+                self.assertEqual([e["method"] for e in calls], expected_methods)
                 self.assertTrue(calls[0]["url"].endswith(f"/releases/tags/{tag}"))
                 self.assertTrue(calls[1]["url"].endswith("/releases/41" if wiederholung else "/releases"))
 

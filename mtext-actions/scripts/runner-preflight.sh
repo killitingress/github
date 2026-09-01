@@ -32,14 +32,6 @@ git --version
 python3 --version
 tar --version
 
-# Die Action stellt "python" und "automation_path" als Output bereit. Bei lokalem
-# Aufruf (außerhalb von GitHub Actions) wird einfach der Python-Pfad ausgegeben.
-if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
-  echo "python=$(command -v python3)" >> "$GITHUB_OUTPUT"
-
-  if [[ -n "${GITHUB_ACTION_PATH:-}" ]]; then
-    echo "automation_path=$GITHUB_ACTION_PATH" >> "$GITHUB_OUTPUT"
-  fi
-else
-  command -v python3
-fi
+# Python-Pfad und Implementierungspfad für die Folgeschritte der Action bereitstellen
+echo "python=$(command -v python3)" >> "$GITHUB_OUTPUT"
+echo "automation_path=$GITHUB_ACTION_PATH" >> "$GITHUB_OUTPUT"

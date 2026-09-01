@@ -39,7 +39,7 @@ jobs:
       # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
       - name: M/Text-Automatisierung laden
         id: automation
-        uses: FI_Actions/fi_lbs_entw_oms_mtext_actions@main
+        uses: FI-Actions/fi_lbs_entw_oms_mtext_actions@main
 
       - name: Lieferstand ermitteln
         id: resolve
@@ -98,7 +98,7 @@ jobs:
       # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
       - name: M/Text-Automatisierung laden
         id: automation
-        uses: FI_Actions/fi_lbs_entw_oms_mtext_actions@main
+        uses: FI-Actions/fi_lbs_entw_oms_mtext_actions@main
 
       # Der Tag zeigt auf die in der bestätigten Vorbereitung festgehaltene SHA.
       - name: Liefer-Tag erstellen
@@ -136,7 +136,7 @@ jobs:
       # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
       - name: M/Text-Automatisierung laden
         id: automation
-        uses: FI_Actions/fi_lbs_entw_oms_mtext_actions@main
+        uses: FI-Actions/fi_lbs_entw_oms_mtext_actions@main
 
       # Schreibt die Lieferdateien nach runner.temp/dist. Das temporäre
       # Basisverzeichnis wird vom Runner je Job bereinigt.
@@ -175,7 +175,7 @@ jobs:
       # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
       - name: M/Text-Automatisierung laden
         id: automation
-        uses: FI_Actions/fi_lbs_entw_oms_mtext_actions@main
+        uses: FI-Actions/fi_lbs_entw_oms_mtext_actions@main
 
       # Lädt das Lieferartefakt in das temporäre Verzeichnis dieses Jobs.
       - name: Lieferartefakt herunterladen
@@ -206,7 +206,7 @@ jobs:
       # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
       - name: M/Text-Automatisierung laden
         id: automation
-        uses: FI_Actions/fi_lbs_entw_oms_mtext_actions@main
+        uses: FI-Actions/fi_lbs_entw_oms_mtext_actions@main
 
       # Lädt das Lieferartefakt in das temporäre Verzeichnis dieses Jobs.
       - name: Lieferartefakt herunterladen

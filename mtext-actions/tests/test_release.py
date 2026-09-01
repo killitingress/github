@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
@@ -12,7 +11,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from lbs_delivery.mainframe_release import _submit_archive, _build_release, _publish_mainframe, run
+from lbs_delivery.mainframe import _build_mainframe_files, _submit_archive, _submit_mainframe_files, run
 from lbs_delivery.process import DeliveryError, NETWORK_TIMEOUT, Status
 
 from tests.support import (
@@ -37,7 +36,7 @@ class ReleaseTests(TempDirTestCase):
     def build(self, output_directory: Path, *, tag: str) -> None:
         """Erzeugt ein Releaseartefakt für den angegebenen Test-Tag."""
 
-        _build_release(self.configuration, output_directory=output_directory, tag=tag)
+        _build_mainframe_files(self.configuration, output_directory=output_directory, tag=tag)
 
     def test_release_files_and_mainframe_transfer(self) -> None:
         """Prüft Archive, Informationsdateien und die Mainframe-Übergabe."""
@@ -50,8 +49,8 @@ class ReleaseTests(TempDirTestCase):
 
         information = json.loads(next(first.glob("_INFO_*.json")).read_text(encoding="utf-8"))
         self.assertEqual(information["projekt"], "LOMS_Basis")
-        self.assertEqual(information["stand"]["von"]["referenz"], "r261.100")
-        self.assertEqual(information["stand"]["bis"]["referenz"], "r261.108")
+        self.assertEqual(information["scope"]["von"]["referenz"], "r261.100")
+        self.assertEqual(information["scope"]["bis"]["referenz"], "r261.108")
         self.assertIn(["D", "deleted.txt"], information["elemente"])
         self.assertIn(["A", "new.txt"], information["elemente"])
         self.assertIn(["D", "rename-old.txt"], information["elemente"])
@@ -76,9 +75,9 @@ class ReleaseTests(TempDirTestCase):
                     "MAINFRAME_FTPS_PASSWORD": "password",
                 },
             ),
-            patch("lbs_delivery.mainframe_release._submit_archive") as submit,
+            patch("lbs_delivery.mainframe._submit_archive") as submit,
         ):
-            result = _publish_mainframe(artifact_root=first)
+            result = _submit_mainframe_files(release_directory=first)
         self.assertEqual(result["status"], Status.MAINFRAME_SUBMITTED.value)
         submit.assert_called_once_with(first / "FIBASISD.tgz")
         rendered = (first / "FIBASISD.jcl").read_text(encoding="ascii")
@@ -87,16 +86,16 @@ class ReleaseTests(TempDirTestCase):
 
         (second / "FIBASISD.jcl").unlink()
         with self.assertRaisesRegex(DeliveryError, "Archive oder JCL fehlen"):
-            _publish_mainframe(artifact_root=second)
+            _submit_mainframe_files(release_directory=second)
 
         git(self.repository, "checkout", "--detach", "r261.100")
         full = self.root / "full"
-        _build_release(self.configuration, output_directory=full, tag="r261.100")
-        self.assertEqual(sorted(archive.stem for archive in full.glob("*.tgz")), ["FIBASISD", "FIBASISF"])
+        _build_mainframe_files(self.configuration, output_directory=full, tag="r261.100")
+        self.assertEqual(sorted(e.stem for e in full.glob("*.tgz")), ["FIBASISD", "FIBASISF"])
         full_information = json.loads(next(full.glob("_INFO_*.json")).read_text(encoding="utf-8"))
-        self.assertNotIn("von", full_information["stand"])
+        self.assertNotIn("von", full_information["scope"])
         self.assertEqual(set(full_information["sha256"]), {"F", "D"})
-        self.assertTrue(all(element[0] == "A" for element in full_information["elemente"]))
+        self.assertTrue(all(e[0] == "A" for e in full_information["elemente"]))
 
     def test_submits_package_and_jcl_with_explicit_ftps(self) -> None:
         """Prüft TLS-Aushandlung, geschützte Datenverbindung und JES-Übergabe."""
@@ -108,8 +107,8 @@ class ReleaseTests(TempDirTestCase):
 
         with (
             patch.dict(os.environ, {"MAINFRAME_FTPS_PASSWORD": "password"}),
-            patch("lbs_delivery.mainframe_release.ssl.create_default_context") as create_context,
-            patch("lbs_delivery.mainframe_release.ftplib.FTP_TLS") as ftp_tls,
+            patch("lbs_delivery.mainframe.ssl.create_default_context") as create_context,
+            patch("lbs_delivery.mainframe.ftplib.FTP_TLS") as ftp_tls,
         ):
             _submit_archive(archive)
 
@@ -138,13 +137,13 @@ class ReleaseTests(TempDirTestCase):
             "GITHUB_REPOSITORY": self.configuration.repository,
             "RUNNER_TEMP": str(runner_temp),
         }):
-            result = run(argparse.Namespace(release_command="build", tag="r261.108"))
+            result = run("build", tag="r261.108")
             self.assertEqual(result["status"], Status.ARTIFACT_READY.value)
 
             # Bildet das Herunterladen des Build-Artefakts im Übergabejob nach.
             shutil.copytree(runner_temp / "dist", runner_temp / "release")
-            with patch("lbs_delivery.mainframe_release._submit_archive") as submit:
-                result = run(argparse.Namespace(release_command="mainframe"))
+            with patch("lbs_delivery.mainframe._submit_archive") as submit:
+                result = run("mainframe")
 
         self.assertEqual(result["status"], Status.MAINFRAME_SUBMITTED.value)
         submit.assert_called_once_with(runner_temp / "release/FIBASISD.tgz")

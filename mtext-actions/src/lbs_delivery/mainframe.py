@@ -7,7 +7,6 @@ reicht ihre JCL bei JES ein.
 
 from __future__ import annotations
 
-import argparse
 import ftplib
 import os
 import re
@@ -17,7 +16,7 @@ from pathlib import Path
 from . import config, git
 from .config import Configuration, mandant_source
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
-from .project_artifacts import ChangeStand, build_project_artifacts, release_scope
+from .project_archives import build_project_archives, release_scope
 
 
 # F- und D-Archive werden als Member in diesem Mainframe-Dataset abgelegt.
@@ -50,7 +49,7 @@ _ASSIGNMENT_RE = re.compile(r"[A-Z0-9]{1,12}")
 def _render_jcl(template: str, *, ispw: str, level: str, subsystem: str, assignment: str, member: str) -> str:
     """Prüft die Mainframe-Werte und setzt sie in die JCL-Vorlage ein."""
 
-    # Nur Werte einsetzen, die von der Vorlage und dem Mainframe akzeptiert werden.
+    # nur Werte einsetzen, die von Vorlage und Mainframe akzeptiert werden
     if (
         _SUBSYSTEM_RE.fullmatch(subsystem) is None
         or _ASSIGNMENT_RE.fullmatch(assignment) is None
@@ -58,7 +57,7 @@ def _render_jcl(template: str, *, ispw: str, level: str, subsystem: str, assignm
     ):
         raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Werte sind ungültig")
 
-    # Platzhalter in der Vorlage durch die geprüften Werte ersetzen.
+    # geprüfte Werte in die JCL-Vorlage einsetzen
     rendered = (
         template.replace("@@ISPW@@", ispw)
         .replace("@@LEVEL@@", level)
@@ -67,7 +66,7 @@ def _render_jcl(template: str, *, ispw: str, level: str, subsystem: str, assignm
         .replace("@@MEMBER@@", member)
     )
 
-    # Wenn noch @@-Platzhalter im resultierenden JCL stehen, ist die Vorlage wohl ungültig.
+    # nicht ersetzte Platzhalter als fehlerhafte Vorlage melden
     if "@@" in rendered:
         raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Template ist ungültig")
 
@@ -77,107 +76,116 @@ def _render_jcl(template: str, *, ispw: str, level: str, subsystem: str, assignm
 def _submit_archive(archive_path: Path) -> None:
     """Lädt ein Archiv-Member per FTPS hoch und übergibt die gerenderte JCL an JES."""
 
+    # Archivname bestimmt Mainframe-Member und zugehörige JCL-Datei
     member = archive_path.stem
     jcl_path = archive_path.with_suffix(_MAINFRAME_JCL_SUFFIX)
-    # Das Passwort ist das einzige Mainframe-Zugangsdatum aus einem Secret.
+
+    # Passwort als einziges geheimes Zugangsdokument aus der Umgebung lesen
     password = os.environ["MAINFRAME_FTPS_PASSWORD"]
     session = ftplib.FTP_TLS(context=ssl.create_default_context())
     try:
+        # FTPS-Sitzung anmelden und auch die Datenverbindung verschlüsseln
         session.connect(_MAINFRAME_FTPS_HOST, _MAINFRAME_FTPS_PORT, timeout=NETWORK_TIMEOUT)
         session.login(_MAINFRAME_FTPS_USER, password)
         session.prot_p()
-        # Passive Datenverbindungen werden vom Runner aufgebaut und benötigen
+
+        # passive Datenverbindungen werden vom Runner aufgebaut und benötigen
         # deshalb keine eingehende Firewall-Freischaltung auf dem Runner.
         session.set_pasv(True)
 
+        # Archiv als Member in das gemeinsame Mainframe-Dataset übertragen
         with archive_path.open("rb") as archive:
             session.storbinary(f"STOR '{_MAINFRAME_DATASET}({member})'", archive)
 
+        # Sitzung auf JES umstellen und die zum Member gerenderte JCL einreichen
         session.sendcmd("SITE FILETYPE=JES")
 
         with jcl_path.open("rb") as jcl:
             session.storlines(f"STOR {_MAINFRAME_JES_TARGET}", jcl)
 
+        # erfolgreiche Sitzung geordnet beenden
         session.quit()
     except ftplib.all_errors as exc:
         session.close()
-        raise DeliveryError(Status.MAINFRAME_TRANSFER_FAILED, "FTPS-/JES-Übergabe fehlgeschlagen") from exc
+        raise DeliveryError(Status.MAINFRAME_TRANSFER_FAILED, f"FTPS-/JES-Übergabe fehlgeschlagen: {exc}") from exc
 
 
-def _publish_mainframe(*, artifact_root: Path) -> dict[str, object]:
+def _submit_mainframe_files(*, release_directory: Path) -> dict[str, object]:
     """Übergibt alle vorbereiteten Archive und JCL-Dateien an den Mainframe."""
 
-    # Archive und JCL im Artefaktverzeichnis voraussetzen.
-    archives = sorted(artifact_root.glob("*.tgz"))
-    if not archives or any(not archive.with_suffix(_MAINFRAME_JCL_SUFFIX).is_file() for archive in archives):
+    # vollständige Paare aus Archiv und JCL im Release-Verzeichnis voraussetzen
+    archives = sorted(release_directory.glob("*.tgz"))
+    if not archives or any(not e.with_suffix(_MAINFRAME_JCL_SUFFIX).is_file() for e in archives):
         raise DeliveryError(Status.PACKAGE_FAILED, "Archive oder JCL fehlen")
 
-    # Jedes Archiv mit seiner JCL an den Mainframe übergeben.
+    # jedes Archiv zusammen mit seiner JCL an den Mainframe übergeben
     for archive in archives:
         _submit_archive(archive)
 
     return {"status": Status.MAINFRAME_SUBMITTED.value}
 
 
-# Der Releasebau wird vom gleichnamigen Workflow-Einstieg aufgerufen.
-def _build_release(configuration: Configuration, *, output_directory: Path, tag: str) -> None:
+def _build_mainframe_files(configuration: Configuration, *, output_directory: Path, tag: str) -> None:
     """Erzeugt Archive, Informationsdateien und JCL für den Liefer-Tag."""
 
+    # Liefer-Tag in Releaselinie und gemeinsamen Git-Scope auflösen
     repository_root = mandant_source()
     tag_match = git.LIEFER_TAG_RE.fullmatch(tag)
     releaselinie = tag_match.group("releaselinie")
-    zwischenrelease = tag_match.group("zwischenrelease")
-    target_sha = git.resolve(repository_root, f"refs/tags/{tag}")
+    scope = release_scope(repository_root, tag, git.resolve(repository_root, f"refs/tags/{tag}"))
 
-    base, cumulative = release_scope(
-        repository_root,
-        target_sha,
-        releaselinie=releaselinie,
-        zwischenrelease=zwischenrelease,
-    )
-
-    # Das Hostprofil bestimmt die JCL-Werte für diese Releaselinie.
+    # Hostprofil und JCL-Vorlage für diese Releaselinie laden
     hostprofil = configuration.hostprofile[configuration.releaselinien[releaselinie]["hostprofil"]]
-    jcl_template = _MAINFRAME_JCL_TEMPLATE.read_text(encoding="ascii")
+    try:
+        jcl_template = _MAINFRAME_JCL_TEMPLATE.read_text(encoding="ascii")
+    except (OSError, UnicodeError) as exc:
+        raise DeliveryError(Status.PACKAGE_FAILED, f"JCL-Template kann nicht gelesen werden: {exc}") from exc
 
-    # Archive, Informationsdateien und die zugehörige Mainframe-JCL erzeugen.
+    # Archive, Informationsdateien und zugehörige Mainframe-JCL je Projekt erzeugen
     for project in configuration.projects:
-        project_artifacts = build_project_artifacts(
+        project_archives = build_project_archives(
             configuration,
-            repository_root=repository_root,
-            output_directory=output_directory,
-            project=project,
-            stand=ChangeStand(von=base, bis=(tag, target_sha), changes=cumulative),
-            include_empty_delta=True,
+            repository_root,
+            project,
+            scope,
+            output_directory,
         )
 
-        for archive_path in (project_artifacts.f_archiv, project_artifacts.d_archiv):
+        for archive_path in (project_archives.f_archiv, project_archives.d_archiv):
             if archive_path is None:
                 continue
 
+            # Archivname und Hostprofil in eine eigene JCL-Datei einsetzen
             member = archive_path.stem
-            archive_path.with_suffix(_MAINFRAME_JCL_SUFFIX).write_text(
-                _render_jcl(
-                    jcl_template,
-                    ispw=configuration.ispw,
-                    level=hostprofil["stage"],
-                    subsystem=configuration.subsystem,
-                    assignment=hostprofil["assignment"],
-                    member=member,
-                ),
-                encoding="ascii",
+            rendered = _render_jcl(
+                jcl_template,
+                ispw=configuration.ispw,
+                level=hostprofil["stage"],
+                subsystem=configuration.subsystem,
+                assignment=hostprofil["assignment"],
+                member=member,
             )
+            try:
+                archive_path.with_suffix(_MAINFRAME_JCL_SUFFIX).write_text(rendered, encoding="ascii")
+            except OSError as exc:
+                raise DeliveryError(Status.PACKAGE_FAILED, f"JCL kann nicht geschrieben werden: {exc}") from exc
 
 
-def run(arguments: argparse.Namespace) -> dict[str, object]:
+def run(subcommand: str, tag: str | None = None) -> dict[str, object]:
     """Erzeugt Release-Dateien oder übergibt sie an den Mainframe."""
 
-    if arguments.release_command == "build":
+    # Build erzeugt die von den folgenden Workflow-Schritten verwendeten Dateien
+    if subcommand == "build":
         configuration = Configuration.load(mandant_source(), os.environ["GITHUB_REPOSITORY"])
-        _build_release(configuration, output_directory=Path(os.environ["RUNNER_TEMP"]) / "dist", tag=arguments.tag)
+        _build_mainframe_files(
+            configuration,
+            output_directory=Path(os.environ["RUNNER_TEMP"]) / "dist",
+            tag=tag,
+        )
 
         return {"status": Status.ARTIFACT_READY.value} | (
             {"warnungen": list(configuration.warnungen)} if configuration.warnungen else {}
         )
 
-    return _publish_mainframe(artifact_root=Path(os.environ["RUNNER_TEMP"]) / "release")
+    # Mainframe-Schritt übergibt das zuvor heruntergeladene Release-Verzeichnis
+    return _submit_mainframe_files(release_directory=Path(os.environ["RUNNER_TEMP"]) / "release")

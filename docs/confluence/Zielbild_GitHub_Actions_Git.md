@@ -15,7 +15,7 @@ M/Text-Ressourcen, Trigger-Workflows und einer für diesen Prozess relevanten
 Konfigurationsdatei. Die gemeinsam genutzte CI/CD-Automatisierung wird im
 Folgenden `mtext_actions` genannt. Sie führt Validierungen, Synchronisierung,
 Paketbau und Übergabe an den Mainframe (IZE9) durch. Das Repository
-`FI_Actions/fi_lbs_entw_oms_mtext_actions` enthält diese Automatisierung.
+`FI-Actions/fi_lbs_entw_oms_mtext_actions` enthält diese Automatisierung.
 
 ### Grundprinzipien
 
@@ -39,7 +39,7 @@ Jeder Entwicklungsauftrag (Änderung, Erweiterung, Korrektur, ...) wird als
 Feature in einem eigenen temporären Feature-Branch umgesetzt. Wenn ein Feature
 fertig entwickelt und getestet wurde, kann ein PR (Pull Request) angelegt
 werden, um es in einen Zielbranch wie z.B. `main` zu übernehmen. Der Pull
-Request muss dazu im 4-Augenfall geprüft und freigegeben werden. Wenn das
+Request muss dazu nach dem 4-Augenprinzip geprüft und freigegeben werden. Wenn das
 passiert ist, werden die Änderungen des Feature-Branches per Squash Merge in
 den Zielbranch übernommen. Dabei entsteht ein neuer Stand und somit auch ein
 neuer Commit.
@@ -93,12 +93,12 @@ Liefer-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
 
 | Entscheidung | Nutzen |
 |---|---|
-| Branches nach dem organisationsweiten Leitfaden | `main`, Release- und Feature-Branches bilden Entwicklung und Wartung gut ab. Pull Requests unterstützen den 4-Augenfall direkt. |
+| Branches nach dem organisationsweiten Leitfaden | `main`, Release- und Feature-Branches bilden Entwicklung und Wartung gut ab. Pull Requests unterstützen das 4-Augenprinzip direkt. |
 | Feature-Push nach M/Text-Entwicklung | Eine Änderung kann vor dem Pull Request vom Entwickler getestet werden. Parallelentwicklungen mehrerer Entwickler werden unterstützt. |
 | Pull Request mit Squash Merge | Jeder Pull Request wird als ein fachlicher Commit in den Zielbranch übernommen und kann später Cherry-Picked werden. Review und Arbeitscommits bleiben im Pull Request sichtbar. |
 | GitHub Actions statt Jenkins | Natives Git-Feeling mit modernen Workflows in der zentralen Oberfläche in der auch das Repository liegt. |
 | Gemeinsames Format für Archive und Informationen | Synchronisation und Mainframe-Lieferung verwenden dieselben Dateiformate auf unterschiedlichen Transportwegen. |
-| Zweistufige Lieferbestätigung | Die Liefer-Workflows unterstützen den 4-Augenfall. |
+| Zweistufige Lieferbestätigung | Die Liefer-Workflows unterstützen das 4-Augenprinzip. |
 
 ## 2. Branch- und Pull-Request-Modell
 
@@ -109,7 +109,7 @@ Wir orientieren uns am FI-Leitfaden zu Branches und Tags in Git:
   Releaselinie, zum Beispiel `release/260` oder `release/270`
 - Jede Änderung entsteht in einem Branch `feature/nnn/<Bezeichnung>`
 - Änderungen an `main` und `release/nnn` erfolgen ausschließlich über Pull Requests
-- Pull Requests werden nach Freigabe im 4-Augenfall mit Squash Merge zusammengeführt
+- Pull Requests werden nach Freigabe nach dem 4-Augenprinzip mit Squash Merge zusammengeführt
 - Liefer-Tags sind bei uns ungeschützt und folgen dem Muster `rnnn.nnn`
 
 ### Branches
@@ -225,7 +225,7 @@ M/Text-Entwicklung verwendet das Präfix `en`, M/Text-Funktionstest das Präfix
 Präfix und Zahlenteil bilden die Umgebungskennung, beispielsweise `en` und
 `01` die Kennung `en01`. M/Text ist unter `<Umgebungskennung>.ltoms.intern`
 erreichbar. Der Sync-Endpunkt des Adapters wird unter
-`<Umgebungskennung>.ltoma.intern/vMtextAdapter/sync` aufgerufen.
+`http://<Umgebungskennung>.ltoma.intern/vMtextAdapter/sync` aufgerufen.
 
 ### Archive, Projektinformationen und Lieferarten
 
@@ -233,7 +233,7 @@ erreichbar. Der Sync-Endpunkt des Adapters wird unter
 |---|---|
 | Projekt | Ein M/Text-Projekt mit seinen Dateien |
 | Archiv | Eine gzip-komprimierte TAR-Datei (`.tgz`) für ein Projekt. Ein F-Archiv enthält dessen vollständigen Stand, ein D-Archiv neue und geänderte Dateien sowie eine Löschliste |
-| Synchronisationsauftrag, kurz Auftrag | Die beim Adapter gemeinsam zu verarbeitenden Archive und Informationen für ein M/Text-Ziel |
+| Synchronisationsauftrag, kurz Auftrag | Die beim Adapter gemeinsam zu verarbeitenden Archive und Informationen für eine M/Text-Umgebung |
 
 Synchronisation und Mainframe-Lieferung verwenden dasselbe Format für Archive
 und Informationen. Bei der Synchronisation stehen die Informationen im POST,
@@ -276,7 +276,7 @@ aufgebaut:
 ```json
 {
   "projekt": "LOMS_Basis",
-  "stand": {
+  "scope": {
     "von": {
       "referenz": "r261.100",
       "commit": "..."
@@ -313,19 +313,10 @@ SHA-256-Prüfsummen enthalten kann.
 Adapter und M/Text greifen auf den gemeinsamen, per NFS eingebundenen Pfad
 `serverSync/` zu. Es enthält unmittelbar die Projektverzeichnisse aller
 Mandanten und bildet die Basis der M/Text-Synchronisation. Upload-Dateien und
-temporäre Auftragsverzeichnisse liegen außerhalb dieses Pfads. Noch
-festzulegen ist der Transport der zusammengestellten Archive und ihrer
-Informationen aus GitHub Actions bis zu diesem Verarbeitungsschritt.
-Folgende Möglichkeiten werden betrachtet:
-
-- NFS- oder CIFS-Share, das im Runner eingebunden ist
-- Upload der vollständigen Aufträge per HTTPS an den M/Text-Adapter
-- Download eines GitHub-Actions-Artefakts durch LTOMA
-- ein weiterer noch festzulegender Transportweg
-
-Die aktuell präferierte Lösung ist ein HTTPS-Upload. Ein
-Synchronisationsauftrag umfasst die Archive, die gemeinsam für ein M/Text-Ziel
-verarbeitet werden sollen. Der Ablauf ist:
+temporäre Auftragsverzeichnisse liegen außerhalb dieses Pfads. Der Workflow
+überträgt die zusammengestellten Archive und ihre Informationen per HTTP an
+den M/Text-Adapter. Ein Synchronisationsauftrag umfasst die Archive, die
+gemeinsam für eine M/Text-Umgebung verarbeitet werden sollen. Der Ablauf ist:
 
 1. Der Workflow legt den Auftrag beim Adapter an. Er übergibt das
    Mandantenkürzel, die Auftragsart `FULL` oder `DELTA` und die Informationen zu
@@ -340,17 +331,19 @@ verarbeitet werden sollen. Der Ablauf ist:
    während des Uploads mit `uploading`. Nach jedem Upload prüft er die
    SHA-256-Prüfsumme gegen die beim Anlegen übergebene Prüfsumme.
 3. Sobald alle angekündigten Archive vollständig und geprüft vorliegen, setzt
-   der Adapter den Auftrag auf `processing`. Ein gemeinsamer Lock verhindert,
-   dass mehrere Aufträge gleichzeitig den Projektbestand verändern oder eine
-   M/Text-Synchronisation ausführen. Ist der Lock belegt, bleibt der Auftrag im
-   Status `processing`, bis er verarbeitet werden kann.
+   der Adapter den Auftrag auf `processing`. Ein Lock je Mandantenkürzel und
+   M/Text-Umgebung verhindert, dass mehrere Aufträge desselben Mandanten
+   gleichzeitig dessen Projektbestand verändern oder eine
+   M/Text-Synchronisation ausführen. Andere Mandanten dürfen parallel verarbeitet
+   werden. Ist der Lock belegt, bleibt der Auftrag im Status `processing`, bis
+   er verarbeitet werden kann.
 4. Unter dem Lock übernimmt der Adapter die Inhalte in `serverSync/`. Bei
    `FULL` ersetzt er die betroffenen Projektverzeichnisse durch den Inhalt der
    F-Archive. Bei `DELTA` wendet er die geänderten Dateien und Löschlisten aus
    den D-Archiven an. `serverSync/` enthält unmittelbar die
    Projektverzeichnisse aller Mandanten und keine Auftragsverzeichnisse. Danach
-   ruft der Adapter M/Text für diesen Bestand auf. Der Lock wird gelöst, sobald
-   M/Text beendet ist.
+   ruft der Adapter M/Text für diesen Bestand auf und aktualisiert den
+   M/Text-Ressourcen-Cache. Der Lock wird nach der Cache-Aktualisierung gelöst.
 5. Der Workflow fragt den Auftragsstatus ab, bis der Auftrag `succeeded` oder
    `failed` erreicht. Der unveränderte M/Text-Output gehört zum Ergebnis und
    wird im Workflow als informative Zusammenfassung angezeigt. Sein Inhalt
@@ -360,16 +353,18 @@ verarbeitet werden sollen. Der Ablauf ist:
    Arbeitsverzeichnis und die Auftragsdaten. Der Projektbestand in
    `serverSync/` bleibt erhalten.
 
-Eine aus Workflow-Lauf und M/Text-Ziel gebildete Idempotenzkennung sorgt dafür,
+Eine aus Workflow-Lauf und M/Text-Umgebung gebildete Idempotenzkennung sorgt dafür,
 dass ein wiederholtes Anlegen desselben Auftrags dieselbe Auftragskennung
 liefert und die Verarbeitung nicht erneut startet. Nach einem Fehler wird kein
-konsistenter Projektbestand automatisch zugesichert. Der Anwender überträgt die
-Archive als neuen Auftrag erneut. Ist inzwischen ein neuer Stand eingetroffen,
-wird ein FULL benötigt, um wieder einen sauberen Stand herzustellen.
+konsistenter Projektbestand automatisch zugesichert. Ein späterer automatischer
+Lauf bildet sein DELTA erneut ab dem letzten erfolgreichen Lauf desselben
+Branches und schließt dadurch die noch nicht erfolgreich synchronisierten
+Änderungen ein. Ein manueller Start gleicht den ausgewählten Branch mit FULL
+ab.
 
-Offen ist, wie der Adapter nach einem Neustart mit unterbrochenen Aufträgen,
-einem möglicherweise noch laufenden M/Text-Prozess und zurückgebliebenen
-Upload-Dateien umgeht.
+Beim Start entfernt der Adapter temporäre Upload-, Arbeits- und Auftragsdaten
+früherer Prozesse. Deren Auftragskennungen sind danach unbekannt und liefern
+HTTP 404. Der Projektbestand in `serverSync/` bleibt erhalten.
 
 ### Erfolg und Reihenfolge aufeinanderfolgender Synchronisationen
 
@@ -379,7 +374,7 @@ D-Archive auch Änderungen zwischenzeitlich ausgefallener Läufe. Ein DELTA ohne
 Projektänderungen benötigt keine Übertragung.
 
 Auf `main` bestimmt der letzte erfolgreiche Push zusätzlich, ob ein
-Releaselinienwechsel noch den FULL-Abgleich beider Zielstufen erfordert.
+Releaselinienwechsel noch den FULL-Abgleich beider Umgebungen erfordert.
 
 Läufe desselben Branches werden nacheinander ausgeführt. Ein neuer Lauf kann
 einen wartenden Lauf ersetzen, ohne den aktiven Lauf abzubrechen. Sein
@@ -388,7 +383,9 @@ Branchstand darf einen inzwischen erfolgreich synchronisierten Stand nicht
 zurücksetzen.
 
 Läufe verschiedener Branches können parallel übertragen werden. Ihre fachlichen
-Abhängigkeiten bleiben in der Verantwortung der Benutzer.
+Abhängigkeiten bleiben in der Verantwortung der Benutzer. Der Adapter
+verarbeitet die Projektübernahme und den M/Text-Aufruf verschiedener Branches
+desselben Mandanten unter dessen gemeinsamem Lock nacheinander.
 
 ## 4. Mainframe-Lieferung
 
@@ -439,9 +436,9 @@ Informationen zum Lieferumfang in einem 30 Tage aufbewahrten Laufartefakt fest.
 Das Artefakt heißt z.B. `r261.108-lieferungsartefakt`.
 
 Es wird empfohlen (aber nicht erzwungen), dass eine **andere** Person dann
-**Lieferung ausführen** mit dem geplanten Liefer-Tag startet. Den
-4-Augenfall zu erzwingen wäre technisch auch umständlich und
-organisatorisch bei einigen Mandanten ggf. nicht praktikabel. Er ist dennoch zu
+**Lieferung ausführen** mit dem geplanten Liefer-Tag startet. Das
+4-Augenprinzip zu erzwingen wäre technisch auch umständlich und
+organisatorisch bei einigen Mandanten ggf. nicht praktikabel. Es ist dennoch zu
 bevorzugen und eine Abweichung davon wird explizit im Laufprotokoll geloggt.
 
 In diesem zweiten Workflows soll eine explizite Vorab-Prüfung, erfolgen bevor
@@ -577,7 +574,7 @@ Die Mandanten-Repositories sind verbindlich zugeordnet:
 
 Im Mandanten-Repository stehen nur kleine Trigger-Workflows. Die eigentlichen
 Arbeitsschritte liegen in
-`FI_Actions/fi_lbs_entw_oms_mtext_actions`. Die Trigger-Workflows nutzen dort
+`FI-Actions/fi_lbs_entw_oms_mtext_actions`. Die Trigger-Workflows nutzen dort
 den `main` Branch, welcher immer die freigegebene Version darstellt.
 
 `mtext_actions` enthält die Shared Workflows, die Python-Module,
@@ -602,12 +599,13 @@ mtext-actions/
     runner-preflight.sh
   src/
     lbs_delivery/
+      adapter.py
       config.py
       git.py
       github.py
-      mainframe_release.py
+      mainframe.py
       process.py
-      project_artifacts.py
+      project_archives.py
       lieferung.py
       resource_check.py
       sync.py
@@ -658,7 +656,7 @@ Merge nicht.
 
 Die Shared Workflows werden direkt in einen Mandantenlauf eingebunden. Die
 Python-Implementierung wird als Action aus `mtext_actions` geladen. Die
-Repositoryfreigabe in `FI_Actions` erlaubt GitHub das Laden dieser gemeinsamen
+Repositoryfreigabe in `FI-Actions` erlaubt GitHub das Laden dieser gemeinsamen
 Komponenten ohne eigenes Zugriffstoken.
 
 Der aufgerufene Workflow verwendet das `GITHUB_TOKEN` des

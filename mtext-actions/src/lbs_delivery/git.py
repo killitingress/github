@@ -12,7 +12,6 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import MTEXT_ZIEL_ENTWICKLUNG, MTEXT_ZIEL_FUNKTIONSTEST
 from .process import DeliveryError, Status
 
 
@@ -24,14 +23,6 @@ _LIEFERSTAND_PATTERN = r"(?P<releaselinie>[0-9]{3})\.(?P<zwischenrelease>[1-9][0
 # Prüft einen Liefer-Tag wie `r260.108`. `.100` bezeichnet das Hauptrelease
 # und ist die FULL-Basis für die späteren Zwischenreleases.
 LIEFER_TAG_RE = re.compile("r" + _LIEFERSTAND_PATTERN)
-
-# Prüft einen geschützten Branch einer gepflegten Releaselinie und erfasst die
-# Releaselinie für die Auswahl des M/Text-Ziels.
-_RELEASE_BRANCH_RE = re.compile(r"release/([0-9]{3})")
-
-# Prüft einen Feature-Branch einschließlich hierarchischer Bezeichnung und
-# erfasst die Releaselinie für die Entwicklungssynchronisation.
-_FEATURE_BRANCH_RE = re.compile(r"feature/([0-9]{3})/(.+)")
 
 # Prüft den temporären Arbeitsbranch einer Teillieferung und erfasst
 # Releaselinie sowie Zwischenrelease, zum Beispiel `bereitstellung/261.108`.
@@ -51,15 +42,18 @@ class GitChange:
 def execute(repository: Path, *arguments: str, returncodes: tuple[int, ...] = (0,)) -> bytes:
     """Führt einen Git-Befehl aus und gibt seine Standardausgabe zurück.
 
-    Bei einem unerwarteten Rückgabecode wird der Schritt mit `SOURCE_FAILED`
-    beendet.
+    Ein fehlendes Git oder ein unerwarteter Rückgabecode beendet den Schritt
+    mit `SOURCE_FAILED`.
     """
 
-    result = subprocess.run(
-        ["git", "-C", repository.as_posix(), *arguments],  # -C: Befehl im Repository ausführen
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "-C", repository.as_posix(), *arguments],  # -C: Befehl im Repository ausführen
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as exc:
+        raise DeliveryError(Status.SOURCE_FAILED, f"Git-Operation fehlgeschlagen: {exc}") from exc
 
     if result.returncode not in returncodes:
         detail = result.stderr.decode(errors="replace").strip()
@@ -97,11 +91,8 @@ def reference_exists(repository: Path, reference: str) -> bool:
 
 
 def require_ancestor(repository: Path, ancestor: str, descendant: str) -> None:
-    """Fordert, dass ein Commit oder eine Referenz von einer anderen Referenz erreichbar ist.
-
-    Damit lässt sich prüfen, ob ein Commit zum erwarteten Remote-Branch gehört
-    oder ob ein Basistag vor dem Release-Tag liegt.
-    """
+    """Fordert, dass ein Commit oder eine Referenz von einer anderen Referenz
+    erreichbar ist.  """
 
     # `--is-ancestor` liefert Exit 0 nur bei echter Abstammung.
     execute(
@@ -113,36 +104,8 @@ def require_ancestor(repository: Path, ancestor: str, descendant: str) -> None:
     )
 
 
-def resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str, str]:
-    """Ordnet einen zulässigen Quellbranch Releaselinie und M/Text-Zielstufe zu.
-
-    `main` und `release/nnn` führen zum M/Text-Ziel Funktionstest,
-    `feature/nnn/<Bezeichnung>` zum M/Text-Ziel Entwicklung. Weitere
-    Schrägstriche in der Feature-Bezeichnung sind erlaubt.
-    """
-
-    # `main` führt die in der Mandantenkonfiguration hinterlegte Releaselinie.
-    if source_branch == "main":
-        return main_releaselinie, MTEXT_ZIEL_FUNKTIONSTEST
-
-    release_match = _RELEASE_BRANCH_RE.fullmatch(source_branch)
-    if release_match is not None:
-        return release_match.group(1), MTEXT_ZIEL_FUNKTIONSTEST
-
-    feature_match = _FEATURE_BRANCH_RE.fullmatch(source_branch)
-    if feature_match is not None:
-        return feature_match.group(1), MTEXT_ZIEL_ENTWICKLUNG
-
-    raise DeliveryError(Status.VALIDATION_FAILED, "Branch ist kein Synchronisationszweig")
-
-
 def changes(repository: Path, base: str, target: str) -> list[GitChange]:
-    """Gibt Status und Pfade der Änderungen zwischen zwei Commits zurück.
-
-    Die nullgetrennte Ausgabe erhält gültige Git-Pfade ohne Mehrdeutigkeit durch
-    Quotierung. Git gibt Umbenennungen als Löschung und Hinzufügung aus, weil
-    DELTA-Pakete und serverSync genau diese Dateioperationen benötigen.
-    """
+    """Status und Pfade der Änderungen zwischen zwei Commits via Git-Diff."""
 
     # `--no-renames` liefert Umbenennungen als Löschung und Hinzufügung,
     # so wie DELTA-Pakete und die Synchronisation sie benötigen.
@@ -161,7 +124,7 @@ def changes(repository: Path, base: str, target: str) -> list[GitChange]:
 
     # Git liefert Status und Pfad als aufeinanderfolgende NUL-getrennte Felder.
     fields = iter(data.split("\0"))
-    return [GitChange(status_field[0], next(fields)) for status_field in fields]
+    return [GitChange(e[0], next(fields)) for e in fields]
 
 
 def project_changes(git_changes: Iterable[GitChange], project: str) -> Iterator[tuple[str, str]]:

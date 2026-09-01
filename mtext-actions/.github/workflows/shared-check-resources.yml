@@ -30,7 +30,7 @@ jobs:
       # prüft zugleich die Python-Runtime des Runners.
       - name: M/Text-Automatisierung laden
         id: automation
-        uses: FI_Actions/fi_lbs_entw_oms_mtext_actions@main
+        uses: FI-Actions/fi_lbs_entw_oms_mtext_actions@main
 
       # Prüft die gemeinsame Zuordnung und die Konfiguration des Mandanten
       - name: Mandantenkonfiguration prüfen

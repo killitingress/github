@@ -10,7 +10,6 @@ from unittest.mock import patch
 from lbs_delivery.git import BEREITSTELLUNG_BRANCH_RE, LIEFER_TAG_RE
 from lbs_delivery.lieferung import _pruefe_lieferquelle, _summary, run
 from lbs_delivery.process import DeliveryError
-from mtext import _build_parser
 
 from tests.support import TempDirTestCase, git, load_test_configuration, setup_release_repository, track_remote_branch
 
@@ -32,7 +31,7 @@ class LieferungTests(TempDirTestCase):
 
         git(self.repository, "switch", "-c", "bereitstellung/261.108")
         track_remote_branch(self.repository, "bereitstellung/261.108")
-        releaselinie, zwischenrelease = _pruefe_lieferquelle(
+        _pruefe_lieferquelle(
             self.configuration,
             self.repository,
             "r261.108",
@@ -45,10 +44,7 @@ class LieferungTests(TempDirTestCase):
             "r261.108",
             "bereitstellung/261.108",
             self.source_sha,
-            releaselinie,
-            zwischenrelease,
         )
-        self.assertEqual((releaselinie, zwischenrelease), ("261", "108"))
         self.assertIn("`DELTA`", summary)
         self.assertIn("`r261.100`", summary)
         self.assertIn("Änderungen seit `r261.107`", summary)
@@ -108,6 +104,23 @@ class LieferungTests(TempDirTestCase):
                 self.source_sha,
             )
 
+    def test_summary_uses_previous_tag_from_delivery_history(self) -> None:
+        """Ignoriert einen höheren Zwischenrelease-Tag auf einem anderen Verlauf."""
+
+        # erreichbaren Vorgänger als .106 und konkurrierende .107 abseits der Lieferung anlegen
+        git(self.repository, "tag", "-d", "r261.107")
+        git(self.repository, "tag", "r261.106", "HEAD^")
+        git(self.repository, "checkout", "--detach", "r261.100")
+        git(self.repository, "commit", "--allow-empty", "-m", "anderer Verlauf")
+        git(self.repository, "tag", "r261.107")
+        git(self.repository, "checkout", "--detach", self.source_sha)
+
+        # Summary folgt der Historie der vorbereiteten SHA, nicht der höchsten Tag-Nummer
+        summary = _summary(self.configuration, self.repository, "r261.108", "release/261", self.source_sha)
+
+        self.assertIn("Änderungen seit `r261.106`", summary)
+        self.assertNotIn("Änderungen seit `r261.107`", summary)
+
     def test_rejects_stale_tip_during_prepare(self) -> None:
         """Die Vorbereitung verlangt den aktuellen Stand des Branches."""
 
@@ -129,7 +142,6 @@ class LieferungTests(TempDirTestCase):
         payload = {
             "tag": "r261.108",
             "sha": self.source_sha,
-            "branch": "bereitstellung/261.108",
             "repository": "FinanzInformatik/fi_lbs_entw_oms_fi",
             "prepare_actor": "alice",
         }
@@ -146,12 +158,8 @@ class LieferungTests(TempDirTestCase):
             },
         ):
             with self.assertRaisesRegex(DeliveryError, "Direktlieferung muss .* bewusst bestätigt werden"):
-                run(_build_parser().parse_args(["delivery", "confirm", "--tag", "r261.108"]))
-            direct = run(
-                _build_parser().parse_args(
-                    ["delivery", "confirm", "--tag", "r261.108", "--confirm-direct-delivery"]
-                )
-            )
+                run("confirm", "r261.108")
+            direct = run("confirm", "r261.108", confirm_direct_delivery=True)
         with patch.dict(
             os.environ,
             {
@@ -160,7 +168,7 @@ class LieferungTests(TempDirTestCase):
                 "GITHUB_ACTOR": "bob",
             },
         ):
-            lieferung_4_augenfall = run(_build_parser().parse_args(["delivery", "confirm", "--tag", "r261.108"]))
+            lieferung_4_augenfall = run("confirm", "r261.108")
 
         self.assertIn("- Lieferweg: Direktlieferung", direct["summary"])
         self.assertIn("- Lieferweg: 4-Augenfall", lieferung_4_augenfall["summary"])
@@ -175,7 +183,7 @@ class LieferungTests(TempDirTestCase):
                 {"id": 20, "created_at": "2026-08-21T10:00:00Z", "expired": False, "workflow_run": {"id": 200}},
             ]
         }
-        arguments = _build_parser().parse_args(["delivery", "resolve", "--tag", "r261.108"])
+        arguments = {"subcommand": "resolve", "tag": "r261.108"}
         with patch.dict(
             os.environ,
             {
@@ -185,7 +193,7 @@ class LieferungTests(TempDirTestCase):
             },
         ):
             with patch("lbs_delivery.lieferung.github.request", side_effect=(None, artifacts)):
-                planned = run(arguments)
+                planned = run(**arguments)
         self.assertEqual(
             planned["outputs"],
             {
@@ -205,7 +213,7 @@ class LieferungTests(TempDirTestCase):
             },
         ):
             with patch("lbs_delivery.lieferung.github.request", return_value=reference):
-                repeated = run(arguments)
+                repeated = run(**arguments)
         self.assertEqual(
             repeated["outputs"],
             {
@@ -234,7 +242,7 @@ class LieferungTests(TempDirTestCase):
             },
         ):
             with patch("lbs_delivery.lieferung.github.request", side_effect=(None, artifacts)):
-                result = run(_build_parser().parse_args(["delivery", "resolve", "--tag", "r261.108"]))
+                result = run("resolve", "r261.108")
 
         self.assertEqual(result["outputs"]["vorbereitung_id"], 300)
 
@@ -243,7 +251,7 @@ class LieferungTests(TempDirTestCase):
 
         preparation = self.root / "vorbereitung" / "vorbereitung.json"
         preparation.parent.mkdir()
-        arguments = _build_parser().parse_args(["delivery", "confirm", "--tag", "r261.108"])
+        arguments = {"subcommand": "confirm", "tag": "r261.108"}
         with patch.dict(
             os.environ,
             {
@@ -254,14 +262,13 @@ class LieferungTests(TempDirTestCase):
         ):
             preparation.write_text("kein JSON", encoding="utf-8")
             with self.assertRaisesRegex(DeliveryError, "Vorbereitungsartefakt ist ungültig"):
-                run(arguments)
+                run(**arguments)
 
             preparation.write_text(
                 json.dumps(
                     {
                         "tag": "r261.109",
                         "sha": self.source_sha,
-                        "branch": "release/261",
                         "repository": "FinanzInformatik/fi_lbs_entw_oms_fi",
                         "prepare_actor": "alice",
                     }
@@ -269,7 +276,7 @@ class LieferungTests(TempDirTestCase):
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(DeliveryError, "anderen Liefer-Tag"):
-                run(arguments)
+                run(**arguments)
 
     def test_creates_tag(self) -> None:
         """Erzeugt den Liefer-Tag über die GitHub-API."""
@@ -294,7 +301,7 @@ class LieferungTests(TempDirTestCase):
                 },
             ),
         ):
-            result = run(_build_parser().parse_args(["delivery", "tag", "--tag", "r261.108"]))
+            result = run("tag", "r261.108")
         self.assertEqual(result, {"status": "LIEFERUNG_TAGGED"})
         self.assertEqual(calls[-1]["payload"], {"ref": "refs/tags/r261.108", "sha": self.source_sha})
 
