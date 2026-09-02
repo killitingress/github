@@ -16,7 +16,9 @@ from pathlib import Path
 from . import config, git
 from .config import Configuration, mandant_source
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
-from .project_archives import build_project_archives, release_scope
+from .project_archives import (
+    RELEASE_REPORT_NAME, build_project_archives, previous_release_scope, release_report, release_scope,
+)
 
 
 # F- und D-Archive werden als Member in diesem Mainframe-Dataset abgelegt.
@@ -114,12 +116,12 @@ def _submit_mainframe_files(*, release_directory: Path) -> dict[str, object]:
     """Übergibt alle vorbereiteten Archive und JCL-Dateien an den Mainframe."""
 
     # vollständige Paare aus Archiv und JCL im Release-Verzeichnis voraussetzen
-    archives = sorted(release_directory.glob("*.tgz"))
+    archives = list(release_directory.glob("*.tgz"))
     if not archives or any(not e.with_suffix(_MAINFRAME_JCL_SUFFIX).is_file() for e in archives):
         raise DeliveryError(Status.PACKAGE_FAILED, "Archive oder JCL fehlen")
 
-    # jedes Archiv zusammen mit seiner JCL an den Mainframe übergeben
-    for archive in archives:
+    # je Projekt zuerst F übertragen, danach mit D den alten Delta-Stand ersetzen
+    for archive in sorted(archives, key=lambda e: (e.stem[:-1], e.stem[-1] == "D")):
         _submit_archive(archive)
 
     return {"status": Status.MAINFRAME_SUBMITTED.value}
@@ -128,11 +130,12 @@ def _submit_mainframe_files(*, release_directory: Path) -> dict[str, object]:
 def _build_mainframe_files(configuration: Configuration, *, output_directory: Path, tag: str) -> None:
     """Erzeugt Archive, Informationsdateien und JCL für den Liefer-Tag."""
 
-    # Liefer-Tag in Releaselinie und gemeinsamen Git-Scope auflösen
+    # Paketumfang und Vorrelease-Vergleich aus demselben Lieferstand ableiten
     repository_root = mandant_source()
     tag_match = git.LIEFER_TAG_RE.fullmatch(tag)
     releaselinie = tag_match.group("releaselinie")
-    scope = release_scope(repository_root, tag, git.resolve(repository_root, f"refs/tags/{tag}"))
+    paket_scope = release_scope(repository_root, tag, git.resolve(repository_root, f"refs/tags/{tag}"))
+    information_scope = previous_release_scope(repository_root, tag, paket_scope.bis[1])
 
     # Hostprofil und JCL-Vorlage für diese Releaselinie laden
     hostprofil = configuration.hostprofile[configuration.releaselinien[releaselinie]["hostprofil"]]
@@ -147,8 +150,9 @@ def _build_mainframe_files(configuration: Configuration, *, output_directory: Pa
             configuration,
             repository_root,
             project,
-            scope,
             output_directory,
+            paket_scope=paket_scope,
+            information_scope=information_scope,
         )
 
         for archive_path in (project_archives.f_archiv, project_archives.d_archiv):
@@ -169,6 +173,15 @@ def _build_mainframe_files(configuration: Configuration, *, output_directory: Pa
                 archive_path.with_suffix(_MAINFRAME_JCL_SUFFIX).write_text(rendered, encoding="ascii")
             except OSError as exc:
                 raise DeliveryError(Status.PACKAGE_FAILED, f"JCL kann nicht geschrieben werden: {exc}") from exc
+
+    # den Bericht mit dem Paket erzeugen, damit spätere Jobs keine Git-Quelle benötigen
+    report = release_report(
+        configuration, repository_root, paket_scope=paket_scope, information_scope=information_scope,
+    )
+    try:
+        (output_directory / RELEASE_REPORT_NAME).write_text(report, encoding="utf-8")
+    except OSError as exc:
+        raise DeliveryError(Status.PACKAGE_FAILED, f"Lieferbericht kann nicht geschrieben werden: {exc}") from exc
 
 
 def run(subcommand: str, tag: str | None = None) -> dict[str, object]:

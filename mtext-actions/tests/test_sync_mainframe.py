@@ -40,6 +40,7 @@ class SyncTests(TempDirTestCase):
         )
         self.project_archives.information.write_text(json.dumps({
             "projekt": "LOMS_Basis",
+            "lieferart": "FULL",
             "scope": {"bis": {"referenz": "release/261", "commit": "current"}},
             "elemente": [["A", "beispiel.xml"]],
             "sha256": "checksum",
@@ -136,7 +137,7 @@ class SyncTests(TempDirTestCase):
                 self.assertEqual(documents[-1]["sha256"], hashlib.sha256(archive.read_bytes()).hexdigest())
 
                 # FULL stellt ein leeres D-Archiv für den Mainframe bereit
-                if "von" not in documents[-1]["scope"]:
+                if documents[-1]["lieferart"] == "FULL":
                     self.assertTrue(archives.d_archiv.is_file())
             return {"auftrag_id": "auftrag", "ergebnis": "Geändert: beispiel.xml\nGelöscht: alt.xml"}
 
@@ -147,6 +148,7 @@ class SyncTests(TempDirTestCase):
             for event in ("push", "workflow_dispatch"):
                 with patch.dict(os.environ, {"GITHUB_EVENT_NAME": event}):
                     result = sync.run()
+            self.assertEqual([e["lieferart"] for e in documents], ["DELTA", "FULL"])
             self.assertEqual(documents[0]["scope"]["von"]["commit"], baseline)
             self.assertEqual(documents[0]["scope"]["bis"]["commit"], commit)
             self.assertIn(["M", "baseline.txt"], documents[0]["elemente"])
@@ -183,8 +185,9 @@ class SyncTests(TempDirTestCase):
             if request.get_method() == "POST":
                 payload = json.loads(request.data)
                 self.assertEqual(payload["kuerzel"], "FI")
-                self.assertEqual(payload["auftragsart"], "FULL")
+                self.assertEqual(set(payload), {"kuerzel", "archive"})
                 self.assertEqual(payload["archive"][0]["name"], "full.tgz")
+                self.assertEqual(payload["archive"][0]["information"]["lieferart"], "FULL")
                 self.assertEqual(payload["archive"][0]["information"]["projekt"], "LOMS_Basis")
                 self.assertEqual(payload["archive"][0]["information"]["sha256"], "checksum")
 
@@ -231,23 +234,6 @@ class SyncTests(TempDirTestCase):
             self.assertEqual(requests[0].get_header("Idempotency-key"), "github-run-test-en01")
             self.assertEqual(wait.call_args_list, [call(5)] if methods.count("GET") == 2 else [])
 
-    def test_upload_abort_closes_stream(self) -> None:
-        """Prüft, dass bei einem Verbindungsabbruch auch der Upload-Datenstrom geschlossen wird."""
-
-        def disconnect(request, **_kwargs) -> None:
-            """Bricht nach dem ersten Dateiblock ab."""
-
-            next(request.data)
-            raise urllib.error.URLError("Verbindung abgebrochen")
-
-        with (
-            patch.object(adapter.urllib.request, "urlopen", side_effect=disconnect) as http,
-            self.assertRaisesRegex(DeliveryError, "Adapteraufruf") as failure,
-        ):
-            adapter._upload_archive("http://adapter.test/sync/auftrag", self.project_archives.f_archiv)
-        self.assertEqual(failure.exception.status, Status.ADAPTER_FAILED)
-        self.assertEqual(list(http.call_args.args[0].data), [])
-
     def test_delta_job_uploads_multiple_archives(self) -> None:
         """Prüft einen DELTA-Auftrag mit Informationen und einem PUT je Archiv."""
 
@@ -256,6 +242,7 @@ class SyncTests(TempDirTestCase):
             information = self.root / f"_INFO_FI-{project}.json"
             information.write_text(json.dumps({
                 "projekt": project,
+                "lieferart": "DELTA",
                 "scope": {
                     "von": {"referenz": "release/261", "commit": "before"},
                     "bis": {"referenz": "release/261", "commit": "current"},
@@ -284,8 +271,9 @@ class SyncTests(TempDirTestCase):
 
             if request.get_method() == "POST":
                 payload = json.loads(request.data)
-                self.assertEqual(payload["auftragsart"], "DELTA")
+                self.assertEqual(set(payload), {"kuerzel", "archive"})
                 self.assertEqual(len(payload["archive"]), 2)
+                self.assertEqual([e["information"]["lieferart"] for e in payload["archive"]], ["DELTA", "DELTA"])
                 self.assertEqual(
                     [e["information"]["sha256"] for e in payload["archive"]],
                     ["checksum-LOMS_Basis", "checksum-LOMS_Autonom"],

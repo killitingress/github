@@ -1,4 +1,4 @@
-"""Prüft Vorbereitung, Bestätigung und Tag der Lieferung."""
+"""Prüft Vorbereitung und Bestätigung der Lieferung."""
 
 from __future__ import annotations
 
@@ -27,10 +27,18 @@ class LieferungTests(TempDirTestCase):
         self.source_sha = git(self.repository, "rev-parse", "HEAD")
 
     def test_prepares_delta_on_bereitstellung_and_shows_previous_tag(self) -> None:
-        """Hält ein DELTA auf dem Bereitstellungsbranch fest und zeigt den Vorgänger."""
+        """Prüft eine DELTA-Vorbereitung mit dem höchsten niedrigeren Liefer-Tag."""
 
-        git(self.repository, "switch", "-c", "bereitstellung/261.108")
+        # .106 gehört zur Lieferhistorie, die höhere .107 liegt auf einem anderen Verlauf
+        git(self.repository, "tag", "-d", "r261.107")
+        git(self.repository, "tag", "r261.106", "HEAD^")
+        git(self.repository, "checkout", "--detach", "r261.100")
+        git(self.repository, "commit", "--allow-empty", "-m", "anderer Verlauf")
+        git(self.repository, "tag", "r261.107")
+        git(self.repository, "switch", "-c", "bereitstellung/261.108", self.source_sha)
         track_remote_branch(self.repository, "bereitstellung/261.108")
+
+        # die Vorbereitung verwendet .107 als Vorgänger auch außerhalb ihrer Historie
         _pruefe_lieferquelle(
             self.configuration,
             self.repository,
@@ -45,9 +53,13 @@ class LieferungTests(TempDirTestCase):
             "bereitstellung/261.108",
             self.source_sha,
         )
-        self.assertIn("`DELTA`", summary)
+        self.assertIn("| Branch | `bereitstellung/261.108` |", summary)
+        self.assertIn("- Liefer-Tag: `r261.108`", summary)
+        self.assertIn("- Lieferart: `DELTA`", summary)
+        self.assertIn(f"- Commit: `{self.source_sha}`", summary)
         self.assertIn("`r261.100`", summary)
         self.assertIn("Änderungen seit `r261.107`", summary)
+        self.assertNotIn("Änderungen seit `r261.106`", summary)
         self.assertIn("`D` `deleted.txt`", summary)
         self.assertIn("`A` `new.txt`", summary)
 
@@ -103,23 +115,6 @@ class LieferungTests(TempDirTestCase):
                 "bereitstellung/261.109",
                 self.source_sha,
             )
-
-    def test_summary_uses_previous_tag_from_delivery_history(self) -> None:
-        """Ignoriert einen höheren Zwischenrelease-Tag auf einem anderen Verlauf."""
-
-        # erreichbaren Vorgänger als .106 und konkurrierende .107 abseits der Lieferung anlegen
-        git(self.repository, "tag", "-d", "r261.107")
-        git(self.repository, "tag", "r261.106", "HEAD^")
-        git(self.repository, "checkout", "--detach", "r261.100")
-        git(self.repository, "commit", "--allow-empty", "-m", "anderer Verlauf")
-        git(self.repository, "tag", "r261.107")
-        git(self.repository, "checkout", "--detach", self.source_sha)
-
-        # Summary folgt der Historie der vorbereiteten SHA, nicht der höchsten Tag-Nummer
-        summary = _summary(self.configuration, self.repository, "r261.108", "release/261", self.source_sha)
-
-        self.assertIn("Änderungen seit `r261.106`", summary)
-        self.assertNotIn("Änderungen seit `r261.107`", summary)
 
     def test_rejects_stale_tip_during_prepare(self) -> None:
         """Die Vorbereitung verlangt den aktuellen Stand des Branches."""
@@ -177,10 +172,12 @@ class LieferungTests(TempDirTestCase):
     def test_resolves_latest_preparation_or_existing_tag(self) -> None:
         """Verwendet den neuesten geplanten Stand und erkennt Wiederholungen."""
 
+        # die jüngste gültige Vorbereitung zählt, eine neuere abgelaufene nicht
         artifacts = {
             "artifacts": [
                 {"id": 10, "created_at": "2026-08-20T10:00:00Z", "expired": False, "workflow_run": {"id": 100}},
                 {"id": 20, "created_at": "2026-08-21T10:00:00Z", "expired": False, "workflow_run": {"id": 200}},
+                {"id": 30, "created_at": "2026-08-22T10:00:00Z", "expired": True, "workflow_run": {"id": 300}},
             ]
         }
         arguments = {"subcommand": "resolve", "tag": "r261.108"}
@@ -222,30 +219,6 @@ class LieferungTests(TempDirTestCase):
             },
         )
 
-    def test_uses_newest_preparation_when_several_exist(self) -> None:
-        """Verwendet die neueste noch gültige Vorbereitung zum Liefer-Tag."""
-
-        artifacts = {
-            "artifacts": [
-                {"id": 10, "created_at": "2026-08-20T10:00:00Z", "expired": True, "workflow_run": {"id": 100}},
-                {"id": 20, "created_at": "2026-08-19T10:00:00Z", "expired": False, "workflow_run": {"id": 200}},
-                {"id": 30, "created_at": "2026-08-21T10:00:00Z", "expired": False, "workflow_run": {"id": 300}},
-            ]
-        }
-
-        with patch.dict(
-            os.environ,
-            {
-                "GITHUB_REPOSITORY": "FI/mandant",
-                "GITHUB_TOKEN": "secret",
-                "GITHUB_API_URL": "https://github.example/api/v3",
-            },
-        ):
-            with patch("lbs_delivery.lieferung.github.request", side_effect=(None, artifacts)):
-                result = run("resolve", "r261.108")
-
-        self.assertEqual(result["outputs"]["vorbereitung_id"], 300)
-
     def test_rejects_invalid_or_mismatched_preparation(self) -> None:
         """Lehnt beschädigte Artefakte und einen abweichenden Liefer-Tag ab."""
 
@@ -277,33 +250,6 @@ class LieferungTests(TempDirTestCase):
             )
             with self.assertRaisesRegex(DeliveryError, "anderen Liefer-Tag"):
                 run(**arguments)
-
-    def test_creates_tag(self) -> None:
-        """Erzeugt den Liefer-Tag über die GitHub-API."""
-
-        calls: list[dict[str, object]] = []
-
-        def request(**arguments: object) -> object:
-            """Zeichnet den GitHub-Aufruf zur Tag-Erstellung auf."""
-
-            calls.append(arguments)
-            return {"ref": "refs/tags/r261.108"}
-
-        with (
-            patch("lbs_delivery.lieferung.github.request", side_effect=request),
-            patch("lbs_delivery.lieferung.git.resolve", return_value=self.source_sha),
-            patch.dict(
-                os.environ,
-                {
-                    "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
-                    "GITHUB_TOKEN": "secret",
-                    "GITHUB_API_URL": "https://github.example/api/v3",
-                },
-            ),
-        ):
-            result = run("tag", "r261.108")
-        self.assertEqual(result, {"status": "LIEFERUNG_TAGGED"})
-        self.assertEqual(calls[-1]["payload"], {"ref": "refs/tags/r261.108", "sha": self.source_sha})
 
 
 if __name__ == "__main__":

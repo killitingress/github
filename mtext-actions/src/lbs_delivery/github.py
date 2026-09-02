@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
+from .project_archives import RELEASE_REPORT_NAME
 
 
 # Von GitHub für die REST-API vorgegebene Version des Anfrageformats.
@@ -152,22 +153,18 @@ def run(tag: str) -> dict[str, object]:
     if not information_files:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien fehlen")
 
-    # gemeinsamen Scope aus der ersten projektbezogenen Informationsdatei lesen
+    # der beim Paketbau erstellte Bericht enthält Vorrelease-Diff und Lieferumfang
     try:
-        scope = json.loads(information_files[0].read_text(encoding="utf-8"))["scope"]
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, f"Informationsdatei kann nicht gelesen werden: {information_files[0].name}: {exc}") from exc
-    delivery_type = "DELTA" if "von" in scope else "FULL"
+        report = (Path(os.environ["RUNNER_TEMP"]) / "release" / RELEASE_REPORT_NAME).read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, f"Lieferbericht kann nicht gelesen werden: {exc}") from exc
 
-    # sichtbaren Lieferbericht aus Tag, Lieferart und Ziel-Commit aufbauen
+    # nach erfolgreicher Übergabe beide Dateilisten direkt im GitHub Release veröffentlichen
     release_values = {
         "tag_name": tag,
         "name": f"Release {tag}",
         "body": (
-            "## Lieferung\n\n"
-            f"- Liefer-Tag: `{tag}`\n"
-            f"- Lieferart: `{delivery_type}`\n"
-            f"- Commit: `{scope['bis']['commit']}`\n\n"
+            report + "\n"
             "Die Archive und die zugehörige JCL wurden von FTPS und JES angenommen.\n"
         ),
         "draft": False,

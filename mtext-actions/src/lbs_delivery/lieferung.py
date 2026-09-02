@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import config, git, github
 from .process import DeliveryError, Status
-from .project_archives import Scope, project_elements, release_scope
+from .project_archives import previous_release_scope, release_report, release_scope
 
 
 # Name des GitHub-Actions-Artefakts mit der festgehaltenen Vorbereitung
@@ -82,51 +82,22 @@ def _pruefe_lieferquelle(configuration: config.Configuration, root: Path, tag: s
 def _summary(configuration: config.Configuration, root: Path, tag: str, branch: str, sha: str) -> str:
     """Erzeugt den Lieferumfang und die Vergleichsstände als Markdown."""
 
-    # Lieferart und gemeinsamer Kopf der Vorprüfung bestimmen
-    scope = release_scope(root, tag, sha)
-    delivery_type = "FULL" if scope.von is None else "DELTA"
-    base_reference = "–" if scope.von is None else scope.von[0]
+    # ausgewählten Branch als Kontext der Vorbereitung nennen
     lines = [
         "## Liefer-Vorprüfung",
         "",
         "| Angabe | Wert |",
         "|---|---|",
-        f"| Lieferung | `{tag}` |",
         f"| Branch | `{branch}` |",
-        f"| Commit | `{sha}` |",
-        f"| Lieferart | `{delivery_type}` |",
-        f"| Bezugsstand | `{base_reference}` |",
         "",
     ]
 
-    # kumulativen Lieferumfang und bei DELTA den direkten Vorgänger zeigen
-    sections: list[tuple[str, Scope]] = [("Lieferumfang", scope)]
-    if scope.von is not None:
-        release_prefix = tag.rsplit(".", 1)[0]
-        previous = git.execute(
-            root, "describe", "--tags", "--match", f"{release_prefix}.*", "--abbrev=0", "--first-parent", sha
-        ).decode().strip()
-
-        if previous != scope.von[0]:
-            previous_sha = git.resolve(root, f"refs/tags/{previous}")
-            previous_scope = Scope(von=(previous, previous_sha), bis=scope.bis, changes=git.changes(root, previous_sha, sha))
-            sections.append((f"Änderungen seit `{previous}`", previous_scope))
-
-    # jeden Vergleichsstand projektweise in die Zusammenfassung schreiben
-    for heading, section in sections:
-        lines.extend((f"## {heading}", ""))
-        for project in configuration.projects:
-            elements = project_elements(root, project, section)
-            lines.extend((f"### `{project}`", ""))
-
-            if elements:
-                lines.extend(f"- `{status}` `{path}`" for status, path in elements)
-            else:
-                lines.append("- Keine Änderungen")
-            lines.append("")
-        lines.extend((f"Zielstand: `{sha}`", ""))
-
-    return "\n".join(lines)
+    # den gemeinsamen Lieferbericht aus den beiden Vergleichsumfängen erzeugen
+    paket_scope = release_scope(root, tag, sha)
+    information_scope = previous_release_scope(root, tag, sha)
+    return "\n".join(lines) + "\n" + release_report(
+        configuration, root, paket_scope=paket_scope, information_scope=information_scope,
+    )
 
 
 def _ermittle_lieferung(tag: str) -> dict[str, object]:

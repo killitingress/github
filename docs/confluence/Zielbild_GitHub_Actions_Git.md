@@ -83,10 +83,10 @@ Branchstand ist für eine Lieferung bereit
 Branch und Liefer-Tag auswählen
     │ Lieferung vorbereiten
     ▼
-Lieferumfang prüfen
-    │ Lieferung mit demselben geplanten Liefer-Tag ausführen
+Vorbereitung prüfen
+    │ Lieferung ausführen
     ▼
-Liefer-Tag, Paketbau und Mainframe-Übergabe durch mtext_actions
+Liefer-Tag, Paketbau und Mainframe-Übergabe
 ```
 
 ### Entscheidungen und Nutzen
@@ -235,15 +235,13 @@ erreichbar. Der Sync-Endpunkt des Adapters wird unter
 | Archiv | Eine gzip-komprimierte TAR-Datei (`.tgz`) für ein Projekt. Ein F-Archiv enthält dessen vollständigen Stand, ein D-Archiv neue und geänderte Dateien sowie eine Löschliste |
 | Synchronisationsauftrag, kurz Auftrag | Die beim Adapter gemeinsam zu verarbeitenden Archive und Informationen für eine M/Text-Umgebung |
 
-Synchronisation und Mainframe-Lieferung verwenden dasselbe Format für Archive
-und Informationen. Bei der Synchronisation stehen die Informationen im POST,
-bei der Mainframe-Lieferung in einer Informationsdatei. Die benötigten Archive
-richten sich nach der Lieferart:
+Anders als im alten SVN Ablauf verwenden wir nun für Synchronisation und Mainframe-Lieferung ein einheitliches Archivformat.
+Es gibt weiterhin die beiden bekannten Lieferarten:
 
-| Lieferart | Archive je Projekt | Vergleichsstand und Verwendung |
-|---|---|---|
-| FULL | F-Archiv mit dem vollständigen Projektbaum. Bei der Mainframe-Lieferung zusätzlich ein leeres D-Archiv | Ohne Vergleichsstand. Für die initiale Synchronisation eines dauerhaften Branchs, den Wechsel der produktiven Releaselinie, den manuellen Vollabgleich und Lieferungen des Hauptreleases (`.100`) |
-| DELTA | D-Archiv mit neuen und geänderten Dateien sowie einer Löschliste | Bei der Synchronisation zwischen dem letzten erfolgreichen und dem aktuellen Branchstand. Beim ersten Feature-Abgleich ab dem gemeinsamen Commit mit dem Zielbranch. Bei der Mainframe-Lieferung kumulativ zwischen dem `.100`-Tag und dem Liefer-Tag |
+| Lieferart | Archive je Projekt |
+|---|---|
+| FULL | F-Archiv mit dem vollständigen Projektbaum. Bei der Mainframe-Lieferung zusätzlich ein leeres D-Archiv |
+| DELTA | D-Archiv mit neuen und geänderten Dateien sowie einer Löschliste |
 
 Das F-Archiv enthält das Projektverzeichnis mit allen Dateien und ersetzt den
 im Ziel vorhandenen Stand vollständig. Eine Löschliste ist deshalb nicht
@@ -258,28 +256,37 @@ muss - das Format ist gegenüber dem Jenkins-Ablauf unverändert. Eine
 Umbenennung erscheint als Löschung des bisherigen und Hinzufügen des neuen
 Pfads.
 
-Bei der Mainframe-Übergabe wird bei FULL zuerst das F-Archiv und anschließend
-das leere D-Archiv verarbeitet. Das leere D-Archiv ersetzt das gleichnamige
-D-Archiv einer früheren Lieferung. Dadurch kann ein vorheriges DELTA den neuen
-FULL-Stand nicht wieder verändern. Für die M/Text-Synchronisation genügt bei
-FULL das F-Archiv. Bei DELTA wird das D-Archiv übertragen.
+Aus dem bestehenden Ablauf wird übernommen, dass bei der Mainframe-Übergabe bei
+FULL zuerst das F-Archiv und anschließend das leere D-Archiv entpackt wird. Der
+Travic-Link Folgejob wird an der Stelle erstmal nicht geändert. Der Sinn
+dahinter ist, dass einmal gelieferte Archive nie gelöscht werden und das leere
+D-Archiv daher das gleichnamige D-Archiv einer früheren Lieferung ersetzt. Es
+enthält eine leere Löschliste und keine Projektdateien. Dadurch kann ein
+vorheriges DELTA den neuen FULL-Stand nicht wieder verändern. Für die
+M/Text-Synchronisation genügt bei FULL das F-Archiv.
 
-Der Archivname besteht aus Mandantenkürzel, Projektcode und `F` oder `D`. Bei
-der Mainframe-Lieferung ist der Name ohne `.tgz` zugleich das Mainframe-Member.
+Der Archivname besteht wie gehabt aus Mandantenkürzel, Projektcode und `F` oder
+`D`. Bei der Mainframe-Lieferung ist der Name ohne `.tgz` zugleich das
+Mainframe-Member.
 
-Neben den Archiven liegt jeweils eine JSON-Informationsdatei
+Neben den Archiven liegt für jedes Projekt eine JSON-Informationsdatei
 `_INFO_<Mandantenkürzel>-<Projekt>.json`, zum Beispiel
-`_INFO_FI-LOMS_Basis.json`. Ihr Inhalt wird bei der Adapter-Synchronisation
-auch bei der Auftragsanlage im POST-Body mitgegeben. Sie entspricht inhaltlich
-den bisherigen Info-Dateien in trans/, ist aber technisch verarbeitbar und
-einheitlich aufgebaut:
+`_INFO_FI-LOMS_Basis.json`. Inhaltlich und namentlich orientiert sie sich an
+dem, was bisher im `trans/`-Verzeichnis (NFS-Share) abgelegt wurde. Sie ist
+jedoch im JSON Format und daher maschinell besser verarbeitbar. Für die
+Mainframe-Lieferung spielt die Datei keine technische Rolle, sie wird aber im
+GitHub-Release mit abgelegt und kann so bei Bedarf für Kontrollen oder zur
+Revision genutzt werden. Bei der Synchronisation via LTOMA ist sie Teil des
+initialen POST-Body und wird verwendet um den Umfang der hochzuladenen Archive
+zu beschreiben. Das folgende Beispiel zeigt eine Mainframe-Lieferung:
 
 ```json
 {
   "projekt": "LOMS_Basis",
+  "lieferart": "DELTA",
   "scope": {
     "von": {
-      "referenz": "r261.100",
+      "referenz": "r261.107",
       "commit": "..."
     },
     "bis": {
@@ -295,16 +302,58 @@ einheitlich aufgebaut:
 }
 ```
 
-`von` entfällt bei FULL und bezeichnet bei DELTA den Vergleichsstand. `bis`
-bezeichnet den paketierten Zielstand. `elemente` enthält für jede relevante
-Datei den Git-Status und ihren projekt-relativen Pfad mit den Statuswerten `A`
+`scope.von` bezeichnet den Ausgangsstand. `scope.bis` gibt den Stand an, der
+geliefert oder synchronisiert werden soll. Die Liste `elemente` beschreibt
+die Unterschiede zwischen diesen beiden Ständen. Für jeden Stand nennt
+`referenz` den Liefer-Tag (bei Lieferungen) oder Branch (bei einer
+Synchronisierung) und `commit` die zugehörige Commit-SHA.
+
+`elemente` enthält für jede relevante Datei den Git-Status und ihren
+projektbezogenen Pfad mit den Statuswerten `A`
 (hinzugefügt), `M` (geändert), `D` (gelöscht) und `T` (Typ geändert). `sha256`
 enthält als String die Prüfsumme des F-Archivs bei FULL oder des D-Archivs bei
 DELTA.
 
-Gelöschte Dateien werden sowohl in `elemente` geführt als auch in der
-Löschliste des D-Archivs, dort allerdings mit vollem Pfad für historische
-Kompatibilität.
+Bei der **Synchronisation** entfällt `scope.von` bei FULL und alle
+Projektdateien stehen mit `A` in `elemente`. Bei DELTA stimmen Elementliste und
+Archivumfang überein. Die Löschliste enthält die `D`-Einträge mit
+vorangestelltem Projektnamen um Kompatibilität mit dem Travic-Link Folgeskript
+zu gewährleisten.
+
+Das folgende Beispiel zeigt einen manuell gestarteten FULL-Abgleich eines
+Feature-Branches. Das Beispielprojekt besteht aus zwei Dateien. Beide werden
+als Teil des gesamten Projektbestands mit `A` aufgeführt, auch wenn sie bereits
+vor dem Abgleich vorhanden waren:
+
+```json
+{
+  "projekt": "LOMS_Basis",
+  "lieferart": "FULL",
+  "scope": {
+    "bis": {
+      "referenz": "feature/261/neues-Anschreiben",
+      "commit": "..."
+    }
+  },
+  "elemente": [
+    ["A", "beispiel.xml"],
+    ["A", "vorlage.xml"]
+  ],
+  "sha256": "..."
+}
+```
+
+Bei **Mainframe-Lieferungen** zeigt die Info-Datei die Änderungen seit
+dem vorherigen Liefer-Tag. Das entspricht dem bisherigen „DIFF gegenüber
+Vorrelease“. Dieser Vergleich wird auch bei einem neuen Hauptrelease gebildet.
+DELTA-Archive und ihre Löschlisten beziehen sich hier auf den zugehörigen
+`.100`-Tag. Sie enthalten die Änderungen seit diesem Hauptrelease bis zum
+aktuellen Liefer-Tag.
+
+Das bedeutet auch, dass sich die Elementliste der Info-Datei und der
+Archivumfang bei DELTA-Lieferungen in der Regel unterscheiden. Das spätere
+GitHub Release zeigt aber beides: die Änderungen seit dem vorherigen Liefer-Tag
+und den tatsächlichen Lieferumfang.
 
 ### Transport der Synchronisationsaufträge
 
@@ -317,8 +366,9 @@ den M/Text-Adapter. Ein Synchronisationsauftrag umfasst die Archive, die
 gemeinsam für eine M/Text-Umgebung verarbeitet werden sollen. Der Ablauf ist:
 
 1. Der Workflow legt den Auftrag beim Adapter an. Er übergibt das
-   Mandantenkürzel, die Auftragsart `FULL` oder `DELTA` und die Informationen zu
-   allen Archiven einschließlich ihrer SHA-256-Prüfsummen. Ein Archiv enthält
+   Mandantenkürzel und die Informationen zu allen Archiven einschließlich ihrer
+   Lieferart `FULL` oder `DELTA` und SHA-256-Prüfsummen. Alle Archive eines
+   Auftrags haben dieselbe Lieferart. Ein Archiv enthält
    ein komprimiertes Projekt. Bei `FULL` werden F-Archive angekündigt. Ein
    leeres D-Archiv wird nicht übertragen. Bei `DELTA` werden D-Archive
    angekündigt. Der Adapter antwortet mit der Auftragskennung und dem Status
@@ -406,14 +456,13 @@ Bei `r260.108` steht `260` für das Hauptrelease `26.0` und `108` für das
 Zwischenrelease. Das Hauptrelease wird im Repository als dreistellige
 Releaselinie angegeben. Zwischenreleases liegen zwischen `100` und `999`.
 
-Für eine Teillieferung zu einem bestimmten Release wird ein ungeschützter
+Für eine Teillieferung zu einem bestimmten Liefer-Tag wird ein ungeschützter
 Branch `bereitstellung/nnn.nnn` aus dem vorherigen Liefer-Tag erstellt. Die
 relevanten Squash-Commits werden mittels EGit auf diesen Arbeitsbranch
 cherry-gepickt.
 
-`260.100` ist das erste Release des Hauptreleases `26.0` und gleichbedeutend
-mit diesem Hauptrelease. Eine solche `.100`-Lieferung ist eine Volllieferung
-(FULL). Ihr Tag entsteht auf `main` oder `release/nnn`.
+Der Liefer-Tag `r260.100` kennzeichnet die Volllieferung (FULL) des Hauptreleases
+`26.0`. Ein solcher `.100`-Tag entsteht auf `main` oder `release/nnn`.
 
 Bei der Verarbeitung einer Mainframe-Lieferung wird zuerst das F-Archiv und
 danach das D-Archiv entpackt. Die Archive bleiben erhalten und werden durch
@@ -441,8 +490,8 @@ bevorzugen und eine Abweichung davon wird explizit im Laufprotokoll geloggt.
 
 In diesem zweiten Workflows soll eine explizite Vorab-Prüfung, erfolgen bevor
 der Tag freigegeben wird. Es kann so sichergestellt werden, dass das was
-mit der Lieferung übergeben werden soll auch tatsächlich das ist was für das
-Release entwickelt wurde. Erst dann wird das Tag tatsächlichen auf dem Stand
+mit der Lieferung übergeben werden soll auch tatsächlich das ist was für den
+Liefer-Tag entwickelt wurde. Erst dann wird das Tag tatsächlichen auf dem Stand
 erzeugt und der Paketbau gestartet.
 
 ### Lieferung bauen und übertragen
@@ -493,8 +542,10 @@ beschriebenen Lieferart.
 ### Lieferartefakt
 
 Das GitHub-Actions-Artefakt, das bei der Lieferung entsteht, enthält die erzeugten
-Archive, die zugehörigen JCL-Dateien und die projektbezogenen
-JSON-Informationsdateien. Es wird 30 Tage aufbewahrt. Der Übergabejob überträgt
+Archive, die zugehörigen JCL-Dateien, die projektbezogenen
+JSON-Informationsdateien und `lieferbericht.md`. Der Bericht wird beim Paketbau
+aus denselben Vergleichsständen erzeugt. Das Artefakt wird 30 Tage aufbewahrt.
+Der Übergabejob überträgt
 die Archive unter ihren Membernamen und reicht die zugehörige JCL ein. Die
 Informationsdateien werden nicht an den Mainframe übertragen.
 
@@ -503,10 +554,15 @@ Der Paketbau und die Mainframe-Übergabe werden dabei erneut gestartet.
 
 Nach der Mainframe-Übergabe erstellt der Shared Workflow im
 Mandanten-Repository ein GitHub Release zum vorhandenen Liefer-Tag. Die
-Beschreibung nennt Liefer-Tag, Lieferart und Commit-SHA. Sie
-bestätigt die technische Übergabe und enthält die JSON-Informationsdateien.
-Diese dienen als Lieferbeleg. Die Bestätigung ist zuvor im
-Mandanten-Repository erfolgt.
+Beschreibung nennt Liefer-Tag, Lieferart und Commit-SHA. Sie zeigt je Projekt
+die Änderungen seit dem vorherigen Liefer-Tag und den Lieferumfang mit Status und Pfad.
+Der jeweilige Bezugsstand steht am Abschnitt. Bei DELTA ist der Lieferumfang
+kumulativ seit `.100`, bei FULL umfasst er den gesamten Projektstand.
+Löschungen sind mit `D` gekennzeichnet. Der Anwender kann beide Listen auf der
+GitHub-Release-Seite lesen, ohne einen Git-Vergleich auszuführen oder einen Anhang zu
+öffnen. Die Beschreibung bestätigt außerdem die technische Übergabe.
+Die JSON-Informationsdateien werden als Lieferbeleg angehängt. Die Bestätigung
+ist zuvor im Mandanten-Repository erfolgt.
 
 ### Mainframe-Übergabe
 
@@ -622,7 +678,7 @@ fi_lbs_entw_oms_<kuerzel>/
 
 `FinanzInformatik/fi_lbs_entw_oms_fi` dient als Muster für die übrigen
 Mandanten-Repositories. Die M/Text-Projekte liegen als Verzeichnisse direkt in
-der Repositorywurzel. Sie werden synchronisiert und in Releasepakete
+der Repositorywurzel. Sie werden synchronisiert und in Lieferpakete
 aufgenommen. Einzelne Verzeichnisse wie `LOMS_Testdaten` können in
 `.github/config.json` davon ausgeschlossen werden, bleiben aber Teil des
 Git-Repositories. Dateien, die gar nicht in Git aufgenommen werden sollen,

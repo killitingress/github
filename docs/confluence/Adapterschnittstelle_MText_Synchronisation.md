@@ -114,12 +114,12 @@ Content-Type: application/json
 ```json
 {
   "kuerzel": "FI",
-  "auftragsart": "FULL",
   "archive": [
     {
       "name": "FIBASISF.tgz",
       "information": {
         "projekt": "LOMS_Basis",
+        "lieferart": "FULL",
         "scope": {
           "bis": {
             "referenz": "release/261",
@@ -137,14 +137,13 @@ Content-Type: application/json
 | Feld | Typ | Bedeutung |
 |---|---|---|
 | `kuerzel` | String | Mandantenkürzel |
-| `auftragsart` | String | `FULL` oder `DELTA` |
 | `archive` | Array | angekündigte Archive des Auftrags |
 | `archive[].name` | String | Schlüssel des Archivs für den späteren PUT |
 | `archive[].information` | Objekt | Projektinformationen gemäß Zielbild |
 
 Jeder Archivname ist innerhalb eines Auftrags eindeutig und bezeichnet das
-Archiv im zugehörigen PUT. Die Projektinformationen enthalten dessen
-SHA-256-Prüfwert.
+Archiv im zugehörigen PUT. Die Projektinformationen enthalten dessen Lieferart
+und SHA-256-Prüfwert. Alle Archive eines Auftrags haben dieselbe Lieferart.
 
 Alle genannten Felder sind erforderlich. `archive` enthält mindestens einen
 Eintrag. Leere Strings sind für `kuerzel`, `archive[].name`, `projekt`,
@@ -158,9 +157,13 @@ keinen internen Ablagepfad ab.
 
 `archive[].information` hat folgende Struktur:
 
+Die Angaben beschreiben den Synchronisationsumfang des angekündigten Archivs.
+Der Vorrelease-Vergleich der Mainframe-Info-Dateien wird hier nicht verwendet.
+
 | Feld | Typ | Vorkommen |
 |---|---|---|
 | `projekt` | String | immer |
+| `lieferart` | String | immer, `FULL` oder `DELTA` |
 | `scope` | Objekt | immer |
 | `scope.von` | Objekt | bei `DELTA` |
 | `scope.von.referenz` | String | bei `DELTA` |
@@ -178,12 +181,12 @@ Trennzeichen. Absolute Pfade und Pfade mit einem Segment `..` sind ungültig.
 Ein projektbezogener Pfad kommt innerhalb der Elementliste höchstens einmal
 vor.
 
-Für `FULL` gelten folgende technische Zuordnungen:
+Für `lieferart: "FULL"` gelten folgende technische Zuordnungen:
 
 - `scope.von` fehlt
 - der angekündigte Name bezeichnet das F-Archiv
 
-Für `DELTA` gelten folgende technische Zuordnungen:
+Für `lieferart: "DELTA"` gelten folgende technische Zuordnungen:
 
 - `scope.von` ist vorhanden
 - der angekündigte Name bezeichnet das D-Archiv
@@ -198,10 +201,11 @@ Der Adapter prüft vor dem Anlegen eines Auftrags:
 1. Der Header `Idempotency-Key` ist vorhanden und nicht leer.
 2. Der Anfrageinhalt ist ein JSON-Objekt und enthält die erforderlichen Felder
    mit den beschriebenen Typen.
-3. `auftragsart` ist `FULL` oder `DELTA`.
+3. `information.lieferart` ist bei jedem Archiv `FULL` oder `DELTA`.
 4. Die Archivnamen und die Werte von `information.projekt` sind innerhalb des
    Auftrags jeweils eindeutig.
-5. Alle Projektinformationen passen zur Auftragsart.
+5. Alle Archive haben dieselbe Lieferart. Archivnamen und weitere
+   Projektinformationen passen zu dieser Lieferart.
 
 Schlägt eine dieser Prüfungen fehl, antwortet der Adapter mit HTTP 400 (Bad
 Request) und legt keinen Auftrag an.
@@ -553,9 +557,10 @@ Workflow anzeigen kann.
 
 Der Client verarbeitet einen Auftrag in dieser Reihenfolge:
 
-1. Er erzeugt die Projektartefakte aus einem gemeinsamen Lieferumfang und
-   leitet daraus die Auftragsart `FULL` oder `DELTA` ab.
-2. Er liest die Projektinformationen und sendet den POST mit einem über
+1. Er erzeugt die Projektartefakte aus einem gemeinsamen Lieferumfang. Die
+   Projektinformationen enthalten die Lieferart `FULL` oder `DELTA`.
+2. Er liest die Projektinformationen, wählt anhand von `lieferart` das F- oder
+   D-Archiv und sendet den POST mit einem über
    Wiederholungen des GitHub-Laufs stabilen Idempotency-Key. Der Schlüssel hat
    das Format `github-run-<GITHUB_RUN_ID>-<Umgebungskennung>`.
 3. Liefert der POST `ready` oder `uploading`, sendet er alle angekündigten
@@ -597,9 +602,9 @@ entscheidenden Verzweigungen:
 
 ```text
 artifacts = alle Archive und Projektinformationen materialisieren
-auftragsart = gemeinsame Auftragsart bestimmen
+uploads = je Projekt das Archiv anhand von information.lieferart auswählen
 
-auftrag = POST /sync
+auftrag = POST /sync mit Archivnamen und Projektinformationen
 
 wenn auftrag.status in [ready, uploading]:
     für jedes Archiv:
@@ -658,18 +663,10 @@ ersetzen oder erweitern.
 ```java
 public record AuftragAnlegenRequest(
         String kuerzel,
-        Auftragsart auftragsart,
         List<ArchivAnmeldung> archive) {
 }
 
 public record ArchivAnmeldung(String name, JsonNode information) {
-}
-
-public enum Auftragsart {
-    // Ersetzt die Projekte des Auftrags durch die Stände aus ihren F-Archiven.
-    FULL,
-    // Übernimmt Änderungen und die zugehörigen Löschungen in vorhandene Projekte.
-    DELTA
 }
 
 public enum SynchronisationsStatus {
@@ -919,7 +916,6 @@ public interface ArchivVerarbeitung {
     void pruefen(
             Path archiv,
             String archivname,
-            Auftragsart auftragsart,
             JsonNode information) throws IOException;
 
     void vollstaendigUebernehmen(
@@ -1005,7 +1001,6 @@ public class SynchronisationProcessor {
                 archivVerarbeitung.pruefen(
                         upload.getValue(),
                         upload.getKey(),
-                        auftrag.getRequest().auftragsart(),
                         anmeldung.information());
             }
         } catch (Exception exception) {
@@ -1022,7 +1017,7 @@ public class SynchronisationProcessor {
         try {
             for (Map.Entry<String, Path> upload : auftrag.getUploads().entrySet()) {
                 ArchivAnmeldung anmeldung = auftrag.getArchive().get(upload.getKey());
-                if (auftrag.getRequest().auftragsart() == Auftragsart.FULL) {
+                if ("FULL".equals(anmeldung.information().get("lieferart").asText())) {
                     archivVerarbeitung.vollstaendigUebernehmen(
                             upload.getValue(), anmeldung.information(), serverSync);
                 } else {

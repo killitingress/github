@@ -183,10 +183,13 @@ def run() -> dict[str, object]:
         ergebnisse = [{"umgebung": umgebung, "projekte": []}]
         return _workflow_response(ergebnisse, configuration.warnungen)
 
-    # Archive einmal bauen und bis zum Abschluss aller Adapteraufrufe bereithalten
+    # Archive und Information folgen demselben Umfang und bleiben bis zum Abschluss bereit
     with tempfile.TemporaryDirectory() as temporary:
         archives = [
-            build_project_archives(configuration, source, e, scope, Path(temporary) / e)
+            build_project_archives(
+                configuration, source, e, Path(temporary) / e,
+                paket_scope=scope, information_scope=scope,
+            )
             for e in projects
         ]
 

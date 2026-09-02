@@ -43,18 +43,15 @@ def synchronize(umgebung: str, project_archives: Iterable[ProjectArchives], idem
     # alle Projektarchive für Auftragsanlage und Upload bereithalten
     prepared_archives = list(project_archives)
 
-    # Sync liefert mindestens ein Projekt, alle Archive stammen aus demselben Scope
-    auftragsart = "FULL" if prepared_archives[0].f_archiv is not None else "DELTA"
-
-    # passendes Archiv und die beim Paketbau erzeugten Informationen je Projekt zusammenstellen
+    # Lieferart aus der Information bestimmt das hochzuladende Archiv je Projekt
     archive_uploads: list[tuple[Path, dict[str, object]]] = []
     for archives in prepared_archives:
-        archive = archives.f_archiv if auftragsart == "FULL" else archives.d_archiv
         try:
             information = json.loads(archives.information.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise DeliveryError(Status.ADAPTER_FAILED, f"Informationsdatei kann nicht gelesen werden: {exc}") from exc
 
+        archive = archives.f_archiv if information["lieferart"] == "FULL" else archives.d_archiv
         archive_uploads.append((archive, information))
 
     # Mandantenkürzel steht im Dateinamen `_INFO_<kuerzel>-<projekt>.json`
@@ -65,7 +62,7 @@ def synchronize(umgebung: str, project_archives: Iterable[ProjectArchives], idem
     archive_list = [
         {"name": archive.name, "information": information} for archive, information in archive_uploads
     ]
-    payload = {"kuerzel": kuerzel, "auftragsart": auftragsart, "archive": archive_list}
+    payload = {"kuerzel": kuerzel, "archive": archive_list}
     created = _call_adapter("POST", adapter_url, payload, {"Idempotency-Key": idempotency_key})
     auftrag_id = created["auftrag_id"]
     auftrag_url = f"{adapter_url}/{urllib.parse.quote(auftrag_id, safe='')}"

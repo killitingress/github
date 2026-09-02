@@ -8,10 +8,9 @@ import os
 import shutil
 import tarfile
 import unittest
-from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
-from lbs_delivery.mainframe import _build_mainframe_files, _submit_archive, _submit_mainframe_files, run
+from lbs_delivery.mainframe import _submit_archive, run
 from lbs_delivery.process import DeliveryError, NETWORK_TIMEOUT, Status
 
 from tests.support import (
@@ -29,76 +28,102 @@ class ReleaseTests(TempDirTestCase):
         super().setUp()
         self.repository = setup_release_repository(self.root)
         self.configuration = load_test_configuration(self.repository)
-        self._workspace = patch.dict(os.environ, {"GITHUB_WORKSPACE": str(self.root)})
-        self._workspace.start()
-        self.addCleanup(self._workspace.stop)
-
-    def build(self, output_directory: Path, *, tag: str) -> None:
-        """Erzeugt ein Releaseartefakt für den angegebenen Test-Tag."""
-
-        _build_mainframe_files(self.configuration, output_directory=output_directory, tag=tag)
+        self.runner_temp = self.root / "runner-temp"
+        self.enterContext(patch.dict(os.environ, {
+            "GITHUB_WORKSPACE": str(self.root),
+            "GITHUB_REPOSITORY": self.configuration.repository,
+            "RUNNER_TEMP": str(self.runner_temp),
+            # lokale macOS-Läufe erzeugen wie der Linux-Runner keine AppleDouble-Dateien
+            "COPYFILE_DISABLE": "1",
+        }))
 
     def test_release_files_and_mainframe_transfer(self) -> None:
-        """Prüft Archive, Informationsdateien und die Mainframe-Übergabe."""
+        """Prüft DELTA und FULL vom Paketbau im Runner bis zur Mainframe-Übergabe."""
 
+        # ein Liefer-Tag außerhalb des Release-Branches und alte Arbeitsdateien sind zulässig
         git(self.repository, "checkout", "--detach", "r261.108")
-        first = self.root / "first"
-        second = self.root / "second"
-        self.build(first, tag="r261.108")
-        self.build(second, tag="r261.108")
+        git(self.repository, "commit", "--allow-empty", "-m", "bereitstellung")
+        git(self.repository, "tag", "-f", "r261.108")
+        stale_dist = self.root / "dist"
+        stale_dist.mkdir()
+        (stale_dist / "alt.tgz").write_bytes(b"alter Lauf")
 
-        information = json.loads(next(first.glob("_INFO_*.json")).read_text(encoding="utf-8"))
+        # die Workflow-Einstiege verwenden das erzeugte und anschließend heruntergeladene Artefakt
+        result = run("build", tag="r261.108")
+        self.assertEqual(result["status"], Status.ARTIFACT_READY.value)
+        delivery = self.runner_temp / "release"
+        shutil.copytree(self.runner_temp / "dist", delivery)
+
+        # die Info zeigt Änderungen seit .107, einschließlich der zwischenzeitlichen Datei
+        information = json.loads(next(delivery.glob("_INFO_*.json")).read_text(encoding="utf-8"))
         self.assertEqual(information["projekt"], "LOMS_Basis")
-        self.assertEqual(information["scope"]["von"]["referenz"], "r261.100")
+        self.assertEqual(information["scope"]["von"]["referenz"], "r261.107")
         self.assertEqual(information["scope"]["bis"]["referenz"], "r261.108")
         self.assertIn(["D", "deleted.txt"], information["elemente"])
         self.assertIn(["A", "new.txt"], information["elemente"])
         self.assertIn(["D", "rename-old.txt"], information["elemente"])
         self.assertIn(["A", "rename-new.txt"], information["elemente"])
+        self.assertIn(["D", "transient.txt"], information["elemente"])
+        self.assertNotIn(["M", "baseline.txt"], information["elemente"])
         self.assertEqual(
             information["sha256"],
-            hashlib.sha256((first / "FIBASISD.tgz").read_bytes()).hexdigest(),
+            hashlib.sha256((delivery / "FIBASISD.tgz").read_bytes()).hexdigest(),
         )
 
-        with tarfile.open(first / "FIBASISD.tgz", "r:gz") as archive:
-            names = archive.getnames()
-            deletion = archive.extractfile("FIBASISD.txt")
-            self.assertIsNotNone(deletion)
-            deleted = deletion.read().decode()
-        self.assertIn("LOMS_Basis/new.txt", names)
-        self.assertIn("LOMS_Basis/deleted.txt", deleted)
-
-        with (
-            patch.dict(
-                os.environ,
+        # Archiv und Löschliste beziehen sich auf .100 und enthalten keinen transient-Eintrag
+        with tarfile.open(delivery / "FIBASISD.tgz", "r:gz") as archive:
+            self.assertEqual(
+                {e.name: archive.extractfile(e).read() for e in archive.getmembers() if e.isfile()},
                 {
-                    "MAINFRAME_FTPS_PASSWORD": "password",
+                    "LOMS_Basis/baseline.txt": b"changed\n",
+                    "LOMS_Basis/new.txt": b"new\n",
+                    "LOMS_Basis/rename-new.txt": b"rename\n",
+                    "FIBASISD.txt": b"LOMS_Basis/deleted.txt\nLOMS_Basis/rename-old.txt\n",
                 },
-            ),
-            patch("lbs_delivery.mainframe._submit_archive") as submit,
-        ):
-            result = _submit_mainframe_files(release_directory=first)
+            )
+
+        # Übergabe verwendet die erzeugte JCL und beendet einen unvollständigen Lieferbestand
+        with patch("lbs_delivery.mainframe._submit_archive") as submit:
+            result = run("mainframe")
         self.assertEqual(result["status"], Status.MAINFRAME_SUBMITTED.value)
-        submit.assert_called_once_with(first / "FIBASISD.tgz")
-        rendered = (first / "FIBASISD.jcl").read_text(encoding="ascii")
+        submit.assert_called_once_with(delivery / "FIBASISD.tgz")
+        rendered = (delivery / "FIBASISD.jcl").read_text(encoding="ascii")
         self.assertIn("MEMBER=((FIBASISD,,R))", rendered)
         self.assertNotIn("@@", rendered)
 
-        (second / "FIBASISD.jcl").unlink()
+        (delivery / "FIBASISD.jcl").unlink()
         with self.assertRaisesRegex(DeliveryError, "Archive oder JCL fehlen"):
-            _submit_mainframe_files(release_directory=second)
+            run("mainframe")
+        self.assertEqual((stale_dist / "alt.tgz").read_bytes(), b"alter Lauf")
 
-        git(self.repository, "checkout", "--detach", "r261.100")
-        full = self.root / "full"
-        _build_mainframe_files(self.configuration, output_directory=full, tag="r261.100")
-        self.assertEqual(sorted(e.stem for e in full.glob("*.tgz")), ["FIBASISD", "FIBASISF"])
-        full_information = json.loads(next(full.glob("_INFO_*.json")).read_text(encoding="utf-8"))
-        self.assertNotIn("von", full_information["scope"])
-        self.assertEqual(
-            full_information["sha256"],
-            hashlib.sha256((full / "FIBASISF.tgz").read_bytes()).hexdigest(),
-        )
-        self.assertTrue(all(e[0] == "A" for e in full_information["elemente"]))
+        # ein neues Hauptrelease folgt auf die vorhandene Zwischenlieferung
+        (self.repository / "LOMS_Basis/new.txt").unlink()
+        git(self.repository, "add", "-u")
+        git(self.repository, "commit", "-m", "neues Hauptrelease")
+        git(self.repository, "tag", "r270.100")
+
+        # der Berichtvergleich darf FULL nicht in ein DELTA umwandeln
+        run("build", tag="r270.100")
+        shutil.copytree(self.runner_temp / "dist", delivery, dirs_exist_ok=True)
+        information = json.loads(next(delivery.glob("_INFO_*.json")).read_text())
+        self.assertEqual(information["lieferart"], "FULL")
+        self.assertEqual(information["scope"]["von"]["referenz"], "r261.108")
+        self.assertEqual(information["elemente"], [["D", "new.txt"]])
+        self.assertEqual(sorted(e.stem for e in delivery.glob("*.tgz")), ["FIBASISD", "FIBASISF"])
+        self.assertEqual(information["sha256"], hashlib.sha256((delivery / "FIBASISF.tgz").read_bytes()).hexdigest())
+        with tarfile.open(delivery / "FIBASISF.tgz") as archive:
+            self.assertEqual(
+                {e.name: archive.extractfile(e).read() for e in archive.getmembers() if e.isfile()},
+                {"./LOMS_Basis/baseline.txt": b"changed\n", "./LOMS_Basis/rename-new.txt": b"rename\n"},
+            )
+        with tarfile.open(delivery / "FIBASISD.tgz") as archive:
+            self.assertEqual(archive.extractfile("FIBASISD.txt").read(), b"")
+        self.assertIn("Lieferart: `FULL`", (delivery / "lieferbericht.md").read_text())
+
+        # FULL übernimmt erst den Projektstand und ersetzt danach das alte D-Archiv
+        with patch("lbs_delivery.mainframe._submit_archive") as submit:
+            run("mainframe")
+        self.assertEqual(submit.call_args_list, [call(delivery / "FIBASISF.tgz"), call(delivery / "FIBASISD.tgz")])
 
     def test_submits_package_and_jcl_with_explicit_ftps(self) -> None:
         """Prüft TLS-Aushandlung, geschützte Datenverbindung und JES-Übergabe."""
@@ -126,41 +151,6 @@ class ReleaseTests(TempDirTestCase):
         session.sendcmd.assert_called_once_with("SITE FILETYPE=JES")
         self.assertEqual(session.storlines.call_args.args[0], "STOR LIT9028A")
         session.quit.assert_called_once_with()
-
-    def test_workflow_builds_and_publishes_in_runner_temp(self) -> None:
-        """Prüft Paketbau und Übergabe trotz vorhandener Dateien im Arbeitsbereich."""
-
-        git(self.repository, "checkout", "--detach", "r261.108")
-        stale_dist = self.root / "dist"
-        stale_dist.mkdir()
-        (stale_dist / "alt.tgz").write_bytes(b"alter Lauf")
-        runner_temp = self.root / "runner-temp"
-
-        with patch.dict(os.environ, {
-            "GITHUB_REPOSITORY": self.configuration.repository,
-            "RUNNER_TEMP": str(runner_temp),
-        }):
-            result = run("build", tag="r261.108")
-            self.assertEqual(result["status"], Status.ARTIFACT_READY.value)
-
-            # Bildet das Herunterladen des Build-Artefakts im Übergabejob nach.
-            shutil.copytree(runner_temp / "dist", runner_temp / "release")
-            with patch("lbs_delivery.mainframe._submit_archive") as submit:
-                result = run("mainframe")
-
-        self.assertEqual(result["status"], Status.MAINFRAME_SUBMITTED.value)
-        submit.assert_called_once_with(runner_temp / "release/FIBASISD.tgz")
-        self.assertEqual((stale_dist / "alt.tgz").read_bytes(), b"alter Lauf")
-
-    def test_delta_need_not_lie_on_release_branch(self) -> None:
-        """DELTA-Lieferungen dürfen auf einem Commit außerhalb von release/nnn liegen."""
-
-        git(self.repository, "checkout", "--detach", "r261.108")
-        git(self.repository, "commit", "--allow-empty", "-m", "bereitstellung")
-        picked = git(self.repository, "rev-parse", "HEAD")
-        git(self.repository, "tag", "-d", "r261.108")
-        git(self.repository, "tag", "r261.108", picked)
-        self.build(self.root / "picked-delta", tag="r261.108")
 
 
 if __name__ == "__main__":

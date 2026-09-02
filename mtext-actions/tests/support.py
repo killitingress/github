@@ -62,7 +62,7 @@ def track_remote_branch(repository: Path, branch: str) -> None:
 
 
 def setup_release_repository(root: Path) -> Path:
-    """Erzeugt eine Releasehistorie mit FULL-, Vorgänger- und DELTA-Tags."""
+    """Erzeugt eine Releasehistorie mit unterschiedlichen Vorrelease- und .100-Diffs."""
 
     repository = init_repository(root, branch="release/261")
     project = repository / "LOMS_Basis"
@@ -72,11 +72,16 @@ def setup_release_repository(root: Path) -> Path:
     (project / "rename-old.txt").write_text("rename\n", encoding="utf-8")
     git(repository, "add", ".")
     git(repository, "commit", "-m", "full")
+    # der Dummy-Liefer-Tag aus der Migration stellt den ersten Vergleichsstand bereit
+    git(repository, "tag", "r260.100")
     git(repository, "tag", "r261.100")
     (project / "baseline.txt").write_text("changed\n", encoding="utf-8")
+    # diese Datei existiert im Vorrelease, aber weder in .100 noch im Lieferstand
+    (project / "transient.txt").write_text("zwischenzeitlich vorhanden\n", encoding="utf-8")
     git(repository, "add", ".")
     git(repository, "commit", "-m", "previous")
     git(repository, "tag", "r261.107")
+    (project / "transient.txt").unlink()
     (project / "deleted.txt").unlink()
     (project / "new.txt").write_text("new\n", encoding="utf-8")
     git(repository, "mv", "LOMS_Basis/rename-old.txt", "LOMS_Basis/rename-new.txt")

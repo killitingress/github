@@ -25,21 +25,10 @@ class ConfigTests(TempDirTestCase):
         git(self.repository, "add", ".")
         git(self.repository, "commit", "-m", "init")
 
-    def test_derives_fragment_project_codes_for_by(self) -> None:
-        for project in ("Configuration", "Fonts", "LOMS_Framework", "LOMS_PKA"):
-            (self.repository / project / "value.txt").unlink()
-            (self.repository / project).rmdir()
-        (self.repository / "LOMS_Basis").rename(self.repository / "LOMS_Basis[BY]")
-        (self.repository / "LOMS_Autonom[BY]").mkdir()
-        configuration = load_test_configuration(
-            self.repository,
-            mandant={"kuerzel": "BY"},
-            repository_name="FinanzInformatik/fi_lbs_entw_oms_by",
-        )
-        self.assertEqual(configuration.projects, {"LOMS_Autonom[BY]": "AUTON", "LOMS_Basis[BY]": "BASIS"})
-        self.assertEqual(configuration.subsystem, "BYMT")
+    def test_validates_configuration_and_derives_fragment_projects(self) -> None:
+        """Prüft ungültige Konfigurationen und die Zuordnung gültiger Fragmentprojekte."""
 
-    def test_rejects_invalid_configuration(self) -> None:
+        # Mandant, Repository und Releaselinie müssen zusammenpassen
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository, mandant={"kuerzel": "BY"})
         with self.assertRaises(DeliveryError):
@@ -47,6 +36,7 @@ class ConfigTests(TempDirTestCase):
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository, mandant={"releaselinie": "999"})
 
+        # zentrale Zuordnungen verlangen eindeutige Repositories und beide Umgebungsarten
         mandanten_path = self.root / "mandanten.json"
         mandanten_path.write_text(
             json.dumps(
@@ -73,9 +63,26 @@ class ConfigTests(TempDirTestCase):
         with self.assertRaisesRegex(DeliveryError, "M/Text-Umgebungsarten"):
             Configuration.load_releaselinien_zuordnung(releaselinien_path)
 
-        (self.repository / "LOMS_Basisdaten").mkdir()
-        with self.assertRaises(DeliveryError):
+        # LOMS_Basis und LOMS_Basisdaten ergeben beide BASIS und damit denselben Archivnamen
+        colliding_project = self.repository / "LOMS_Basisdaten"
+        colliding_project.mkdir()
+        with self.assertRaisesRegex(DeliveryError, "Projektcodes sind nicht eindeutig"):
             load_test_configuration(self.repository)
+        colliding_project.rmdir()
+
+        # gültige Fragmentprojekte erhalten Projektcodes und das Mainframe-Subsystem des Mandanten
+        for project in ("Configuration", "Fonts", "LOMS_Framework", "LOMS_PKA"):
+            (self.repository / project / "value.txt").unlink()
+            (self.repository / project).rmdir()
+        (self.repository / "LOMS_Basis").rename(self.repository / "LOMS_Basis[BY]")
+        (self.repository / "LOMS_Autonom[BY]").mkdir()
+        configuration = load_test_configuration(
+            self.repository,
+            mandant={"kuerzel": "BY"},
+            repository_name="FinanzInformatik/fi_lbs_entw_oms_by",
+        )
+        self.assertEqual(configuration.projects, {"LOMS_Autonom[BY]": "AUTON", "LOMS_Basis[BY]": "BASIS"})
+        self.assertEqual(configuration.subsystem, "BYMT")
 
 
 if __name__ == "__main__":
