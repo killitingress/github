@@ -43,7 +43,7 @@ festzulegen und nicht Bestandteil dieser Anwendungsschnittstelle.
 ## Basis-URL
 
 ```text
-http://<Umgebungskennung>.ltoma.intern/vMtextAdapter/sync
+http://<Umgebungskennung>.ltoma.intern/vMtextAdapter
 ```
 
 `mtext_actions` bestimmt die Umgebungskennung aus der M/Text-Umgebung und der
@@ -51,7 +51,21 @@ ETAPS-Linie. Eine Adapterinstanz verarbeitet eine M/Text-Umgebung. Der Pfad
 `serverSync/` und die M/Text-Verbindung gehören deshalb zur Konfiguration
 dieser Instanz und werden nicht im Request übergeben.
 
+## Erreichbarkeit prüfen
+
+Vor dem Archivbau ruft der Client `GET /vMtextAdapter/version` auf. Beim
+Linienwechsel prüft er die Adapter für Entwicklung und Funktionstest, bevor
+er Archive erzeugt oder einen Auftrag anlegt.
+
+Eine Antwort mit HTTP-Status 200 bestätigt die Erreichbarkeit. Der Client
+gibt die zurückgegebene Plaintext-Zeile im Workflow-Log aus. Für den Aufruf
+gilt ein Socket-Timeout von 15 Sekunden. Netzwerkfehler und ein abweichender
+HTTP-Status beenden den Lauf mit `ADAPTER_FAILED` und einer Meldung mit der
+betroffenen URL.
+
 ## HTTP-Konventionen
+
+Für die Synchronisationsendpunkte unter `/vMtextAdapter/sync` gilt:
 
 - Metadatenrequests verwenden `application/json` mit UTF-8.
 - Erfolgreiche Antworten mit Inhalt und Fehlerantworten verwenden
@@ -82,13 +96,14 @@ dieser Instanz und werden nicht im Request übergeben.
 
 | Methode | Pfad | Zweck |
 |---|---|---|
+| `GET` | `/vMtextAdapter/version` | Erreichbarkeit vor dem Archivbau prüfen |
 | `POST` | `/vMtextAdapter/sync` | Auftrag anlegen oder anhand des Idempotency-Keys wiederaufnehmen |
 | `PUT` | `/vMtextAdapter/sync/{auftrag_id}/archive/{name}` | angekündigtes Archiv hochladen |
 | `GET` | `/vMtextAdapter/sync/{auftrag_id}` | Status und gegebenenfalls Ergebnis lesen |
 | `DELETE` | `/vMtextAdapter/sync/{auftrag_id}` | beendeten Auftrag löschen |
 
-Die nachfolgenden Statuscodes legen das erwartete Serververhalten genauer
-fest.
+Die nachfolgenden Statuscodes legen das erwartete Serververhalten für die
+Synchronisationsendpunkte genauer fest.
 
 ### HTTP-Status
 
@@ -557,7 +572,8 @@ Workflow anzeigen kann.
 
 Der Client verarbeitet einen Auftrag in dieser Reihenfolge:
 
-1. Er erzeugt die Projektartefakte aus einem gemeinsamen Lieferumfang. Die
+1. Er prüft die Erreichbarkeit der Zieladapter über `/version`. Danach erzeugt
+   er die Projektartefakte aus einem gemeinsamen Lieferumfang. Die
    Projektinformationen enthalten die Lieferart `FULL` oder `DELTA`.
 2. Er liest die Projektinformationen, wählt anhand von `lieferart` das F- oder
    D-Archiv und sendet den POST mit einem über
@@ -580,7 +596,8 @@ Ein Abbruch des Clients beendet die serverseitige Verarbeitung nicht. Ein
 erneuter Lauf nimmt einen noch vorhandenen Auftrag über den Idempotency-Key
 wieder auf.
 
-Der Client behandelt folgende Antworten als Adapterfehler:
+Bei Synchronisationsaufträgen behandelt der Client folgende Antworten als
+Adapterfehler:
 
 - Netzwerkfehler oder eine länger als 15 Sekunden blockierte Socket-Operation
 - HTTP-Status außerhalb von 2xx
@@ -601,6 +618,9 @@ Das folgende Pseudocode-Beispiel zeigt die für Wiederaufnahme und Aufräumen
 entscheidenden Verzweigungen:
 
 ```text
+für jede Zielumgebung:
+    GET /version aufrufen und bei Netzwerkfehler oder HTTP-Status ungleich 200 abbrechen
+
 artifacts = alle Archive und Projektinformationen materialisieren
 uploads = je Projekt das Archiv anhand von information.lieferart auswählen
 

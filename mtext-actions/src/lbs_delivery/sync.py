@@ -153,6 +153,14 @@ def run() -> dict[str, object]:
         vorherige = _previous_main_release_line(source)
         linienwechsel = bool(vorherige and vorherige != configuration.releaselinie)
 
+    # vor dem Archivbau die Adapter prüfen, beim Linienwechsel beide Ziele
+    if linienwechsel:
+        entwicklungsumgebung = (
+            f"{configuration.mtext_umgebung_prefixe[config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG]}{etaps_linie}"
+        )
+        adapter.check_reachability(entwicklungsumgebung)
+    adapter.check_reachability(umgebung)
+
     # manueller Abgleich und Linienwechsel brauchen keinen DELTA-Vergleichsstand
     vergleichsstand = None
     if event != "workflow_dispatch" and not linienwechsel:
@@ -195,15 +203,9 @@ def run() -> dict[str, object]:
 
         # beim Linienwechsel zuerst Entwicklung, danach Funktionstest
         if linienwechsel:
-            entwicklungsumgebung = (
-                f"{configuration.mtext_umgebung_prefixe[config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG]}{etaps_linie}"
-            )
-            funktionstestumgebung = (
-                f"{configuration.mtext_umgebung_prefixe[config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST]}{etaps_linie}"
-            )
             entwicklung_ergebnis = _synchronize_environment(entwicklungsumgebung, archives)
             try:
-                funktionstest_ergebnis = _synchronize_environment(funktionstestumgebung, archives)
+                funktionstest_ergebnis = _synchronize_environment(umgebung, archives)
             except DeliveryError as exc:
                 message = f"{exc.args[0]} Bereits erfolgreich: {entwicklungsumgebung}."
                 raise DeliveryError(exc.status, message) from exc

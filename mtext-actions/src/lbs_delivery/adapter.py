@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -33,8 +34,27 @@ _ACTIVE_STATUSES = frozenset({"ready", "uploading", "processing"})
 # Auftragszustände, die die Verarbeitung beim Adapter beenden.
 _TERMINAL_STATUSES = frozenset({"succeeded", "failed"})
 
-# URL-Muster der Adapter-Synchronisation. `{umgebung}` ist Präfix und ETAPS-Linie.
-_SYNC_URL = "http://{umgebung}.ltoma.intern/vMtextAdapter/sync"
+# URL-Muster des Adapters. `{umgebung}` ist Präfix und ETAPS-Linie.
+_ADAPTER_URL = "http://{umgebung}.ltoma.intern/vMtextAdapter"
+
+
+def check_reachability(umgebung: str) -> None:
+    """Prüft den Adapter vor dem Archivbau und protokolliert seine Versionsantwort."""
+
+    # Versionsendpunkt abrufen, urlopen meldet HTTP- und Verbindungsfehler
+    url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/version"
+    try:
+        with urllib.request.urlopen(url, timeout=NETWORK_TIMEOUT) as response:
+            # der Versionsendpunkt muss die Erreichbarkeit mit HTTP 200 bestätigen
+            if response.status != 200:
+                raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter unter {url} antwortet mit HTTP {response.status}")
+
+            version = response.read().decode(errors="replace").strip()
+    except (urllib.error.URLError, OSError, HTTPException) as exc:
+        raise DeliveryError(Status.ADAPTER_FAILED, f"Versionsabfrage unter {url} ist fehlgeschlagen: {exc}") from exc
+
+    # Antwortzeile ins Workflow-Log schreiben, stdout bleibt für das JSON-Ergebnis
+    print(version, file=sys.stderr)
 
 
 def synchronize(umgebung: str, project_archives: Iterable[ProjectArchives], idempotency_key: str) -> dict[str, object]:
@@ -58,7 +78,7 @@ def synchronize(umgebung: str, project_archives: Iterable[ProjectArchives], idem
     kuerzel = prepared_archives[0].information.stem.removeprefix("_INFO_").partition("-")[0]
 
     # Auftrag mit vollständiger Archivliste idempotent beim Ziel anlegen
-    adapter_url = _SYNC_URL.format(umgebung=umgebung)
+    adapter_url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync"
     archive_list = [
         {"name": archive.name, "information": information} for archive, information in archive_uploads
     ]

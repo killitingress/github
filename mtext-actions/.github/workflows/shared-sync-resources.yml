@@ -36,7 +36,8 @@ jobs:
         id: automation
         uses: FI-Actions/fi_lbs_entw_oms_mtext_actions@main
 
-      # Python bestimmt den Vergleichsstand und überträgt die Projektänderungen.
+      # Python prüft die Adaptererreichbarkeit vor dem Archivbau und überträgt
+      # die Projektänderungen anhand des ermittelten Vergleichsstands.
       - name: Ressourcen synchronisieren
         env:
           GITHUB_TOKEN: ${{ github.token }}

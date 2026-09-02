@@ -58,6 +58,7 @@ class SyncTests(TempDirTestCase):
             patch.object(sync.git, "changes", return_value=[]) as changes,
             patch.object(sync.git, "execute") as read_git,
             patch.object(sync, "build_project_archives", return_value=MagicMock()) as build_archives,
+            patch.object(sync.adapter, "check_reachability"),
             patch.object(sync.adapter, "synchronize", return_value={}) as transfer,
         ):
             # Der letzte Erfolg bestimmt das DELTA. Ein manueller Lauf bestätigt
@@ -143,6 +144,7 @@ class SyncTests(TempDirTestCase):
 
         with (
             patch.object(github, "last_sync_commit", return_value=baseline),
+            patch.object(adapter, "check_reachability"),
             patch.object(adapter, "synchronize", side_effect=capture_archives) as transfer,
         ):
             for event in ("push", "workflow_dispatch"):

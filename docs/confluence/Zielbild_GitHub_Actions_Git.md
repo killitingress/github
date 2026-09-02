@@ -357,6 +357,11 @@ und den tatsächlichen Lieferumfang.
 
 ### Transport der Synchronisationsaufträge
 
+Vor dem Archivbau prüft der Workflow die Erreichbarkeit des Adapters über
+`GET /vMtextAdapter/version` und gibt die Antwort im Workflow-Log aus.
+Schlägt der Aufruf fehl, endet der Lauf mit
+`ADAPTER_FAILED`. Beim Linienwechsel werden beide Zieladapter vorab geprüft.
+
 Adapter und M/Text greifen auf den gemeinsamen, per NFS eingebundenen Pfad
 `serverSync/` zu. Es enthält unmittelbar die Projektverzeichnisse aller
 Mandanten und bildet die Basis der M/Text-Synchronisation. Upload-Dateien und
