@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import unittest
@@ -41,7 +42,7 @@ class SyncTests(TempDirTestCase):
             "projekt": "LOMS_Basis",
             "scope": {"bis": {"referenz": "release/261", "commit": "current"}},
             "elemente": [["A", "beispiel.xml"]],
-            "sha256": {"D": "unused-checksum", "F": "checksum"},
+            "sha256": "checksum",
         }))
         self.project_archives.d_archiv.write_bytes(b"D-Archiv")
         self.project_archives.f_archiv.write_bytes(b"F-Archiv")
@@ -130,6 +131,11 @@ class SyncTests(TempDirTestCase):
 
             for archives in project_archives:
                 documents.append(json.loads(archives.information.read_text()))
+                # die Information muss die Prüfsumme des jeweiligen Uploads tragen
+                archive = archives.f_archiv if archives.f_archiv is not None else archives.d_archiv
+                self.assertEqual(documents[-1]["sha256"], hashlib.sha256(archive.read_bytes()).hexdigest())
+
+                # FULL stellt ein leeres D-Archiv für den Mainframe bereit
                 if "von" not in documents[-1]["scope"]:
                     self.assertTrue(archives.d_archiv.is_file())
             return {"auftrag_id": "auftrag", "ergebnis": "Geändert: beispiel.xml\nGelöscht: alt.xml"}
@@ -145,7 +151,6 @@ class SyncTests(TempDirTestCase):
             self.assertEqual(documents[0]["scope"]["bis"]["commit"], commit)
             self.assertIn(["M", "baseline.txt"], documents[0]["elemente"])
             self.assertNotIn("von", documents[1]["scope"])
-            self.assertEqual([set(e["sha256"]) for e in documents], [{"D"}, {"D", "F"}])
             self.assertEqual(
                 result["ergebnisse"][0]["ergebnis"],
                 "Geändert: beispiel.xml\nGelöscht: alt.xml",
@@ -181,7 +186,7 @@ class SyncTests(TempDirTestCase):
                 self.assertEqual(payload["auftragsart"], "FULL")
                 self.assertEqual(payload["archive"][0]["name"], "full.tgz")
                 self.assertEqual(payload["archive"][0]["information"]["projekt"], "LOMS_Basis")
-                self.assertEqual(payload["archive"][0]["information"]["sha256"], {"F": "checksum"})
+                self.assertEqual(payload["archive"][0]["information"]["sha256"], "checksum")
 
             if request.get_method() == "PUT":
                 self.assertNotIsInstance(request.data, bytes)
@@ -256,7 +261,7 @@ class SyncTests(TempDirTestCase):
                     "bis": {"referenz": "release/261", "commit": "current"},
                 },
                 "elemente": [["M", "beispiel.xml"]],
-                "sha256": {"D": f"checksum-{project}"},
+                "sha256": f"checksum-{project}",
             }))
             archive = self.root / f"{project}D.tgz"
             archive.write_bytes(project.encode())
@@ -283,7 +288,7 @@ class SyncTests(TempDirTestCase):
                 self.assertEqual(len(payload["archive"]), 2)
                 self.assertEqual(
                     [e["information"]["sha256"] for e in payload["archive"]],
-                    [{"D": "checksum-LOMS_Basis"}, {"D": "checksum-LOMS_Autonom"}],
+                    ["checksum-LOMS_Basis", "checksum-LOMS_Autonom"],
                 )
             elif request.get_method() == "PUT":
                 uploaded.append((request.full_url, b"".join(request.data)))

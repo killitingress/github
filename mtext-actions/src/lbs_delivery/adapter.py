@@ -40,18 +40,13 @@ _SYNC_URL = "http://{umgebung}.ltoma.intern/vMtextAdapter/sync"
 def synchronize(umgebung: str, project_archives: Iterable[ProjectArchives], idempotency_key: str) -> dict[str, object]:
     """Legt einen Adapterauftrag an, lädt seine Archive hoch und wartet auf den Endstatus."""
 
-    # alle Projektarchive für Prüfung, Auftragsanlage und Upload bereithalten
+    # alle Projektarchive für Auftragsanlage und Upload bereithalten
     prepared_archives = list(project_archives)
 
-    # eine gemeinsame Auftragsart aus den vorhandenen Archivtypen ableiten
-    full = {e.f_archiv is not None for e in prepared_archives}
-    if len(full) != 1:
-        raise DeliveryError(Status.ADAPTER_FAILED, "Archive des Auftrags haben unterschiedliche Auftragsarten")
+    # Sync liefert mindestens ein Projekt, alle Archive stammen aus demselben Scope
+    auftragsart = "FULL" if prepared_archives[0].f_archiv is not None else "DELTA"
 
-    auftragsart = "FULL" if full.pop() else "DELTA"
-    checksum_name = "F" if auftragsart == "FULL" else "D"
-
-    # passendes Archiv und seine geprüften Informationen je Projekt zusammenstellen
+    # passendes Archiv und die beim Paketbau erzeugten Informationen je Projekt zusammenstellen
     archive_uploads: list[tuple[Path, dict[str, object]]] = []
     for archives in prepared_archives:
         archive = archives.f_archiv if auftragsart == "FULL" else archives.d_archiv
@@ -60,26 +55,10 @@ def synchronize(umgebung: str, project_archives: Iterable[ProjectArchives], idem
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             raise DeliveryError(Status.ADAPTER_FAILED, f"Informationsdatei kann nicht gelesen werden: {exc}") from exc
 
-        if not isinstance(information, dict):
-            raise DeliveryError(Status.ADAPTER_FAILED, "Informationsdatei ist ungültig")
-
-        # Adaptervertrag nennt nur die Prüfsumme des tatsächlich angekündigten Archivs
-        checksums = information.get("sha256")
-        if not isinstance(checksums, dict) or not isinstance(checksums.get(checksum_name), str):
-            raise DeliveryError(
-                Status.ADAPTER_FAILED,
-                f"Informationsdatei enthält keine SHA-256-Prüfsumme für das {checksum_name}-Archiv",
-            )
-        information["sha256"] = {checksum_name: checksums[checksum_name]}
-
         archive_uploads.append((archive, information))
 
     # Mandantenkürzel steht im Dateinamen `_INFO_<kuerzel>-<projekt>.json`
-    name = prepared_archives[0].information.name
-    rest = name.removeprefix("_INFO_")
-    kuerzel, _hyphen, projekt = rest.removesuffix(".json").partition("-")
-    if rest == name or not rest.endswith(".json") or not _hyphen or not kuerzel or not projekt:
-        raise DeliveryError(Status.ADAPTER_FAILED, "Informationsdatei hat keinen Mandantennamen")
+    kuerzel = prepared_archives[0].information.stem.removeprefix("_INFO_").partition("-")[0]
 
     # Auftrag mit vollständiger Archivliste idempotent beim Ziel anlegen
     adapter_url = _SYNC_URL.format(umgebung=umgebung)

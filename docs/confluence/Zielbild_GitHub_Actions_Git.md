@@ -225,7 +225,7 @@ M/Text-Entwicklung verwendet das Präfix `en`, M/Text-Funktionstest das Präfix
 Präfix und Zahlenteil bilden die Umgebungskennung, beispielsweise `en` und
 `01` die Kennung `en01`. M/Text ist unter `<Umgebungskennung>.ltoms.intern`
 erreichbar. Der Sync-Endpunkt des Adapters wird unter
-`http://<Umgebungskennung>.ltoma.intern/vMtextAdapter/sync` aufgerufen.
+`<Umgebungskennung>.ltoma.intern/vMtextAdapter/sync` aufgerufen.
 
 ### Archive, Projektinformationen und Lieferarten
 
@@ -267,11 +267,12 @@ FULL das F-Archiv. Bei DELTA wird das D-Archiv übertragen.
 Der Archivname besteht aus Mandantenkürzel, Projektcode und `F` oder `D`. Bei
 der Mainframe-Lieferung ist der Name ohne `.tgz` zugleich das Mainframe-Member.
 
-Neben den Archiven liegt für jedes Projekt eine JSON-Informationsdatei
+Neben den Archiven liegt jeweils eine JSON-Informationsdatei
 `_INFO_<Mandantenkürzel>-<Projekt>.json`, zum Beispiel
-`_INFO_FI-LOMS_Basis.json`. Sie entspricht inhaltlich den bisherigen
-Info-Dateien in trans/, ist aber technisch verarbeitbar und einheitlich
-aufgebaut:
+`_INFO_FI-LOMS_Basis.json`. Ihr Inhalt wird bei der Adapter-Synchronisation
+auch bei der Auftragsanlage im POST-Body mitgegeben. Sie entspricht inhaltlich
+den bisherigen Info-Dateien in trans/, ist aber technisch verarbeitbar und
+einheitlich aufgebaut:
 
 ```json
 {
@@ -290,23 +291,20 @@ aufgebaut:
     ["M", "geaendert.xml"],
     ["D", "entfernt.xml"]
   ],
-  "sha256": {
-    "D": "..."
-  }
+  "sha256": "..."
 }
 ```
 
 `von` entfällt bei FULL und bezeichnet bei DELTA den Vergleichsstand. `bis`
-bezeichnet den paketierten Zielstand. `elemente` enthält Git-Status und
-projektbezogenen Pfad mit den Statuswerten `A` (hinzugefügt), `M` (geändert),
-`D` (gelöscht) und `T` (Typ geändert). Bei einem FULL werden die enthaltenen
-Dateien mit `A` aufgeführt. Die Schlüssel `F` und `D` unter `sha256` bezeichnen
-die vorhandenen Archive.
+bezeichnet den paketierten Zielstand. `elemente` enthält für jede relevante
+Datei den Git-Status und ihren projekt-relativen Pfad mit den Statuswerten `A`
+(hinzugefügt), `M` (geändert), `D` (gelöscht) und `T` (Typ geändert). `sha256`
+enthält als String die Prüfsumme des F-Archivs bei FULL oder des D-Archivs bei
+DELTA.
 
-Mandant und Repository ergeben sich aus dem Mandanten-Repository und dem
-Übergabeauftrag. Sie werden in der projektbezogenen Informationsdatei nicht
-wiederholt. Die Informationsdatei liegt neben den Archiven, damit sie deren
-SHA-256-Prüfsummen enthalten kann.
+Gelöschte Dateien werden sowohl in `elemente` geführt als auch in der
+Löschliste des D-Archivs, dort allerdings mit vollem Pfad für historische
+Kompatibilität.
 
 ### Transport der Synchronisationsaufträge
 
@@ -532,7 +530,79 @@ Passwort soll auf Ebene der GitHub-Organisation verwaltet und für die
 vorgesehenen Mandanten-Repositories freigegeben werden und steht dann in
 Mandanten-Workflows unter `secrets.MAINFRAME_FTPS_PASSWORD` zur Verfügung.
 
-## 5. Repositories
+## 5. Konfiguration
+
+### Mandantenkonfiguration
+
+Die Datei `.github/config.json` liegt im Mandanten-Repository und wird zusammen
+mit den M/Text-Projekten versioniert. Der Block `mandant` enthält:
+
+| Feld | Bedeutung |
+|---|---|
+| `kuerzel` | Mandantenkürzel für Paketnamen und Fragmentprojekte |
+| `releaselinie` | Releaselinie von `main` |
+| `ispw` | CodePipeline-Instanz `T` oder `P` |
+| `excluded_projects` | Projektverzeichnisse, die weder synchronisiert noch paketiert werden |
+| `hostprofile` | Assignment und CodePipeline-Stage je Hostprofil |
+
+Beispiel:
+
+```json
+{
+  "mandant": {
+    "kuerzel": "FI",
+    "releaselinie": "270",
+    "ispw": "P",
+    "excluded_projects": ["LOMS_Testdaten"],
+    "hostprofile": {
+      "FKT": {
+        "assignment": "LOMS000066",
+        "stage": "FKTE"
+      },
+      "JUR": {
+        "assignment": "LOMS000067",
+        "stage": "JURP"
+      }
+    }
+  }
+}
+```
+
+Bei Feature- und Release-Branches steht die Releaselinie im Branchnamen. Bei
+`main` steht sie im Feld `releaselinie`. Eine Lieferung verändert die
+Mandantenkonfiguration nicht.
+
+### `mtext_actions`-Konfiguration
+
+`config/mandanten.json` ordnet Mandantenkürzel und Repository einander eindeutig zu.
+`config/releaselinien.json` ist in Kapitel 3 beschrieben.
+
+`config/ressourcenformate.json` wird für die Ressourcenprüfung genutzt um
+Dateiendungen einem Prüfverfahren zuzuordnen, da Tonic-Elemente verschiedenste
+Endungen haben können, unabhängig von ihrem wahren Dateityp.
+Dateien, deren Endung zu keinem Eintrag oder Glob-Muster in
+`ressourcenformate.json` passt, werden nicht geprüft.
+Nur wenn Node.js auf dem Runner verfügbar ist, kann JavaScript geprüft werden. Dies wird dynamisch ermittelt.
+Die Zuordnung ist derzeit:
+
+```
+{
+  "dateiendungen": {
+    ".datamodel": "xml",
+    ".mapping": "xml",
+    ".model": "xml",
+    ".pageLayout*": "xml",
+    ".outputSettings": "xml",
+    ".template": "xml",
+    ".xml": "xml",
+    ".formio": "json",
+    ".json": "json",
+    ".js": "js"
+  }
+}
+```
+
+## 6. Repositories
 
 ### Mandanten-Repositories
 
@@ -615,7 +685,7 @@ mtext-actions/
   tests/
 ```
 
-## 6. Workflows
+## 7. Workflows
 
 ### Gesamtzusammenhang
 
@@ -702,89 +772,3 @@ mit dem zugehörigen Exitcode.
 | `MAINFRAME_SUBMITTED` | Archive und JCL wurden per FTPS und JES übergeben | – |
 | `GITHUB_RELEASE_FAILED` | Das GitHub Release oder seine Informationsdateien konnten nicht bereitgestellt werden | `8` |
 | `GITHUB_RELEASE_PUBLISHED` | Zusammenfassung und Informationsdateien stehen im Mandanten-Repository bereit | – |
-
-## 7. Konfiguration
-
-### Mandantenkonfiguration
-
-Die Datei `.github/config.json` liegt im Mandanten-Repository und wird zusammen
-mit den M/Text-Projekten versioniert. Der Block `mandant` enthält:
-
-| Feld | Bedeutung |
-|---|---|
-| `kuerzel` | Mandantenkürzel für Paketnamen und Fragmentprojekte |
-| `releaselinie` | Releaselinie von `main` |
-| `ispw` | CodePipeline-Instanz `T` oder `P` |
-| `excluded_projects` | Projektverzeichnisse, die weder synchronisiert noch paketiert werden |
-| `hostprofile` | Assignment und CodePipeline-Stage je Hostprofil |
-
-Beispiel:
-
-```json
-{
-  "mandant": {
-    "kuerzel": "FI",
-    "releaselinie": "270",
-    "ispw": "P",
-    "excluded_projects": ["LOMS_Testdaten"],
-    "hostprofile": {
-      "FKT": {
-        "assignment": "LOMS000066",
-        "stage": "FKTE"
-      },
-      "JUR": {
-        "assignment": "LOMS000067",
-        "stage": "JURP"
-      }
-    }
-  }
-}
-```
-
-Bei Feature- und Release-Branches steht die Releaselinie im Branchnamen. Bei
-`main` steht sie im Feld `releaselinie`. Eine Lieferung verändert die
-Mandantenkonfiguration nicht.
-
-### `mtext_actions`-Konfiguration
-
-`config/mandanten.json` ordnet Mandantenkürzel und Repository einander eindeutig zu.
-`config/releaselinien.json` ist in Kapitel 3 beschrieben.
-
-`config/ressourcenformate.json` wird für die Ressourcenprüfung genutzt um
-Dateiendungen einem Prüfverfahren zuzuordnen, da Tonic-Elemente verschiedenste
-Endungen haben können, unabhängig von ihrem wahren Dateityp.
-Dateien, deren Endung zu keinem Eintrag oder Glob-Muster in
-`ressourcenformate.json` passt, werden nicht geprüft.
-Nur wenn Node.js auf dem Runner verfügbar ist, kann JavaScript geprüft werden. Dies wird dynamisch ermittelt.
-Die Zuordnung ist derzeit:
-
-```
-{
-  "dateiendungen": {
-    ".datamodel": "xml",
-    ".mapping": "xml",
-    ".model": "xml",
-    ".pageLayout*": "xml",
-    ".outputSettings": "xml",
-    ".template": "xml",
-    ".xml": "xml",
-    ".formio": "json",
-    ".json": "json",
-    ".js": "js"
-  }
-}
-```
-
-## 8. Mögliche Phase 2
-
-Die erste Ausbaustufe bleibt bewusst auf die sichere Ablösung des bestehenden
-Lieferwegs begrenzt. Nach einem stabilen Produktivbetrieb können insbesondere
-folgende Erweiterungen bewertet werden:
-
-- Betriebsmetriken und kompakte Laufzusammenfassungen ergänzen, ohne
-  mandantenübergreifende oder vertrauliche Details offenzulegen
-- zusätzliche E-Mail-Benachrichtigungen für relevante Workflow-Ergebnisse
-  ergänzen, ohne den fachlichen Laufstatus von der Benachrichtigung abhängig zu
-  machen
-- Aktualisierungen gepinnter Actions sowie ergänzende Workflow-, Shell-, Typ-
-  und Abdeckungsprüfungen automatisieren

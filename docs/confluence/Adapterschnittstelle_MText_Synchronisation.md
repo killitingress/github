@@ -94,10 +94,10 @@ fest.
 
 | Methode | Bei erfolgreichem Request | Bei einem Fehler |
 |---|---|---|
-| `POST` | `201 Created` für einen neuen Auftrag, `200 OK` für einen bekannten Idempotency-Key | `400`, `409`, `415`, `500` |
-| `PUT` | `202 Accepted` | `400`, `404`, `415`, `500` |
-| `GET` | `200 OK` | `404`, `500` |
-| `DELETE` | `200 OK` | `404`, `409`, `500` |
+| `POST` | `HTTP 201 (Created)` für einen neuen Auftrag, `HTTP 200 (OK)` für einen bekannten Idempotency-Key | `HTTP 400 (Bad Request)`, `HTTP 409 (Conflict)`, `HTTP 415 (Unsupported Media Type)`, `HTTP 500 (Internal Server Error)` |
+| `PUT` | `HTTP 202 (Accepted)` | `HTTP 400 (Bad Request)`, `HTTP 404 (Not Found)`, `HTTP 415 (Unsupported Media Type)`, `HTTP 500 (Internal Server Error)` |
+| `GET` | `HTTP 200 (OK)` | `HTTP 404 (Not Found)`, `HTTP 500 (Internal Server Error)` |
+| `DELETE` | `HTTP 200 (OK)` | `HTTP 404 (Not Found)`, `HTTP 409 (Conflict)`, `HTTP 500 (Internal Server Error)` |
 
 Die vollständige JSON-Antwort steht beim jeweiligen Request. POST, PUT und GET
 liefern `auftrag_id` und `status`. Abhängig vom Status kommen `ergebnis` oder
@@ -107,7 +107,7 @@ liefern `auftrag_id` und `status`. Abhängig vom Status kommen `ergebnis` oder
 
 ```http
 POST /vMtextAdapter/sync
-Idempotency-Key: github-run-123456-Entwicklung
+Idempotency-Key: github-run-123456-en01
 Content-Type: application/json
 ```
 
@@ -127,9 +127,7 @@ Content-Type: application/json
           }
         },
         "elemente": [["A", "beispiel.xml"]],
-        "sha256": {
-          "F": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-        }
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       }
     }
   ]
@@ -172,9 +170,7 @@ keinen internen Ablagepfad ab.
 | `scope.bis.commit` | String | immer |
 | `elemente` | Array | immer, darf leer sein |
 | `elemente[]` | Array aus Status und Pfad | je enthaltenem Element |
-| `sha256` | Objekt | immer |
-| `sha256.F` | String | bei `FULL` |
-| `sha256.D` | String | bei `DELTA` |
+| `sha256` | String | immer, Prüfsumme des angekündigten Archivs |
 
 Jeder Eintrag in `elemente` besteht aus zwei Strings. Der erste String ist
 `A`, `M`, `D` oder `T`. Der zweite ist ein projektbezogener Pfad mit `/` als
@@ -185,13 +181,11 @@ vor.
 Für `FULL` gelten folgende technische Zuordnungen:
 
 - `scope.von` fehlt
-- `sha256` enthält `F`
 - der angekündigte Name bezeichnet das F-Archiv
 
 Für `DELTA` gelten folgende technische Zuordnungen:
 
 - `scope.von` ist vorhanden
-- `sha256` enthält `D`
 - der angekündigte Name bezeichnet das D-Archiv
 
 Die Prüfsumme besteht aus 64 hexadezimalen Zeichen. Groß- und Kleinschreibung
@@ -209,8 +203,8 @@ Der Adapter prüft vor dem Anlegen eines Auftrags:
    Auftrags jeweils eindeutig.
 5. Alle Projektinformationen passen zur Auftragsart.
 
-Schlägt eine dieser Prüfungen fehl, antwortet der Adapter mit HTTP 400 und legt
-keinen Auftrag an.
+Schlägt eine dieser Prüfungen fehl, antwortet der Adapter mit HTTP 400 (Bad
+Request) und legt keinen Auftrag an.
 
 Ein neuer Auftrag liefert:
 
@@ -234,9 +228,10 @@ zurück.
 
 Für einen bereits bekannten Schlüssel vergleicht der Adapter den JSON-Inhalt
 mit dem beim ersten POST gespeicherten Inhalt. Bei gleichem Inhalt antwortet er
-mit HTTP 200 und dem aktuellen Auftrag. Bei einer Abweichung antwortet er mit
-HTTP 409. Der Idempotency-Key wird als undurchsichtiger String behandelt. Seine
-Zusammensetzung wird vom Client bestimmt und vom Adapter nicht ausgewertet.
+mit HTTP 200 (OK) und dem aktuellen Auftrag. Bei einer Abweichung antwortet er
+mit HTTP 409 (Conflict). Der Idempotency-Key wird als undurchsichtiger String
+behandelt. Seine Zusammensetzung wird vom Client bestimmt und vom Adapter nicht
+ausgewertet.
 
 Der Vergleich erfolgt auf den deserialisierten, in dieser Schnittstelle definierten
 Feldern. Die Reihenfolge von JSON-Objektfeldern ist ohne Bedeutung. Die
@@ -288,9 +283,9 @@ diesen PUT kann daher bereits `processing` enthalten.
 
 Ein wiederholter PUT startet die Verarbeitung nicht erneut. Hat die
 Verarbeitung bereits begonnen oder ist der Auftrag beendet, liefert der
-Adapter mit HTTP 202 den aktuellen Auftrag und verändert den gespeicherten
-Upload nicht. Dadurch kann der Client einen PUT wiederholen, dessen Antwort
-verloren ging.
+Adapter mit HTTP 202 (Accepted) den aktuellen Auftrag und verändert den
+gespeicherten Upload nicht. Dadurch kann der Client einen PUT wiederholen,
+dessen Antwort verloren ging.
 
 Eine abweichende SHA-256-Prüfsumme setzt den Auftrag während des PUT auf
 `failed`. Die Antwort enthält dann `meldung`. Die nicht angenommene temporäre
@@ -340,7 +335,7 @@ während `processing` erkannt.
 GET /vMtextAdapter/sync/8f73c1
 ```
 
-Ein bekannter Auftrag liefert HTTP 200 und die nachfolgend beschriebene
+Ein bekannter Auftrag liefert HTTP 200 (OK) und die nachfolgend beschriebene
 JSON-Struktur.
 
 Die JSON-Antwort für einen bekannten Auftrag hat folgende Felder:
@@ -511,11 +506,11 @@ Content-Type: application/json
 
 Nach erfolgreichem DELETE sind der Auftrag, sein Ergebnis, seine Uploads und
 die Zuordnung des Idempotency-Keys nicht mehr über diese API verfügbar. Ein
-anschließender GET mit derselben `auftrag_id` liefert HTTP 404. Ein DELETE in
-einem anderen Status liefert HTTP 409.
+anschließender GET mit derselben `auftrag_id` liefert HTTP 404 (Not Found). Ein
+DELETE in einem anderen Status liefert HTTP 409 (Conflict).
 
 Der Projektbestand unter `serverSync/` wird durch DELETE nicht verändert. Ein
-zweiter DELETE derselben Auftrags-ID liefert HTTP 404.
+zweiter DELETE derselben Auftrags-ID liefert HTTP 404 (Not Found).
 
 ### Lebensdauer und Adapter-Neustart
 
@@ -524,10 +519,10 @@ erfolgreichen DELETE oder bis zu einem Adapter-Neustart erhalten. Eine
 Persistenz über den Neustart hinaus ist nicht Bestandteil der Schnittstelle.
 
 Beim Start entfernt der Adapter zurückgebliebene temporäre Upload- und
-Arbeitsdateien. Zuvor bekannte Auftrags-IDs liefern danach HTTP 404. Ein POST
-mit dem bisherigen Idempotency-Key legt einen neuen Auftrag an. Änderungen,
-die ein vor dem Neustart abgebrochener Auftrag bereits an `serverSync/`
-vorgenommen hat, werden nicht zurückgesetzt.
+Arbeitsdateien. Zuvor bekannte Auftrags-IDs liefern danach HTTP 404 (Not Found).
+Ein POST mit dem bisherigen Idempotency-Key legt einen neuen Auftrag an.
+Änderungen, die ein vor dem Neustart abgebrochener Auftrag bereits an
+`serverSync/` vorgenommen hat, werden nicht zurückgesetzt.
 
 ## Fehlerantworten
 
@@ -541,11 +536,11 @@ Fehler eines Requests liefern ein JSON-Objekt mit `meldung`:
 
 | HTTP-Status | Bedeutung |
 |---|---|
-| `400 Bad Request` | Request oder Archivzuordnung ist ungültig |
-| `404 Not Found` | Auftrag ist unbekannt |
-| `409 Conflict` | Request ist im aktuellen Auftragsstatus nicht zulässig |
-| `415 Unsupported Media Type` | `Content-Type` passt nicht zum Endpunkt |
-| `500 Internal Server Error` | Request konnte wegen eines unerwarteten Adapterfehlers nicht beantwortet werden |
+| `HTTP 400 (Bad Request)` | Request oder Archivzuordnung ist ungültig |
+| `HTTP 404 (Not Found)` | Auftrag ist unbekannt |
+| `HTTP 409 (Conflict)` | Request ist im aktuellen Auftragsstatus nicht zulässig |
+| `HTTP 415 (Unsupported Media Type)` | `Content-Type` passt nicht zum Endpunkt |
+| `HTTP 500 (Internal Server Error)` | Request konnte wegen eines unerwarteten Adapterfehlers nicht beantwortet werden |
 
 Fehler während der Prüfung oder Verarbeitung eines bekannten Auftrags werden
 über den Status `failed` gemeldet.
@@ -558,11 +553,11 @@ Workflow anzeigen kann.
 
 Der Client verarbeitet einen Auftrag in dieser Reihenfolge:
 
-1. Er sammelt alle Projektartefakte des Zielaufrufs und prüft, ob sie gemeinsam
-   `FULL` oder gemeinsam `DELTA` sind.
+1. Er erzeugt die Projektartefakte aus einem gemeinsamen Lieferumfang und
+   leitet daraus die Auftragsart `FULL` oder `DELTA` ab.
 2. Er liest die Projektinformationen und sendet den POST mit einem über
    Wiederholungen des GitHub-Laufs stabilen Idempotency-Key. Der Schlüssel hat
-   das Format `github-run-<GITHUB_RUN_ID>-<Umgebung>`.
+   das Format `github-run-<GITHUB_RUN_ID>-<Umgebungskennung>`.
 3. Liefert der POST `ready` oder `uploading`, sendet er alle angekündigten
    Archive. Bereits vorhandene Uploads dürfen dadurch erneut übertragen
    werden.
@@ -874,8 +869,8 @@ Verarbeitung starten soll.
 Eine abweichende Prüfsumme wird in dieser Methode in den Auftragsstatus
 `failed` übersetzt und als `UploadErgebnis` zurückgegeben. Eine syntaktisch
 ungültige Anfrage wird dagegen als `UngueltigerRequestException` behandelt und
-liefert HTTP 400. Inhaltsfehler des Archivs entstehen erst in der
-asynchronen Verarbeitung.
+liefert HTTP 400 (Bad Request). Inhaltsfehler des Archivs entstehen erst in
+der asynchronen Verarbeitung.
 
 ### Abbildung von HTTP-Fehlern
 
@@ -909,9 +904,10 @@ public class SynchronisationFehlerbehandlung {
 }
 ```
 
-Spring beantwortet nicht unterstützte Content-Types mit HTTP 415. Für
-unerwartete Exceptions wird zentral HTTP 500 mit einer allgemeinen Meldung
-erzeugt und die vollständige Exception serverseitig protokolliert.
+Spring beantwortet nicht unterstützte Content-Types mit HTTP 415 (Unsupported
+Media Type). Für unerwartete Exceptions wird zentral HTTP 500 (Internal Server
+Error) mit einer allgemeinen Meldung erzeugt und die vollständige Exception
+serverseitig protokolliert.
 
 ### Archivverarbeitung
 
@@ -1099,25 +1095,25 @@ folgenden Fällen geprüft:
 
 | Fall | Erwartetes Ergebnis |
 |---|---|
-| gültiger erster POST | HTTP 201, `Location`, neue Auftrags-ID und `ready` |
-| gleicher POST mit gleichem Idempotency-Key | HTTP 200, gleiche Auftrags-ID und unveränderter aktueller Status |
-| anderer JSON-Inhalt mit bekanntem Idempotency-Key | HTTP 409 und `meldung` |
-| erster gültiger Upload eines unvollständigen Auftrags | HTTP 202 und `uploading` |
-| wiederholter gültiger Upload vor Verarbeitungsbeginn | HTTP 202, Upload bleibt verwendbar und Auftrag startet höchstens einmal |
-| Upload mit abweichender Prüfsumme | HTTP 202, `failed` und `meldung`, keine Änderung an `serverSync/` |
-| letzter gültiger Upload | HTTP 202 und `processing`, Verarbeitung startet einmal |
+| gültiger erster POST | HTTP 201 (Created), `Location`, neue Auftrags-ID und `ready` |
+| gleicher POST mit gleichem Idempotency-Key | HTTP 200 (OK), gleiche Auftrags-ID und unveränderter aktueller Status |
+| anderer JSON-Inhalt mit bekanntem Idempotency-Key | HTTP 409 (Conflict) und `meldung` |
+| erster gültiger Upload eines unvollständigen Auftrags | HTTP 202 (Accepted) und `uploading` |
+| wiederholter gültiger Upload vor Verarbeitungsbeginn | HTTP 202 (Accepted), Upload bleibt verwendbar und Auftrag startet höchstens einmal |
+| Upload mit abweichender Prüfsumme | HTTP 202 (Accepted), `failed` und `meldung`, keine Änderung an `serverSync/` |
+| letzter gültiger Upload | HTTP 202 (Accepted) und `processing`, Verarbeitung startet einmal |
 | parallele letzte Uploads | ein Statuswechsel zu `processing` und ein Verarbeitungsstart |
 | parallele Aufträge desselben Mandanten | Projektübernahme und M/Text-Aufruf erfolgen nacheinander unter demselben Lock |
 | parallele Aufträge verschiedener Mandanten | Projektübernahme und M/Text-Aufruf dürfen innerhalb derselben Umgebung parallel erfolgen |
-| PUT nach Verarbeitungsbeginn | HTTP 202 mit aktuellem Status, kein weiterer Verarbeitungsstart |
-| GET eines bekannten Auftrags | HTTP 200 mit passender Auftrags-ID und aktuellem Status |
-| GET eines unbekannten Auftrags | HTTP 404 und `meldung` |
+| PUT nach Verarbeitungsbeginn | HTTP 202 (Accepted) mit aktuellem Status, kein weiterer Verarbeitungsstart |
+| GET eines bekannten Auftrags | HTTP 200 (OK) mit passender Auftrags-ID und aktuellem Status |
+| GET eines unbekannten Auftrags | HTTP 404 (Not Found) und `meldung` |
 | erfolgreicher M/Text-Aufruf | `succeeded` und vorhandenes Ergebnis wird als `ergebnis` übertragen |
 | fehlgeschlagene Übernahme oder M/Text-Aufruf | `failed`, technische `meldung` und freigegebener Mandanten-Lock |
-| DELETE eines aktiven Auftrags | HTTP 409, Auftrag bleibt erhalten |
-| DELETE eines Endstatus | HTTP 200 und `{"ok": true}` |
-| GET oder zweiter DELETE nach dem Löschen | HTTP 404 |
-| Adapter-Neustart | temporäre Auftragsdateien werden entfernt, frühere Auftrags-IDs liefern HTTP 404 |
+| DELETE eines aktiven Auftrags | HTTP 409 (Conflict), Auftrag bleibt erhalten |
+| DELETE eines Endstatus | HTTP 200 (OK) und `{"ok": true}` |
+| GET oder zweiter DELETE nach dem Löschen | HTTP 404 (Not Found) |
+| Adapter-Neustart | temporäre Auftragsdateien werden entfernt, frühere Auftrags-IDs liefern HTTP 404 (Not Found) |
 | Archivpfad außerhalb des Projekts | Auftrag wird `failed`, außerhalb des Projekts erfolgt keine Dateioperation |
 
 Änderungen an Pfaden, erforderlichen Feldern, Statuswerten oder der Bedeutung

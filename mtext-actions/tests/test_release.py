@@ -56,7 +56,7 @@ class ReleaseTests(TempDirTestCase):
         self.assertIn(["D", "rename-old.txt"], information["elemente"])
         self.assertIn(["A", "rename-new.txt"], information["elemente"])
         self.assertEqual(
-            information["sha256"]["D"],
+            information["sha256"],
             hashlib.sha256((first / "FIBASISD.tgz").read_bytes()).hexdigest(),
         )
 
@@ -94,7 +94,10 @@ class ReleaseTests(TempDirTestCase):
         self.assertEqual(sorted(e.stem for e in full.glob("*.tgz")), ["FIBASISD", "FIBASISF"])
         full_information = json.loads(next(full.glob("_INFO_*.json")).read_text(encoding="utf-8"))
         self.assertNotIn("von", full_information["scope"])
-        self.assertEqual(set(full_information["sha256"]), {"F", "D"})
+        self.assertEqual(
+            full_information["sha256"],
+            hashlib.sha256((full / "FIBASISF.tgz").read_bytes()).hexdigest(),
+        )
         self.assertTrue(all(e[0] == "A" for e in full_information["elemente"]))
 
     def test_submits_package_and_jcl_with_explicit_ftps(self) -> None:

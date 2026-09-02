@@ -42,7 +42,7 @@ class Scope:
 class ProjectArchives:
     """Hält die erzeugte Informationsdatei und die Archive eines Projekts."""
 
-    # JSON mit Scope, Elementliste und Prüfsummen
+    # JSON mit Scope, Elementliste und Prüfsumme des F- oder D-Archivs
     information: Path
     # D-Archiv mit Änderungen oder leerer Löschliste bei FULL
     d_archiv: Path
@@ -217,21 +217,19 @@ def build_project_archives(
         _write_delta_archive(delta_archive, repository_root, project, f"{prefix}D.txt", elements)
         full_archive = None
 
-    # Scope, Prüfsummen und Elementliste in die Informationsdatei schreiben
+    # Vergleichsstand und Zielstand für die Informationsdatei zusammenstellen
     scope_json: dict[str, object] = {"bis": {"referenz": scope.bis[0], "commit": scope.bis[1]}}
     if scope.von is not None:
         scope_json["von"] = {"referenz": scope.von[0], "commit": scope.von[1]}
 
-    # Prüfsummen für D- und F-Archiv berechnen
-    checksums = {"D": _sha256(delta_archive)}
-    if full_archive is not None:
-        checksums["F"] = _sha256(full_archive)
+    # bei FULL das F-Archiv, bei DELTA das D-Archiv der Projektlieferung prüfen
+    checksum = _sha256(full_archive if full_archive is not None else delta_archive)
 
     # Informationsdatei erzeugen
     information = output_directory / INFORMATION_NAME.format(kuerzel=configuration.kuerzel, project=project)
     try:
         information.write_text(
-            json.dumps({"projekt": project, "scope": scope_json, "elemente": elements, "sha256": checksums}, indent=2) + "\n",
+            json.dumps({"projekt": project, "scope": scope_json, "elemente": elements, "sha256": checksum}, indent=2) + "\n",
             encoding="utf-8",
         )
     except OSError as exc:
