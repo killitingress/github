@@ -45,8 +45,8 @@ def _vorbereitungslauf(api_url: str, repository: str, tag: str, token: str) -> i
         raise DeliveryError(Status.SOURCE_FAILED, f"Vorbereitungsartefakt ist ungültig: {exc}") from exc
 
 
-def _pruefe_lieferquelle(configuration: config.Configuration, root: Path, tag: str, branch: str, sha: str) -> None:
-    """Prüft Liefer-Tag, Branch und ob der ausgewählte Branchstand noch aktuell ist."""
+def _pruefe_lieferquelle(configuration: config.Configuration, root: Path, tag: str, branch: str) -> None:
+    """Prüft die Zulässigkeit von Liefer-Tag und Branch für die Releaselinie."""
 
     # Liefer-Tag zerlegen und ungültige Formate vor allen Git-Zugriffen ablehnen
     tag_match = git.LIEFER_TAG_RE.fullmatch(tag)
@@ -73,10 +73,6 @@ def _pruefe_lieferquelle(configuration: config.Configuration, root: Path, tag: s
     # Releaselinie muss in der gemeinsamen Zielzuordnung aktiv sein
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, f"Releaselinie {releaselinie} ist ungültig")
-
-    # Vorbereitung nur für den weiterhin aktuellen Remote-Branchstand zulassen
-    if git.resolve(root, f"refs/remotes/origin/{branch}") != sha:
-        raise DeliveryError(Status.SOURCE_FAILED, "ausgewählter Branchstand ist nicht mehr aktuell")
 
 
 def _summary(configuration: config.Configuration, root: Path, tag: str, branch: str, sha: str) -> str:
@@ -131,14 +127,14 @@ def _ermittle_lieferung(tag: str) -> dict[str, object]:
 def _pruefe_lieferung(tag: str) -> dict[str, object]:
     """Hält für `check` den geprüften Branchstand und seinen Lieferumfang fest."""
 
-    # aktuellen Mandantenstand einordnen und gegen Liefer-Tag und Branch prüfen
+    # ausgecheckten Mandantenstand einordnen und gegen Liefer-Tag und Branch prüfen
     source = config.mandant_source()
     repository = os.environ["GITHUB_REPOSITORY"]
     branch = os.environ["GITHUB_REF_NAME"]
     sha = git.resolve(source, "HEAD")
     actor = os.environ["GITHUB_ACTOR"]
     configuration = config.Configuration.load(source, repository)
-    _pruefe_lieferquelle(configuration, source, tag, branch, sha)
+    _pruefe_lieferquelle(configuration, source, tag, branch)
 
     # geprüften Stand für Bestätigung und Tag-Erzeugung festhalten
     vorbereitung = config.workflow_workspace() / config.WORKFLOW_VORBEREITUNG_DATEI

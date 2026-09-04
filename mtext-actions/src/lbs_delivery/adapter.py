@@ -78,11 +78,11 @@ def synchronize(umgebung: str, project_archives: Iterable[ProjectArchives], idem
     kuerzel = prepared_archives[0].information.stem.removeprefix("_INFO_").partition("-")[0]
 
     # Auftrag mit vollständiger Archivliste idempotent beim Ziel anlegen
-    adapter_url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync"
+    adapter_url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2"
     archive_list = [
         {"name": archive.name, "information": information} for archive, information in archive_uploads
     ]
-    payload = {"kuerzel": kuerzel, "archive": archive_list}
+    payload = {"mandant": kuerzel, "archive": archive_list}
     created = _call_adapter("POST", adapter_url, payload, {"Idempotency-Key": idempotency_key})
     auftrag_id = created["auftrag_id"]
     auftrag_url = f"{adapter_url}/{urllib.parse.quote(auftrag_id, safe='')}"
@@ -102,7 +102,7 @@ def synchronize(umgebung: str, project_archives: Iterable[ProjectArchives], idem
             time.sleep(_POLL_INTERVAL_SECONDS)
 
     # Auftrag entfernen, ohne eine M/Text-Fehlermeldung zu überschreiben
-    message = result.get("meldung") or "M/Text-Synchronisation ist fehlgeschlagen"
+    message = result.get("message") or "M/Text-Synchronisation ist fehlgeschlagen"
     try:
         _call_adapter("DELETE", auftrag_url)
     except DeliveryError as exc:
@@ -115,7 +115,7 @@ def synchronize(umgebung: str, project_archives: Iterable[ProjectArchives], idem
         raise DeliveryError(Status.ADAPTER_FAILED, message)
 
     # Auftrags-ID und optionales M/Text-Ergebnis an den Workflow zurückgeben
-    return {"auftrag_id": auftrag_id} | ({"ergebnis": result["ergebnis"]} if "ergebnis" in result else {})
+    return {"auftrag_id": auftrag_id} | ({"result": result["result"]} if "result" in result else {})
 
 
 def _upload_archive(auftrag_url: str, archive: Path) -> dict[str, object]:
@@ -178,7 +178,7 @@ def _call_adapter(
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort ist ungültig")
 
     if method == "DELETE":
-        if document.get("ok") is not True:
+        if document.get("status") != "succeeded":
             raise DeliveryError(Status.ADAPTER_FAILED, "Adapter bestätigt das Löschen des Auftrags nicht")
         return document
 
@@ -194,7 +194,7 @@ def _call_adapter(
     if not isinstance(auftrag_id, str) or not auftrag_id:
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapter liefert keine gültige Auftrags-ID")
 
-    message = document.get("meldung")
+    message = document.get("message")
     if message is not None and not isinstance(message, str):
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort ist ungültig")
 

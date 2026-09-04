@@ -3,8 +3,8 @@ name: M/Text-Ressourcen synchronisieren
 # Dieser Workflow startet die Ressourcensynchronisierung für Feature-, main- und
 # Release-Branches. Der Shared Workflow verwendet den Branchstand des
 # auslösenden Ereignisses. Ein manueller Start gleicht den in GitHub
-# ausgewählten Branch vollständig ab. Verschiedene Branches dürfen
-# ihre Aufträge parallel an den gewählten Transportweg übergeben.
+# ausgewählten Branch vollständig ab. Die Läufe können ihre Aufträge
+# parallel an den Adapter übergeben.
 'on':
   push:
     branches:
@@ -13,13 +13,6 @@ name: M/Text-Ressourcen synchronisieren
       - feature/[0-9][0-9][0-9]/**
   # Der manuelle Start verwendet die Branchwahl von GitHub.
   workflow_dispatch:
-
-# Ein aktiver Lauf wird beendet, bevor der nächste Lauf desselben Branches
-# beginnt. Neuere Pushes können wartende Läufe ersetzen, weil ihr DELTA alle
-# Änderungen seit dem letzten erfolgreichen Lauf enthält.
-concurrency:
-  group: mtext-sync-${{ github.ref }}
-  cancel-in-progress: false
 
 permissions:
   contents: read

@@ -108,9 +108,9 @@ def _workflow_response(ergebnisse: list[dict[str, object]], warnungen: tuple[str
     # vorhandene M/Text-Ausgaben in die Workflow-Zusammenfassung übernehmen
     summary = ["## M/Text-Synchronisation"]
     for entry in ergebnisse:
-        if "ergebnis" not in entry:
+        if "result" not in entry:
             continue
-        output = entry["ergebnis"]
+        output = entry["result"]
         rendered = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False, indent=2)
         summary.extend((f"### {entry['umgebung']}", "```text", rendered, "```"))
 

@@ -63,9 +63,3 @@ Die Mindestversion in `.python-version` ist Python 3.11. Die Runner-Prüfung in
 `scripts/runner-preflight.sh` erwartet außerdem Git und `tar`.
 Ist Node.js auf dem Runner verfügbar, prüft `resources check` zusätzlich
 JavaScript-Dateien mit `node --check`.
-
-Die Tests lassen sich aus der Repositorywurzel ausführen:
-
-```bash
-PYTHONPATH=src python3 -m unittest discover -s tests
-```

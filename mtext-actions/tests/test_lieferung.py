@@ -44,7 +44,6 @@ class LieferungTests(TempDirTestCase):
             self.repository,
             "r261.108",
             "bereitstellung/261.108",
-            self.source_sha,
         )
         summary = _summary(
             self.configuration,
@@ -87,21 +86,18 @@ class LieferungTests(TempDirTestCase):
                         self.repository,
                         f"r261.{zwischenrelease}",
                         "release/261",
-                        self.source_sha,
                     )
 
         git(self.repository, "checkout", "--detach", "r261.100")
         git(self.repository, "switch", "-c", "bereitstellung/261.100")
         git(self.repository, "tag", "-d", "r261.100")
         track_remote_branch(self.repository, "bereitstellung/261.100")
-        sha = git(self.repository, "rev-parse", "HEAD")
         with self.assertRaisesRegex(DeliveryError, r"\.100 entsteht"):
             _pruefe_lieferquelle(
                 self.configuration,
                 self.repository,
                 "r261.100",
                 "bereitstellung/261.100",
-                sha,
             )
 
         git(self.repository, "checkout", "release/261")
@@ -113,23 +109,29 @@ class LieferungTests(TempDirTestCase):
                 self.repository,
                 "r261.108",
                 "bereitstellung/261.109",
-                self.source_sha,
             )
 
-    def test_rejects_stale_tip_during_prepare(self) -> None:
-        """Die Vorbereitung verlangt den aktuellen Stand des Branches."""
+    def test_prepares_checkout_after_branch_advances(self) -> None:
+        """Die Vorbereitung hält den Lauf-Commit bei weiterentwickeltem Branch fest."""
 
+        # der Remote-Branch ist weiter, der Checkout bleibt auf dem Commit des Laufs
         git(self.repository, "commit", "--allow-empty", "-m", "später")
         track_remote_branch(self.repository, "release/261")
         git(self.repository, "checkout", "--detach", self.source_sha)
-        with self.assertRaisesRegex(DeliveryError, "nicht mehr aktuell"):
-            _pruefe_lieferquelle(
-                self.configuration,
-                self.repository,
-                "r261.108",
-                "release/261",
-                self.source_sha,
-            )
+
+        # den gestarteten Stand für die spätere Lieferung vorbereiten
+        with patch.dict(os.environ, {
+            "GITHUB_WORKSPACE": str(self.root),
+            "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
+            "GITHUB_REF_NAME": "release/261",
+            "GITHUB_ACTOR": "alice",
+        }):
+            result = run("check", "r261.108")
+
+        # Artefakt und Vorprüfung beziehen sich auf den Checkout des Laufs
+        payload = json.loads((self.root / "vorbereitung.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["sha"], self.source_sha)
+        self.assertIn(f"- Commit: `{self.source_sha}`", result["summary"])
 
     def test_confirms_direct_and_4_augenfall_from_local_artifact(self) -> None:
         """Verlangt die bewusste Direktlieferung und erlaubt den 4-Augenfall."""

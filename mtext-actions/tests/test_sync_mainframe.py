@@ -140,7 +140,7 @@ class SyncTests(TempDirTestCase):
                 # FULL stellt ein leeres D-Archiv für den Mainframe bereit
                 if documents[-1]["lieferart"] == "FULL":
                     self.assertTrue(archives.d_archiv.is_file())
-            return {"auftrag_id": "auftrag", "ergebnis": "Geändert: beispiel.xml\nGelöscht: alt.xml"}
+            return {"auftrag_id": "auftrag", "result": "Geändert: beispiel.xml\nGelöscht: alt.xml"}
 
         with (
             patch.object(github, "last_sync_commit", return_value=baseline),
@@ -156,7 +156,7 @@ class SyncTests(TempDirTestCase):
             self.assertIn(["M", "baseline.txt"], documents[0]["elemente"])
             self.assertNotIn("von", documents[1]["scope"])
             self.assertEqual(
-                result["ergebnisse"][0]["ergebnis"],
+                result["ergebnisse"][0]["result"],
                 "Geändert: beispiel.xml\nGelöscht: alt.xml",
             )
             self.assertIn("Geändert: beispiel.xml\nGelöscht: alt.xml", result["summary"])
@@ -175,8 +175,8 @@ class SyncTests(TempDirTestCase):
 
         ready = {"auftrag_id": "auftrag", "status": "ready"}
         processing = ready | {"status": "processing"}
-        succeeded = ready | {"status": "succeeded", "ergebnis": {"geaendert": ["beispiel.xml"]}}
-        failed = ready | {"status": "failed", "meldung": "M/Text-Fehler"}
+        succeeded = ready | {"status": "succeeded", "result": {"geaendert": ["beispiel.xml"]}}
+        failed = ready | {"status": "failed", "message": "M/Text-Fehler"}
         network_error = urllib.error.URLError("Verbindung abgebrochen")
         response = MagicMock(status=200)
         response.__enter__.return_value = response
@@ -186,8 +186,8 @@ class SyncTests(TempDirTestCase):
 
             if request.get_method() == "POST":
                 payload = json.loads(request.data)
-                self.assertEqual(payload["kuerzel"], "FI")
-                self.assertEqual(set(payload), {"kuerzel", "archive"})
+                self.assertEqual(payload["mandant"], "FI")
+                self.assertEqual(set(payload), {"mandant", "archive"})
                 self.assertEqual(payload["archive"][0]["name"], "full.tgz")
                 self.assertEqual(payload["archive"][0]["information"]["lieferart"], "FULL")
                 self.assertEqual(payload["archive"][0]["information"]["projekt"], "LOMS_Basis")
@@ -203,13 +203,13 @@ class SyncTests(TempDirTestCase):
             return response
 
         for replies, error, methods in (
-            ([ready, processing, processing, succeeded, {"ok": True}], None,
+            ([ready, processing, processing, succeeded, {"status": "succeeded"}], None,
              ["POST", "PUT", "GET", "GET", "DELETE"]),
-            ([processing, succeeded, {"ok": True}], None, ["POST", "GET", "DELETE"]),
+            ([processing, succeeded, {"status": "succeeded"}], None, ["POST", "GET", "DELETE"]),
             ([ready, b""], "gültigem JSON", ["POST", "PUT"]),
             ([{"status": "ready"}], "Auftrags-ID", ["POST"]),
             ([processing, processing | {"status": "unbekannt"}], "unbekannten Auftragsstatus", ["POST", "GET"]),
-            ([processing, failed, {"ok": True}], "M/Text-Fehler", ["POST", "GET", "DELETE"]),
+            ([processing, failed, {"status": "succeeded"}], "M/Text-Fehler", ["POST", "GET", "DELETE"]),
             ([processing, failed, network_error], "M/Text-Fehler.*Adapteraufruf", ["POST", "GET", "DELETE"]),
             ([processing, succeeded, network_error], "Adapteraufruf", ["POST", "GET", "DELETE"]),
             ([processing, succeeded, b""], "gültigem JSON", ["POST", "GET", "DELETE"]),
@@ -229,10 +229,10 @@ class SyncTests(TempDirTestCase):
                         "en01", project_archives, "github-run-test-en01",
                     )
                     self.assertEqual(adapter_result["auftrag_id"], "auftrag")
-                    self.assertEqual(adapter_result["ergebnis"], succeeded["ergebnis"])
+                    self.assertEqual(adapter_result["result"], succeeded["result"])
             requests = [e.args[0] for e in http.call_args_list]
             self.assertEqual([e.get_method() for e in requests], methods)
-            self.assertEqual(requests[0].full_url, "http://en01.ltoma.intern/vMtextAdapter/sync")
+            self.assertEqual(requests[0].full_url, "http://en01.ltoma.intern/vMtextAdapter/sync2")
             self.assertEqual(requests[0].get_header("Idempotency-key"), "github-run-test-en01")
             self.assertEqual(wait.call_args_list, [call(5)] if methods.count("GET") == 2 else [])
 
@@ -259,12 +259,12 @@ class SyncTests(TempDirTestCase):
         ready = {"auftrag_id": "auftrag", "status": "ready"}
         uploading = ready | {"status": "uploading"}
         processing = ready | {"status": "processing"}
-        succeeded = ready | {"status": "succeeded", "ergebnis": "M/Text-Output"}
+        succeeded = ready | {"status": "succeeded", "result": "M/Text-Output"}
         response = MagicMock(status=200)
         response.__enter__.return_value = response
         response.read.side_effect = [
             json.dumps(e).encode()
-            for e in (ready, uploading, processing, succeeded, {"ok": True})
+            for e in (ready, uploading, processing, succeeded, {"status": "succeeded"})
         ]
         uploaded = []
 
@@ -273,7 +273,7 @@ class SyncTests(TempDirTestCase):
 
             if request.get_method() == "POST":
                 payload = json.loads(request.data)
-                self.assertEqual(set(payload), {"kuerzel", "archive"})
+                self.assertEqual(set(payload), {"mandant", "archive"})
                 self.assertEqual(len(payload["archive"]), 2)
                 self.assertEqual([e["information"]["lieferart"] for e in payload["archive"]], ["DELTA", "DELTA"])
                 self.assertEqual(
@@ -289,7 +289,7 @@ class SyncTests(TempDirTestCase):
                 "en01", archives_by_project, "github-run-test-Entwicklung",
             )
 
-        self.assertEqual(result, {"auftrag_id": "auftrag", "ergebnis": "M/Text-Output"})
+        self.assertEqual(result, {"auftrag_id": "auftrag", "result": "M/Text-Output"})
         self.assertEqual([e.args[0].get_method() for e in http.call_args_list], [
             "POST", "PUT", "PUT", "GET", "DELETE",
         ])

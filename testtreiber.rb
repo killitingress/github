@@ -5,7 +5,8 @@ require "json"
 require "net/http"
 require "optparse"
 
-MTEXT_ADAPTER_URL = "http://localhost:8080/"
+# Basis des neuen Auftragsablaufs, der bestehende /sync bleibt unverändert
+MTEXT_ADAPTER_URL = "http://localhost:8080/sync2"
 SOCKET_TIMEOUT = 15.0
 POLL_INTERVAL = 5.0
 RESPONSE_LIMIT = 1024 * 1024
@@ -36,7 +37,7 @@ def parse_response(response)
   raise "Adapterantwort ist kein JSON-Objekt" unless document.is_a?(Hash)
 
   unless response.is_a?(Net::HTTPSuccess)
-      message = document["meldung"] || body
+      message = document["message"] || body
       raise "Adapter antwortet mit HTTP #{response.code}: #{message}"
   end
 
@@ -49,7 +50,7 @@ end
 
 # Auftrag anlegen, mit dem request_document als JSON im POST-Body
 def create(request_document, idempotency_key)
-  request = Net::HTTP::Post.new(URI(MTEXT_ADAPTER_URL) + "/sync")
+  request = Net::HTTP::Post.new(URI(MTEXT_ADAPTER_URL))
   request["Content-Type"] = "application/json"
   request["Idempotency-Key"] = idempotency_key
   request.body = JSON.generate(request_document)
@@ -60,7 +61,7 @@ end
 
 # Überträgt ein (angekündigtes) Archiv als Datenstrom zum vorhandenen Auftrag
 def upload(auftrag_id, archive_name, archive_path)
-  request = Net::HTTP::Put.new(MTEXT_ADAPTER_URL + auftrag_id + "/archive/" + archive_name)
+  request = Net::HTTP::Put.new(URI(MTEXT_ADAPTER_URL + "/" + auftrag_id + "/archive/" + archive_name))
   request["Content-Type"] = "application/gzip"
   request.content_length = File.size(archive_path)
 
@@ -75,15 +76,15 @@ end
 
 # Aktuellen Status abfragen
 def get(auftrag_id)
-  send_request(Net::HTTP::Get.new(MTEXT_ADAPTER_URL + auftrag_id))
+  send_request(Net::HTTP::Get.new(URI(MTEXT_ADAPTER_URL + "/" + auftrag_id)))
 end
 
 
 # Auftrag löschen
 def delete(auftrag_id)
-  document = send_request(Net::HTTP::Delete.new(MTEXT_ADAPTER_URL + auftrag_id))
+  document = send_request(Net::HTTP::Delete.new(URI(MTEXT_ADAPTER_URL + "/" + auftrag_id)))
 
-  if not document["ok"] == true
+  if document["status"] != "succeeded"
     raise "Adapter bestätigt das Löschen nicht"
   end
 
