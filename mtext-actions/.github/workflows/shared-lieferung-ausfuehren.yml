@@ -56,13 +56,27 @@ jobs:
       # Mandanten-Repositories
       - name: Vorbereitung laden
         if: steps.resolve.outputs.wiederholung != 'true'
-        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
-        with:
-          name: ${{ steps.resolve.outputs.vorbereitung_name }}
-          path: vorbereitung
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.resolve.outputs.vorbereitung_id }}
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ARTEFAKT_ID: ${{ steps.resolve.outputs.vorbereitung_artefakt_id }}
+        run: |
+          set -euo pipefail
+
+          # temporären Download auch bei einem Fehler entfernen
+          archive="$(mktemp "$RUNNER_TEMP/vorbereitung.XXXXXX")"
+          trap 'rm -f "$archive"' EXIT
+
+          # Artefakt aus dem Vorbereitungslauf als ZIP laden und der Download-Weiterleitung folgen
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --output "$archive" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTEFAKT_ID/zip"
+
+          # Vorbereitungsdatei aus dem ZIP für die anschließende Bestätigung bereitstellen
+          mkdir -p vorbereitung
+          unzip -p "$archive" vorbereitung.json > vorbereitung/vorbereitung.json
 
       # Prüft die Vorbereitung und den Lieferweg der ausführenden Person
       - name: Lieferung bestätigen
@@ -77,17 +91,23 @@ jobs:
           --tag "$LIEFER_TAG"
           ${{ inputs.direktlieferung_bestaetigt && '--confirm-direct-delivery' || '' }}
 
+  # Läuft auch bei Wiederholung durch, damit build, publish und report
+  # nicht wegen eines übersprungenen Vorgängers ausfallen.
   tag:
     name: Liefer-Tag erstellen
     needs: check
-    if: needs.check.outputs.wiederholung != 'true'
     permissions:
       contents: write
     runs-on: [self-hosted, linux]
     timeout-minutes: 10
     steps:
+      - name: Vorhandenen Liefer-Tag übernehmen
+        if: needs.check.outputs.wiederholung == 'true'
+        run: echo "Liefer-Tag ${{ inputs.liefer_tag }} ist vorhanden."
+
       # Lädt den in der Vorbereitung festgehaltenen Stand mit seiner Historie.
       - name: Check-Out Mandantenstand
+        if: needs.check.outputs.wiederholung != 'true'
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
@@ -97,11 +117,13 @@ jobs:
 
       # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
       - name: M/Text-Automatisierung laden
+        if: needs.check.outputs.wiederholung != 'true'
         id: automation
         uses: FI-Actions/fi_lbs_entw_oms_mtext_actions@main
 
       # Der Tag zeigt auf die in der bestätigten Vorbereitung festgehaltene SHA.
       - name: Liefer-Tag erstellen
+        if: needs.check.outputs.wiederholung != 'true'
         env:
           AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -115,12 +137,8 @@ jobs:
   build:
     name: FULL- oder DELTA-Artefakt erstellen
     needs: [check, tag]
-    if: >-
-      ${{ always() && needs.check.result == 'success' &&
-      (needs.tag.result == 'success' || needs.tag.result == 'skipped') }}
     permissions:
       contents: read
-      actions: write
     runs-on: [self-hosted, linux]
     timeout-minutes: 10
     steps:

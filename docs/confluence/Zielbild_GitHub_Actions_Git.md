@@ -403,8 +403,7 @@ Für einen neuen Auftrag gilt folgender Ablauf:
    übermittelt und als informative Zusammenfassung angezeigt.
 6. Danach sendet der Workflow HTTP-DELETE. Der Adapter entfernt den Auftrag,
    seine Idempotenzkennung, die Upload-Dateien und ein gegebenenfalls
-   verwendetes temporäres Arbeitsverzeichnis. Der Projektbestand unter
-   `serverSync/` bleibt erhalten.
+   verwendetes temporäres Arbeitsverzeichnis.
 
 Vor dem Archivbau sucht der Workflow mit `GET /vMtextAdapter/sync2` nach einem
 bestehenden Auftrag. Der Header `Idempotency-Key` enthält
@@ -486,7 +485,7 @@ Die Laufzusammenfassung zeigt den Branch, die Änderungen seit dem vorherigen
 Liefer-Tag und den vorgesehenen Lieferumfang. Für die spätere Bestätigung hält
 der Workflow Liefer-Tag, Commit-SHA, Repository und vorbereitende Person in
 einem 30 Tage aufbewahrten Laufartefakt fest. Das Artefakt heißt z.B.
-`r261.108-lieferungsartefakt`.
+`r261.108-vorbereitungsartefakt` und enthält die Datei `vorbereitung.json`.
 
 Sollte auffallen, dass etwas mit der Lieferung fachlich noch nicht stimmt, ist
 der Branch zu korrigieren und dann der Workflow erneut mit demselben geplanten

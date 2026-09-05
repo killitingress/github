@@ -13,11 +13,11 @@ from .project_archives import previous_release_scope, release_report, release_sc
 
 
 # Name des GitHub-Actions-Artefakts mit der festgehaltenen Vorbereitung
-_VORBEREITUNG_ARTEFAKT = "{tag}-lieferungsartefakt"
+_VORBEREITUNG_ARTEFAKT = "{tag}-vorbereitungsartefakt"
 
 
-def _vorbereitungslauf(api_url: str, repository: str, tag: str, token: str) -> int | None:
-    """Ermittelt den jüngsten verfügbaren Vorbereitungslauf zum Liefer-Tag."""
+def _vorbereitungsartefakt(api_url: str, repository: str, tag: str, token: str) -> int | None:
+    """Ermittelt die ID des jüngsten verfügbaren Vorbereitungsartefakts."""
 
     # GitHub-Actions-Artefakte gezielt über den Namen dieser Lieferung abfragen
     repository_path = urllib.parse.quote(repository, safe="/")
@@ -37,10 +37,10 @@ def _vorbereitungslauf(api_url: str, repository: str, tag: str, token: str) -> i
     if not available:
         return None
 
-    # jüngsten Lauf stabil nach Erstellungszeit und Artefakt-ID bestimmen
+    # jüngstes Artefakt stabil nach Erstellungszeit und Artefakt-ID bestimmen
     try:
         newest = max(available, key=lambda artifact: (artifact["created_at"], artifact["id"]))
-        return newest["workflow_run"]["id"]
+        return newest["id"]
     except (KeyError, TypeError) as exc:
         raise DeliveryError(Status.SOURCE_FAILED, f"Vorbereitungsartefakt ist ungültig: {exc}") from exc
 
@@ -116,12 +116,11 @@ def _ermittle_lieferung(tag: str) -> dict[str, object]:
         return {"outputs": {"wiederholung": "true", "source_sha": reference["object"]["sha"]}}
 
     # neue Lieferung aus der jüngsten verfügbaren Vorbereitung fortsetzen
-    run_id = _vorbereitungslauf(api_url, repository, tag, token)
-    if run_id is None:
+    artifact_id = _vorbereitungsartefakt(api_url, repository, tag, token)
+    if artifact_id is None:
         raise DeliveryError(Status.SOURCE_FAILED, "Für den Liefer-Tag besteht keine Vorbereitung")
 
-    return {"outputs": {"wiederholung": "false", "vorbereitung_id": run_id,
-                        "vorbereitung_name": _VORBEREITUNG_ARTEFAKT.format(tag=tag)}}
+    return {"outputs": {"wiederholung": "false", "vorbereitung_artefakt_id": artifact_id}}
 
 
 def _pruefe_lieferung(tag: str) -> dict[str, object]:

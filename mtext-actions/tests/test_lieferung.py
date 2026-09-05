@@ -27,7 +27,7 @@ class LieferungTests(TempDirTestCase):
         self.source_sha = git(self.repository, "rev-parse", "HEAD")
 
     def test_prepares_delta_on_bereitstellung_and_shows_previous_tag(self) -> None:
-        """Prüft eine DELTA-Vorbereitung mit dem höchsten niedrigeren Liefer-Tag."""
+        """Prüft eine DELTA-Vorbereitung mit dem vorherigen Liefer-Tag."""
 
         # .106 gehört zur Lieferhistorie, die höhere .107 liegt auf einem anderen Verlauf
         git(self.repository, "tag", "-d", "r261.107")
@@ -197,8 +197,7 @@ class LieferungTests(TempDirTestCase):
             planned["outputs"],
             {
                 "wiederholung": "false",
-                "vorbereitung_id": 200,
-                "vorbereitung_name": "r261.108-lieferungsartefakt",
+                "vorbereitung_artefakt_id": 20,
             },
         )
 

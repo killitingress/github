@@ -111,10 +111,10 @@ def project_elements(repository_root: Path, project: str, scope: Scope) -> list[
 def previous_release_scope(repository: Path, tag: str, commit: str) -> Scope:
     """Bestimmt den Delta-Scope für Lieferungen.
 
-    Der höchste niedrigere Liefer-Tag bestimmt den Vorgänger, unabhängig vom Branch.
+    Der vorherige Liefer-Tag wird unabhängig vom Branch bestimmt.
     """
 
-    # gültige niedrigere Liefer-Tags zulassen, auch vor einem neuen Hauptrelease
+    # vorherigen Liefer-Tag ermitteln, auch vor einem neuen Hauptrelease
     previous = max(
         e for e in git.execute(repository, "tag", "--list", "r*").decode().splitlines()
         if git.LIEFER_TAG_RE.fullmatch(e) and e < tag

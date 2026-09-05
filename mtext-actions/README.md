@@ -60,6 +60,11 @@ Die Ressourcenprüfung leitet ihren Umfang aus `GITHUB_EVENT_NAME` ab. Bei
 Stand.
 
 Die Mindestversion in `.python-version` ist Python 3.11. Die Runner-Prüfung in
-`scripts/runner-preflight.sh` erwartet außerdem Git und `tar`.
+`scripts/runner-preflight.sh` erwartet außerdem Git, `tar`, `curl` und `unzip`.
+Der Lieferworkflow lädt die Vorbereitung per REST-API mit `curl` und liest
+`vorbereitung.json` mit `unzip` aus dem heruntergeladenen Artefakt.
+Die aktuelle GHES Version kann Artefakte nur aus eigenen Läufen laden, daher
+dieser Umweg.
+
 Ist Node.js auf dem Runner verfügbar, prüft `resources check` zusätzlich
 JavaScript-Dateien mit `node --check`.
