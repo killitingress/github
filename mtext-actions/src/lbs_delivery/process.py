@@ -65,11 +65,13 @@ NETWORK_TIMEOUT = 15.0
 class DeliveryError(RuntimeError):
     """Enthält Status und Meldung eines erwarteten Fehlers im Workflow."""
 
-    def __init__(self, status: Status, message: str) -> None:
+    def __init__(self, status: Status, message: str, *, http_status: int | None = None) -> None:
         """Speichert den Status zusammen mit der auszugebenden Fehlermeldung."""
 
         super().__init__(message)
         self.status = status
+        # Nicht-2xx einer HTTP-Antwort, sonst ungesetzt
+        self.http_status = http_status
 
     def __str__(self) -> str:
         """Setzt den Statuswert vor die Fehlermeldung."""

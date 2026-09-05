@@ -14,8 +14,9 @@ Basis-URL: `http://<Umgebungskennung>.ltoma.intern/vMtextAdapter`
 |---|---|---|
 | `POST` | `/sync2` | Auftrag anlegen oder wiederaufnehmen |
 | `PUT` | `/sync2/{auftrag_id}/archive/{name}` | angekündigtes Archiv übertragen |
+| `GET` | `/sync2` mit Header `Idempotency-Key` | Auftrag anhand der Laufkennung suchen |
 | `GET` | `/sync2/{auftrag_id}` | Status und Ergebnis lesen |
-| `DELETE` | `/sync2/{auftrag_id}` | beendeten Auftrag aufräumen |
+| `DELETE` | `/sync2/{auftrag_id}` | Auftrag außerhalb von `processing` aufräumen |
 
 Für `/sync2` gelten folgende Anforderungen des Clients:
 
@@ -24,8 +25,6 @@ Für `/sync2` gelten folgende Anforderungen des Clients:
   `Content-Type: application/gzip` und `Content-Length`.
 - `auftrag_id` und `name` werden jeweils als ein URL-Pfadsegment kodiert.
 - Erfolgreiche Antworten haben einen 2xx-Status und ein JSON-Objekt als Body.
-  Eine leere Antwort, etwa bei DELETE, genügt nicht.
-- Jede Antwort darf höchstens 1 MiB groß sein.
 - Das Socket-Timeout beträgt 15 Sekunden. Die Auftragsverarbeitung muss
   unabhängig vom HTTP-Request laufen und per GET abfragbar bleiben.
 
@@ -45,15 +44,37 @@ und einem JSON-Objekt mit `message`, etwa
 
 | HTTP-Status | Auslöser |
 |---|---|
-| `400 Bad Request` | ungültiger Request, fehlender oder leerer `Idempotency-Key` beim POST oder nicht angekündigter Archivname beim PUT |
-| `404 Not Found` | unbekannte oder bereits gelöschte Auftrags-ID |
-| `409 Conflict` | bekannter `Idempotency-Key` mit abweichendem Requestinhalt oder DELETE eines noch aktiven Auftrags |
+| `400 Bad Request` | ungültiger Request, fehlender oder leerer `Idempotency-Key` beim POST oder GET auf `/sync2` oder nicht angekündigter Archivname beim PUT |
+| `404 Not Found` | unbekannte oder bereits gelöschte Auftrags-ID oder Idempotenzkennung |
+| `409 Conflict` | bekannter `Idempotency-Key` mit abweichendem Requestinhalt oder DELETE eines Auftrags in `processing` |
 | `415 Unsupported Media Type` | `Content-Type` passt nicht zum Endpunkt |
 | `500 Internal Server Error` | unerwarteter Adapterfehler bei der Bearbeitung des HTTP-Requests |
 
 Prüfsummen-, Archivinhalts- und Verarbeitungsfehler eines bekannten Auftrags
 werden dagegen mit Auftragsstatus `failed` und `message` übermittelt.
 Der HTTP-Request zum Übermitteln dieses Status erhält eine 2xx-Antwort.
+
+## Auftrag beim Start suchen
+
+Vor dem Archivbau fragt der Client mit `GET /sync2` und dem Header
+`Idempotency-Key: github-run-<GITHUB_RUN_ID>-<Umgebungskennung>` nach einem
+bestehenden Auftrag. Die Kennung bleibt beim Wiederholen desselben
+GitHub-Laufs erhalten. Die Anfrage hat keinen Body.
+
+Der Adapter liefert bei bekanntem Schlüssel HTTP 200 mit der Auftragsantwort.
+Bei unbekanntem Schlüssel liefert er HTTP 404 mit `message`.
+
+| Ergebnis der Suche | Ablauf im Client |
+|---|---|
+| HTTP 404 | Archive bauen, Auftrag anlegen und Uploads starten |
+| `processing` | bestehenden Auftrag bis zum Endstatus abfragen |
+| `succeeded` | Ergebnis übernehmen, Auftrag aufräumen und erfolgreich enden |
+| `ready`, `uploading`, `failed` | Auftrag löschen, Archive bauen und mit demselben Schlüssel neu anlegen |
+
+Lehnt DELETE mit HTTP 409 ab, fragt der Client den Auftrag über seine ID
+erneut ab und wartet auf den Abschluss. Meldet diese Abfrage bereits `failed`,
+endet der GitHub-Versuch nach dem Aufräumen mit diesem Fehler. Innerhalb
+dieses Versuchs wird die Verarbeitung nicht automatisch erneut gestartet.
 
 ## Auftrag anlegen
 
@@ -124,9 +145,8 @@ Content-Length: 12345
 ```
 
 Die Antwort enthält `auftrag_id` und den aktuellen `status`.
-Bei Wiederaufnahme in `ready` oder `uploading` sendet der Client alle Archive
-noch einmal. Wiederholte Uploads müssen daher möglich sein, ohne einen zweiten
-Verarbeitungslauf auszulösen.
+Bei einem neuen Auftrag sendet der Client die angekündigten Archive.
+Wiederholte Uploads lösen keinen zweiten Verarbeitungslauf aus.
 
 Der Adapter speichert Uploads außerhalb von `serverSync/` (streamt in eine
 temporäre Datei) und checkt die SHA-256-Prüfsumme.
@@ -165,7 +185,7 @@ Für HTTP-Antworten mit 2xx gilt:
 | POST, neuer Auftrag | Auftragsantwort mit `status: "ready"` |
 | POST, bestehender Auftrag | Auftragsantwort mit aktuellem Status, auch `succeeded` oder `failed` |
 | PUT | Auftragsantwort mit `uploading`, `processing`, `succeeded` oder `failed` |
-| GET | Auftragsantwort mit aktuellem Status |
+| GET über ID oder Idempotenzkennung | Auftragsantwort mit aktuellem Status |
 | DELETE | `{"status": "succeeded"}` als Löschbestätigung |
 
 Ein PUT nach Verarbeitungsbeginn liefert den aktuellen Auftrag und startet
@@ -209,11 +229,20 @@ Uploads.
 
 Nach `succeeded` oder `failed` liest der Client das Ergebnis und sendet
 `DELETE /sync2/{auftrag_id}`. Der Adapter entfernt die Auftragsdaten und
-zugehörigen temporären Dateien und bestätigt mit `{"status": "succeeded"}`.
+zugehörigen temporären Dateien einschließlich der Zuordnung des
+Idempotency-Keys und bestätigt mit `{"status": "succeeded"}`.
 Der Projektbestand unter `serverSync/` bleibt erhalten. Laut Zielbild
 überleben Auftragsdaten keinen Adapter-Neustart.
 
-Netzwerkfehler, HTTP-Status außerhalb von 2xx und ungültige Antworten beenden
+DELETE ist auch in `ready` und `uploading` erlaubt. Dabei beendet der Adapter
+die zugehörige Uploadannahme und verhindert einen anschließenden
+Verarbeitungsstart. Statusprüfung und Löschen werden mit dem Wechsel zu
+`processing` abgestimmt. In `processing` antwortet DELETE mit HTTP 409 und
+lässt Verarbeitung und Lock bestehen.
+
+HTTP 404 bei der Suche per Idempotenzkennung bedeutet, dass kein Auftrag
+besteht. HTTP 409 beim Aufräumen vor einem Neustart führt zur erneuten
+Statusabfrage. Andere HTTP-Fehler, Netzwerkfehler und ungültige Antworten beenden
 den Clientlauf mit `ADAPTER_FAILED`. Das gilt auch bei fehlgeschlagenem DELETE.
 Bei `failed` übernimmt der Client den Wert aus `message`, bei `succeeded` ein vorhandenes
 `result`. Der Client legt dessen inhaltliches Format nicht fest.
@@ -335,7 +364,7 @@ public class SynchronisationController {
     public ResponseEntity<AuftragAntwort> create(
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestBody AuftragAnlegenRequest request) {
-    ...
+        ...
     }
 
     @PutMapping(path = "/{auftragId}/archive/{name}", consumes = "application/gzip", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -343,7 +372,14 @@ public class SynchronisationController {
             @PathVariable("auftragId") String auftragId,
             @PathVariable("name") String name,
             HttpServletRequest request) throws IOException {
-    ...
+        ...
+    }
+
+    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
+    public AuftragAntwort search(
+            @RequestHeader("Idempotency-Key") String idempotencyKey) {
+        // Über die gespeicherte Schlüsselzuordnung lesen, bei unbekanntem Schlüssel HTTP 404.
+        ...
     }
 
     @GetMapping(path = "/{auftragId}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -353,7 +389,8 @@ public class SynchronisationController {
 
     @DeleteMapping(path = "/{auftragId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, String> delete(@PathVariable("auftragId") String auftragId) {
-        auftraege.beendetenAuftragLoeschen(auftragId);
+        // In PROCESSING mit HTTP 409 ablehnen, sonst Auftrag und Schlüsselzuordnung entfernen.
+        auftraege.auftragLoeschen(auftragId);
         return Map.of("status", "succeeded");
     }
 }

@@ -370,13 +370,15 @@ enthält die Projektverzeichnisse aller Mandanten und bildet wie im alten Ablauf
 die Basis der M/Text-Synchronisation. Der Workflow überträgt die
 zusammengestellten Archive und ihre Informationen einzeln per HTTP an LTOMA.
 Ein Synchronisationsauftrag umfasst alle Archive, die mit einer M/Text-Umgebung
-synchronisiert werden sollen. Der Ablauf ist:
+synchronisiert werden sollen.
+
+Für einen neuen Auftrag gilt folgender Ablauf:
 
 1. Der Workflow initiiert einen Auftrag via POST-Request an LTOMA. Dabei
    kündigt er im POST-Body alle Archive und deren Prüfsummen an, die zum
    Auftrag gehören werden. Der Adapter antwortet mit der Auftrags-ID und dem
    Status `ready`.
-2. Der Workflow lädt jedes angekündigte Archiv nacheinandert mit einem eigenen
+2. Der Workflow lädt jedes angekündigte Archiv nacheinander mit einem eigenen
    PUT-Request unter der Auftrags-ID hoch. Der Adapter speichert die
    Upload-Dateien zunächst außerhalb von `serverSync/` und prüft direkt nach
    Empfang eines Archivs dessen Prüfsumme. Während noch nicht alle Uploads des
@@ -399,19 +401,35 @@ synchronisiert werden sollen. Der Ablauf ist:
    bis der Auftrag `succeeded` oder `failed` erreicht. Die Ausgabe, die durch
    die Ressourcen-Cache Aktualisierung entsteht, wird an den Workflow
    übermittelt und als informative Zusammenfassung angezeigt.
-6. Denn sendet der Workflow HTTP-DELETE, damit der Adapter die 
-   Upload-Dateien und ein gegebenenfalls verwendetes temporäres
-   Arbeitsverzeichnis löscht.
+6. Danach sendet der Workflow HTTP-DELETE. Der Adapter entfernt den Auftrag,
+   seine Idempotenzkennung, die Upload-Dateien und ein gegebenenfalls
+   verwendetes temporäres Arbeitsverzeichnis. Der Projektbestand unter
+   `serverSync/` bleibt erhalten.
 
-Eine aus Workflow-Lauf und M/Text-Umgebung gebildete Idempotenzkennung im HTTP
-Request-Header sorgt dafür, dass ein wiederholtes Anlegen desselben Auftrags
-dieselbe Auftrags-ID liefert und die Verarbeitung nicht erneut startet. Ein
-späterer Lauf bildet sein DELTA erneut ab dem letzten erfolgreichen Lauf
-desselben Branches und schließt dadurch die noch nicht erfolgreich
-synchronisierten Änderungen ein.  Wenn durch Überholer-Situationen oder
-Abbrüche / Neustarts korrupte Stände in `serverSync` entstehen sollten, ist
-eine manuelle Volllieferung durchzuführen. Die Auftragsdaten im Adapter
-überleben keinen Neustart.
+Vor dem Archivbau sucht der Workflow mit `GET /vMtextAdapter/sync2` nach einem
+bestehenden Auftrag. Der Header `Idempotency-Key` enthält
+`github-run-<GITHUB_RUN_ID>-<Umgebungskennung>`. Diese Kennung bleibt beim
+Wiederholen desselben GitHub-Laufs erhalten. Antwortet der Adapter mit HTTP
+404, baut der Workflow die Archive und startet den beschriebenen Ablauf.
+
+Besteht der Auftrag bereits in `processing`, wartet der Workflow auf dessen
+Abschluss. Bei `succeeded` übernimmt er das Ergebnis und räumt den Auftrag
+auf. In beiden Fällen entfallen Archivbau und Uploads. Einen Auftrag in
+`ready`, `uploading` oder `failed` löscht er und startet mit neu gebauten
+Archiven unter derselben Kennung erneut.
+
+Ist die Verarbeitung inzwischen gestartet, lehnt der Adapter DELETE mit
+HTTP 409 ab und lässt Verarbeitung und Lock bestehen. Der Workflow fragt den
+Status erneut ab und wartet auf den Abschluss. Ein dabei gemeldetes `failed`
+beendet den Versuch nach dem Aufräumen mit diesem Fehler, ohne erneut zu
+starten.
+
+Ein neuer GitHub-Lauf verwendet eine neue Idempotenzkennung und bildet sein
+DELTA ab dem letzten erfolgreichen Lauf desselben Branches. Dadurch schließt
+er die noch nicht erfolgreich synchronisierten Änderungen ein. Wenn durch
+Überholer-Situationen oder Abbrüche und Neustarts korrupte Stände in
+`serverSync/` entstehen sollten, ist eine manuelle Volllieferung durchzuführen.
+Die Auftragsdaten im Adapter überleben keinen Neustart.
 
 ### Erfolg und Reihenfolge aufeinanderfolgender Synchronisationen
 

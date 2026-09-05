@@ -85,23 +85,6 @@ def _resolve_comparison_commit(source: Path, commit: str, basis_branch: str | No
     return vergleichsstand
 
 
-def _synchronize_environment(umgebung: str, archives: list[ProjectArchives]) -> dict[str, object]:
-    """Übergibt die vorbereiteten Archive an eine M/Text-Umgebung (z.B. en01)."""
-
-    try:
-        _key = f"github-run-{os.environ['GITHUB_RUN_ID']}-{umgebung}"
-        # Adapterauftrag anlegen, Archive hochladen und bis zum Endstatus warten
-        adapter_ergebnis = adapter.synchronize(umgebung, archives, _key)
-    except DeliveryError as exc:
-        message = f"Synchronisation mit der M/Text-Umgebung {umgebung} fehlgeschlagen. {exc.args[0]}"
-        raise DeliveryError(exc.status, message) from exc
-
-    # Projektname steht im Dateinamen `_INFO_<kuerzel>-<projekt>.json`
-    projects = [e.information.stem.removeprefix("_INFO_").partition("-")[2] for e in archives]
-
-    return {"umgebung": umgebung, **adapter_ergebnis, "projekte": projects}
-
-
 def _workflow_response(ergebnisse: list[dict[str, object]], warnungen: tuple[str, ...]) -> dict[str, object]:
     """Erzeugt Ergebnis und Zusammenfassung des Sync-Workflows."""
 
@@ -191,26 +174,34 @@ def run() -> dict[str, object]:
         ergebnisse = [{"umgebung": umgebung, "projekte": []}]
         return _workflow_response(ergebnisse, configuration.warnungen)
 
-    # Archive und Information folgen demselben Umfang und bleiben bis zum Abschluss bereit
+    # beim Linienwechsel zuerst Entwicklung, danach Funktionstest bedienen
+    umgebungen = [entwicklungsumgebung, umgebung] if linienwechsel else [umgebung]
+    ergebnisse = []
     with tempfile.TemporaryDirectory() as temporary:
-        archives = [
-            build_project_archives(
-                configuration, source, e, Path(temporary) / e,
-                paket_scope=scope, information_scope=scope,
-            )
-            for e in projects
-        ]
-
-        # beim Linienwechsel zuerst Entwicklung, danach Funktionstest
-        if linienwechsel:
-            entwicklung_ergebnis = _synchronize_environment(entwicklungsumgebung, archives)
+        archives: list[ProjectArchives] = []
+        for ziel in umgebungen:
             try:
-                funktionstest_ergebnis = _synchronize_environment(umgebung, archives)
+                # vorhandenen Auftrag abschließen oder einen neuen vorbereiten
+                key = f"github-run-{os.environ['GITHUB_RUN_ID']}-{ziel}"
+                result = adapter.resume_existing(ziel, key)
+                if result is None:
+                    # Archive für neue Aufträge bauen und beim zweiten Ziel wiederverwenden
+                    if not archives:
+                        archives = [
+                            build_project_archives(
+                                configuration, source, e, Path(temporary) / e,
+                                paket_scope=scope, information_scope=scope,
+                            )
+                            for e in projects
+                        ]
+                    result = adapter.synchronize(ziel, archives, key)
             except DeliveryError as exc:
-                message = f"{exc.args[0]} Bereits erfolgreich: {entwicklungsumgebung}."
+                message = f"Synchronisation mit der M/Text-Umgebung {ziel} fehlgeschlagen. {exc.args[0]}"
+                if ergebnisse:
+                    message += f" Bereits erfolgreich: {ergebnisse[0]['umgebung']}."
                 raise DeliveryError(exc.status, message) from exc
-            ergebnisse = [entwicklung_ergebnis, funktionstest_ergebnis]
-        else:
-            ergebnisse = [_synchronize_environment(umgebung, archives)]
+
+            # Ergebnis und Projekte bleiben auch ohne erneuten Archivbau zugeordnet
+            ergebnisse.append({"umgebung": ziel, **result, "projekte": projects})
 
     return _workflow_response(ergebnisse, configuration.warnungen)

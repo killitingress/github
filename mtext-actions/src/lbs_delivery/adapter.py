@@ -8,7 +8,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from contextlib import closing
 from http.client import HTTPException
 from pathlib import Path
@@ -57,15 +57,46 @@ def check_reachability(umgebung: str) -> None:
     print(version, file=sys.stderr)
 
 
-def synchronize(umgebung: str, project_archives: Iterable[ProjectArchives], idempotency_key: str) -> dict[str, object]:
-    """Legt einen Adapterauftrag an, lädt seine Archive hoch und wartet auf den Endstatus."""
+def resume_existing(umgebung: str, idempotency_key: str) -> dict[str, object] | None:
+    """Übernimmt einen bestehenden Auftrag und wartet auf seinen Abschluss.
 
-    # alle Projektarchive für Auftragsanlage und Upload bereithalten
-    prepared_archives = list(project_archives)
+    Fehlt der Auftrag oder wurde er vor dem Neustart gelöscht, bedeutet
+    `None`, dass neue Archive und ein neuer Auftrag benötigt werden.
+    """
+
+    # vorhandenen Auftrag über die Laufkennung suchen
+    url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2"
+    try:
+        result = _call_adapter("GET", url, headers={"Idempotency-Key": idempotency_key})
+    except DeliveryError as exc:
+        if exc.http_status == 404:
+            return None
+        raise
+
+    # unfertige Uploads und fehlgeschlagene Aufträge vor dem Neubau aufräumen
+    if result["status"] in {"ready", "uploading", "failed"}:
+        auftrag_url = f"{url}/{urllib.parse.quote(result['auftrag_id'], safe='')}"
+        try:
+            _call_adapter("DELETE", auftrag_url)
+        except DeliveryError as exc:
+            # bei HTTP 409 läuft die Verarbeitung inzwischen und wird abgewartet
+            if exc.http_status != 409:
+                raise
+        else:
+            return None
+
+    # auch nach DELETE 409 beendet ein Verarbeitungsfehler diesen Versuch
+    return _finish_job(umgebung, result)
+
+
+def synchronize(umgebung: str, project_archives: list[ProjectArchives], idempotency_key: str) -> dict[str, object]:
+    """Legt einen Auftrag an, lädt die fertigen Archive hoch und wartet auf das Ergebnis."""
+
+    url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2"
 
     # Lieferart aus der Information bestimmt das hochzuladende Archiv je Projekt
     archive_uploads: list[tuple[Path, dict[str, object]]] = []
-    for archives in prepared_archives:
+    for archives in project_archives:
         try:
             information = json.loads(archives.information.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -75,25 +106,37 @@ def synchronize(umgebung: str, project_archives: Iterable[ProjectArchives], idem
         archive_uploads.append((archive, information))
 
     # Mandantenkürzel steht im Dateinamen `_INFO_<kuerzel>-<projekt>.json`
-    kuerzel = prepared_archives[0].information.stem.removeprefix("_INFO_").partition("-")[0]
+    kuerzel = project_archives[0].information.stem.removeprefix("_INFO_").partition("-")[0]
 
-    # Auftrag mit vollständiger Archivliste idempotent beim Ziel anlegen
-    adapter_url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2"
+    # neue Archivliste unter der Laufkennung beim Adapter anmelden
     archive_list = [
         {"name": archive.name, "information": information} for archive, information in archive_uploads
     ]
     payload = {"mandant": kuerzel, "archive": archive_list}
-    created = _call_adapter("POST", adapter_url, payload, {"Idempotency-Key": idempotency_key})
-    auftrag_id = created["auftrag_id"]
-    auftrag_url = f"{adapter_url}/{urllib.parse.quote(auftrag_id, safe='')}"
-    result = created
+    result = _call_adapter("POST", url, payload, {"Idempotency-Key": idempotency_key})
+    auftrag_url = f"{url}/{urllib.parse.quote(result['auftrag_id'], safe='')}"
 
     # noch erwartete Archive nacheinander als unveränderten Datenstrom übertragen
-    if created["status"] in {"ready", "uploading"}:
+    if result["status"] in {"ready", "uploading"}:
         for archive, _information in archive_uploads:
             result = _upload_archive(auftrag_url, archive)
             if result["status"] not in {"ready", "uploading"}:
                 break
+
+    return _finish_job(umgebung, result)
+
+
+def _finish_job(umgebung: str, result: dict[str, object]) -> dict[str, object]:
+    """Wartet auf das Auftragsergebnis und räumt nach Erfolg oder Fehler auf.
+
+    Neubau und Wiederanlauf verwenden denselben Abschluss. Ein inzwischen
+    fehlgeschlagener Auftrag beendet den Versuch ohne erneute Verarbeitung.
+    """
+
+    # übergebene Auftrags-ID für Status und Aufräumen verwenden
+    url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2"
+    auftrag_id = result["auftrag_id"]
+    auftrag_url = f"{url}/{urllib.parse.quote(auftrag_id, safe='')}"
 
     # Verarbeitung nach dem Upload bis zu einem Endstatus abfragen
     while result["status"] not in _TERMINAL_STATUSES:
@@ -136,7 +179,7 @@ def _call_adapter(
     payload: dict[str, object] | Iterator[bytes] | None = None,
     headers: dict[str, str] | None = None,
 ) -> dict[str, object]:
-    """Sendet JSON oder Archivdaten und prüft die Antwort des Adapters."""
+    """Liefert eine geprüfte Antwort. Nicht-2xx werden als DeliveryError gemeldet."""
 
     # JSON-Anfragen serialisieren, Archivdaten unverändert durchreichen
     data = payload
@@ -166,7 +209,10 @@ def _call_adapter(
     # nicht erfolgreiche HTTP-Antwort vor der JSON-Verarbeitung melden
     if not 200 <= http_status < 300:
         detail = body[:1000].decode(errors="replace")
-        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {http_status}: {detail}")
+        raise DeliveryError(
+            Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {http_status}: {detail}",
+            http_status=http_status,
+        )
 
     # erfolgreichen Body als JSON-Objekt übernehmen
     try:
