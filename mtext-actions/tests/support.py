@@ -25,7 +25,12 @@ class TempDirTestCase(unittest.TestCase):
 def git(repository: Path, *arguments: str) -> str:
     """Führt einen erwartbar erfolgreichen Git-Befehl aus."""
 
-    result = subprocess.run(["git", "-C", str(repository), *arguments], check=True, stdout=subprocess.PIPE, text=True)
+    result = subprocess.run(
+        ["git", "-C", str(repository), *arguments],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
     return result.stdout.strip()
 
 

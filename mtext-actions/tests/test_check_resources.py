@@ -94,9 +94,14 @@ class CheckResourcesTests(TempDirTestCase):
         git(self.repository, "add", ".")
         git(self.repository, "commit", "-q", "-m", "Änderung")
 
+        summary = self.root / "summary.md"
         output = io.StringIO()
         with (
-            patch.dict(os.environ, {"GITHUB_WORKSPACE": str(self.root), "GITHUB_EVENT_NAME": "pull_request"}),
+            patch.dict(os.environ, {
+                "GITHUB_WORKSPACE": str(self.root),
+                "GITHUB_STEP_SUMMARY": str(summary),
+                "GITHUB_EVENT_NAME": "pull_request",
+            }),
             patch.object(sys, "argv", ["mtext.py", "resources", "check"]),
             redirect_stdout(output),
         ):
