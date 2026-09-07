@@ -374,10 +374,11 @@ synchronisiert werden sollen.
 
 Für einen neuen Auftrag gilt folgender Ablauf:
 
-1. Der Workflow initiiert einen Auftrag via POST-Request an LTOMA. Dabei
-   kündigt er im POST-Body alle Archive und deren Prüfsummen an, die zum
-   Auftrag gehören werden. Der Adapter antwortet mit der Auftrags-ID und dem
-   Status `ready`.
+1. Der Workflow bildet die Auftrags-ID als
+   `<GITHUB_RUN_ID>-<Mandantenkürzel>` und initiiert darunter einen Auftrag via
+   POST-Request an LTOMA. Im POST-Body kündigt er alle Archive und deren
+   Prüfsummen an. Der Adapter antwortet mit der Auftrags-ID und dem Status
+   `ready`.
 2. Der Workflow lädt jedes angekündigte Archiv nacheinander mit einem eigenen
    PUT-Request unter der Auftrags-ID hoch. Der Adapter speichert die
    Upload-Dateien zunächst außerhalb von `serverSync/` und prüft direkt nach
@@ -402,28 +403,22 @@ Für einen neuen Auftrag gilt folgender Ablauf:
    die Ressourcen-Cache Aktualisierung entsteht, wird an den Workflow
    übermittelt und als informative Zusammenfassung angezeigt.
 6. Danach sendet der Workflow HTTP-DELETE. Der Adapter entfernt den Auftrag,
-   seine Idempotenzkennung, die Upload-Dateien und ein gegebenenfalls
-   verwendetes temporäres Arbeitsverzeichnis.
+   die Upload-Dateien und ein gegebenenfalls verwendetes temporäres
+   Arbeitsverzeichnis.
 
-Vor dem Archivbau sucht der Workflow mit `GET /vMtextAdapter/sync2` nach einem
-bestehenden Auftrag. Der Header `Idempotency-Key` enthält
-`github-run-<GITHUB_RUN_ID>-<Umgebungskennung>`. Diese Kennung bleibt beim
-Wiederholen desselben GitHub-Laufs erhalten. Antwortet der Adapter mit HTTP
-404, baut der Workflow die Archive und startet den beschriebenen Ablauf.
+Vor dem Archivbau sucht der Workflow mit
+`GET /vMtextAdapter/sync2/{auftrag_id}` nach einem bestehenden Auftrag. Die
+Auftrags-ID bleibt beim Wiederholen desselben GitHub-Laufs erhalten. Antwortet
+der Adapter mit HTTP 404, baut der Workflow die Archive und startet den
+beschriebenen Ablauf.
 
 Besteht der Auftrag bereits in `processing`, wartet der Workflow auf dessen
 Abschluss. Bei `succeeded` übernimmt er das Ergebnis und räumt den Auftrag
 auf. In beiden Fällen entfallen Archivbau und Uploads. Einen Auftrag in
 `ready`, `uploading` oder `failed` löscht er und startet mit neu gebauten
-Archiven unter derselben Kennung erneut.
+Archiven unter derselben Auftrags-ID erneut.
 
-Ist die Verarbeitung inzwischen gestartet, lehnt der Adapter DELETE mit
-HTTP 409 ab und lässt Verarbeitung und Lock bestehen. Der Workflow fragt den
-Status erneut ab und wartet auf den Abschluss. Ein dabei gemeldetes `failed`
-beendet den Versuch nach dem Aufräumen mit diesem Fehler, ohne erneut zu
-starten.
-
-Ein neuer GitHub-Lauf verwendet eine neue Idempotenzkennung und bildet sein
+Ein neuer GitHub-Lauf verwendet eine neue Auftrags-ID und bildet sein
 DELTA ab dem letzten erfolgreichen Lauf desselben Branches. Dadurch schließt
 er die noch nicht erfolgreich synchronisierten Änderungen ein. Wenn durch
 Überholer-Situationen oder Abbrüche und Neustarts korrupte Stände in

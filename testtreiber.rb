@@ -48,11 +48,10 @@ rescue JSON::ParserError => error
 end
 
 
-# Auftrag anlegen, mit dem request_document als JSON im POST-Body
-def create(request_document, idempotency_key)
-  request = Net::HTTP::Post.new(URI(MTEXT_ADAPTER_URL))
+# Auftrag unter seiner ID anlegen, mit dem request_document als JSON im POST-Body
+def create(request_document, auftrag_id)
+  request = Net::HTTP::Post.new(URI(MTEXT_ADAPTER_URL + "/" + auftrag_id))
   request["Content-Type"] = "application/json"
-  request["Idempotency-Key"] = idempotency_key
   request.body = JSON.generate(request_document)
 
   send_request(request)
@@ -96,7 +95,7 @@ end
 def execute(command)
   case command
   when "create"
-    create({'foo':'bar'}, "12345")
+    create({'foo':'bar'}, @options[:auftrag_id])
 
   when "upload"
     archive = @options[:file]
@@ -121,7 +120,6 @@ def main
   @options = {}
   parser = OptionParser.new do |parser|
       parser.banner = "Usage: ruby main.rb <create|upload|status|delete> [Optionen]"
-      parser.on("--key KEY", "Idempotency-Key for POST") { |value| @options[:idempotency_key] = value }
       parser.on("--auftrag-id ID", "Auftrag-ID") { |value| @options[:auftrag_id] = value }
       parser.on("--file FILE", "Upload file") { |value| @options[:archive] = value }
   end

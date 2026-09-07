@@ -137,7 +137,7 @@ class SyncTests(TempDirTestCase):
                 sync.run()
             transfer.assert_not_called()
 
-    def _capture_archives(self, _umgebung, project_archives, _idempotency_key) -> dict[str, object]:
+    def _capture_archives(self, _umgebung, project_archives, _auftrag_id) -> dict[str, object]:
         """Liest die erzeugten Projektinformationen während ihrer Übergabe."""
 
         for archives in project_archives:
@@ -201,7 +201,7 @@ class SyncTests(TempDirTestCase):
     def test_adapter_protocol(self) -> None:
         """Prüft Anlage, Archivupload, Verarbeitung und Fehler bis zum Löschen."""
 
-        ready = {"auftrag_id": "auftrag", "status": "ready"}
+        ready = {"auftrag_id": "test-FI", "status": "ready"}
         processing = ready | {"status": "processing"}
         succeeded = ready | {"status": "succeeded", "result": {"geaendert": ["beispiel.xml"]}}
         failed = ready | {"status": "failed", "message": "M/Text-Fehler"}
@@ -211,14 +211,19 @@ class SyncTests(TempDirTestCase):
         for replies, error, methods in (
             ([ready, processing, processing, succeeded, {"status": "succeeded"}], None,
              ["POST", "PUT", "GET", "GET", "DELETE"]),
-            ([processing, succeeded, {"status": "succeeded"}], None, ["POST", "GET", "DELETE"]),
             ([ready, b""], "gültigem JSON", ["POST", "PUT"]),
             ([{"status": "ready"}], "Auftrags-ID", ["POST"]),
-            ([processing, processing | {"status": "unbekannt"}], "unbekannten Auftragsstatus", ["POST", "GET"]),
-            ([processing, failed, {"status": "succeeded"}], "M/Text-Fehler", ["POST", "GET", "DELETE"]),
-            ([processing, failed, network_error], "M/Text-Fehler.*Adapteraufruf", ["POST", "GET", "DELETE"]),
-            ([processing, succeeded, network_error], "Adapteraufruf", ["POST", "GET", "DELETE"]),
-            ([processing, succeeded, b""], "gültigem JSON", ["POST", "GET", "DELETE"]),
+            ([ready, processing, processing | {"status": "unbekannt"}], "unbekannten Auftragsstatus",
+             ["POST", "PUT", "GET"]),
+            ([ready, failed, {"status": "succeeded"}], "M/Text-Fehler", ["POST", "PUT", "DELETE"]),
+            ([ready, processing, failed, {"status": "succeeded"}], "M/Text-Fehler",
+             ["POST", "PUT", "GET", "DELETE"]),
+            ([ready, processing, failed, network_error], "M/Text-Fehler.*Adapteraufruf",
+             ["POST", "PUT", "GET", "DELETE"]),
+            ([ready, processing, succeeded, network_error], "Adapteraufruf",
+             ["POST", "PUT", "GET", "DELETE"]),
+            ([ready, processing, succeeded, b""], "gültigem JSON",
+             ["POST", "PUT", "GET", "DELETE"]),
         ):
             self.response.read.side_effect = [
                 e if isinstance(e, (bytes, Exception)) else json.dumps(e).encode() for e in replies
@@ -233,19 +238,18 @@ class SyncTests(TempDirTestCase):
                 outcome = self.assertRaisesRegex(DeliveryError, error) if error else nullcontext()
                 with outcome:
                     adapter_result = adapter.synchronize(
-                        "en01", project_archives, "github-run-test-en01",
+                        "en01", project_archives, "test-FI",
                     )
-                    self.assertEqual(adapter_result["auftrag_id"], "auftrag")
+                    self.assertEqual(adapter_result["auftrag_id"], "test-FI")
                     self.assertEqual(adapter_result["result"], succeeded["result"])
             requests = [e.args[0] for e in http.call_args_list]
             payload = json.loads(requests[0].data)
-            self.assertEqual(payload["mandant"], "FI")
+            self.assertNotIn("mandant", payload)
             self.assertEqual(payload["archive"][0]["name"], "full.tgz")
             self.assertEqual(payload["archive"][0]["information"], json.loads(self.project_archives.information.read_text()))
             self.assertTrue(all(e == b"F-Archiv" for e in self.uploaded))
             self.assertEqual([e.get_method() for e in requests], methods)
-            self.assertEqual(requests[0].full_url, "http://en01.ltoma.intern/vMtextAdapter/sync2")
-            self.assertEqual(requests[0].get_header("Idempotency-key"), "github-run-test-en01")
+            self.assertEqual(requests[0].full_url, "http://en01.ltoma.intern/vMtextAdapter/sync2/test-FI")
             self.assertEqual(wait.call_args_list, [call(5)] if methods.count("GET") == 2 else [])
 
     def test_delta_job_uploads_multiple_archives(self) -> None:
@@ -268,7 +272,7 @@ class SyncTests(TempDirTestCase):
             archive.write_bytes(project.encode())
             archives_by_project.append(ProjectArchives(information, archive, None))
 
-        ready = {"auftrag_id": "auftrag", "status": "ready"}
+        ready = {"auftrag_id": "test-FI", "status": "ready"}
         uploading = ready | {"status": "uploading"}
         processing = ready | {"status": "processing"}
         succeeded = ready | {"status": "succeeded", "result": "M/Text-Output"}
@@ -281,13 +285,13 @@ class SyncTests(TempDirTestCase):
 
         with patch.object(adapter.urllib.request, "urlopen", side_effect=self._receive_archive) as http:
             result = adapter.synchronize(
-                "en01", archives_by_project, "github-run-test-Entwicklung",
+                "en01", archives_by_project, "test-FI",
             )
 
         payload = json.loads(http.call_args_list[0].args[0].data)
         self.assertEqual([e["information"]["sha256"] for e in payload["archive"]],
                          ["checksum-LOMS_Basis", "checksum-LOMS_Autonom"])
-        self.assertEqual(result, {"auftrag_id": "auftrag", "result": "M/Text-Output"})
+        self.assertEqual(result, {"auftrag_id": "test-FI", "result": "M/Text-Output"})
         self.assertEqual([e.args[0].get_method() for e in http.call_args_list], [
             "POST", "PUT", "PUT", "GET", "DELETE",
         ])
@@ -303,9 +307,9 @@ class SyncTests(TempDirTestCase):
         build = self.enterContext(patch.object(sync, "build_project_archives", return_value=self.project_archives))
 
         for status in ("processing", "succeeded"):
-            replies = [{"auftrag_id": "alt", "status": status, "result": "fertig"}]
+            replies = [{"auftrag_id": "test-FI", "status": status, "result": "fertig"}]
             if status == "processing":
-                replies.append({"auftrag_id": "alt", "status": "succeeded", "result": "fertig"})
+                replies.append({"auftrag_id": "test-FI", "status": "succeeded", "result": "fertig"})
             replies.append({"status": "succeeded"})
 
             # den echten Sync-Einstieg gegen den vorhandenen Adapterauftrag ausführen
@@ -331,11 +335,12 @@ class SyncTests(TempDirTestCase):
 
         for status in (None, "ready", "uploading", "failed"):
             replies = [http_reply({}, 404)] if status is None else [
-                http_reply({"auftrag_id": "alt", "status": status}), http_reply({"status": "succeeded"}),
+                http_reply({"auftrag_id": "test-FI", "status": status}), http_reply({"status": "succeeded"}),
             ]
             replies.extend(http_reply(e) for e in (
-                {"auftrag_id": "neu", "status": "ready"},
-                {"auftrag_id": "neu", "status": "succeeded"}, {"status": "succeeded"},
+                {"auftrag_id": "test-FI", "status": "ready"},
+                {"auftrag_id": "test-FI", "status": "processing"},
+                {"auftrag_id": "test-FI", "status": "succeeded"}, {"status": "succeeded"},
             ))
 
             # der Neubau folgt erst auf die Suche und gegebenenfalls das Löschen
@@ -346,37 +351,10 @@ class SyncTests(TempDirTestCase):
             build.assert_called_once()
             requests = [e.args[0] for e in http.call_args_list]
             self.assertEqual([e.get_method() for e in requests],
-                             ["GET"] + (["DELETE"] if status else []) + ["POST", "PUT", "DELETE"])
+                             ["GET"] + (["DELETE"] if status else []) + ["POST", "PUT", "GET", "DELETE"])
             post = next(e for e in requests if e.get_method() == "POST")
-            self.assertEqual(post.get_header("Idempotency-key"), requests[0].get_header("Idempotency-key"))
-            self.assertEqual(result["ergebnisse"][0]["auftrag_id"], "neu")
-
-    def test_delete_conflict_finishes_without_restart(self) -> None:
-        """Wertet Erfolg und Fehler nach DELETE 409 aus, ohne erneut zu starten."""
-
-        baseline = git(self.repository, "rev-parse", "r261.100")
-        self.enterContext(patch.object(github, "last_sync_commit", return_value=baseline))
-        self.enterContext(patch.object(adapter, "check_reachability"))
-        build = self.enterContext(patch.object(sync, "build_project_archives", return_value=self.project_archives))
-
-        for status in ("succeeded", "failed"):
-            replies = [
-                http_reply({"auftrag_id": "alt", "status": "uploading"}),
-                http_reply({"message": "processing"}, 409),
-                http_reply({"auftrag_id": "alt", "status": status, "message": "M/Text-Fehler"}),
-                http_reply({"status": "succeeded"}),
-            ]
-
-            # zwischen Suche und Löschen ist die Verarbeitung gestartet und abgeschlossen
-            with self.subTest(status=status), patch.object(adapter.urllib.request, "urlopen", side_effect=replies) as http:
-                outcome = self.assertRaisesRegex(DeliveryError, "M/Text-Fehler") if status == "failed" else nullcontext()
-                with outcome:
-                    result = sync.run()
-                    self.assertEqual(result["ergebnisse"][0]["auftrag_id"], "alt")
-
-            # insbesondere ein inzwischen fehlgeschlagener Auftrag erzeugt keinen neuen POST
-            build.assert_not_called()
-            self.assertEqual([e.args[0].get_method() for e in http.call_args_list], ["GET", "DELETE", "GET", "DELETE"])
+            self.assertEqual(post.full_url, "http://fu01.ltoma.intern/vMtextAdapter/sync2/test-FI")
+            self.assertEqual(result["ergebnisse"][0]["auftrag_id"], "test-FI")
 
 
 

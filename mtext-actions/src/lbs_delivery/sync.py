@@ -176,14 +176,14 @@ def run() -> dict[str, object]:
 
     # beim Linienwechsel zuerst Entwicklung, danach Funktionstest bedienen
     umgebungen = [entwicklungsumgebung, umgebung] if linienwechsel else [umgebung]
+    auftrag_id = f"{os.environ['GITHUB_RUN_ID']}-{configuration.kuerzel}"
     ergebnisse = []
     with tempfile.TemporaryDirectory() as temporary:
         archives: list[ProjectArchives] = []
         for ziel in umgebungen:
             try:
                 # vorhandenen Auftrag abschließen oder einen neuen vorbereiten
-                key = f"github-run-{os.environ['GITHUB_RUN_ID']}-{ziel}"
-                result = adapter.resume_existing(ziel, key)
+                result = adapter.resume_existing(ziel, auftrag_id)
                 if result is None:
                     # Archive für neue Aufträge bauen und beim zweiten Ziel wiederverwenden
                     if not archives:
@@ -194,7 +194,7 @@ def run() -> dict[str, object]:
                             )
                             for e in projects
                         ]
-                    result = adapter.synchronize(ziel, archives, key)
+                    result = adapter.synchronize(ziel, archives, auftrag_id)
             except DeliveryError as exc:
                 message = f"Synchronisation mit der M/Text-Umgebung {ziel} fehlgeschlagen. {exc.args[0]}"
                 if ergebnisse:
