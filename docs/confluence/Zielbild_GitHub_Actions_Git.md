@@ -15,7 +15,7 @@ M/Text-Ressourcen, Trigger-Workflows und einer für diesen Prozess relevanten
 Konfigurationsdatei. Die gemeinsam genutzte CI/CD-Automatisierung wird im
 Folgenden `mtext_actions` genannt. Sie führt Validierungen, Synchronisierung,
 Paketbau und Übergabe an den Mainframe (IZE9) durch. Das Repository
-`FI-Actions/fi_lbs_entw_oms_mtext_actions` enthält diese Automatisierung.
+`FinanzInformatik/fi_lbs_entw_oms_mtext_actions` enthält diese Automatisierung.
 
 ### Grundprinzipien
 
@@ -598,7 +598,7 @@ werden wie üblich in `.gitignore` eingetragen.
 ### Repository für Shared Workflows und Action `mtext_actions`
 
 Im Mandanten-Repository stehen nur kleine Trigger-Workflows. Die eigentlichen
-Arbeitsschritte liegen in `FI-Actions/fi_lbs_entw_oms_mtext_actions`. Die
+Arbeitsschritte liegen in `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Die
 Trigger-Workflows nutzen dort den `main` Branch, welcher immer die freigegebene
 Version darstellt.
 
@@ -651,7 +651,7 @@ mit den M/Text-Projekten versioniert. Der Block `mandant` enthält:
 | `kuerzel` | Mandantenkürzel für Paketnamen und Fragmentprojekte |
 | `releaselinie` | Releaselinie von `main` |
 | `ispw` | CodePipeline-Instanz `T` oder `P` |
-| `excluded_projects` | Projektverzeichnisse, die weder synchronisiert noch paketiert werden |
+| `excluded_projects` | Projektverzeichnisse, die weder geprüft noch synchronisiert oder paketiert werden |
 | `hostprofile` | Assignment und CodePipeline-Stage je Hostprofil |
 
 Beispiel:
@@ -711,7 +711,7 @@ JavaScript geprüft werden. Dies wird dynamisch ermittelt.
 
 | Prozessschritt | Auslöser | Trigger-Workflow | Shared Workflow | Python-Skript |
 |---|---|---|---|---|---|
-| Mandantenkonfiguration und Ressourcen prüfen | Pull Request oder manueller Start | `check-resources.yml` | `shared-check-resources.yml` | `mtext.py config validate` und `mtext.py resources check` |
+| Mandantenkonfiguration und Ressourcen prüfen | Pull Request oder manueller Start | `check-resources.yml` | `shared-check-resources.yml` | `mtext.py resources check` |
 | M/Text-Entwicklung synchronisieren | Push auf `feature/nnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `shared-sync-resources.yml` | `mtext.py resources sync` |
 | M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/nnn` sowie manueller Start | `sync-resources.yml` | `shared-sync-resources.yml` | `mtext.py resources sync` |
 | Lieferung vorbereiten | Manueller Start auf `main`, `release/nnn` oder `bereitstellung/nnn.nnn` | `lieferung-vorbereiten.yml` | `shared-lieferung-check.yml` | `mtext.py delivery check` |
@@ -743,8 +743,8 @@ Verarbeitung in `mtext_actions`:
 
 Die Shared Workflows werden direkt in einen Mandantenlauf eingebunden. Die
 Python-Implementierung wird als Action aus `mtext_actions` geladen. Die
-Repositoryfreigabe in `FI-Actions` erlaubt GitHub das Laden dieser gemeinsamen
-Komponenten ohne eigenes Zugriffstoken.
+Repositoryfreigabe in `FinanzInformatik` erlaubt GitHub das Laden dieser
+gemeinsamen Komponenten ohne eigenes Zugriffstoken.
 
 GitHub stellt jedem Job automatisch einen zeitlich begrenzten Zugangsschlüssel
 namens `GITHUB_TOKEN` bereit. Damit kann der Job auf das Mandanten-Repository
@@ -782,8 +782,7 @@ mit dem zugehörigen Exitcode.
 
 | Status | Bedeutung | Exitcode bei Fehlern |
 |---|---|---|
-| `RESOURCE_CHECKED` | JSON- und XML-Ressourcen wurden geprüft, Befunde stehen als Warnungen bereit | – |
-| `CONFIG_VALIDATED` | Mandantenkonfiguration und Releaselinienzuordnung wurden geprüft | – |
+| `RESOURCE_CHECKED` | Die konfigurierten Ressourcen wurden geprüft, Befunde stehen als Warnungen bereit | – |
 | `VALIDATION_FAILED` | Eingaben oder Konfiguration sind ungültig | `2` |
 | `LIEFERUNG_CHECKED` | SHA, Liefer-Tag und Lieferumfang der Vorbereitung wurden festgehalten | – |
 | `LIEFERUNG_BESTAETIGT` | Die vorbereitete Lieferung wurde durch dieselbe oder eine zweite Person bestätigt | – |

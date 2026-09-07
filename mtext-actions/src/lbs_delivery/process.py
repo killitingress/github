@@ -15,10 +15,8 @@ from pathlib import Path
 
 
 class Status(str, Enum):
-    # JSON- und XML-Ressourcen wurden geprüft, Befunde stehen als Warnungen bereit.
+    # Die konfigurierten Ressourcen wurden geprüft, Befunde stehen als Warnungen bereit.
     RESOURCE_CHECKED = "RESOURCE_CHECKED"
-    # Mandanten- und Releaselinienkonfiguration sind für die folgenden Schritte verwendbar.
-    CONFIG_VALIDATED = "CONFIG_VALIDATED"
     # Konfiguration oder Argumente sind ungültig.
     VALIDATION_FAILED = "VALIDATION_FAILED"
     # SHA, Liefer-Tag und Lieferumfang der Vorbereitung sind festgehalten.

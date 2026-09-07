@@ -3,8 +3,9 @@ name: Mandantenkonfiguration und Ressourcen prüfen
 # Dieser Workflow startet den Shared Workflow zur Prüfung des aktuellen
 # Mandantenstand. Bei Pull Requests prüft er den Merge-Commit, die
 # Mandantenkonfiguration und die geänderten JSON- und XML-Ressourcen. Bei einem
-# manuellen Start verwendet er den ausgewählten Branchstand. Die Verarbeitung
-# erfolgt im Shared Workflow aus der freigegebenen Version von mtext_actions.
+# manuellen Start verwendet er die konfigurierten Ressourcen des ausgewählten
+# Branchstands außerhalb ausgeschlossener Projekte. Die Verarbeitung erfolgt im
+# Shared Workflow aus der freigegebenen Version von mtext_actions.
 'on':
   pull_request:
   workflow_dispatch:
@@ -21,4 +22,4 @@ jobs:
   # Startet den Shared Workflow für den gewählten Mandantenstand
   check:
     name: Mandantenkonfiguration und Ressourcen prüfen
-    uses: FI-Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main

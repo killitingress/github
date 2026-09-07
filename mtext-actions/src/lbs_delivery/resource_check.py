@@ -1,8 +1,8 @@
-"""Prüft JSON, XML und bei verfügbarem Node.js auch JavaScript.
+"""Prüft Mandantenkonfiguration, JSON, XML und verfügbares JavaScript.
 
 Bei Pull Requests werden die geänderten Ressourcen geprüft. Ein manueller Lauf
-prüft den gesamten Mandantenstand. Syntaxbefunde lassen den Lauf erfolgreich
-enden und erscheinen als GitHub-Warnungen.
+prüft die konfigurierten Ressourcen außerhalb ausgeschlossener Projekte.
+Syntaxbefunde lassen den Lauf erfolgreich enden und erscheinen als GitHub-Warnungen.
 """
 
 from __future__ import annotations
@@ -12,11 +12,12 @@ import os
 import shutil
 import subprocess
 import xml.etree.ElementTree as ElementTree
+from collections import Counter
 from fnmatch import fnmatchcase
 from pathlib import Path
 
 from . import git
-from .config import RESOURCE_FORMATS_PATH, mandant_source
+from .config import RESOURCE_FORMATS_PATH, Configuration, mandant_source
 from .process import DeliveryError, Status
 
 
@@ -111,7 +112,7 @@ def _resource_format(path: Path, resource_formats: dict[str, str]) -> str | None
     return None
 
 
-def _resource_paths(root: Path, resource_formats: dict[str, str], *, changed_only: bool) -> list[tuple[Path, str]]:
+def _resource_paths(root: Path, resource_formats: dict[str, str], configuration: Configuration, *, changed_only: bool) -> list[tuple[Path, str]]:
     """Ermittelt Ressourcendateien mit ihrem zugeordneten Parser."""
 
     # Kandidaten aus dem Pull-Request-Diff oder dem vollständigen Arbeitsbaum sammeln
@@ -120,7 +121,7 @@ def _resource_paths(root: Path, resource_formats: dict[str, str], *, changed_onl
         # werden durch is_file vor der Prüfung ausgeschlossen.
         candidates = [root / e.path for e in git.changes(root, "HEAD^1", "HEAD")]
     else:
-        # manueller Lauf prüft den gesamten Mandantenstand ohne versteckte Verzeichnisse
+        # manueller Lauf sammelt Dateien außerhalb versteckter und ausgeschlossener Projektverzeichnisse
         candidates = []
         for directory, directories, filenames in os.walk(root):
             directories[:] = [e for e in directories if not e.startswith(".")]
@@ -132,7 +133,12 @@ def _resource_paths(root: Path, resource_formats: dict[str, str], *, changed_onl
         if not path.is_file() or path.is_symlink():
             continue
 
-        if any(e.startswith(".") for e in path.relative_to(root).parts):
+        relative_path = path.relative_to(root)
+        if any(e.startswith(".") for e in relative_path.parts):
+            continue
+
+        # Dieselbe Projektgrenze gilt für den vollständigen und den geänderten Stand
+        if configuration.excludes_project_path(relative_path):
             continue
 
         resource_format = _resource_format(path, resource_formats)
@@ -150,11 +156,12 @@ def _escape_workflow_command(value: object, *, property_value: bool = False) -> 
 
 
 def run() -> dict[str, object]:
-    """Prüft Ressourcen, schreibt Warnungen und gibt das Workflow-Ergebnis zurück."""
+    """Lädt die Mandantenkonfiguration und prüft die ausgewählten Ressourcen."""
 
     # Prüfumfang aus dem Workflow-Ereignis bestimmen
     root = mandant_source().resolve()
     changed_only = os.environ["GITHUB_EVENT_NAME"] == "pull_request"
+    configuration = Configuration.load(root, os.environ["GITHUB_REPOSITORY"])
 
     # gemeinsame Formatzuordnung als technische Prüfgrenze laden
     try:
@@ -166,7 +173,13 @@ def run() -> dict[str, object]:
         ) from exc
 
     # ausgewählte Ressourcen prüfen und Befunde mit Repositorypfad sammeln
-    resources = _resource_paths(root, resource_formats, changed_only=changed_only)
+    resources = _resource_paths(
+        root,
+        resource_formats,
+        configuration,
+        changed_only=changed_only,
+    )
+    format_counts = Counter(e[1] for e in resources)
     findings: list[tuple[Path, int, int, str]] = []
     for path, resource_format in resources:
         if (finding := _CHECKERS[resource_format](path)) is not None:
@@ -179,12 +192,17 @@ def run() -> dict[str, object]:
             f"title=Ungültige Ressource::{_escape_workflow_command(message)}"
         )
 
-    # Anzahl und verfügbare Parser für die Workflow-Zusammenfassung festhalten
+    # Prüfumfang nach technischem Format in der Workflow-Zusammenfassung aufschlüsseln
     if summary_path := os.environ.get("GITHUB_STEP_SUMMARY"):
         Path(summary_path).write_text(
             (
                 "## Prüfung der Ressourcen\n\n"
-                f"- Geprüfte Dateien: {len(resources)}\n"
+                "| Format | Geprüfte Dateien |\n"
+                "| --- | ---: |\n"
+                f"| JSON | {format_counts['json']} |\n"
+                f"| XML | {format_counts['xml']} |\n"
+                f"| JavaScript | {format_counts['js']} |\n"
+                f"| **Gesamt** | **{len(resources)}** |\n\n"
                 f"- Warnungen: {len(findings)}\n"
                 f"- JavaScript-Prüfung: {'aktiv' if _NODE_COMMAND else 'übersprungen, Node.js nicht verfügbar'}\n\n"
                 "Syntaxbefunde werden als Warnungen angezeigt und blockieren den Pull Request nicht.\n"
@@ -193,4 +211,8 @@ def run() -> dict[str, object]:
         )
 
     # erfolgreicher Prüflauf meldet Befunde als Anzahl, nicht als Fehlerstatus
-    return {"status": Status.RESOURCE_CHECKED.value, "files": len(resources), "warnings": len(findings)}
+    return {
+        "status": Status.RESOURCE_CHECKED.value,
+        "files": len(resources),
+        "warnings": len(findings),
+    } | ({"warnungen": list(configuration.warnungen)} if configuration.warnungen else {})

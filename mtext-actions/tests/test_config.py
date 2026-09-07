@@ -28,6 +28,18 @@ class ConfigTests(TempDirTestCase):
     def test_validates_configuration_and_derives_fragment_projects(self) -> None:
         """Prüft ungültige Konfigurationen und die Zuordnung gültiger Fragmentprojekte."""
 
+        # Derselbe Projektausschluss gilt für Projektableitung und enthaltene Ressourcen
+        excluded_project = self.repository / "LOMS_Testdaten"
+        excluded_project.mkdir()
+        configuration = load_test_configuration(
+            self.repository,
+            mandant={"excluded_projects": [excluded_project.name]},
+        )
+        self.assertNotIn(excluded_project.name, configuration.projects)
+        excluded_resource = excluded_project.relative_to(self.repository) / "daten.xml"
+        self.assertTrue(configuration.excludes_project_path(excluded_resource))
+        excluded_project.rmdir()
+
         # Mandant, Repository und Releaselinie müssen zusammenpassen
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository, mandant={"kuerzel": "BY"})

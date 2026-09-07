@@ -4,8 +4,8 @@ name: Shared Workflow – Mandantenkonfiguration und Ressourcen prüfen
 # Mandantenkonfiguration wird in jedem Lauf gegen die gemeinsamen Zuordnungen
 # geprüft. Pull Requests prüfen geänderte JSON- und XML-Ressourcen sowie bei
 # verfügbarem Node.js auch JavaScript und laden dafür den Vorgänger. Manuelle
-# Läufe prüfen den gesamten Stand. Die Prüfung greift nicht auf M/Text oder den
-# Mainframe zu.
+# Läufe prüfen die konfigurierten Ressourcen außerhalb ausgeschlossener Projekte.
+# Die Prüfung greift nicht auf M/Text oder den Mainframe zu.
 'on':
   workflow_call:
 
@@ -30,16 +30,11 @@ jobs:
       # prüft zugleich die Python-Runtime des Runners.
       - name: M/Text-Automatisierung laden
         id: automation
-        uses: FI-Actions/fi_lbs_entw_oms_mtext_actions@main
+        uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
-      # Prüft die gemeinsame Zuordnung und die Konfiguration des Mandanten
-      - name: Mandantenkonfiguration prüfen
-        env:
-          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
-        run: '"${{ steps.automation.outputs.python }}" "$AUTOMATION_PATH/src/mtext.py" config validate'
-
-      # Pull Requests prüfen geänderte Ressourcen, manuelle Läufe den gesamten Stand
-      - name: Ressourcen prüfen
+      # Lädt die Mandantenkonfiguration einmal. Pull Requests prüfen geänderte
+      # Ressourcen, manuelle Läufe den gesamten konfigurierten Stand.
+      - name: Ressourcensyntax prüfen
         env:
           AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
         run: >-

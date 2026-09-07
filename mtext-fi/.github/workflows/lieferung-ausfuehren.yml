@@ -27,7 +27,7 @@ jobs:
     permissions:
       contents: write
       actions: read
-    uses: FI-Actions/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@main
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@main
     with:
       liefer_tag: ${{ inputs.liefer_tag }}
       direktlieferung_bestaetigt: ${{ inputs.direktlieferung_bestaetigt }}

@@ -34,7 +34,7 @@ jobs:
       # Runners, bevor Ziel und Projektpakete bestimmt werden.
       - name: M/Text-Automatisierung laden
         id: automation
-        uses: FI-Actions/fi_lbs_entw_oms_mtext_actions@main
+        uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
       # Python prüft die Adaptererreichbarkeit vor dem Archivbau und überträgt
       # die Projektänderungen anhand des ermittelten Vergleichsstands.

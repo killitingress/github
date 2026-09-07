@@ -87,6 +87,8 @@ class Configuration:
     subsystem: str
     # Zuordnung der Projektverzeichnisse zu ihren Projektcodes, zum Beispiel `LOMS_Basis[BY]` zu `BASIS`.
     projects: dict[str, str]
+    # Projektverzeichnisse, die weder synchronisiert, geliefert noch als Ressource geprüft werden.
+    excluded_projects: tuple[str, ...]
     # In `.github/config.json` benannte Hostprofile mit CodePipeline-Stage und Assignment.
     hostprofile: dict[str, dict[str, str]]
     # Gemeinsame Zuordnung aller aktiven Linien aus `releaselinien.json`. Die
@@ -97,6 +99,11 @@ class Configuration:
     mtext_umgebung_prefixe: dict[str, str]
     # Warnungen zu fehlenden oder zusätzlichen Projektverzeichnissen.
     warnungen: tuple[str, ...]
+
+    def excludes_project_path(self, relative_path: Path) -> bool:
+        """Gibt an, ob ein Pfad zu einem ausgeschlossenen Projekt gehört."""
+
+        return _is_excluded_project_path(relative_path, self.excluded_projects)
 
     def release_branches(self, releaselinie: str) -> tuple[str, ...]:
         """Gibt die zulässigen Lieferbranches einer Releaselinie zurück."""
@@ -188,6 +195,7 @@ class Configuration:
             ispw=ispw,
             subsystem=stammdaten["subsystem"],
             projects=projects,
+            excluded_projects=tuple(excluded_projects),
             hostprofile=hostprofile,
             releaselinien=releaselinien,
             mtext_umgebung_prefixe=mtext_umgebung_prefixe,
@@ -205,13 +213,23 @@ def _read_json(path: str | Path) -> Any:
         raise DeliveryError(Status.VALIDATION_FAILED, message) from exc
 
 
+def _is_excluded_project_path(relative_path: Path, excluded_projects: tuple[str, ...]) -> bool:
+    """Ordnet einen relativen Pfad über sein oberstes Verzeichnis einem Ausschluss zu."""
+
+    return bool(relative_path.parts) and relative_path.parts[0] in excluded_projects
+
+
 def _scan_projects(root: Path, kuerzel: str, excluded_projects: tuple[str, ...]) -> dict[str, str]:
     """Ermittelt lieferbare Projekte und leitet ihre Projektcodes ab."""
 
     projects: dict[str, str] = {}
     for item in sorted(root.iterdir(), key=lambda path: path.name):
-        # Ausgeschlossene und versteckte Verzeichnisse entfallen vor der Pfadprüfung
-        if not item.is_dir() or item.name.startswith(".") or item.name in excluded_projects:
+        # Nur sichtbare Projektverzeichnisse in den fachlichen Prüfumfang aufnehmen
+        if not item.is_dir() or item.name.startswith("."):
+            continue
+
+        # Konfigurierter Ausschluss gilt für das gesamte Projektverzeichnis
+        if _is_excluded_project_path(item.relative_to(root), excluded_projects):
             continue
         projects[item.name] = item.name.removesuffix(f"[{kuerzel}]").removeprefix("LOMS_")[:5].upper()
 
@@ -253,16 +271,3 @@ def mandant_source() -> Path:
     """Gibt den Pfad des im Workflow ausgecheckten Mandanten-Repositories zurück."""
 
     return workflow_workspace() / WORKFLOW_MANDANT_SOURCE
-
-
-def run() -> dict[str, object]:
-    """Prüft die Mandantenkonfiguration des Workflow-Arbeitsbereichs."""
-
-    configuration = Configuration.load(mandant_source(), os.environ["GITHUB_REPOSITORY"])
-    return {
-        "status": Status.CONFIG_VALIDATED.value,
-        "mandanten_kuerzel": configuration.kuerzel,
-        "repository": configuration.repository,
-        "releaselinie": configuration.releaselinie,
-        "releaselinien": sorted(configuration.releaselinien),
-    } | ({"warnungen": list(configuration.warnungen)} if configuration.warnungen else {})

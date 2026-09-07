@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 
-from lbs_delivery import config, github, lieferung, mainframe, process, resource_check, sync
+from lbs_delivery import github, lieferung, mainframe, process, resource_check, sync
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -14,10 +14,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mtext")
     commands = parser.add_subparsers(required=True)
 
-    # Konfiguration und Ressourcen benötigen keine zusätzlichen Eingaben
-    config_commands = commands.add_parser("config").add_subparsers(required=True)
-    config_commands.add_parser("validate").set_defaults(handler=config.run)
-
+    # Ressourcenprüfung benötigt keine zusätzlichen Eingaben
     resource_commands = commands.add_parser("resources").add_subparsers(required=True)
     resource_commands.add_parser("check").set_defaults(handler=resource_check.run)
     resource_commands.add_parser("sync").set_defaults(handler=sync.run)

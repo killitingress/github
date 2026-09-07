@@ -27,8 +27,7 @@ Die wiederverwendbaren Workflows unter `.github/workflows` sind:
 
 | Kommando | Aufgabe |
 |---|---|
-| `config validate` | Mandantenkonfiguration prüfen |
-| `resources check` | konfigurierte JSON-, XML- und verfügbare JavaScript-Ressourcen prüfen |
+| `resources check` | Mandantenkonfiguration sowie konfigurierte JSON-, XML- und verfügbare JavaScript-Ressourcen prüfen |
 | `resources sync` | Änderungen seit dem letzten erfolgreichen Branchstand mit M/Text synchronisieren |
 | `delivery check` | einen Lieferstand vorbereiten |
 | `delivery resolve` | eine Vorbereitung oder einen vorhandenen Liefer-Tag ermitteln |
@@ -57,7 +56,9 @@ Runner je Job bereinigt.
 
 Die Ressourcenprüfung leitet ihren Umfang aus `GITHUB_EVENT_NAME` ab. Bei
 `pull_request` prüft sie geänderte Ressourcen, beim manuellen Start den gesamten
-Stand.
+Stand. Projektverzeichnisse aus `excluded_projects` bleiben dabei unberücksichtigt.
+Die Actions-Zusammenfassung schlüsselt die geprüften Dateien nach JSON, XML und
+JavaScript auf.
 
 Die Mindestversion in `.python-version` ist Python 3.11. Die Runner-Prüfung in
 `scripts/runner-preflight.sh` erwartet außerdem Git, `tar`, `curl` und `unzip`.
@@ -66,5 +67,5 @@ Der Lieferworkflow lädt die Vorbereitung per REST-API mit `curl` und liest
 Die aktuelle GHES Version kann Artefakte nur aus eigenen Läufen laden, daher
 dieser Umweg.
 
-Ist Node.js auf dem Runner verfügbar, prüft `resources check` zusätzlich
-JavaScript-Dateien mit `node --check`.
+Ist Node.js auf dem Runner verfügbar, zeigt die Runner-Prüfung seine Version an
+und `resources check` prüft zusätzlich JavaScript-Dateien mit `node --check`.
