@@ -31,11 +31,8 @@ fi
 git --version
 python3 --version
 
-# Version für die optionale JavaScript-Prüfung oder ihren fehlenden Umfang ausgeben
 if command -v node >/dev/null 2>&1; then
   node --version
-else
-  echo "Node.js nicht verfügbar, JavaScript-Ressourcen werden nicht geprüft."
 fi
 
 # Python-Pfad und Implementierungspfad für die Folgeschritte der Action bereitstellen
