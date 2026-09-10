@@ -1,11 +1,9 @@
 name: Shared Workflow – Lieferung ausführen
 
-# Dieser Workflow ermittelt den Lieferstand im Mandanten-Repository.
-# Für einen geplanten Tag lädt er die neueste
-# Vorbereitung und prüft sie mit der ausführenden Person. Eine Direktlieferung
-# erfordert die übergebene bewusste Bestätigung. Ein vorhandener Liefer-Tag
-# bezeichnet eine Wiederholung und benötigt keine neue Vorbereitung. Danach
-# führt er die Lieferung mit SHA und Branch im selben Mandantenlauf aus.
+# Dieser Workflow ermittelt lässt eine Vorbereitung prüfen und führt die
+# Lieferung für den geplanten oder vorhandenen Liefer-Tag im
+# Mandanten-Repository aus. Ein vorhandener Liefer-Tag bezeichnet eine
+# Wiederholung und benötigt keine neue Vorbereitung.
 'on':
   workflow_call:
     inputs:
@@ -36,25 +34,23 @@ jobs:
         steps.resolve.outputs.source_sha || steps.confirm.outputs.source_sha }}
       wiederholung: ${{ steps.resolve.outputs.wiederholung }}
     steps:
-      # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
-      - name: M/Text-Automatisierung laden
+      - name: mtext_actions laden
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
       - name: Lieferstand ermitteln
         id: resolve
         env:
-          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           GITHUB_TOKEN: ${{ github.token }}
           LIEFER_TAG: ${{ inputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}"
-          "$AUTOMATION_PATH/src/mtext.py" delivery resolve
+          "$ACTION_PATH/src/mtext.py" delivery resolve
           --tag "$LIEFER_TAG"
 
-      # Lädt die ermittelte Vorbereitung aus dem Laufartefakt des
-      # Mandanten-Repositories
-      - name: Vorbereitung laden
+      # Lädt die ermittelte Vorbereitung aus dem Laufartefakt des Mandanten-Repositories
+      - name: Vorbereitung herunterladen
         if: steps.resolve.outputs.wiederholung != 'true'
         shell: bash
         env:
@@ -83,16 +79,15 @@ jobs:
         id: confirm
         if: steps.resolve.outputs.wiederholung != 'true'
         env:
-          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           LIEFER_TAG: ${{ inputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}"
-          "$AUTOMATION_PATH/src/mtext.py" delivery confirm
+          "$ACTION_PATH/src/mtext.py" delivery confirm
           --tag "$LIEFER_TAG"
           ${{ inputs.direktlieferung_bestaetigt && '--confirm-direct-delivery' || '' }}
 
-  # Läuft auch bei Wiederholung durch, damit build, publish und report
-  # nicht wegen eines übersprungenen Vorgängers ausfallen.
+  # Erstellt den Liefer-Tag im Mandanten-Repository.
   tag:
     name: Liefer-Tag erstellen
     needs: check
@@ -115,8 +110,7 @@ jobs:
           persist-credentials: false
           ref: ${{ needs.check.outputs.source_sha }}
 
-      # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
-      - name: M/Text-Automatisierung laden
+      - name: mtext_actions laden
         if: needs.check.outputs.wiederholung != 'true'
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
@@ -125,12 +119,12 @@ jobs:
       - name: Liefer-Tag erstellen
         if: needs.check.outputs.wiederholung != 'true'
         env:
-          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           GITHUB_TOKEN: ${{ github.token }}
           LIEFER_TAG: ${{ inputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}"
-          "$AUTOMATION_PATH/src/mtext.py" delivery tag
+          "$ACTION_PATH/src/mtext.py" delivery tag
           --tag "$LIEFER_TAG"
 
   # Erstellt die Projektpakete mit JCL und JSON-Informationsdateien.
@@ -140,7 +134,7 @@ jobs:
     permissions:
       contents: read
     runs-on: [self-hosted, linux]
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       # Lädt den Commit des Liefer-Tags mit seiner Historie.
       - name: Check-Out Liefer-Tag
@@ -151,8 +145,7 @@ jobs:
           persist-credentials: false
           ref: refs/tags/${{ inputs.liefer_tag }}
 
-      # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
-      - name: M/Text-Automatisierung laden
+      - name: mtext_actions laden
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
@@ -160,16 +153,16 @@ jobs:
       # Basisverzeichnis wird vom Runner je Job bereinigt.
       - name: Lieferdateien erstellen
         env:
-          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           LIEFER_TAG: ${{ inputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}"
-          "$AUTOMATION_PATH/src/mtext.py" release build
+          "$ACTION_PATH/src/mtext.py" release build
           --tag "$LIEFER_TAG"
 
       # Speichert die erzeugten Lieferdateien als Laufartefakt.
       - name: Lieferartefakt speichern
-        uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de
+        uses: actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf
         with:
           name: release
           path: ${{ runner.temp }}/dist
@@ -177,7 +170,7 @@ jobs:
           retention-days: 30
           compression-level: 0
 
-  # Die Mainframe-Zugangsdaten sind in diesem Job verfügbar.
+  # Übergibt die Lieferdateien an den Mainframe.
   publish:
     name: Lieferung an Mainframe übergeben
     needs: build
@@ -188,16 +181,15 @@ jobs:
     concurrency:
       group: mainframe-${{ github.repository }}
       cancel-in-progress: false
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
-      - name: M/Text-Automatisierung laden
+      - name: mtext_actions laden
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
       # Lädt das Lieferartefakt in das temporäre Verzeichnis dieses Jobs.
       - name: Lieferartefakt herunterladen
-        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
+        uses: actions/download-artifact@a9bc5e6ef2cb54c177f32aa5726adaa15e7e2d59
         with:
           name: release
           path: ${{ runner.temp }}/release
@@ -205,11 +197,11 @@ jobs:
       # Überträgt jedes Archiv per FTPS und reicht seine JCL bei JES ein.
       - name: Lieferung an Mainframe übergeben
         env:
-          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           MAINFRAME_FTPS_PASSWORD: ${{ secrets.mainframe_ftps_password }}
         run: >-
           "${{ steps.automation.outputs.python }}"
-          "$AUTOMATION_PATH/src/mtext.py" release mainframe
+          "$ACTION_PATH/src/mtext.py" release mainframe
 
   # Veröffentlicht den Bereitstellungsbericht nach der Mainframe-Übergabe.
   report:
@@ -219,25 +211,24 @@ jobs:
       contents: write
       actions: read
     runs-on: [self-hosted, linux]
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
-      - name: M/Text-Automatisierung laden
+      - name: mtext_actions laden
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
       # Lädt das Lieferartefakt in das temporäre Verzeichnis dieses Jobs.
       - name: Lieferartefakt herunterladen
-        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b
+        uses: actions/download-artifact@a9bc5e6ef2cb54c177f32aa5726adaa15e7e2d59
         with:
           name: release
           path: ${{ runner.temp }}/release
 
       - name: GitHub Release veröffentlichen
         env:
-          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
           "${{ steps.automation.outputs.python }}"
-          "$AUTOMATION_PATH/src/mtext.py" release github
+          "$ACTION_PATH/src/mtext.py" release github
           --tag "${{ inputs.liefer_tag }}"

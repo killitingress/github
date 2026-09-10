@@ -1,7 +1,7 @@
-"""Liest die für Synchronisation und Release benötigten Angaben aus Git.
+"""Liest die für Synchronisierung und Release benötigten Angaben aus Git.
 
 Das Modul löst Referenzen in Commit-SHAs auf, prüft Tags und Branchbeziehungen
-und liefert Dateiänderungen für den Paketbau und die Synchronisation.
+und liefert Dateiänderungen für den Paketbau und die Synchronisierung.
 """
 
 from __future__ import annotations
@@ -27,6 +27,47 @@ LIEFER_TAG_RE = re.compile("r" + _LIEFERSTAND_PATTERN)
 # Prüft den temporären Arbeitsbranch einer Teillieferung und erfasst
 # Releaselinie sowie Zwischenrelease, zum Beispiel `bereitstellung/261.108`.
 BEREITSTELLUNG_BRANCH_RE = re.compile("bereitstellung/" + _LIEFERSTAND_PATTERN)
+
+
+@dataclass(frozen=True, order=True)
+class LieferTag:
+    """Beschreibt den Lieferstand eines Liefer-Tags."""
+
+    # dreistellige Releaselinie aus dem Liefer-Tag
+    releaselinie: str
+    # dreistelliges Zwischenrelease aus dem Liefer-Tag
+    zwischenrelease: str
+
+    @classmethod
+    def parse(cls, value: str) -> LieferTag:
+        """Prüft einen Git-Namen und gibt seinen Lieferstand zurück."""
+
+        match = LIEFER_TAG_RE.fullmatch(value)
+        if match is None:
+            raise ValueError(f"ungültiges Format des Liefer-Tags rnnn.nnn: {value}")
+
+        return cls(match.group("releaselinie"), match.group("zwischenrelease"))
+
+    @classmethod
+    def from_bereitstellung(cls, branch: str) -> LieferTag | None:
+        """Gibt den Lieferstand eines Bereitstellungsbranches zurück."""
+
+        match = BEREITSTELLUNG_BRANCH_RE.fullmatch(branch)
+        if match is None:
+            return None
+
+        return cls(match.group("releaselinie"), match.group("zwischenrelease"))
+
+    @property
+    def ist_hauptrelease(self) -> bool:
+        """Gibt an, ob der Tag die FULL-Basis seiner Releaselinie bezeichnet."""
+
+        return self.zwischenrelease == "100"
+
+    def __str__(self) -> str:
+        """Gibt den Namen der Git-Referenz zurück."""
+
+        return f"r{self.releaselinie}.{self.zwischenrelease}"
 
 
 @dataclass(frozen=True)
@@ -108,7 +149,7 @@ def changes(repository: Path, base: str, target: str) -> list[GitChange]:
     """Status und Pfade der Änderungen zwischen zwei Commits via Git-Diff."""
 
     # `--no-renames` liefert Umbenennungen als Löschung und Hinzufügung,
-    # so wie DELTA-Pakete und die Synchronisation sie benötigen.
+    # so wie DELTA-Pakete und die Synchronisierung sie benötigen.
     output = execute(
         repository,
         "diff",

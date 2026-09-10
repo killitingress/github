@@ -8,9 +8,10 @@ import unittest
 import urllib.parse
 from unittest.mock import patch
 
+from lbs_delivery.git import LieferTag
 from lbs_delivery.github import run
-from lbs_delivery.process import Status
 from lbs_delivery.mainframe import _build_mainframe_files
+from lbs_delivery.process import Status
 
 from tests.support import (
     TempDirTestCase,
@@ -54,7 +55,9 @@ class GitHubReleaseTests(TempDirTestCase):
             with self.subTest(tag=tag, wiederholung=wiederholung):
                 git(self.repository, "checkout", "--detach", tag)
                 runner_temp = self.root / tag
-                _build_mainframe_files(self.configuration, output_directory=runner_temp / "release", tag=tag)
+                _build_mainframe_files(
+                    self.configuration, output_directory=runner_temp / "release", tag=LieferTag.parse(tag),
+                )
                 information = next((runner_temp / "release").glob("_INFO_*.json"))
                 content = information.read_bytes()
                 document = json.loads(content)
@@ -112,13 +115,12 @@ class GitHubReleaseTests(TempDirTestCase):
                     self.assertEqual(document["scope"]["von"]["referenz"], "r260.100")
                     self.assertEqual(document["elemente"], [])
 
-                self.assertEqual(calls[-1]["content"], content)
-                self.assertEqual(calls[-1]["content_type"], "application/json")
+                self.assertEqual(calls[-1]["payload"], content)
                 self.assertEqual(
                     urllib.parse.parse_qs(urllib.parse.urlsplit(calls[-1]["url"]).query),
                     {"name": [information.name]},
                 )
-                self.assertEqual(result["status"], Status.GITHUB_RELEASE_PUBLISHED.value)
+                self.assertEqual(result["status"], Status.GITHUB_RELEASE_PUBLISHED)
                 self.assertEqual(result["release_url"], release["html_url"])
 
 

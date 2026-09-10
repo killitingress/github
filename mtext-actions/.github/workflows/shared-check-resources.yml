@@ -1,11 +1,8 @@
-name: Shared Workflow – Mandantenkonfiguration und Ressourcen prüfen
+name: Shared Workflow – Tonic-Ressourcen prüfen
 
-# Dieser Workflow prüft den Mandantenstand des aufrufenden Laufs. Die
-# Mandantenkonfiguration wird in jedem Lauf gegen die gemeinsamen Zuordnungen
-# geprüft. Pull Requests prüfen geänderte JSON- und XML-Ressourcen sowie bei
-# verfügbarem Node.js auch JavaScript und laden dafür den Vorgänger. Manuelle
-# Läufe prüfen die konfigurierten Ressourcen außerhalb ausgeschlossener Projekte.
-# Die Prüfung greift nicht auf M/Text oder den Mainframe zu.
+# Shared Workflow zur Prüfung der Tonic-Ressourcen des angegebenen Mandanten-
+# Repositories. Bei Pull-Requests werden nur die geänderten Elemente
+# geprüft, bei manuellem Lauf der gesamte Stand (ohne excluded_projects).
 'on':
   workflow_call:
 
@@ -16,7 +13,7 @@ jobs:
   check:
     name: Mandantenkonfiguration und Ressourcen prüfen
     runs-on: [self-hosted, linux]
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       # Für Pull Requests wird der Vorgänger für den Änderungsvergleich geladen.
       - name: Check-Out Mandantenstand
@@ -26,16 +23,14 @@ jobs:
           fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
           persist-credentials: false
 
-      # Lädt Implementierung und Konfiguration aus der gemeinsamen Action und
-      # prüft zugleich die Python-Runtime des Runners.
-      - name: M/Text-Automatisierung laden
+      # Starte die Composite Action "action.yml"
+      - name: action.yml ausführen
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
-      # Lädt die Mandantenkonfiguration einmal. Pull Requests prüfen geänderte
-      # Ressourcen, manuelle Läufe den gesamten konfigurierten Stand.
-      - name: Ressourcensyntax prüfen
+      # Prüft die Tonic-Ressourcen des Mandanten-Repositories
+      - name: Ressourcen prüfen
         env:
-          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
         run: >-
-          "${{ steps.automation.outputs.python }}" "$AUTOMATION_PATH/src/mtext.py" resources check
+          "${{ steps.automation.outputs.python }}" "$ACTION_PATH/src/mtext.py" resources check

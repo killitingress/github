@@ -5,9 +5,9 @@ outputs:
   python:
     description: Absoluter Pfad zur verwendeten Python-Runtime
     value: ${{ steps.runtime.outputs.python }}
-  automation_path:
-    description: Absoluter Pfad zur CI/CD-Implementierung
-    value: ${{ steps.runtime.outputs.automation_path }}
+  action_path:
+    description: Absoluter Pfad der geladenen Action
+    value: ${{ steps.runtime.outputs.action_path }}
 
 runs:
   using: composite

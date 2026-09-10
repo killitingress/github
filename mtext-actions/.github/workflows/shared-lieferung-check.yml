@@ -29,8 +29,7 @@ jobs:
           path: source
           persist-credentials: false
 
-      # Lädt die gemeinsame Lieferlogik und prüft die Python-Runtime des Runners.
-      - name: M/Text-Automatisierung laden
+      - name: mtext_actions laden
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
@@ -39,15 +38,15 @@ jobs:
       - name: Lieferung und Lieferumfang prüfen
         id: check
         env:
-          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           LIEFER_TAG: ${{ inputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}"
-          "$AUTOMATION_PATH/src/mtext.py" delivery check
+          "$ACTION_PATH/src/mtext.py" delivery check
           --tag "$LIEFER_TAG"
 
       - name: Vorbereitung festhalten
-        uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de
+        uses: actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf
         with:
           name: ${{ steps.check.outputs.vorbereitung_name }}
           path: ${{ steps.check.outputs.vorbereitung_path }}

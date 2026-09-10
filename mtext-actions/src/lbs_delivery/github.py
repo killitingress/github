@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
-from .project_archives import RELEASE_REPORT_NAME
+from .project_packages import INFORMATION_PATTERN, RELEASE_REPORT_NAME
 
 
 # Von GitHub für die REST-API vorgegebene Version des Anfrageformats.
@@ -25,17 +25,7 @@ _API_VERSION = "2022-11-28"
 _JSON_MEDIA_TYPE = "application/vnd.github+json"
 
 # Gemeinsamer HTTP-Zugang zur GitHub-REST-API für alle Aufrufe dieses Moduls.
-def request(
-    *,
-    method: str,
-    url: str,
-    token: str,
-    failure: Status,
-    payload: dict[str, object] | None = None,
-    content: bytes | None = None,
-    content_type: str | None = None,
-    missing_ok: bool = False,
-) -> Any:
+def request(*, method: str, url: str, failure: Status, payload: dict[str, object] | bytes | None = None, missing_ok: bool = False) -> Any:
     """Sendet eine Anfrage an GitHub und liest die JSON-Antwort.
 
     Bei einer fehlenden Ressource gibt die Funktion mit `missing_ok` `None`
@@ -44,16 +34,14 @@ def request(
     """
 
     # JSON oder Binärinhalt in den gemeinsamen GitHub-Request übernehmen
-    body = json.dumps(payload).encode() if payload is not None else content
+    body = json.dumps(payload).encode() if isinstance(payload, dict) else payload
     headers = {
         "Accept": _JSON_MEDIA_TYPE,
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
         "X-GitHub-Api-Version": _API_VERSION,
     }
     if payload is not None:
         headers["Content-Type"] = "application/json"
-    elif content_type is not None:
-        headers["Content-Type"] = content_type
 
     # authentifizierte Anfrage mit festem API-Format erstellen
     http_request = urllib.request.Request(url, data=body, headers=headers, method=method)
@@ -103,25 +91,19 @@ def last_sync_commit(*, event: str | None = None) -> str | None:
 
     query = urllib.parse.urlencode(parameters)
     url = f"{actions_url}/workflows/sync-resources.yml/runs?{query}"
-    document = request(method="GET", url=url, token=os.environ["GITHUB_TOKEN"], failure=Status.SOURCE_FAILED)
+    document = request(method="GET", url=url, failure=Status.SOURCE_FAILED)
     runs = document["workflow_runs"]
     return runs[0]["head_sha"] if runs else None
 
 
-def _replace_information_files(
-    information_files: list[Path],
-    assets: dict[str, int],
-    releases_url: str,
-    upload_url: str,
-    token: str,
-) -> None:
+def _replace_information_files(files: list[Path], assets: dict[str, int], releases_url: str, upload_url: str) -> None:
     """Ersetzt die Informationsdateien eines GitHub Releases.
 
     GitHub kann den Inhalt eines Release-Anhangs nicht per PATCH ändern.
     Gleichnamige Dateien werden deshalb gelöscht und anschließend neu hochgeladen.
     """
 
-    for information in information_files:
+    for information in files:
         # Datei erst unmittelbar vor ihrem Upload aus dem Release-Verzeichnis lesen
         try:
             content = information.read_bytes()
@@ -131,11 +113,11 @@ def _replace_information_files(
         # vorhandenen Anhang entfernen, damit GitHub denselben Namen erneut annimmt
         if (asset_id := assets.get(information.name)) is not None:
             url = f"{releases_url}/assets/{asset_id}"
-            request(method="DELETE", url=url, token=token, failure=Status.GITHUB_RELEASE_FAILED)
+            request(method="DELETE", url=url, failure=Status.GITHUB_RELEASE_FAILED)
 
         # unveränderte JSON-Datei unter ihrem bisherigen Namen neu hochladen
         url = f"{upload_url}?{urllib.parse.urlencode({'name': information.name})}"
-        request(method="POST", url=url, token=token, failure=Status.GITHUB_RELEASE_FAILED, content=content, content_type="application/json")
+        request(method="POST", url=url, failure=Status.GITHUB_RELEASE_FAILED, payload=content)
 
 
 def run(tag: str) -> dict[str, object]:
@@ -147,9 +129,8 @@ def run(tag: str) -> dict[str, object]:
 
     # GitHub-Ziel und erzeugte Informationsdateien des Releasebaus bestimmen
     repository = os.environ["GITHUB_REPOSITORY"]
-    token = os.environ["GITHUB_TOKEN"]
     releases_url = f"{os.environ['GITHUB_API_URL'].rstrip('/')}/repos/{urllib.parse.quote(repository)}/releases"
-    information_files = sorted((Path(os.environ["RUNNER_TEMP"]) / "release").glob("_INFO_*.json"))
+    information_files = sorted((Path(os.environ["RUNNER_TEMP"]) / "release").glob(INFORMATION_PATTERN))
     if not information_files:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien fehlen")
 
@@ -173,23 +154,23 @@ def run(tag: str) -> dict[str, object]:
 
     # vorhandenes Release samt Anhängen lesen oder ein neues Release vorbereiten
     url = f"{releases_url}/tags/{urllib.parse.quote(tag, safe='')}"
-    release = request(method="GET", url=url, token=token, failure=Status.GITHUB_RELEASE_FAILED, missing_ok=True)
+    release = request(method="GET", url=url, failure=Status.GITHUB_RELEASE_FAILED, missing_ok=True)
     assets = {e["name"]: e["id"] for e in release["assets"]} if release is not None else {}
 
     # Lieferbericht durch Anlegen oder Aktualisieren veröffentlichen
     url = releases_url if release is None else f"{releases_url}/{release['id']}"
     method = "POST" if release is None else "PATCH"
-    release = request(method=method, url=url, token=token, failure=Status.GITHUB_RELEASE_FAILED, payload=release_values)
+    release = request(method=method, url=url, failure=Status.GITHUB_RELEASE_FAILED, payload=release_values)
 
     # URI-Vorlage auf den Upload-Endpunkt ohne GitHub-Platzhalter reduzieren
     upload_url = release["upload_url"].split("{", 1)[0]
 
     # Informationsdateien hochladen und gleichnamige Anhänge vorher ersetzen
-    _replace_information_files(information_files, assets, releases_url, upload_url, token)
+    _replace_information_files(information_files, assets, releases_url, upload_url)
 
     # veröffentlichte Release-Adresse an den Workflow zurückgeben
     return {
-        "status": Status.GITHUB_RELEASE_PUBLISHED.value,
+        "status": Status.GITHUB_RELEASE_PUBLISHED,
         "repository": repository,
         "liefer_tag": tag,
         "release_url": release["html_url"],

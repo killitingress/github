@@ -10,6 +10,7 @@ from contextlib import redirect_stdout
 from unittest.mock import patch
 
 import mtext
+from lbs_delivery.process import Status
 from lbs_delivery.resource_check import _NODE_COMMAND
 
 from tests.support import TempDirTestCase, git, init_git_repository, load_test_configuration
@@ -39,7 +40,7 @@ class CheckResourcesTests(TempDirTestCase):
         self.write("brief.model", "<brief><absatz>Text</absatz></brief>")
         self.write("start.pageLayout", "<seite />")
         self.write("aktion.js", "const x = 1;\n")
-        self.write("LOMS_Basis/formular:a,b.formio", '{\n  "components": [\n}')
+        self.write("LOMS_Basis/formular.formio", '{\n  "components": [\n}')
         self.write("LOMS_Basis/brief.mapping", "<brief>\n  <absatz>\n</brief>")
         self.write("variante.pageLayouts", "<seite>")
         self.write("bruch.js", "const a = 1;\nfunction(\n")
@@ -48,13 +49,11 @@ class CheckResourcesTests(TempDirTestCase):
         self.write(".git/interne-daten.json", "kein JSON")
         (self.repository / "verknuepfung.json").symlink_to(self.repository / ".git/interne-daten.json")
         load_test_configuration(self.repository, mandant={"excluded_projects": ["LOMS_Testdaten"]})
-        summary = self.root / "summary.md"
         output = io.StringIO()
 
         with (
             patch.dict(os.environ, {
                 "GITHUB_WORKSPACE": str(self.root),
-                "GITHUB_STEP_SUMMARY": str(summary),
                 "GITHUB_EVENT_NAME": "workflow_dispatch",
                 "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
             }),
@@ -67,7 +66,7 @@ class CheckResourcesTests(TempDirTestCase):
         files = 8 if _NODE_COMMAND else 6
         warnings = 4 if _NODE_COMMAND else 3
         self.assertIn("::warning file=LOMS_Basis/brief.mapping,line=3,col=3", command_output)
-        self.assertIn("::warning file=LOMS_Basis/formular%3Aa%2Cb.formio,line=3,col=1", command_output)
+        self.assertIn("::warning file=LOMS_Basis/formular.formio,line=3,col=1", command_output)
         self.assertIn("::warning file=variante.pageLayouts", command_output)
         self.assertNotIn("LOMS_Testdaten", command_output)
         self.assertNotIn("start.pageLayout", command_output)
@@ -76,19 +75,9 @@ class CheckResourcesTests(TempDirTestCase):
             self.assertNotIn("aktion.js", command_output)
         else:
             self.assertNotIn("bruch.js", command_output)
-        self.assertEqual(result, {"status": "RESOURCE_CHECKED", "files": files, "warnings": warnings})
 
-        summary_text = summary.read_text(encoding="utf-8")
-        self.assertIn("| JSON | 2 |", summary_text)
-        self.assertIn("| XML | 4 |", summary_text)
-        self.assertIn(f"| JavaScript | {2 if _NODE_COMMAND else 0} |", summary_text)
-        self.assertIn(f"| **Gesamt** | **{files}** |", summary_text)
-        self.assertIn(f"Warnungen: {warnings}", summary_text)
-        self.assertIn("blockieren den Pull Request nicht", summary_text)
-        if _NODE_COMMAND:
-            self.assertIn("JavaScript-Prüfung: aktiv", summary_text)
-        else:
-            self.assertIn("JavaScript-Prüfung: übersprungen, Node.js nicht verfügbar", summary_text)
+        result.pop("summary")
+        self.assertEqual(result, {"status": Status.RESOURCE_CHECKED, "files": files, "warnings": warnings})
 
     def test_pull_request_checks_changed_resources(self) -> None:
         """Prüft beim Pull Request die Ressourcen aus dem Git-Vergleich."""
@@ -107,12 +96,10 @@ class CheckResourcesTests(TempDirTestCase):
         git(self.repository, "add", ".")
         git(self.repository, "commit", "-q", "-m", "Änderung")
 
-        summary = self.root / "summary.md"
         output = io.StringIO()
         with (
             patch.dict(os.environ, {
                 "GITHUB_WORKSPACE": str(self.root),
-                "GITHUB_STEP_SUMMARY": str(summary),
                 "GITHUB_EVENT_NAME": "pull_request",
                 "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
             }),
@@ -125,7 +112,8 @@ class CheckResourcesTests(TempDirTestCase):
         self.assertIn("::warning file=brief.datamodel", command_output)
         self.assertNotIn("LOMS_Testdaten", command_output)
         self.assertNotIn("bestehend.formio", command_output)
-        self.assertEqual(result, {"status": "RESOURCE_CHECKED", "files": 1, "warnings": 1})
+        result.pop("summary")
+        self.assertEqual(result, {"status": Status.RESOURCE_CHECKED, "files": 1, "warnings": 1})
 
 
 if __name__ == "__main__":

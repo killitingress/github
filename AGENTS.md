@@ -74,6 +74,10 @@ def upload_archive(path: Path) -> Response:
 
 ## Python
 
+- Module als Namensraum importieren, wenn die Herkunft allgemeiner oder technischer Operationen
+  sichtbar bleiben soll. Eindeutige Typen, Konstanten und fachlich benannte Funktionen direkt
+  importieren, wenn das Modul sonst nicht als Namensraum benötigt wird. Dasselbe Modul nicht
+  zugleich als Namensraum und über einzelne Namen importieren. Keine Stern-Imports verwenden.
 - In Comprehensions und Generatorausdrücken mit genau einer Iteration heißt die
   kurzlebige, nicht entpackte Elementvariable `e`. Normale und verschachtelte
   Schleifen verwenden beschreibende Namen.
@@ -94,6 +98,8 @@ def upload_archive(path: Path) -> Response:
 
 - In Dokumentation und Betrieb verwendete deutsche Fachbegriffe übernehmen. Keine neuen
   englischen Übersetzungen für bestehende Begriffe einführen.
+- Für den Vorgang und daraus gebildete Begriffe `Synchronisierung` verwenden, nicht
+  `Synchronisation`, etwa `Synchronisierungslauf` und `Synchronisierungsauftrag`.
 - Es heißt `Releaselinie` und `Mandantenkürzel`, nicht `Release-Line`, `release_line` oder
   `Mandant-Code`. Die JSON-Felder heißen `kuerzel`, `releaselinie`, `etaps_linie`,
   `hostprofil` und `hostprofile`. Umlaute in Feldnamen als `ae`, `oe` und `ue` schreiben.

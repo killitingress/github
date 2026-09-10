@@ -1,4 +1,4 @@
-"""Führt M/Text-Synchronisationen über die HTTP-Schnittstelle des Adapters aus."""
+"""Führt M/Text-Synchronisierungen über die HTTP-Schnittstelle des Adapters aus."""
 
 from __future__ import annotations
 
@@ -15,92 +15,72 @@ from pathlib import Path
 from typing import Literal
 
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
-from .project_archives import ProjectArchives
+from .project_packages import ProjectPackage
 
 
-# Begrenzt gelesene Adapterantworten, damit fehlerhafte Antworten nicht den
-# Arbeitsspeicher vollständig belegen.
-_RESPONSE_LIMIT = 1024 * 1024
+# Adapterantworten werden erstmal auf 10 MB begrenzt
+# TODO wie mit überlangen Antworten umgehen? kann bei M/Text result passieren
+_RESPONSE_LIMIT = 10 * 1024 * 1024
 
-# Blockgröße beim Streaming großer Archive zum Adapter.
+# Blockgröße beim Streaming der Archive zum Adapter
 _UPLOAD_BLOCK_SIZE = 1024 * 1024
 
-# Abstand zwischen Statusabfragen, solange der Adapter noch verarbeitet.
+# Polling-Interval in Sekunden
 _POLL_INTERVAL_SECONDS = 5
-
-# Auftragszustände, in denen der Adapter noch arbeitet oder Dateien erwartet.
-_ACTIVE_STATUSES = frozenset({"ready", "uploading", "processing"})
-
-# Auftragszustände, die die Verarbeitung beim Adapter beenden.
-_TERMINAL_STATUSES = frozenset({"succeeded", "failed"})
 
 # URL-Muster des Adapters. `{umgebung}` ist Präfix und ETAPS-Linie.
 _ADAPTER_URL = "http://{umgebung}.ltoma.intern/vMtextAdapter"
 
 
 def check_reachability(umgebung: str) -> None:
-    """Prüft den Adapter vor dem Archivbau und protokolliert seine Versionsantwort."""
+    """Prüft Erreichbarkeit des /version Endpunkts und protokolliert die Antwort"""
 
     # Versionsendpunkt abrufen, urlopen meldet HTTP- und Verbindungsfehler
     url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/version"
     try:
         with urllib.request.urlopen(url, timeout=NETWORK_TIMEOUT) as response:
-            # der Versionsendpunkt muss die Erreichbarkeit mit HTTP 200 bestätigen
             if response.status != 200:
                 raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter unter {url} antwortet mit HTTP {response.status}")
-
-            version = response.read().decode(errors="replace").strip()
+            # Antwortzeile nach STDERR schreiben
+            print(response.read().decode().strip(), file=sys.stderr)
     except (urllib.error.URLError, OSError, HTTPException) as exc:
         raise DeliveryError(Status.ADAPTER_FAILED, f"Versionsabfrage unter {url} ist fehlgeschlagen: {exc}") from exc
 
-    # Antwortzeile ins Workflow-Log schreiben, stdout bleibt für das JSON-Ergebnis
-    print(version, file=sys.stderr)
-
 
 def resume_existing(umgebung: str, auftrag_id: str) -> dict[str, object] | None:
-    """Übernimmt einen bestehenden Auftrag und wartet auf seinen Abschluss.
+    """Sucht Auftrag per id und schließt diesen ab, falls er noch am Leben ist,
+    oder schießt ihn ab, wenn er im Wald steht. Gibt None zurück wenn es keinen
+    solchen Auftrag (mehr) gibt."""
 
-    Fehlt der Auftrag oder wurde er vor dem Neustart gelöscht, bedeutet
-    `None`, dass neue Archive und ein neuer Auftrag benötigt werden.
-    """
-
-    # vorhandenen Auftrag über seine vom Client gebildete ID suchen
     url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2"
     auftrag_url = f"{url}/{urllib.parse.quote(auftrag_id, safe='')}"
-    try:
-        result = _call_adapter("GET", auftrag_url)
-    except DeliveryError as exc:
-        if exc.http_status == 404:
-            return None
-        raise
 
-    # unfertige Uploads und fehlgeschlagene Aufträge vor dem Neubau aufräumen
+    # Das ist etwas seltsam hier: der Adapter antwortet HTTP 404, wenn es den
+    # Auftrag nicht gibt - und anders als sonst ist 404 hier OK, da es sowieso
+    # das erwartete Ergebnis ist (wieso sollte der Auftrag schon existieren?) -
+    # daher wird mittels not_found_ok=True das 404 auf None umgesetzt...
+    result = _call_adapter("GET", auftrag_url, not_found_ok=True)
+    if result is None:
+        return None
+
+    # wenn es den Auftrag schon gibt, er aber in einem Status ist, in dem er
+    # nicht sauber beendet werden kann, wird er hier entfernt
     if result["status"] in {"ready", "uploading", "failed"}:
         _call_adapter("DELETE", auftrag_url)
         return None
 
+    # Auftrag regulär abschließen
     return _finish_job(umgebung, result)
 
 
-def synchronize(umgebung: str, project_archives: list[ProjectArchives], auftrag_id: str) -> dict[str, object]:
-    """Legt einen Auftrag an, lädt die fertigen Archive hoch und wartet auf das Ergebnis."""
+def upload(umgebung: str, pakete: list[ProjectPackage], auftrag_id: str) -> dict[str, object]:
+    """Legt einen Auftrag an, lädt die Pakete hoch und wartet auf das Ergebnis."""
 
     url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2"
 
-    # Lieferart aus der Information bestimmt das hochzuladende Archiv je Projekt
-    archive_uploads: list[tuple[Path, dict[str, object]]] = []
-    for archives in project_archives:
-        try:
-            information = json.loads(archives.information.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise DeliveryError(Status.ADAPTER_FAILED, f"Informationsdatei kann nicht gelesen werden: {exc}") from exc
-
-        archive = archives.f_archiv if information["lieferart"] == "FULL" else archives.d_archiv
-        archive_uploads.append((archive, information))
-
-    # neue Archivliste unter der Auftrags-ID beim Adapter anmelden
+    # Pakete unter der Auftrags-ID beim Adapter anmelden
     archive_list = [
-        {"name": archive.name, "information": information} for archive, information in archive_uploads
+        {"name": paket.archive.name, "information": paket.information} for paket in pakete
     ]
     payload = {"archive": archive_list}
     auftrag_url = f"{url}/{urllib.parse.quote(auftrag_id, safe='')}"
@@ -108,8 +88,8 @@ def synchronize(umgebung: str, project_archives: list[ProjectArchives], auftrag_
 
     # noch erwartete Archive nacheinander als unveränderten Datenstrom übertragen
     if result["status"] in {"ready", "uploading"}:
-        for archive, _information in archive_uploads:
-            result = _upload_archive(auftrag_url, archive)
+        for paket in pakete:
+            result = _upload_archive(auftrag_url, paket.archive)
             if result["status"] not in {"ready", "uploading"}:
                 break
 
@@ -129,13 +109,13 @@ def _finish_job(umgebung: str, result: dict[str, object]) -> dict[str, object]:
     auftrag_url = f"{url}/{urllib.parse.quote(auftrag_id, safe='')}"
 
     # Verarbeitung nach dem Upload bis zu einem Endstatus abfragen
-    while result["status"] not in _TERMINAL_STATUSES:
+    while result["status"] not in {"succeeded", "failed"}:
         result = _call_adapter("GET", auftrag_url)
-        if result["status"] in _ACTIVE_STATUSES:
+        if result["status"] not in {"succeeded", "failed"}:
             time.sleep(_POLL_INTERVAL_SECONDS)
 
     # Auftrag entfernen, ohne eine M/Text-Fehlermeldung zu überschreiben
-    message = result.get("message") or "M/Text-Synchronisation ist fehlgeschlagen"
+    message = result.get("message") or "M/Text-Synchronisierung ist fehlgeschlagen"
     try:
         _call_adapter("DELETE", auftrag_url)
     except DeliveryError as exc:
@@ -168,8 +148,15 @@ def _call_adapter(
     url: str,
     payload: dict[str, object] | Iterator[bytes] | None = None,
     headers: dict[str, str] | None = None,
-) -> dict[str, object]:
-    """Liefert eine geprüfte Antwort. Nicht-2xx werden als DeliveryError gemeldet."""
+    *,
+    not_found_ok: bool = False,
+) -> dict[str, object] | None:
+    """Liefert eine geprüfte Adapterantwort.
+
+    Bei HTTP 404 gibt die Funktion mit `not_found_ok` `None` zurück. Der
+    Wiederanlauf nutzt das, wenn unter der Lauf-ID noch kein Auftrag liegt.
+    Andere HTTP-Fehler beenden den Schritt mit `ADAPTER_FAILED`.
+    """
 
     # JSON-Anfragen serialisieren, Archivdaten unverändert durchreichen
     data = payload
@@ -194,14 +181,15 @@ def _call_adapter(
         raise DeliveryError(Status.ADAPTER_FAILED, f"Adapteraufruf ist fehlgeschlagen: {exc}") from exc
 
     if len(body) > _RESPONSE_LIMIT:
-        raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort überschreitet 1 MiB")
+        raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort überschreitet 10 MiB")
 
-    # nicht erfolgreiche HTTP-Antwort vor der JSON-Verarbeitung melden
+    if not_found_ok and http_status == 404:
+        return None
+
     if not 200 <= http_status < 300:
         detail = body[:1000].decode(errors="replace")
         raise DeliveryError(
             Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {http_status}: {detail}",
-            http_status=http_status,
         )
 
     # erfolgreichen Body als JSON-Objekt übernehmen
@@ -223,7 +211,7 @@ def _call_adapter(
     if not isinstance(auftrag_status, str) or not auftrag_status:
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapter meldet keinen Auftragsstatus")
 
-    if auftrag_status not in _ACTIVE_STATUSES and auftrag_status not in _TERMINAL_STATUSES:
+    if auftrag_status not in {"ready", "uploading", "processing", "succeeded", "failed"}:
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapter meldet einen unbekannten Auftragsstatus")
 
     auftrag_id = document.get("auftrag_id")

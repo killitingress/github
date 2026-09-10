@@ -50,7 +50,7 @@ class ReleaseTests(TempDirTestCase):
 
         # die Workflow-Einstiege verwenden das erzeugte und anschließend heruntergeladene Artefakt
         result = run("build", tag="r261.108")
-        self.assertEqual(result["status"], Status.ARTIFACT_READY.value)
+        self.assertEqual(result["status"], Status.ARTIFACT_READY)
         delivery = self.runner_temp / "release"
         shutil.copytree(self.runner_temp / "dist", delivery)
 
@@ -85,7 +85,7 @@ class ReleaseTests(TempDirTestCase):
         # Übergabe verwendet die erzeugte JCL und beendet einen unvollständigen Lieferbestand
         with patch("lbs_delivery.mainframe._submit_archive") as submit:
             result = run("mainframe")
-        self.assertEqual(result["status"], Status.MAINFRAME_SUBMITTED.value)
+        self.assertEqual(result["status"], Status.MAINFRAME_SUBMITTED)
         submit.assert_called_once_with(delivery / "FIBASISD.tgz")
         rendered = (delivery / "FIBASISD.jcl").read_text(encoding="ascii")
         self.assertIn("MEMBER=((FIBASISD,,R))", rendered)

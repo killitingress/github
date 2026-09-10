@@ -60,7 +60,7 @@ Stand. Projektverzeichnisse aus `excluded_projects` bleiben dabei unberücksicht
 Die Actions-Zusammenfassung schlüsselt die geprüften Dateien nach JSON, XML und
 JavaScript auf.
 
-Die Mindestversion in `.python-version` ist Python 3.11. Die Runner-Prüfung in
+Die Mindestversion in `.python-version` ist Python 3.12. Die Runner-Prüfung in
 `scripts/runner-preflight.sh` erwartet außerdem Git, `tar`, `curl` und `unzip`.
 Der Lieferworkflow lädt die Vorbereitung per REST-API mit `curl` und liest
 `vorbereitung.json` mit `unzip` aus dem heruntergeladenen Artefakt.

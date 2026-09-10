@@ -69,7 +69,7 @@ Zusammenhang zwischen Abnahme- und Lieferstand wie folgt her:
 
 1. Der Pull Request führt die fachlich geprüfte Änderung mit Squash Merge in
    `main` oder `release/nnn` zusammen.
-2. Die Synchronisation überträgt diesen Branchstand nach
+2. Die Synchronisierung überträgt diesen Branchstand nach
    M/Text-Funktionstest.
 3. **Lieferung vorbereiten** hält die ausgewählte SHA und den Lieferumfang
    fest. Bei einer Teillieferung enthält `bereitstellung/nnn.nnn` die

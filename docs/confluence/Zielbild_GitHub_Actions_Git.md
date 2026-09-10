@@ -98,7 +98,7 @@ Liefer-Tag, Paketbau und Mainframe-Übergabe
 | Branches nach dem organisationsweiten Leitfaden | `main`, Release- und Feature-Branches bilden Entwicklung und Wartung gut ab. Pull Requests erhöhen Sicherheit und Transparenz und sind Git-native. |
 | Feature-Push nach M/Text-Entwicklung | Eine Änderung kann vor dem Pull Request vom Entwickler getestet werden. Parallelentwicklungen mehrerer Entwickler werden unterstützt. |
 | Pull Request mit Squash Merge | Jeder Pull Request wird als ein fachlicher Commit in den Zielbranch übernommen und kann später Cherry-Picked werden (entspricht bisherigem Merge-Verfahren). Review und Arbeitscommits bleiben im Pull Request sichtbar. |
-| Gemeinsames Format für Archive und Informationen | Synchronisation und Mainframe-Lieferung verwenden dieselben Dateiformate auf unterschiedlichen Transportwegen. |
+| Gemeinsames Format für Archive und Informationen | Synchronisierung und Mainframe-Lieferung verwenden dieselben Dateiformate auf unterschiedlichen Transportwegen. |
 | Zweistufige Lieferbestätigung | Die Liefer-Workflows unterstützen das 4-Augenprinzip. |
 
 ## 2. Branch- und Pull-Request-Modell
@@ -226,7 +226,7 @@ erreichbar. Der Sync-Endpunkt des Adapters wird unter
 
 ### Lieferarten und Projektarchive
 
-Anders als im alten SVN Ablauf verwenden wir nun für Synchronisation und
+Anders als im alten SVN Ablauf verwenden wir nun für Synchronisierung und
 Mainframe-Lieferung ein einheitliches Archivformat. Es gibt weiterhin die
 beiden bekannten Lieferarten:
 
@@ -279,7 +279,7 @@ dem, was bisher im `trans/`-Verzeichnis (NFS-Share) abgelegt wurde. Sie ist
 jedoch im JSON Format und daher maschinell besser verarbeitbar. Für die
 **Mainframe-Lieferung** spielt die Datei technisch keine Rolle, sie wird aber im
 GitHub-Release mit abgelegt und kann so bei Bedarf für Kontrollen genutzt
-werden. Bei der **Synchronisation** via LTOMA ist sie Teil des initialen
+werden. Bei der **Synchronisierung** via LTOMA ist sie Teil des initialen
 POST-Body und wird verwendet um den Umfang der hochzuladenen Archive
 festzulegen. Das folgende Beispiel zeigt eine Mainframe-Lieferung:
 
@@ -316,7 +316,7 @@ projektbezogenen Pfad mit den Statuswerten `A`
 (hinzugefügt), `M` (geändert), `D` (gelöscht) und `T` (Typ geändert). `sha256`
 enthält die Prüfsumme des Archivs.
 
-Bei der **Synchronisation** entfällt `scope.von` bei FULL, und alle
+Bei der **Synchronisierung** entfällt `scope.von` bei FULL, und alle
 Projektdateien stehen mit Status `A` in `elemente`. Bei DELTA stimmen
 Elementliste und Archivumfang überein. Die Löschliste enthält die `D`-Einträge
 mit vorangestelltem Projektnamen um Kompatibilität mit dem Travic-Link
@@ -358,7 +358,7 @@ Archivumfang bei DELTA-Lieferungen in der Regel unterscheiden. Das spätere
 GitHub Release zeigt aber beides: die Änderungen seit dem vorherigen Liefer-Tag
 und den tatsächlichen Lieferumfang.
 
-### Transport der Synchronisationsaufträge
+### Transport der Synchronisierungsaufträge
 
 Vor dem Archivbau prüft der Workflow die Erreichbarkeit des Adapters über
 `GET /vMtextAdapter/version` und gibt die Antwort im Workflow-Log aus.
@@ -367,9 +367,9 @@ Linienwechsel werden beide Zieladapter vorab geprüft.
 
 Adapter und M/Text greifen auf den gemeinsamen Pfad `serverSync/` zu. Dieser
 enthält die Projektverzeichnisse aller Mandanten und bildet wie im alten Ablauf
-die Basis der M/Text-Synchronisation. Der Workflow überträgt die
+die Basis der M/Text-Synchronisierung. Der Workflow überträgt die
 zusammengestellten Archive und ihre Informationen einzeln per HTTP an LTOMA.
-Ein Synchronisationsauftrag umfasst alle Archive, die mit einer M/Text-Umgebung
+Ein Synchronisierungsauftrag umfasst alle Archive, die mit einer M/Text-Umgebung
 synchronisiert werden sollen.
 
 Für einen neuen Auftrag gilt folgender Ablauf:
@@ -389,7 +389,7 @@ Für einen neuen Auftrag gilt folgender Ablauf:
    der Adapter den Auftrag auf `processing`. Ein Lock je Mandantenkürzel und
    M/Text-Umgebung verhindert, dass mehrere Aufträge desselben Mandanten
    gleichzeitig dessen Projektbestand verändern oder eine
-   M/Text-Synchronisation ausführen. Andere Mandanten dürfen parallel
+   M/Text-Synchronisierung ausführen. Andere Mandanten dürfen parallel
    verarbeitet werden. Ist der Lock belegt, bleibt der Auftrag im Status
    `processing`, bis er verarbeitet werden kann.
 4. Unter dem Lock übernimmt der Adapter die Inhalte nach `serverSync/`. Bei
@@ -425,7 +425,7 @@ er die noch nicht erfolgreich synchronisierten Änderungen ein. Wenn durch
 `serverSync/` entstehen sollten, ist eine manuelle Volllieferung durchzuführen.
 Die Auftragsdaten im Adapter überleben keinen Neustart.
 
-### Erfolg und Reihenfolge aufeinanderfolgender Synchronisationen
+### Erfolg und Reihenfolge aufeinanderfolgender Synchronisierungen
 
 Ein DELTA liefert die Änderungen seit dem letzten erfolgreichen Sync-Lauf
 desselben Branches. Damit umfassen die D-Archive auch Änderungen
@@ -696,6 +696,18 @@ Bei Feature- und Release-Branches steht die Releaselinie im Branchnamen. Bei
 }
 ```
 
+Die derzeit versionierten Projekte:
+
+| Repository | Mandantenkürzel | Projekte |
+|---|---|---|
+| `FinanzInformatik/fi_lbs_entw_oms_fi` | `FI` | `Configuration`, `Fonts`, `LOMS_Framework`, `LOMS_Basis`, `LOMS_PKA` |
+| `FinanzInformatik/fi_lbs_entw_oms_it` | `IT` | `LOMS_Autonom` |
+| `FinanzInformatik/fi_lbs_entw_oms_by` | `BY` | `LOMS_Basis[BY]`, `LOMS_Autonom[BY]` |
+| `FinanzInformatik/fi_lbs_entw_oms_lh` | `LH` | `LOMS_Basis[LH]`, `LOMS_Autonom[LH]` |
+| `FinanzInformatik/fi_lbs_entw_oms_nw` | `NW` | `LOMS_Basis[NW]`, `LOMS_Autonom[NW]` |
+| `FinanzInformatik/fi_lbs_entw_oms_os` | `OS` | `LOMS_Basis[OS]`, `LOMS_Autonom[OS]` |
+| `FinanzInformatik/fi_lbs_entw_oms_sa` | `SA` | `LOMS_Basis[SA]`, `LOMS_Autonom[SA]` |
+
 `config/releaselinien.json` ist in Kapitel 3 beschrieben.
 
 `config/ressourcenformate.json` wird für die Ressourcenprüfung genutzt um
@@ -768,7 +780,7 @@ geschützt gespeicherter Wert.
 GitHub Actions übernimmt `stdout` und `stderr` der Workflows in das Protokoll.
 Die Python-Skripte schreiben ein erfolgreiches Ergebnis als JSON nach `stdout`
 und Warnungen oder Fehler nach `stderr`. Bei der Konfigurationsprüfung und der
-M/Text-Synchronisation sind diese Ausgaben im Mandanten-Repository sichtbar.
+M/Text-Synchronisierung sind diese Ausgaben im Mandanten-Repository sichtbar.
 
 Prüfung, Paketbau, Mainframe-Übergabe und Bereitstellungsbericht sind im
 Mandantenlauf sichtbar. **Nach Abschluss stehen das Ergebnis und die
@@ -788,8 +800,8 @@ mit dem zugehörigen Exitcode.
 | `LIEFERUNG_BESTAETIGT` | Die vorbereitete Lieferung wurde durch dieselbe oder eine zweite Person bestätigt | – |
 | `LIEFERUNG_TAGGED` | Der Liefer-Tag wurde auf der festgehaltenen SHA erstellt | – |
 | `SOURCE_FAILED` | Checkout, Commit, Branch oder Tag können nicht als Quelle verwendet werden | `3` |
-| `ADAPTER_FAILED` | Adapteraufruf oder M/Text-Synchronisation sind fehlgeschlagen | `6` |
-| `ADAPTER_COMPLETED` | Der M/Text-Adapter hat die Synchronisation erfolgreich abgeschlossen | – |
+| `ADAPTER_FAILED` | Adapteraufruf oder M/Text-Synchronisierung sind fehlgeschlagen | `6` |
+| `ADAPTER_COMPLETED` | Der M/Text-Adapter hat die Synchronisierung erfolgreich abgeschlossen | – |
 | `PACKAGE_FAILED` | Archiv, Informationsdatei oder JCL konnten nicht erstellt oder verwendet werden | `4` |
 | `ARTIFACT_READY` | Archive, Informationsdateien und JCL wurden erstellt | – |
 | `MAINFRAME_TRANSFER_FAILED` | Die FTPS- oder JES-Übergabe ist fehlgeschlagen | `7` |

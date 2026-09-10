@@ -1,4 +1,4 @@
-# Adaptervertrag für die M/Text-Synchronisation
+# Adaptervertrag für die M/Text-Synchronisierung
 
 Diese Spezifikation beschreibt die Erweiterung des Adapters für den vorhandenen
 HTTP-Client.
@@ -161,7 +161,7 @@ das jeweilige Projektverzeichnis nicht verlassen.
 Gemäß Zielbild umfasst ein Lock je Mandantenkürzel und M/Text-Umgebung die
 Übernahme aller Projektarchive und den anschließenden M/Text-Aufruf zur
 Aktualisierung des Ressourcen-Caches. Danach wird der Lock freigegeben.
-`serverSync/` ist die gemeinsame Synchronisationsbasis.
+`serverSync/` ist die gemeinsame Synchronisierungsbasis.
 
 ## Status, Ergebnis und Aufräumen
 
@@ -212,7 +212,7 @@ Auftrags-ID. Diese Antwort ist eine Löschbestätigung und kein Auftragsstatus.
 ```
 
 ```json
-{"auftrag_id": "123456-FI", "status": "failed", "message": "M/Text-Synchronisation ist fehlgeschlagen"}
+{"auftrag_id": "123456-FI", "status": "failed", "message": "M/Text-Synchronisierung ist fehlgeschlagen"}
 ```
 
 Der Client fragt mit `GET /sync2/{auftrag_id}` bis zu einem Endstatus ab.
@@ -238,20 +238,20 @@ Der Client legt das inhaltliche Format von `result` nicht fest.
 
 | Klasse oder Komponente | Aufgabe |
 |---|---|
-| `SynchronisationController` | Anlage, Archivupload, Status und Löschen eines Auftrags bereitstellen |
-| `SynchronisationsAuftraege` | Auftragsdaten, Uploadprüfung, Status und Ergebnis verwalten |
-| `SynchronisationProcessor` | Projektbestand und M/Text-Aufruf unter dem Lock des Mandanten verarbeiten |
-| `MtextRessourceSynchronisationService` | M/Text mit `serverSync/` aufrufen und das Ergebnis zurückgeben |
+| `SynchronisierungsController` | Anlage, Archivupload, Status und Löschen eines Auftrags bereitstellen |
+| `SynchronisierungsAuftraege` | Auftragsdaten, Uploadprüfung, Status und Ergebnis verwalten |
+| `SynchronisierungsProcessor` | Projektbestand und M/Text-Aufruf unter dem Lock des Mandanten verarbeiten |
+| `MtextRessourceSynchronisierungsService` | M/Text mit `serverSync/` aufrufen und das Ergebnis zurückgeben |
 
 ### Auftragsdaten und Antworten
 
 ```java
-public enum SynchronisationsStatus {
+public enum SynchronisierungsStatus {
     // Der angelegte Auftrag wartet auf seinen ersten Upload.
     READY,
     // Angekündigte Archive werden empfangen und geprüft.
     UPLOADING,
-    // Umfasst Warten auf den Mandanten-Lock, Projektübernahme und M/Text-Synchronisation.
+    // Umfasst Warten auf den Mandanten-Lock, Projektübernahme und M/Text-Synchronisierung.
     PROCESSING,
     // Übernahme und M/Text-Aufruf sind ohne technischen Fehler beendet.
     SUCCEEDED,
@@ -269,12 +269,12 @@ Der interne Auftragszustand kann die angekündigten Archive und ihre geprüften
 Upload-Dateien gemeinsam halten:
 
 ```java
-public class SynchronisationsAuftrag {
+public class SynchronisierungsAuftrag {
     private String auftragId;
     private AuftragAnlegenRequest request;
     private Map<String, ArchivAnmeldung> archive;
     private Map<String, Path> uploads;
-    private SynchronisationsStatus status = SynchronisationsStatus.READY;
+    private SynchronisierungsStatus status = SynchronisierungsStatus.READY;
     private Object result;
     private String message;
 
@@ -292,8 +292,8 @@ So kann eine Anfrage den Auftrag erst lesen, wenn eine andere ihre Änderungen
 einschließlich des Status abgeschlossen hat.
 
 ```java
-public class SynchronisationsAuftraege {
-    private final Map<String, SynchronisationsAuftrag> nachId = new HashMap<>();
+public class SynchronisierungsAuftraege {
+    private final Map<String, SynchronisierungsAuftrag> nachId = new HashMap<>();
 
     public synchronized AuftragAntwort anlegen(
             String auftragId,
@@ -303,8 +303,8 @@ public class SynchronisationsAuftraege {
         }
 
         requestValidieren(auftragId, request);
-        SynchronisationsAuftrag auftrag =
-                SynchronisationsAuftrag.anlegen(
+        SynchronisierungsAuftrag auftrag =
+                SynchronisierungsAuftrag.anlegen(
                         auftragId, request, uploadBasis);
         nachId.put(auftragId, auftrag);
         return antwort(auftrag);
@@ -330,9 +330,9 @@ Beispiel:
 ```java
 @RestController
 @RequestMapping("sync2")
-public class SynchronisationController {
-    private final SynchronisationsAuftraege auftraege;
-    private final SynchronisationProcessor processor;
+public class SynchronisierungsController {
+    private final SynchronisierungsAuftraege auftraege;
+    private final SynchronisierungsProcessor processor;
 
     @PostMapping(path = "/{auftragId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<AuftragAntwort> create(

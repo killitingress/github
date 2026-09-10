@@ -1,12 +1,7 @@
-name: M/Text-Automatisierung testen
+name: Unit-Tests
 
-# Dieser Workflow prüft mtext_actions bei Pull Requests, Änderungen an main und
-# einem manuellen Start.
-# Er lädt den betroffenen Repository-Stand, ermittelt die verfügbare
-# Python-Runtime und führt die Unit-Tests aus. Die Tests sprechen natürlich
-# weder M/Text noch den Mainframe an.
-# Ein erfolgreicher Lauf bestätigt die Ausführbarkeit der Python-Abläufe auf dem
-# Runner und deren Korrektheit.
+# Dieser Workflow führt die Unit-Tests aus. Ein erfolgreicher Lauf bedeutet,
+# dass die Python-Abläufe ausführbar und konsistent sind.
 'on':
   workflow_dispatch:
   pull_request:
@@ -14,40 +9,39 @@ name: M/Text-Automatisierung testen
     branches:
       - main
 
-# Beschränkt GITHUB_TOKEN auf Lesezugriff für dieses Repository (für Check-Out)
+# Das GITHUB_TOKEN hat Lesezugriff für dieses Repository (für Check-Out).
 permissions:
   contents: read
 
-# Neuere Commits ersetzen laufende Tests derselben Änderung
+# Gruppierung nach Pull-Request-Nummer oder Branch-Name.
 concurrency:
   group: mtext-actions-tests-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
-    name: CI/CD-Implementierung testen
+    name: Unit-Tests durchführen
     runs-on: [self-hosted, linux]
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      # Lädt die zu prüfende CI/CD-Version in den Arbeitsbereich
-      - name: Check-Out CI/CD-Version
+      # Lädt den aktuellen Stand des Repositories in den Arbeitsbereich
+      - name: Check-Out Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
 
-      # Prüft dieselbe Ladeschnittstelle, die die Mandanten-Workflows verwenden.
-      - name: M/Text-Automatisierung laden
+      # Starte die Composite Action "action.yml"
+      - name: action.yml ausführen
         id: automation
         uses: ./
 
-      # Workflow-Dateien mit actionlint prüfen, sobald der Runner das Kommando
-      # bereitstellt.
+      # Wenn actionlint zur Verfügung stehen würde, könnte man die Workflows an sich damit prüfen
       # - name: Workflow-Dateien prüfen
       #   run: actionlint
 
-      # Führt alle Unit-Tests aus
+      # Startet die Testsuite
       - name: Unit-Tests ausführen
         env:
-          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
-          PYTHONPATH: ${{ steps.automation.outputs.automation_path }}/src
-        run: '"${{ steps.automation.outputs.python }}" -m unittest discover -s "$AUTOMATION_PATH/tests" -v'
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
+          PYTHONPATH: ${{ steps.automation.outputs.action_path }}/src
+        run: '"${{ steps.automation.outputs.python }}" -m unittest discover -s "$ACTION_PATH/tests" -v'

@@ -35,6 +35,6 @@ if command -v node >/dev/null 2>&1; then
   node --version
 fi
 
-# Python-Pfad und Implementierungspfad für die Folgeschritte der Action bereitstellen
+# Python-Pfad und Action-Pfad für die Folgeschritte bereitstellen
 echo "python=$(command -v python3)" >> "$GITHUB_OUTPUT"
-echo "automation_path=$GITHUB_ACTION_PATH" >> "$GITHUB_OUTPUT"
+echo "action_path=$GITHUB_ACTION_PATH" >> "$GITHUB_OUTPUT"

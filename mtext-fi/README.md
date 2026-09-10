@@ -16,7 +16,7 @@ technischen Zielen zu:
 | `kuerzel` | Mandantenkürzel |
 | `releaselinie` | von `main` geführte Releaselinie |
 | `ispw` | CodePipeline-Umgebung |
-| `excluded_projects` | von Prüfung, Synchronisation und Lieferung ausgeschlossene Projektverzeichnisse |
+| `excluded_projects` | von Prüfung, Synchronisierung und Lieferung ausgeschlossene Projektverzeichnisse |
 | `hostprofile` | Assignment und CodePipeline-Stage der verwendeten Hostprofile |
 
 ## Voraussetzungen
@@ -40,7 +40,7 @@ bearbeitet:
    Feature-Branch gehören dabei zur selben Releaselinie.
 6. Die Ressourcenprüfung und das Review abschließen und die Änderung mit
    **Squash and merge** zusammenführen.
-7. Den Synchronisationslauf des Zielbranches prüfen und den Stand in
+7. Den Synchronisierungslauf des Zielbranches prüfen und den Stand in
    M/Text-Funktionstest abnehmen.
 
 Korrekturen werden auf demselben Feature-Branch ergänzt und erneut nach

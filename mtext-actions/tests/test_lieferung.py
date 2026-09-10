@@ -7,7 +7,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from lbs_delivery.git import BEREITSTELLUNG_BRANCH_RE, LIEFER_TAG_RE
+from lbs_delivery.git import LieferTag
 from lbs_delivery.lieferung import _pruefe_lieferquelle, _summary, run
 from lbs_delivery.process import DeliveryError
 
@@ -26,6 +26,23 @@ class LieferungTests(TempDirTestCase):
         self.configuration = load_test_configuration(self.repository)
         self.source_sha = git(self.repository, "rev-parse", "HEAD")
 
+    def test_liefer_tag_exposes_release_information(self) -> None:
+        """Prüft Bestandteile, Hauptrelease und Reihenfolge eines Liefer-Tags."""
+
+        # ein Zwischenrelease liefert seine Bestandteile und die FULL-Basis
+        tag = LieferTag.parse("r261.108")
+        self.assertEqual(tag.releaselinie, "261")
+        self.assertEqual(tag.zwischenrelease, "108")
+        self.assertFalse(tag.ist_hauptrelease)
+        self.assertLess(tag, LieferTag.parse("r270.100"))
+
+        # Tag und Bereitstellungsbranch beschreiben denselben Lieferstand
+        self.assertEqual(tag, LieferTag.from_bereitstellung("bereitstellung/261.108"))
+        self.assertTrue(LieferTag.parse("r261.100").ist_hauptrelease)
+        self.assertIsNone(LieferTag.from_bereitstellung("anderer-branch"))
+        with self.assertRaises(ValueError):
+            LieferTag.parse("r261.099")
+
     def test_prepares_delta_on_bereitstellung_and_shows_previous_tag(self) -> None:
         """Prüft eine DELTA-Vorbereitung mit dem vorherigen Liefer-Tag."""
 
@@ -42,13 +59,13 @@ class LieferungTests(TempDirTestCase):
         _pruefe_lieferquelle(
             self.configuration,
             self.repository,
-            "r261.108",
+            LieferTag.parse("r261.108"),
             "bereitstellung/261.108",
         )
         summary = _summary(
             self.configuration,
             self.repository,
-            "r261.108",
+            LieferTag.parse("r261.108"),
             "bereitstellung/261.108",
             self.source_sha,
         )
@@ -65,28 +82,18 @@ class LieferungTests(TempDirTestCase):
     def test_rejects_full_on_bereitstellung_and_mismatched_branch(self) -> None:
         """Prüft Zwischenrelease-Grenzen und die passende Branchzuordnung."""
 
-        # Tag und Bereitstellungsbranch verwenden denselben Lieferstand mit
-        # Zwischenrelease 100–999. Ungültige Werte scheitern vor dem Git-Zugriff.
+        # Tag und Bereitstellungsbranch verwenden denselben Lieferstand
         for zwischenrelease in ("100", "108", "999"):
-            for pattern, value in (
-                (LIEFER_TAG_RE, f"r260.{zwischenrelease}"),
-                (BEREITSTELLUNG_BRANCH_RE, f"bereitstellung/260.{zwischenrelease}"),
-            ):
-                with self.subTest(value=value):
-                    match = pattern.fullmatch(value)
-                    self.assertIsNotNone(match)
-                    self.assertEqual(match.groupdict(), {"releaselinie": "260", "zwischenrelease": zwischenrelease})
+            with self.subTest(zwischenrelease=zwischenrelease):
+                tag = LieferTag.parse(f"r260.{zwischenrelease}")
+                self.assertEqual(tag, LieferTag.from_bereitstellung(f"bereitstellung/260.{zwischenrelease}"))
 
+        # Zwischenreleases außerhalb von 100–999 scheitern vor dem Git-Zugriff
         for zwischenrelease in ("000", "099", "1000"):
             with self.subTest(zwischenrelease=zwischenrelease):
-                self.assertIsNone(BEREITSTELLUNG_BRANCH_RE.fullmatch(f"bereitstellung/261.{zwischenrelease}"))
+                self.assertIsNone(LieferTag.from_bereitstellung(f"bereitstellung/261.{zwischenrelease}"))
                 with self.assertRaisesRegex(DeliveryError, "ungültiges Format des Liefer-Tags"):
-                    _pruefe_lieferquelle(
-                        self.configuration,
-                        self.repository,
-                        f"r261.{zwischenrelease}",
-                        "release/261",
-                    )
+                    run("check", f"r261.{zwischenrelease}")
 
         git(self.repository, "checkout", "--detach", "r261.100")
         git(self.repository, "switch", "-c", "bereitstellung/261.100")
@@ -96,7 +103,7 @@ class LieferungTests(TempDirTestCase):
             _pruefe_lieferquelle(
                 self.configuration,
                 self.repository,
-                "r261.100",
+                LieferTag.parse("r261.100"),
                 "bereitstellung/261.100",
             )
 
@@ -107,7 +114,7 @@ class LieferungTests(TempDirTestCase):
             _pruefe_lieferquelle(
                 self.configuration,
                 self.repository,
-                "r261.108",
+                LieferTag.parse("r261.108"),
                 "bereitstellung/261.109",
             )
 

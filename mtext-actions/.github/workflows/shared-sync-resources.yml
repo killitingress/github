@@ -1,25 +1,18 @@
 name: Shared Workflow – Ressourcen mit M/Text synchronisieren
 
 # Dieser Workflow synchronisiert den ausgewählten Branchstand eines
-# Mandanten-Repositories mit M/Text. Er lädt den Mandantenstand mit seiner
-# Historie und die freigegebene Implementierung aus mtext_actions. Der Python-Ablauf
-# bestimmt aus Branch und Ereignis Releaselinie, Umgebungen und den
-# Änderungsumfang, übergibt Informationen und Archive an den Adapter und wartet
-# auf das Ergebnis der M/Text-Synchronisation.
+# Mandanten-Repositories mit M/Text.
 'on':
   workflow_call:
 
 permissions:
   contents: read
-  # Der Vergleichsstand kommt aus den erfolgreichen Läufen des Mandanten.
   actions: read
 
 jobs:
   sync:
     name: Ressourcen mit M/Text synchronisieren
     runs-on: [self-hosted, linux]
-    # Begrenzt Upload, Lock-Wartezeit und Verarbeitung gemeinsam, falls der
-    # Adapter keinen Endstatus liefert.
     timeout-minutes: 30
     steps:
       # Checkout lädt den zum Push oder manuellen Start gehörenden Branchstand.
@@ -30,19 +23,16 @@ jobs:
           path: source
           persist-credentials: false
 
-      # Lädt die gemeinsame Implementierung und prüft die Python-Runtime des
-      # Runners, bevor Ziel und Projektpakete bestimmt werden.
-      - name: M/Text-Automatisierung laden
+      - name: mtext_actions laden
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
-      # Python prüft die Adaptererreichbarkeit vor dem Archivbau und überträgt
-      # die Projektänderungen anhand des ermittelten Vergleichsstands.
+      # Synchronisiert die Ressourcen mit M/Text.
       - name: Ressourcen synchronisieren
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          AUTOMATION_PATH: ${{ steps.automation.outputs.automation_path }}
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           MTEXT_PREVIOUS_COMMIT: ${{ github.event.before || '' }}
         run: >-
           "${{ steps.automation.outputs.python }}"
-          "$AUTOMATION_PATH/src/mtext.py" resources sync
+          "$ACTION_PATH/src/mtext.py" resources sync

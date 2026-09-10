@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest.mock import patch
 
-from lbs_delivery.config import Configuration
 from lbs_delivery.process import DeliveryError
 
 from tests.support import TempDirTestCase, git, init_repository, load_test_configuration
@@ -44,7 +44,7 @@ class ConfigTests(TempDirTestCase):
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository, mandant={"kuerzel": "BY"})
         with self.assertRaises(DeliveryError):
-            load_test_configuration(self.repository, repository_name="FinanzInformatik/fi_lbs_entw_oms_unbekannt")
+            load_test_configuration(self.repository, repository="FinanzInformatik/fi_lbs_entw_oms_unbekannt")
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository, mandant={"releaselinie": "999"})
 
@@ -59,8 +59,9 @@ class ConfigTests(TempDirTestCase):
             ),
             encoding="utf-8",
         )
-        with self.assertRaises(DeliveryError):
-            Configuration.load_mandanten_zuordnung(mandanten_path)
+        with patch("lbs_delivery.config.MANDANTEN_ZUORDNUNG_PATH", mandanten_path):
+            with self.assertRaisesRegex(DeliveryError, "Mandantenzuordnung ist nicht eindeutig"):
+                load_test_configuration(self.repository)
 
         releaselinien_path = self.root / "releaselinien.json"
         releaselinien_path.write_text(
@@ -72,8 +73,9 @@ class ConfigTests(TempDirTestCase):
             ),
             encoding="utf-8",
         )
-        with self.assertRaisesRegex(DeliveryError, "M/Text-Umgebungsarten"):
-            Configuration.load_releaselinien_zuordnung(releaselinien_path)
+        with patch("lbs_delivery.config.RELEASELINIEN_ZUORDNUNG_PATH", releaselinien_path):
+            with self.assertRaisesRegex(DeliveryError, "M/Text-Umgebungsarten"):
+                load_test_configuration(self.repository)
 
         # LOMS_Basis und LOMS_Basisdaten ergeben beide BASIS und damit denselben Archivnamen
         colliding_project = self.repository / "LOMS_Basisdaten"
@@ -91,7 +93,7 @@ class ConfigTests(TempDirTestCase):
         configuration = load_test_configuration(
             self.repository,
             mandant={"kuerzel": "BY"},
-            repository_name="FinanzInformatik/fi_lbs_entw_oms_by",
+            repository="FinanzInformatik/fi_lbs_entw_oms_by",
         )
         self.assertEqual(configuration.projects, {"LOMS_Autonom[BY]": "AUTON", "LOMS_Basis[BY]": "BASIS"})
         self.assertEqual(configuration.subsystem, "BYMT")

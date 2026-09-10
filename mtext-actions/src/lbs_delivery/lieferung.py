@@ -1,4 +1,4 @@
-"""Bereitet Lieferungen vor, bestätigt sie und erzeugt Liefer-Tags."""
+"""Bereitet Lieferungen an CodePipeline vor, oder bestätigt diese und erzeugt Liefer-Tags."""
 
 from __future__ import annotations
 
@@ -9,21 +9,21 @@ from pathlib import Path
 
 from . import config, git, github
 from .process import DeliveryError, Status
-from .project_archives import previous_release_scope, release_report, release_scope
+from .project_packages import previous_release_scope, release_report, release_scope
 
 
 # Name des GitHub-Actions-Artefakts mit der festgehaltenen Vorbereitung
 _VORBEREITUNG_ARTEFAKT = "{tag}-vorbereitungsartefakt"
 
 
-def _vorbereitungsartefakt(api_url: str, repository: str, tag: str, token: str) -> int | None:
+def _vorbereitungsartefakt(api_url: str, repository: str, tag: git.LieferTag) -> int | None:
     """Ermittelt die ID des jüngsten verfügbaren Vorbereitungsartefakts."""
 
     # GitHub-Actions-Artefakte gezielt über den Namen dieser Lieferung abfragen
     repository_path = urllib.parse.quote(repository, safe="/")
     query = urllib.parse.urlencode({"name": _VORBEREITUNG_ARTEFAKT.format(tag=tag), "per_page": 100})
     url = f"{api_url.rstrip('/')}/repos/{repository_path}/actions/artifacts?{query}"
-    document = github.request(method="GET", url=url, token=token, failure=Status.SOURCE_FAILED)
+    document = github.request(method="GET", url=url, failure=Status.SOURCE_FAILED)
 
     # unerwartete GitHub-Antwort vor der Auswahl ablehnen
     if not isinstance(document, dict) or not isinstance(document.get("artifacts"), list):
@@ -45,37 +45,34 @@ def _vorbereitungsartefakt(api_url: str, repository: str, tag: str, token: str) 
         raise DeliveryError(Status.SOURCE_FAILED, f"Vorbereitungsartefakt ist ungültig: {exc}") from exc
 
 
-def _pruefe_lieferquelle(configuration: config.Configuration, root: Path, tag: str, branch: str) -> None:
+def _pruefe_lieferquelle(configuration: config.Configuration, root: Path, tag: git.LieferTag, branch: str) -> None:
     """Prüft die Zulässigkeit von Liefer-Tag und Branch für die Releaselinie."""
-
-    # Liefer-Tag zerlegen und ungültige Formate vor allen Git-Zugriffen ablehnen
-    tag_match = git.LIEFER_TAG_RE.fullmatch(tag)
-    if tag_match is None:
-        raise DeliveryError(Status.VALIDATION_FAILED, f"ungültiges Format des Liefer-Tags rnnn.nnn: {tag}")
-    releaselinie = tag_match.group("releaselinie")
-    zwischenrelease = tag_match.group("zwischenrelease")
 
     # neue Vorbereitung darf keinen bereits veröffentlichten Tag überschreiben
     if git.reference_exists(root, f"refs/tags/{tag}"):
         raise DeliveryError(Status.SOURCE_FAILED, "Liefer-Tag ist bereits vorhanden")
 
     # Bereitstellungsbranch oder regulären Branch der Releaselinie zuordnen
-    bereitstellung = git.BEREITSTELLUNG_BRANCH_RE.fullmatch(branch)
+    bereitstellung = git.LieferTag.from_bereitstellung(branch)
     if bereitstellung is not None:
-        if zwischenrelease == "100":
+        if tag.ist_hauptrelease:
             raise DeliveryError(Status.VALIDATION_FAILED, ".100 entsteht nur auf main oder release/nnn")
 
-        if bereitstellung.groups() != (releaselinie, zwischenrelease):
+        if bereitstellung != tag:
             raise DeliveryError(Status.SOURCE_FAILED, "Bereitstellungsbranch passt nicht zum Liefer-Tag")
-    elif branch not in configuration.release_branches(releaselinie):
-        raise DeliveryError(Status.SOURCE_FAILED, "Branch passt nicht zur Releaselinie")
+    else:
+        # release/nnn muss zur Linie im Tag passen, main nur zur führenden Linie
+        ist_release = branch == f"release/{tag.releaselinie}"
+        ist_fuehrende_main = branch == "main" and configuration.releaselinie == tag.releaselinie
+        if not ist_release and not ist_fuehrende_main:
+            raise DeliveryError(Status.SOURCE_FAILED, "Branch passt nicht zur Releaselinie")
 
     # Releaselinie muss in der gemeinsamen Zielzuordnung aktiv sein
-    if releaselinie not in configuration.releaselinien:
-        raise DeliveryError(Status.VALIDATION_FAILED, f"Releaselinie {releaselinie} ist ungültig")
+    if tag.releaselinie not in configuration.releaselinien:
+        raise DeliveryError(Status.VALIDATION_FAILED, f"Releaselinie {tag.releaselinie} ist ungültig")
 
 
-def _summary(configuration: config.Configuration, root: Path, tag: str, branch: str, sha: str) -> str:
+def _summary(configuration: config.Configuration, root: Path, tag: git.LieferTag, branch: str, sha: str) -> str:
     """Erzeugt den Lieferumfang und die Vergleichsstände als Markdown."""
 
     # ausgewählten Branch als Kontext der Vorbereitung nennen
@@ -88,7 +85,7 @@ def _summary(configuration: config.Configuration, root: Path, tag: str, branch: 
         "",
     ]
 
-    # den gemeinsamen Lieferbericht aus den beiden Vergleichsumfängen erzeugen
+    # den hübschen Lieferbericht aus den beiden Vergleichsumfängen erzeugen
     paket_scope = release_scope(root, tag, sha)
     information_scope = previous_release_scope(root, tag, sha)
     return "\n".join(lines) + "\n" + release_report(
@@ -96,34 +93,29 @@ def _summary(configuration: config.Configuration, root: Path, tag: str, branch: 
     )
 
 
-def _ermittle_lieferung(tag: str) -> dict[str, object]:
+def _ermittle_lieferung(tag: git.LieferTag) -> dict[str, object]:
     """Ermittelt für `resolve` einen vorhandenen Tag oder die jüngste Vorbereitung."""
-
-    # ungültige Tags vor dem Zugriff auf GitHub ablehnen
-    if git.LIEFER_TAG_RE.fullmatch(tag) is None:
-        raise DeliveryError(Status.VALIDATION_FAILED, "ungültiger Liefer-Tag")
 
     api_url = os.environ["GITHUB_API_URL"]
     repository = os.environ["GITHUB_REPOSITORY"]
-    token = os.environ["GITHUB_TOKEN"]
     repository_path = urllib.parse.quote(repository, safe="/")
-    tag_path = urllib.parse.quote(tag, safe="")
+    tag_path = urllib.parse.quote(str(tag), safe="")
     url = f"{api_url.rstrip('/')}/repos/{repository_path}/git/ref/tags/{tag_path}"
 
     # vorhandener Liefer-Tag kennzeichnet einen Wiederanlauf
-    reference = github.request(method="GET", url=url, token=token, failure=Status.SOURCE_FAILED, missing_ok=True)
+    reference = github.request(method="GET", url=url, failure=Status.SOURCE_FAILED, missing_ok=True)
     if reference is not None:
         return {"outputs": {"wiederholung": "true", "source_sha": reference["object"]["sha"]}}
 
     # neue Lieferung aus der jüngsten verfügbaren Vorbereitung fortsetzen
-    artifact_id = _vorbereitungsartefakt(api_url, repository, tag, token)
+    artifact_id = _vorbereitungsartefakt(api_url, repository, tag)
     if artifact_id is None:
         raise DeliveryError(Status.SOURCE_FAILED, "Für den Liefer-Tag besteht keine Vorbereitung")
 
     return {"outputs": {"wiederholung": "false", "vorbereitung_artefakt_id": artifact_id}}
 
 
-def _pruefe_lieferung(tag: str) -> dict[str, object]:
+def _pruefe_lieferung(tag: git.LieferTag) -> dict[str, object]:
     """Hält für `check` den geprüften Branchstand und seinen Lieferumfang fest."""
 
     # ausgecheckten Mandantenstand einordnen und gegen Liefer-Tag und Branch prüfen
@@ -136,10 +128,10 @@ def _pruefe_lieferung(tag: str) -> dict[str, object]:
     _pruefe_lieferquelle(configuration, source, tag, branch)
 
     # geprüften Stand für Bestätigung und Tag-Erzeugung festhalten
-    vorbereitung = config.workflow_workspace() / config.WORKFLOW_VORBEREITUNG_DATEI
+    vorbereitung = Path(os.environ["GITHUB_WORKSPACE"]) / config.WORKFLOW_VORBEREITUNG_DATEI
     try:
         vorbereitung.write_text(
-            json.dumps({"tag": tag, "sha": sha, "repository": repository, "prepare_actor": actor},
+            json.dumps({"tag": str(tag), "sha": sha, "repository": repository, "prepare_actor": actor},
                        ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
@@ -148,18 +140,18 @@ def _pruefe_lieferung(tag: str) -> dict[str, object]:
 
     # Vorbereitung und lesbare Vorprüfung an den Workflow übergeben
     return {
-        "status": Status.LIEFERUNG_CHECKED.value,
+        "status": Status.LIEFERUNG_CHECKED,
         "summary": _summary(configuration, source, tag, branch, sha),
         "outputs": {"vorbereitung_path": vorbereitung.as_posix(),
                     "vorbereitung_name": _VORBEREITUNG_ARTEFAKT.format(tag=tag)},
     }
 
 
-def _bestaetige_lieferung(expected_tag: str, confirm_direct_delivery: bool) -> dict[str, object]:
-    """Bestätigt für `confirm` die festgehaltene Vorbereitung und ihren Lieferweg."""
+def _bestaetige_lieferung(expected_tag: git.LieferTag, confirm_direct_delivery: bool) -> dict[str, object]:
+    """Bestätigt die festgehaltene Vorbereitung."""
 
     # Vorbereitung aus dem heruntergeladenen GitHub-Actions-Artefakt lesen
-    vorbereitung = config.workflow_workspace() / "vorbereitung" / config.WORKFLOW_VORBEREITUNG_DATEI
+    vorbereitung = Path(os.environ["GITHUB_WORKSPACE"]) / "vorbereitung" / config.WORKFLOW_VORBEREITUNG_DATEI
     try:
         payload = json.loads(vorbereitung.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -170,38 +162,37 @@ def _bestaetige_lieferung(expected_tag: str, confirm_direct_delivery: bool) -> d
         case {"tag": str(tag), "sha": str(sha), "repository": str(repository), "prepare_actor": str(prepare_actor)}:
             pass
         case _:
-            raise DeliveryError(Status.SOURCE_FAILED, "Vorbereitungsartefakt ist ungültig")
+            raise DeliveryError(Status.SOURCE_FAILED, "Vorbereitungsartefakt passt nicht zu Liefer-Tag und Prüfsumme")
 
     # Vorbereitung dem aktuellen Repository und Liefer-Tag zuordnen
     if repository != os.environ["GITHUB_REPOSITORY"]:
-        raise DeliveryError(Status.SOURCE_FAILED, "Vorbereitung gehört zu einem anderen Repository")
+        raise DeliveryError(Status.SOURCE_FAILED, "Vorbereitung gehört nicht zu diesem Repository")
 
-    if tag != expected_tag:
-        raise DeliveryError(Status.SOURCE_FAILED, "Vorbereitung gehört zu einem anderen Liefer-Tag")
+    if tag != str(expected_tag):
+        raise DeliveryError(Status.SOURCE_FAILED, "Vorbereitung gehört nicht zu diesem Liefer-Tag")
 
     # Direktlieferung nur nach bewusster Bestätigung zulassen
     direktlieferung = prepare_actor == os.environ["GITHUB_ACTOR"]
     if direktlieferung and not confirm_direct_delivery:
         raise DeliveryError(
             Status.VALIDATION_FAILED,
-            "Direktlieferung muss mit der Abweichung vom empfohlenen 4-Augenprinzip und dem damit "
-            "verbundenen Risiko bewusst bestätigt werden",
+            "Direktlieferung muss bewusst bestätigt werden",
         )
 
     # bestätigten Commit und Lieferweg für die Folgeschritte ausgeben
     return {
-        "status": Status.LIEFERUNG_BESTAETIGT.value,
+        "status": Status.LIEFERUNG_BESTAETIGT,
         "summary": (
             "## Lieferung bestätigt\n\n"
             f"- Liefer-Tag: `{tag}`\n"
             f"- Commit: `{sha}`\n"
-            f"- Lieferweg: {'Direktlieferung' if direktlieferung else '4-Augenfall'}\n"
+            f"- 4-Augen-Lieferweg: {'nein' if direktlieferung else 'ja'}\n"
         ),
         "outputs": {"source_sha": sha},
     }
 
 
-def _erstelle_liefer_tag(tag: str) -> dict[str, object]:
+def _erstelle_liefer_tag(tag: git.LieferTag) -> dict[str, object]:
     """Erzeugt für `tag` den Liefer-Tag auf dem ausgecheckten Commit."""
 
     # geprüften Checkout-Stand als neue GitHub-Referenz veröffentlichen
@@ -209,13 +200,19 @@ def _erstelle_liefer_tag(tag: str) -> dict[str, object]:
     source_sha = git.resolve(config.mandant_source(), "HEAD")
     payload = {"ref": f"refs/tags/{tag}", "sha": source_sha}
     url = f"{os.environ['GITHUB_API_URL'].rstrip('/')}/repos/{urllib.parse.quote(repository, safe='/')}/git/refs"
-    github.request(method="POST", url=url, token=os.environ["GITHUB_TOKEN"], failure=Status.SOURCE_FAILED, payload=payload)
+    github.request(method="POST", url=url, failure=Status.SOURCE_FAILED, payload=payload)
 
-    return {"status": Status.LIEFERUNG_TAGGED.value}
+    return {"status": Status.LIEFERUNG_TAGGED}
 
 
 def run(subcommand: str, tag: str, confirm_direct_delivery: bool = False) -> dict[str, object]:
     """Führt das gewählte Lieferkommando über den einheitlichen Moduleinstieg aus."""
+
+    # externen Text einmalig prüfen und danach als Liefer-Tag weiterreichen
+    try:
+        tag = git.LieferTag.parse(tag)
+    except ValueError as exc:
+        raise DeliveryError(Status.VALIDATION_FAILED, str(exc)) from exc
 
     if subcommand == "resolve":
         return _ermittle_lieferung(tag)

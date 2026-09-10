@@ -10,7 +10,10 @@ from pathlib import Path
 
 from lbs_delivery.config import Configuration, MANDANT_CONFIG_PATH
 
-AUTOMATION_ROOT = Path(__file__).resolve().parents[1]
+ACTION_ROOT = Path(__file__).resolve().parents[1]
+
+# GitHub-Name des in den Tests verwendeten FI-Mandanten-Repositories
+_TEST_REPOSITORY = "FinanzInformatik/fi_lbs_entw_oms_fi"
 
 
 class TempDirTestCase(unittest.TestCase):
@@ -48,7 +51,7 @@ def init_git_repository(repository: Path, *, branch: str | None = None) -> None:
 def jcl_template() -> str:
     """Liest die Mainframe-JCL-Vorlage aus dem CI/CD-Checkout."""
 
-    return (AUTOMATION_ROOT / "templates/mainframe-upload.jcl").read_text(encoding="ascii")
+    return (ACTION_ROOT / "templates/mainframe-upload.jcl").read_text(encoding="ascii")
 
 
 def init_repository(root: Path, *, branch: str) -> Path:
@@ -97,15 +100,10 @@ def setup_release_repository(root: Path) -> Path:
     return repository
 
 
-def load_test_configuration(
-    repository: Path,
-    *,
-    mandant: dict[str, object] | None = None,
-    repository_name: str = "FinanzInformatik/fi_lbs_entw_oms_fi",
-) -> Configuration:
+def load_test_configuration(root: Path, *, mandant: dict[str, object] | None = None, repository: str = _TEST_REPOSITORY) -> Configuration:
     """Schreibt lokale Mandantenangaben und lädt die produktive Konfiguration."""
 
-    path = repository / MANDANT_CONFIG_PATH
+    path = root / MANDANT_CONFIG_PATH
     path.parent.mkdir(exist_ok=True)
 
     # Minimale FI-Mandantenkonfiguration schreiben und gezielte Abweichungen des
@@ -121,4 +119,4 @@ def load_test_configuration(
     }
     values.update(mandant or {})
     path.write_text(json.dumps({"mandant": values}), encoding="utf-8")
-    return Configuration.load(repository, repository_name)
+    return Configuration.load(root, repository)

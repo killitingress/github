@@ -10,43 +10,30 @@ import json
 import os
 import sys
 from collections.abc import Callable
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 
-class Status(str, Enum):
-    # Die konfigurierten Ressourcen wurden geprüft, Befunde stehen als Warnungen bereit.
+class Status(StrEnum):
+    """Statuswerte der Kommandozeilenskripte für JSON-Ergebnis und Fehlerausgabe."""
+
     RESOURCE_CHECKED = "RESOURCE_CHECKED"
-    # Konfiguration oder Argumente sind ungültig.
     VALIDATION_FAILED = "VALIDATION_FAILED"
-    # SHA, Liefer-Tag und Lieferumfang der Vorbereitung sind festgehalten.
     LIEFERUNG_CHECKED = "LIEFERUNG_CHECKED"
-    # Die vorbereitete Lieferung wurde durch dieselbe oder eine zweite Person bestätigt.
     LIEFERUNG_BESTAETIGT = "LIEFERUNG_BESTAETIGT"
-    # Der Liefer-Tag wurde auf der festgehaltenen SHA erstellt.
     LIEFERUNG_TAGGED = "LIEFERUNG_TAGGED"
-    # Checkout, Commit, Branch oder Tag sind nicht als Quelle verwendbar.
     SOURCE_FAILED = "SOURCE_FAILED"
-    # Ein Archiv, eine Informationsdatei oder eine JCL ist nicht verwendbar.
     PACKAGE_FAILED = "PACKAGE_FAILED"
-    # Archive, Informationsdateien und JCL-Dateien wurden erstellt.
     ARTIFACT_READY = "ARTIFACT_READY"
-    # Der Adapter hat die M/Text-Synchronisation erfolgreich abgeschlossen.
     ADAPTER_COMPLETED = "ADAPTER_COMPLETED"
-    # Adapteraufruf oder HTTP-Antwort sind fehlgeschlagen.
     ADAPTER_FAILED = "ADAPTER_FAILED"
-    # FTPS und JES haben Archive und JCL angenommen.
     MAINFRAME_SUBMITTED = "MAINFRAME_SUBMITTED"
-    # FTPS-Verbindung, Paketübertragung oder JES-Übergabe sind fehlgeschlagen.
     MAINFRAME_TRANSFER_FAILED = "MAINFRAME_TRANSFER_FAILED"
-    # Zusammenfassung und Informationsdateien stehen im Mandanten-Repository bereit.
     GITHUB_RELEASE_PUBLISHED = "GITHUB_RELEASE_PUBLISHED"
-    # Das GitHub Release oder seine Informationsdateien konnten nicht veröffentlicht werden.
     GITHUB_RELEASE_FAILED = "GITHUB_RELEASE_FAILED"
 
 
-# Die Workflows unterscheiden Fehler anhand dieser Exitcodes und müssen dafür
-# nicht den Text der Fehlermeldung auswerten.
+# Die Workflows unterscheiden Fehler anhand dieser Exitcodes.
 _EXIT_CODES = {
     Status.VALIDATION_FAILED: 2,
     Status.SOURCE_FAILED: 3,
@@ -57,66 +44,42 @@ _EXIT_CODES = {
 }
 
 # Externe FTPS- und HTTP-Aufrufe werden nach so vielen Sekunden abgebrochen.
-NETWORK_TIMEOUT = 15.0
+NETWORK_TIMEOUT = 30.0
 
 
 class DeliveryError(RuntimeError):
     """Enthält Status und Meldung eines erwarteten Fehlers im Workflow."""
 
-    def __init__(self, status: Status, message: str, *, http_status: int | None = None) -> None:
-        """Speichert den Status zusammen mit der auszugebenden Fehlermeldung."""
-
+    def __init__(self, status: Status, message: str) -> None:
         super().__init__(message)
         self.status = status
-        # Nicht-2xx einer HTTP-Antwort, sonst ungesetzt
-        self.http_status = http_status
 
     def __str__(self) -> str:
-        """Setzt den Statuswert vor die Fehlermeldung."""
-
-        return f"{self.status.value}: {super().__str__()}"
+        return f"{self.status}: {super().__str__()}"
 
 
 def execute(operation: Callable[[], dict[str, object]]) -> int:
-    """Führt einen Skriptschritt aus und schreibt sein Ergebnis nach stdout.
-
-    Lieferfehler, ungültig aufgebaute Eingaben und fehlgeschlagene
-    Dateioperationen werden auf stderr ausgegeben. Warnungen stehen ebenfalls
-    auf stderr, damit stdout bei Erfolg ausschließlich das JSON-Ergebnis enthält.
-    Als ``outputs`` gekennzeichnete Werte schreibt der Schritt nach
-    ``GITHUB_OUTPUT`` für nachfolgende Workflow-Schritte.
-    """
+    """Führt den Schritt aus, schreibt JSON nach stdout und gibt den Exitcode zurück."""
 
     try:
         result = operation()
     except DeliveryError as exc:
-        print(str(exc), file=sys.stderr)
-        # Zum Status gehörenden Exitcode zurückgeben. Statuswerte ohne eigenen
-        # Eintrag verwenden Exitcode 1.
+        print(exc, file=sys.stderr)
         return _EXIT_CODES.get(exc.status, 1)
     except KeyError as exc:
-        print(f"{Status.VALIDATION_FAILED.value}: fehlender Eingabewert: {exc.args[0]}", file=sys.stderr)
-        return 2
+        print(f"{Status.VALIDATION_FAILED}: fehlender Eingabewert: {exc.args[0]}", file=sys.stderr)
+        return _EXIT_CODES[Status.VALIDATION_FAILED]
     except (OSError, UnicodeError) as exc:
-        print(f"{Status.VALIDATION_FAILED.value}: lokale Dateioperation fehlgeschlagen: {exc}", file=sys.stderr)
-        return 2
+        print(f"{Status.VALIDATION_FAILED}: lokale Dateioperation fehlgeschlagen: {exc}", file=sys.stderr)
+        return _EXIT_CODES[Status.VALIDATION_FAILED]
 
-    # GitHub zeigt eine vorhandene Zusammenfassung direkt beim Workflow-Check an.
-    summary = result.pop("summary", "")
-    if summary and (summary_path := os.environ.get("GITHUB_STEP_SUMMARY")):
-        with Path(summary_path).open("a", encoding="utf-8") as stream:
-            stream.write(str(summary))
-            stream.write("\n")
+    if summary := result.pop("summary", ""):
+        with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as stream:
+            stream.write(f"{summary}\n")
 
-    # Folgeschritte lesen Workflow-Ausgaben aus der von GitHub Actions vorgegebenen Datei.
-    outputs = result.pop("outputs", {})
-    if outputs and (output_path := os.environ.get("GITHUB_OUTPUT")):
-        with Path(output_path).open("a", encoding="utf-8") as stream:
-            for name, value in outputs.items():
-                stream.write(f"{name}={value}\n")
+    if outputs := result.pop("outputs", {}):
+        with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as stream:
+            stream.writelines(f"{name}={value}\n" for name, value in outputs.items())
 
-    # Warnungen dürfen den Lauf nicht blockieren und gehören deshalb nach stderr.
-    for warnung in result.get("warnungen", []):
-        print(f"WARNUNG: {warnung}", file=sys.stderr)
     print(json.dumps(result, sort_keys=True))
     return 0

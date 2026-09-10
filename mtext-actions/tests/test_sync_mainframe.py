@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, call, patch
 
 from lbs_delivery import adapter, github, sync
 from lbs_delivery.process import DeliveryError, Status
-from lbs_delivery.project_archives import ProjectArchives
+from lbs_delivery.project_packages import ProjectPackage
 from tests.support import TempDirTestCase, git, load_test_configuration, setup_release_repository
 
 
@@ -49,18 +49,15 @@ class SyncTests(TempDirTestCase):
             "GITHUB_TOKEN": "test-token",
             "MTEXT_PREVIOUS_COMMIT": "before",
         }))
-        self.project_archives = ProjectArchives(
-            self.root / "_INFO_FI-LOMS_Basis.json", self.root / "namedF.tgz", self.root / "full.tgz",
-        )
-        self.project_archives.information.write_text(json.dumps({
+        information = {
             "projekt": "LOMS_Basis",
             "lieferart": "FULL",
             "scope": {"bis": {"referenz": "release/261", "commit": "current"}},
             "elemente": [["A", "beispiel.xml"]],
             "sha256": "checksum",
-        }))
-        self.project_archives.d_archiv.write_bytes(b"D-Archiv")
-        self.project_archives.f_archiv.write_bytes(b"F-Archiv")
+        }
+        self.project_package = ProjectPackage(information, self.root / "full.tgz")
+        self.project_package.archive.write_bytes(b"F-Archiv")
 
 
     def test_run_command(self) -> None:
@@ -72,11 +69,17 @@ class SyncTests(TempDirTestCase):
             patch.object(sync.git, "require_ancestor") as ancestor,
             patch.object(sync.git, "changes", return_value=[]) as changes,
             patch.object(sync.git, "execute") as read_git,
-            patch.object(sync, "build_project_archives", return_value=MagicMock()) as build_archives,
-            patch.object(sync.adapter, "check_reachability"),
+            patch.object(sync, "build_project_package", return_value=MagicMock()) as build_package,
+            patch.object(sync.adapter, "check_reachability") as check_reachability,
             patch.object(sync.adapter, "resume_existing", return_value=None),
-            patch.object(sync.adapter, "synchronize", return_value={}) as transfer,
+            patch.object(sync.adapter, "upload", return_value={}) as transfer,
         ):
+            adapter_steps = []
+            check_reachability.side_effect = lambda ziel: adapter_steps.append(("check", ziel))
+            build_package.side_effect = lambda *args, **kwargs: (
+                adapter_steps.append(("build", args[2])) or MagicMock()
+            )
+
             # Der letzte Erfolg bestimmt das DELTA. Ein manueller Lauf bestätigt
             # keinen ausstehenden Linienwechsel für beide Umgebungen.
             for branch, event, commits, old_line, base, targets in (
@@ -99,9 +102,10 @@ class SyncTests(TempDirTestCase):
                     json.dumps({"mandant": {"releaselinie": old_line}}).encode() if branch == "main" else b"base"
                 )
                 transfer.reset_mock()
-                build_archives.reset_mock()
+                build_package.reset_mock()
                 ancestor.reset_mock()
                 changes.reset_mock()
+                adapter_steps.clear()
                 with self.subTest(branch=branch, event=event, commits=commits), patch.dict(os.environ, {
                     "GITHUB_REF_NAME": branch, "GITHUB_EVENT_NAME": event,
                 }):
@@ -128,7 +132,9 @@ class SyncTests(TempDirTestCase):
 
                     if len(targets) == 2:
                         self.assertEqual(transfer.call_count, 2)
-                        self.assertEqual(build_archives.call_count, len(load_test_configuration(self.repository).projects))
+                        project_count = len(load_test_configuration(self.repository).projects)
+                        self.assertEqual(build_package.call_count, project_count * 2)
+                        self.assertEqual(adapter_steps[:2], [("check", e) for e in targets])
 
             history.side_effect = [{"workflow_runs": [{"head_sha": "previous"}]}]
             ancestor.side_effect = [None, DeliveryError(Status.SOURCE_FAILED, "kein Vorfahr")]
@@ -137,21 +143,18 @@ class SyncTests(TempDirTestCase):
                 sync.run()
             transfer.assert_not_called()
 
-    def _capture_archives(self, _umgebung, project_archives, _auftrag_id) -> dict[str, object]:
-        """Liest die erzeugten Projektinformationen während ihrer Übergabe."""
+    def _capture_packages(self, _umgebung, pakete, _auftrag_id) -> dict[str, object]:
+        """Prüft Informations-Dokumente und Archive während ihrer Übergabe."""
 
-        for archives in project_archives:
-            self.documents.append(json.loads(archives.information.read_text()))
+        for paket in pakete:
+            self.documents.append(paket.information)
             # die Information muss die Prüfsumme des jeweiligen Uploads tragen
-            archive = archives.f_archiv if archives.f_archiv is not None else archives.d_archiv
-            self.assertEqual(self.documents[-1]["sha256"], hashlib.sha256(archive.read_bytes()).hexdigest())
-
-            # FULL stellt ein leeres D-Archiv für den Mainframe bereit
-            if self.documents[-1]["lieferart"] == "FULL":
-                self.assertTrue(archives.d_archiv.is_file())
+            self.assertEqual(
+                self.documents[-1]["sha256"], hashlib.sha256(paket.archive.read_bytes()).hexdigest(),
+            )
         return {"auftrag_id": "auftrag", "result": "Geändert: beispiel.xml\nGelöscht: alt.xml"}
 
-    def test_sync_archives(self) -> None:
+    def test_sync_packages(self) -> None:
         """Prüft kumulative Sync-Änderungen, FULL und das Auslassen reiner Konfigurationsänderungen."""
 
         baseline = git(self.repository, "rev-parse", "r261.100")
@@ -162,7 +165,7 @@ class SyncTests(TempDirTestCase):
             patch.object(github, "last_sync_commit", return_value=baseline),
             patch.object(adapter, "check_reachability"),
             patch.object(adapter, "resume_existing", return_value=None),
-            patch.object(adapter, "synchronize", side_effect=self._capture_archives) as transfer,
+            patch.object(adapter, "upload", side_effect=self._capture_packages) as transfer,
         ):
             for event in ("push", "workflow_dispatch"):
                 with patch.dict(os.environ, {"GITHUB_EVENT_NAME": event}):
@@ -228,7 +231,7 @@ class SyncTests(TempDirTestCase):
             self.response.read.side_effect = [
                 e if isinstance(e, (bytes, Exception)) else json.dumps(e).encode() for e in replies
             ]
-            project_archives = [self.project_archives]
+            pakete = [self.project_package]
             self.uploaded = []
             with (
                 self.subTest(replies=replies),
@@ -237,8 +240,8 @@ class SyncTests(TempDirTestCase):
             ):
                 outcome = self.assertRaisesRegex(DeliveryError, error) if error else nullcontext()
                 with outcome:
-                    adapter_result = adapter.synchronize(
-                        "en01", project_archives, "test-FI",
+                    adapter_result = adapter.upload(
+                        "en01", pakete, "test-FI",
                     )
                     self.assertEqual(adapter_result["auftrag_id"], "test-FI")
                     self.assertEqual(adapter_result["result"], succeeded["result"])
@@ -246,7 +249,7 @@ class SyncTests(TempDirTestCase):
             payload = json.loads(requests[0].data)
             self.assertNotIn("mandant", payload)
             self.assertEqual(payload["archive"][0]["name"], "full.tgz")
-            self.assertEqual(payload["archive"][0]["information"], json.loads(self.project_archives.information.read_text()))
+            self.assertEqual(payload["archive"][0]["information"], self.project_package.information)
             self.assertTrue(all(e == b"F-Archiv" for e in self.uploaded))
             self.assertEqual([e.get_method() for e in requests], methods)
             self.assertEqual(requests[0].full_url, "http://en01.ltoma.intern/vMtextAdapter/sync2/test-FI")
@@ -255,10 +258,9 @@ class SyncTests(TempDirTestCase):
     def test_delta_job_uploads_multiple_archives(self) -> None:
         """Prüft einen DELTA-Auftrag mit Informationen und einem PUT je Archiv."""
 
-        archives_by_project = []
+        pakete = []
         for project in ("LOMS_Basis", "LOMS_Autonom"):
-            information = self.root / f"_INFO_FI-{project}.json"
-            information.write_text(json.dumps({
+            information = {
                 "projekt": project,
                 "lieferart": "DELTA",
                 "scope": {
@@ -267,10 +269,10 @@ class SyncTests(TempDirTestCase):
                 },
                 "elemente": [["M", "beispiel.xml"]],
                 "sha256": f"checksum-{project}",
-            }))
+            }
             archive = self.root / f"{project}D.tgz"
             archive.write_bytes(project.encode())
-            archives_by_project.append(ProjectArchives(information, archive, None))
+            pakete.append(ProjectPackage(information, archive))
 
         ready = {"auftrag_id": "test-FI", "status": "ready"}
         uploading = ready | {"status": "uploading"}
@@ -284,8 +286,8 @@ class SyncTests(TempDirTestCase):
         self.uploaded = []
 
         with patch.object(adapter.urllib.request, "urlopen", side_effect=self._receive_archive) as http:
-            result = adapter.synchronize(
-                "en01", archives_by_project, "test-FI",
+            result = adapter.upload(
+                "en01", pakete, "test-FI",
             )
 
         payload = json.loads(http.call_args_list[0].args[0].data)
@@ -304,7 +306,7 @@ class SyncTests(TempDirTestCase):
         baseline = git(self.repository, "rev-parse", "r261.100")
         self.enterContext(patch.object(github, "last_sync_commit", return_value=baseline))
         self.enterContext(patch.object(adapter, "check_reachability"))
-        build = self.enterContext(patch.object(sync, "build_project_archives", return_value=self.project_archives))
+        build = self.enterContext(patch.object(sync, "build_project_package", return_value=self.project_package))
 
         for status in ("processing", "succeeded"):
             replies = [{"auftrag_id": "test-FI", "status": status, "result": "fertig"}]
@@ -331,7 +333,7 @@ class SyncTests(TempDirTestCase):
         baseline = git(self.repository, "rev-parse", "r261.100")
         self.enterContext(patch.object(github, "last_sync_commit", return_value=baseline))
         self.enterContext(patch.object(adapter, "check_reachability"))
-        build = self.enterContext(patch.object(sync, "build_project_archives", return_value=self.project_archives))
+        build = self.enterContext(patch.object(sync, "build_project_package", return_value=self.project_package))
 
         for status in (None, "ready", "uploading", "failed"):
             replies = [http_reply({}, 404)] if status is None else [
