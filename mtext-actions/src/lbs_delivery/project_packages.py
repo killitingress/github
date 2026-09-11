@@ -128,31 +128,39 @@ def release_report(configuration: Configuration, repository: Path, *, paket_scop
         "",
     ]
 
-    # Diff und tatsächlicher Lieferumfang können sich unterscheiden..
-    sections = [
-        (f"Änderungen seit `{information_scope.von[0]}`", information_scope),
-        ("Lieferumfang des Archivs", paket_scope),
+    # Änderungen seit dem vorherigen Liefer-Tag ohne leere Projektabschnitte zeigen
+    lines.extend((f"## Änderungen seit `{information_scope.von[0]}`", ""))
+    lines.extend((f"Vergleich: `{information_scope.von[0]}` → `{information_scope.bis[0]}`", ""))
+    changes = [
+        (project, project_elements(repository, project, information_scope))
+        for project in configuration.projects
     ]
-
-    for heading, section in sections:
-        lines.extend((f"## {heading}", ""))
-
-        # FULL beschreibt den Zielbestand, ein Diff nennt beide Vergleichsstände
-        if section.von is None:
-            lines.extend(("Vollständiger Projektstand (FULL).", ""))
-        else:
-            lines.extend((f"Vergleich: `{section.von[0]}` → `{section.bis[0]}`", ""))
-
-        for project in configuration.projects:
-            elements = project_elements(repository, project, section)
+    changes = [e for e in changes if e[1]]
+    if changes:
+        for project, elements in changes:
             lines.extend((f"### `{project}`", ""))
-
-            # leere Vergleiche ausdrücklich als solche kennzeichnen
-            if elements:
-                lines.extend(f"- `{status}` `{path}`" for status, path in elements)
-            else:
-                lines.append("- Keine Änderungen")
+            lines.extend(f"- `{status}` `{path}`" for status, path in elements)
             lines.append("")
+    else:
+        lines.extend(("Keine Ressourcenänderungen in den gelieferten Projekten.", ""))
+
+    # jedes Projekt erhält ein eigenes Archiv mit dem kumulativen Lieferumfang
+    lines.extend(("## Projektarchive", "", "Für jedes Projekt wird ein eigenes Archiv erstellt.", ""))
+    if paket_scope.von is None:
+        lines.extend(("Vollständiger Projektstand (FULL).", ""))
+    else:
+        lines.extend((f"Vergleich: `{paket_scope.von[0]}` → `{paket_scope.bis[0]}`", ""))
+
+    for project in configuration.projects:
+        elements = project_elements(repository, project, paket_scope)
+        lines.extend((f"### `{project}`", ""))
+        if elements:
+            lines.extend(f"- `{status}` `{path}`" for status, path in elements)
+        elif paket_scope.von is None:
+            lines.append("Das FULL-Archiv enthält keine Ressourcendateien.")
+        else:
+            lines.append("Das DELTA-Archiv enthält keine geänderten oder gelöschten Ressourcen.")
+        lines.append("")
 
     return "\n".join(lines)
 

@@ -6,9 +6,9 @@ name: Lieferung vorbereiten
 # unterbrechen die Vorbereitung nicht. Die vorbereitende Person gibt den
 # vorgesehenen Liefer-Tag beim manuellen Start an. Repository, Branch, SHA und
 # Person stammen aus dem auslösenden Mandantenlauf. Der Shared Workflow prüft
-# den Lieferstand und hält SHA und Lieferumfang für die spätere Bestätigung als
-# Laufartefakt fest. Die Vorbereitung erstellt noch keinen Liefer-Tag und
-# startet keine Mainframe-Übergabe.
+# den Lieferstand und hält SHA und Lieferumfang als Laufartefakt fest. Ein Issue
+# zeigt die geprüften Angaben und nimmt die spätere Freigabe entgegen. Die
+# Vorbereitung erstellt noch keinen Liefer-Tag und startet keine Übergabe.
 'on':
   workflow_dispatch:
     inputs:
@@ -17,8 +17,14 @@ name: Lieferung vorbereiten
         required: true
         type: string
 
+# Verhindert konkurrierende Erzeugung des gemeinsamen Freigabe-Labels.
+concurrency:
+  group: lieferung-vorbereiten-${{ github.repository }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
+  issues: write
 
 jobs:
   # Prüft bei FULL den Branchstand und bei DELTA die geänderten Ressourcen.

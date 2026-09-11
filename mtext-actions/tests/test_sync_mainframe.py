@@ -64,7 +64,7 @@ class SyncTests(TempDirTestCase):
         """Prüft Erstlauf, DELTA-Basis, Linienwechsel, manuelles FULL und überholte Läufe."""
 
         with (
-            patch.object(github, "request") as history,
+            patch.object(github, "_request") as history,
             patch.object(sync.git, "resolve", return_value="current"),
             patch.object(sync.git, "require_ancestor") as ancestor,
             patch.object(sync.git, "changes", return_value=[]) as changes,

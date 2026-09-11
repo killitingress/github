@@ -1,35 +1,43 @@
 name: Lieferung ausführen
 
-# Dieser Workflow startet eine Lieferung mit einem geplanten oder vorhandenen
-# Liefer-Tag. Ein geplanter Tag wird aus seiner neuesten Vorbereitung ausgeführt
-# und mit der ausführenden Person geprüft. Für eine Direktlieferung muss die
-# Abweichung vom 4-Augenfall bewusst bestätigt werden. Ein vorhandener
-# Liefer-Tag wird als Wiederholung erneut verarbeitet. Bei einer erstmaligen
-# Lieferung erstellt der wiederverwendbare Workflow den Liefer-Tag. Paketbau,
-# Mainframe-Übergabe und Bereitstellungsbericht bleiben Teil dieses Laufs.
+# Ein Freigabekommentar im Issue startet die vorbereitete Lieferung. Der Shared
+# Workflow prüft die Repository-Berechtigung der kommentierenden Person und
+# lädt den im Issue gezeigten Stand aus dem zugeordneten Laufartefakt. Ein
+# vorhandener Liefer-Tag kann weiterhin manuell erneut verarbeitet werden.
+# Paketbau, Mainframe-Übergabe und Bereitstellungsbericht bleiben Teil dieses
+# Laufs.
 'on':
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       liefer_tag:
-        description: Geplanter oder vorhandener Liefer-Tag, zum Beispiel r261.108
+        description: Vorhandener Liefer-Tag für eine Wiederholung, zum Beispiel r261.108
         required: true
         type: string
-      direktlieferung_bestaetigt:
-        description: Direktlieferung, Abweichung vom 4-Augenfall und Risiko bewusst bestätigen
-        required: false
-        type: boolean
-        default: false
+
+# Lieferungen desselben Mandanten werden nacheinander ausgeführt. Nach einer
+# erfolgreichen Lieferung ist das zugehörige Issue geschlossen.
+concurrency:
+  group: lieferung-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
   # Startet den Shared Workflow für den gewählten Liefer-Tag
   lieferung-ausfuehren:
     name: Lieferung ausführen
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request == null &&
+      contains(github.event.issue.labels.*.name, 'lieferung:freigabe') &&
+      github.event.comment.body == '/freigeben')
     permissions:
       contents: write
       actions: read
+      issues: write
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@main
     with:
-      liefer_tag: ${{ inputs.liefer_tag }}
-      direktlieferung_bestaetigt: ${{ inputs.direktlieferung_bestaetigt }}
+      liefer_tag: ${{ inputs.liefer_tag || '' }}
+      freigabe_issue: ${{ github.event.issue.number || 0 }}
     secrets:
       mainframe_ftps_password: ${{ secrets.MAINFRAME_FTPS_PASSWORD }}

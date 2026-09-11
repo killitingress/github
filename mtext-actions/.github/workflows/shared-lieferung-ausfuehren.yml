@@ -1,20 +1,21 @@
 name: Shared Workflow – Lieferung ausführen
 
-# Dieser Workflow ermittelt lässt eine Vorbereitung prüfen und führt die
-# Lieferung für den geplanten oder vorhandenen Liefer-Tag im
-# Mandanten-Repository aus. Ein vorhandener Liefer-Tag bezeichnet eine
-# Wiederholung und benötigt keine neue Vorbereitung.
+# Dieser Workflow prüft die Freigabe, übernimmt die zugehörige Vorbereitung und
+# führt die Lieferung im Mandanten-Repository aus. Ein vorhandener Liefer-Tag
+# bezeichnet eine manuell gestartete Wiederholung und benötigt kein Issue.
 'on':
   workflow_call:
     inputs:
       liefer_tag:
-        description: Geplanter oder vorhandener Liefer-Tag
-        required: true
+        description: Vorhandener Liefer-Tag für eine Wiederholung
+        required: false
+        default: ''
         type: string
-      direktlieferung_bestaetigt:
-        description: Bewusste Bestätigung einer Direktlieferung
-        required: true
-        type: boolean
+      freigabe_issue:
+        description: Issue-Nummer der freigegebenen Vorbereitung
+        required: false
+        default: 0
+        type: number
     secrets:
       mainframe_ftps_password:
         description: Passwort des technischen Mainframe-Benutzers
@@ -26,6 +27,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      issues: read
     runs-on: [self-hosted, linux]
     timeout-minutes: 10
     outputs:
@@ -33,21 +35,26 @@ jobs:
         ${{ steps.resolve.outputs.wiederholung == 'true' &&
         steps.resolve.outputs.source_sha || steps.confirm.outputs.source_sha }}
       wiederholung: ${{ steps.resolve.outputs.wiederholung }}
+      liefer_tag: >-
+        ${{ steps.resolve.outputs.wiederholung == 'true' &&
+        steps.resolve.outputs.liefer_tag || steps.confirm.outputs.liefer_tag }}
     steps:
       - name: mtext_actions laden
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
-      - name: Lieferstand ermitteln
+      # Prüft die wirksame Rolle und ermittelt danach genau einen Lieferweg.
+      - name: Freigabe und Lieferstand prüfen
         id: resolve
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           GITHUB_TOKEN: ${{ github.token }}
+          FREIGABE_ISSUE: ${{ inputs.freigabe_issue }}
           LIEFER_TAG: ${{ inputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" delivery resolve
-          --tag "$LIEFER_TAG"
+          --tag "$LIEFER_TAG" --issue "$FREIGABE_ISSUE"
 
       # Lädt die ermittelte Vorbereitung aus dem Laufartefakt des Mandanten-Repositories
       - name: Vorbereitung herunterladen
@@ -74,18 +81,17 @@ jobs:
           mkdir -p vorbereitung
           unzip -p "$archive" vorbereitung.json > vorbereitung/vorbereitung.json
 
-      # Prüft die Vorbereitung und den Lieferweg der ausführenden Person
+      # Prüft die Zuordnung der Vorbereitung zum Freigabe-Issue.
       - name: Lieferung bestätigen
         id: confirm
         if: steps.resolve.outputs.wiederholung != 'true'
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
-          LIEFER_TAG: ${{ inputs.liefer_tag }}
+          FREIGABE_ISSUE: ${{ inputs.freigabe_issue }}
         run: >-
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" delivery confirm
-          --tag "$LIEFER_TAG"
-          ${{ inputs.direktlieferung_bestaetigt && '--confirm-direct-delivery' || '' }}
+          --issue "$FREIGABE_ISSUE"
 
   # Erstellt den Liefer-Tag im Mandanten-Repository.
   tag:
@@ -98,7 +104,7 @@ jobs:
     steps:
       - name: Vorhandenen Liefer-Tag übernehmen
         if: needs.check.outputs.wiederholung == 'true'
-        run: echo "Liefer-Tag ${{ inputs.liefer_tag }} ist vorhanden."
+        run: echo "Liefer-Tag ${{ needs.check.outputs.liefer_tag }} ist vorhanden."
 
       # Lädt den in der Vorbereitung festgehaltenen Stand mit seiner Historie.
       - name: Check-Out Mandantenstand
@@ -121,7 +127,7 @@ jobs:
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           GITHUB_TOKEN: ${{ github.token }}
-          LIEFER_TAG: ${{ inputs.liefer_tag }}
+          LIEFER_TAG: ${{ needs.check.outputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" delivery tag
@@ -143,7 +149,7 @@ jobs:
           fetch-depth: 0
           path: source
           persist-credentials: false
-          ref: refs/tags/${{ inputs.liefer_tag }}
+          ref: refs/tags/${{ needs.check.outputs.liefer_tag }}
 
       - name: mtext_actions laden
         id: automation
@@ -154,7 +160,7 @@ jobs:
       - name: Lieferdateien erstellen
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
-          LIEFER_TAG: ${{ inputs.liefer_tag }}
+          LIEFER_TAG: ${{ needs.check.outputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" release build
@@ -168,7 +174,6 @@ jobs:
           path: ${{ runner.temp }}/dist
           if-no-files-found: error
           retention-days: 30
-          compression-level: 0
 
   # Übergibt die Lieferdateien an den Mainframe.
   publish:
@@ -206,10 +211,11 @@ jobs:
   # Veröffentlicht den Bereitstellungsbericht nach der Mainframe-Übergabe.
   report:
     name: Bereitstellungsbericht im Mandanten-Repository veröffentlichen
-    needs: publish
+    needs: [check, publish]
     permissions:
       contents: write
       actions: read
+      issues: write
     runs-on: [self-hosted, linux]
     timeout-minutes: 5
     steps:
@@ -231,4 +237,17 @@ jobs:
         run: >-
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" release github
-          --tag "${{ inputs.liefer_tag }}"
+          --tag "${{ needs.check.outputs.liefer_tag }}"
+
+      # Das Issue protokolliert den erfolgreichen Lauf und bleibt danach lesbar geschlossen.
+      - name: Freigabe abschließen
+        if: inputs.freigabe_issue != 0
+        env:
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
+          FREIGABE_ISSUE: ${{ inputs.freigabe_issue }}
+          GITHUB_TOKEN: ${{ github.token }}
+          LIEFER_TAG: ${{ needs.check.outputs.liefer_tag }}
+        run: >-
+          "${{ steps.automation.outputs.python }}"
+          "$ACTION_PATH/src/mtext.py" delivery complete
+          --tag "$LIEFER_TAG" --issue "$FREIGABE_ISSUE"

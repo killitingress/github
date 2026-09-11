@@ -17,8 +17,8 @@ def run() -> dict[str, object]:
     parser.add_argument("bereich") # z.B. "resources" oder "delivery" oder "release"
     parser.add_argument("schritt") # z.B. "check" oder "sync" oder "github" oder "mainframe"
     parser.add_argument("--tag")
+    parser.add_argument("--issue", type=int) # Freigabe-Issue einer Lieferung
     parser.add_argument("--sync-scope", action="store_true") # Umfang der folgenden Synchronisierung
-    parser.add_argument("--confirm-direct-delivery", action="store_true") # nur für "delivery"
     args = parser.parse_args()
 
     if args.bereich == "resources" and args.schritt == "check":
@@ -46,7 +46,7 @@ def run() -> dict[str, object]:
         return sync.run()
 
     if args.bereich == "delivery":
-        return lieferung.run(args.schritt, args.tag, args.confirm_direct_delivery)
+        return lieferung.run(args.schritt, args.tag, args.issue)
 
     if args.bereich == "release" and args.schritt == "github":
         return github.run(args.tag)

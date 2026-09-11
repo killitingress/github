@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import unittest
@@ -55,15 +56,21 @@ class LieferungTests(TempDirTestCase):
         git(self.repository, "switch", "-c", "bereitstellung/261.108", self.source_sha)
         track_remote_branch(self.repository, "bereitstellung/261.108")
 
+        # ein zusätzliches leeres Projekt macht die Texte für leere Archive sichtbar
+        configuration = dataclasses.replace(
+            self.configuration,
+            projects=self.configuration.projects | {"Leeres_Projekt": "LEER"},
+        )
+
         # die Vorbereitung verwendet .107 als Vorgänger auch außerhalb ihrer Historie
         _pruefe_lieferquelle(
-            self.configuration,
+            configuration,
             self.repository,
             LieferTag.parse("r261.108"),
             "bereitstellung/261.108",
         )
         summary = _summary(
-            self.configuration,
+            configuration,
             self.repository,
             LieferTag.parse("r261.108"),
             "bereitstellung/261.108",
@@ -78,6 +85,18 @@ class LieferungTests(TempDirTestCase):
         self.assertNotIn("Änderungen seit `r261.106`", summary)
         self.assertIn("`D` `deleted.txt`", summary)
         self.assertIn("`A` `new.txt`", summary)
+        self.assertIn("## Projektarchive", summary)
+        self.assertIn("Das DELTA-Archiv enthält keine geänderten oder gelöschten Ressourcen.", summary)
+
+        # dieselbe Berichtserzeugung bezeichnet ein leeres FULL-Archiv passend
+        full_summary = _summary(
+            configuration,
+            self.repository,
+            LieferTag.parse("r261.100"),
+            "release/261",
+            git(self.repository, "rev-parse", "r261.100"),
+        )
+        self.assertIn("Das FULL-Archiv enthält keine Ressourcendateien.", full_summary)
 
     def test_rejects_full_on_bereitstellung_and_mismatched_branch(self) -> None:
         """Prüft Zwischenrelease-Grenzen und die passende Branchzuordnung."""
@@ -135,22 +154,40 @@ class LieferungTests(TempDirTestCase):
             "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
             "GITHUB_REF_NAME": "release/261",
             "GITHUB_ACTOR": "alice",
+            "GITHUB_API_URL": "https://github.example/api/v3",
+            "GITHUB_SERVER_URL": "https://github.example",
+            "GITHUB_RUN_ID": "1234",
+            "GITHUB_TOKEN": "secret",
         }):
-            result = run("check", "r261.108")
+            with patch(
+                "lbs_delivery.lieferung.github._request",
+                side_effect=(
+                    None,
+                    {"name": "lieferung:freigabe"},
+                    {
+                        "number": 42,
+                        "html_url": "https://github.example/FI/mandant/issues/42",
+                        "labels": [{"name": "lieferung:freigabe"}],
+                    },
+                ),
+            ):
+                result = run("check", "r261.108")
 
         # Artefakt und Vorprüfung beziehen sich auf den Checkout des Laufs
         payload = json.loads((self.root / "vorbereitung.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["sha"], self.source_sha)
+        self.assertEqual(payload["issue"], 42)
+        self.assertEqual(result["outputs"]["vorbereitung_name"], "lieferung-42-vorbereitungsartefakt")
         self.assertIn(f"- Commit: `{self.source_sha}`", result["summary"])
 
-    def test_confirms_direct_and_4_augenfall_from_local_artifact(self) -> None:
-        """Verlangt die bewusste Direktlieferung und erlaubt den 4-Augenfall."""
+    def test_resolve_authorizes_maintainers_and_confirms_issue_artifact(self) -> None:
+        """Erlaubt Maintain und Admin und bindet die Vorbereitung an das Issue."""
 
         payload = {
             "tag": "r261.108",
             "sha": self.source_sha,
             "repository": "FinanzInformatik/fi_lbs_entw_oms_fi",
-            "prepare_actor": "alice",
+            "issue": 42,
         }
         preparation = self.root / "vorbereitung" / "vorbereitung.json"
         preparation.parent.mkdir()
@@ -162,25 +199,58 @@ class LieferungTests(TempDirTestCase):
                 "GITHUB_WORKSPACE": str(self.root),
                 "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
                 "GITHUB_ACTOR": "alice",
+                "GITHUB_API_URL": "https://github.example/api/v3",
+                "GITHUB_SERVER_URL": "https://github.example",
+                "GITHUB_RUN_ID": "1234",
+                "GITHUB_TOKEN": "secret",
             },
         ):
-            with self.assertRaises(DeliveryError) as raised:
-                run("confirm", "r261.108")
-            self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
-            direct = run("confirm", "r261.108", confirm_direct_delivery=True)
-        with patch.dict(
-            os.environ,
-            {
-                "GITHUB_WORKSPACE": str(self.root),
-                "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
-                "GITHUB_ACTOR": "bob",
-            },
-        ):
-            lieferung_4_augenfall = run("confirm", "r261.108")
+            issue = {"state": "open", "labels": [{"name": "lieferung:freigabe"}]}
+            artifacts = {"artifacts": [{"id": 20, "created_at": "2026-08-21T10:00:00Z", "expired": False}]}
 
-        self.assertEqual(direct["status"], Status.LIEFERUNG_BESTAETIGT)
-        self.assertEqual(lieferung_4_augenfall["status"], Status.LIEFERUNG_BESTAETIGT)
-        self.assertEqual(direct["outputs"]["source_sha"], self.source_sha)
+            # resolve prüft Rolle, offenes Issue und zugeordnetes Artefakt gemeinsam
+            for role in ("maintain", "admin"):
+                with self.subTest(role=role):
+                    with patch(
+                        "lbs_delivery.lieferung.github._request",
+                        side_effect=({"role_name": role}, issue, artifacts),
+                    ):
+                        result = run("resolve", issue=42)
+                    self.assertEqual(result["status"], Status.LIEFERSTAND_ERMITTELT)
+
+            # dieselbe Rollenprüfung gilt ohne Issue für eine Wiederholung
+            reference = {"object": {"sha": self.source_sha}}
+            with patch(
+                "lbs_delivery.lieferung.github._request",
+                side_effect=({"role_name": "maintain"}, reference),
+            ):
+                result = run("resolve", "r261.108", issue=0)
+            self.assertEqual(result["status"], Status.LIEFERSTAND_ERMITTELT)
+
+            # dieselbe Person darf vorbereiten und freigeben
+            confirmed = run("confirm", issue=42)
+            self.assertEqual(confirmed["status"], Status.LIEFERUNG_BESTAETIGT)
+            self.assertEqual(
+                confirmed["outputs"],
+                {"source_sha": self.source_sha, "liefer_tag": "r261.108"},
+            )
+
+            # Write reicht für die Freigabe nicht aus
+            with patch("lbs_delivery.lieferung.github._request", return_value={"role_name": "write"}):
+                with self.assertRaises(DeliveryError) as raised:
+                    run("resolve", issue=42)
+            self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
+
+            # ein anderes Issue darf dasselbe Artefakt nicht übernehmen
+            with self.assertRaises(DeliveryError) as raised:
+                run("confirm", issue=41)
+            self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
+
+            # eine erfolgreiche Lieferung ergänzt und schließt das Freigabe-Issue
+            with patch("lbs_delivery.lieferung.github._request") as api:
+                completed = run("complete", "r261.108", issue=42)
+            self.assertEqual(completed["status"], Status.LIEFERUNG_ABGESCHLOSSEN)
+            self.assertEqual([e.kwargs["method"] for e in api.call_args_list], ["POST", "PATCH"])
 
     def test_resolves_latest_preparation_or_existing_tag(self) -> None:
         """Verwendet den neuesten geplanten Stand und erkennt Wiederholungen."""
@@ -193,16 +263,24 @@ class LieferungTests(TempDirTestCase):
                 {"id": 30, "created_at": "2026-08-22T10:00:00Z", "expired": True, "workflow_run": {"id": 300}},
             ]
         }
-        arguments = {"subcommand": "resolve", "tag": "r261.108"}
+        arguments = {"subcommand": "resolve", "issue": 42}
         with patch.dict(
             os.environ,
             {
                 "GITHUB_REPOSITORY": "FI/mandant",
+                "GITHUB_ACTOR": "alice",
                 "GITHUB_TOKEN": "secret",
                 "GITHUB_API_URL": "https://github.example/api/v3",
             },
         ):
-            with patch("lbs_delivery.lieferung.github.request", side_effect=(None, artifacts)):
+            with patch(
+                "lbs_delivery.lieferung.github._request",
+                side_effect=(
+                    {"role_name": "maintain"},
+                    {"state": "open", "labels": [{"name": "lieferung:freigabe"}]},
+                    artifacts,
+                ),
+            ):
                 planned = run(**arguments)
         self.assertEqual(
             planned["outputs"],
@@ -211,32 +289,46 @@ class LieferungTests(TempDirTestCase):
                 "vorbereitung_artefakt_id": 20,
             },
         )
+        self.assertEqual(planned["status"], Status.LIEFERSTAND_ERMITTELT)
 
         reference = {"object": {"sha": self.source_sha, "type": "commit"}}
         with patch.dict(
             os.environ,
             {
                 "GITHUB_REPOSITORY": "FI/mandant",
+                "GITHUB_ACTOR": "alice",
                 "GITHUB_TOKEN": "secret",
                 "GITHUB_API_URL": "https://github.example/api/v3",
             },
         ):
-            with patch("lbs_delivery.lieferung.github.request", return_value=reference):
-                repeated = run(**arguments)
+            with patch(
+                "lbs_delivery.lieferung.github._request",
+                side_effect=({"role_name": "admin"}, reference),
+            ):
+                repeated = run("resolve", "r261.108")
         self.assertEqual(
             repeated["outputs"],
             {
                 "wiederholung": "true",
                 "source_sha": self.source_sha,
+                "liefer_tag": "r261.108",
             },
         )
+        self.assertEqual(repeated["status"], Status.LIEFERSTAND_ERMITTELT)
+
+        # fehlender oder doppelt angegebener Lieferweg scheitert vor GitHub-Zugriffen
+        for invalid in ({"issue": 0}, {"tag": "r261.108", "issue": 42}):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(DeliveryError) as raised:
+                    run("resolve", **invalid)
+                self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
 
     def test_rejects_invalid_or_mismatched_preparation(self) -> None:
-        """Lehnt beschädigte Artefakte und einen abweichenden Liefer-Tag ab."""
+        """Lehnt beschädigte Artefakte und ein abweichendes Freigabe-Issue ab."""
 
         preparation = self.root / "vorbereitung" / "vorbereitung.json"
         preparation.parent.mkdir()
-        arguments = {"subcommand": "confirm", "tag": "r261.108"}
+        arguments = {"subcommand": "confirm", "issue": 42}
         with patch.dict(
             os.environ,
             {
@@ -256,7 +348,7 @@ class LieferungTests(TempDirTestCase):
                         "tag": "r261.109",
                         "sha": self.source_sha,
                         "repository": "FinanzInformatik/fi_lbs_entw_oms_fi",
-                        "prepare_actor": "alice",
+                        "issue": 41,
                     }
                 ),
                 encoding="utf-8",

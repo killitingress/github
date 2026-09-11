@@ -55,9 +55,9 @@ werden.
 Eine Mainframe-Lieferung kann entweder auf `main` oder `release/nnn`
 durchgeführt werden und verwendet dann dessen vollständigen Stand, oder auf
 einer in `bereitstellung/nnn.nnn` zusammengestellten Teillieferung. Ein
-Vorbereitungs-Workflow hält Commit-SHA, Liefer-Tag und Lieferumfang fest. Der
-Freigabe-Workflow bestätigt dann diesen Stand und startet Tag-Erzeugung,
-Paketbau und Mainframe-Übergabe.
+Vorbereitungs-Workflow hält Commit-SHA, Liefer-Tag und Lieferumfang fest und
+zeigt sie in einem Freigabe-Issue. Der Freigabekommentar startet anschließend
+Tag-Erzeugung, Paketbau und Mainframe-Übergabe.
 
 #### Änderungsablauf
 
@@ -84,8 +84,8 @@ Branchstand ist für eine Lieferung bereit
 Branch und Liefer-Tag auswählen
     │ Lieferung vorbereiten
     ▼
-Vorbereitung prüfen
-    │ Lieferung ausführen
+Freigabe-Issue prüfen
+    │ /freigeben
     ▼
 Liefer-Tag, Paketbau und Mainframe-Übergabe
 ```
@@ -99,7 +99,7 @@ Liefer-Tag, Paketbau und Mainframe-Übergabe
 | Feature-Push nach M/Text-Entwicklung | Eine Änderung kann vor dem Pull Request vom Entwickler getestet werden. Parallelentwicklungen mehrerer Entwickler werden unterstützt. |
 | Pull Request mit Squash Merge | Jeder Pull Request wird als ein fachlicher Commit in den Zielbranch übernommen und kann später Cherry-Picked werden (entspricht bisherigem Merge-Verfahren). Review und Arbeitscommits bleiben im Pull Request sichtbar. |
 | Gemeinsames Format für Archive und Informationen | Synchronisierung und Mainframe-Lieferung verwenden dieselben Dateiformate auf unterschiedlichen Transportwegen. |
-| Zweistufige Lieferbestätigung | Die Liefer-Workflows unterstützen das 4-Augenprinzip. |
+| Nachvollziehbare Lieferfreigabe | Ein Issue zeigt den vorbereiteten Stand, die Freigabe und das Ergebnis der Lieferung. |
 
 ## 2. Branch- und Pull-Request-Modell
 
@@ -476,29 +476,27 @@ Der Workflow **Lieferung vorbereiten** wird manuell für den ausgewählten Branc
 mit dem geplanten Liefer-Tag gestartet. Er prüft, ob der Tag noch frei ist und
 Branch und Tag zur Releaselinie passen.
 
-Die Laufzusammenfassung zeigt den Branch, die Änderungen seit dem vorherigen
-Liefer-Tag und den vorgesehenen Lieferumfang. Für die spätere Bestätigung hält
-der Workflow Liefer-Tag, Commit-SHA, Repository und vorbereitende Person in
-einem 30 Tage aufbewahrten Laufartefakt fest. Das Artefakt heißt z.B.
-`r261.108-vorbereitungsartefakt` und enthält die Datei `vorbereitung.json`.
+Die Laufzusammenfassung und das neu angelegte Freigabe-Issue zeigen Branch,
+Änderungen seit dem vorherigen Liefer-Tag und vorgesehenen Lieferumfang. Der
+Workflow hält Liefer-Tag, Commit-SHA, Repository und Issue-Nummer in einem
+30 Tage aufbewahrten Laufartefakt fest. Das Artefakt heißt beispielsweise
+`lieferung-42-vorbereitungsartefakt` und enthält `vorbereitung.json`.
 
 Sollte auffallen, dass etwas mit der Lieferung fachlich noch nicht stimmt, ist
 der Branch zu korrigieren und dann der Workflow erneut mit demselben geplanten
 Liefer-Tag zu starten. Dabei entsteht ein neues Laufartefakt.
 
-### Lieferung ausführen
+### Lieferung freigeben und ausführen
 
-In diesem zweiten Workflow soll eine explizite Vorab-Prüfung durch eine zweite
-Person erfolgen, bevor der Tag freigegeben wird. Es kann so sichergestellt
-werden, dass das was mit der Lieferung übergeben werden soll auch tatsächlich
-das ist was für den Liefer-Tag entwickelt wurde. Falls der gleiche Anwender
-**Lieferung ausführen** startet, der auch schon die Vorbereitung getätigt hat,
-muss hier explizit die Abweichung vom empfohlenen 4-Augenprinzip angehakt
-werden. Technisch das 4-Augenprinzip zu erzwingen wäre umständlich und
-organisatorisch bei einigen Mandanten ggf. nicht praktikabel, insofern ist es
-auch möglich, dass der gleiche Autor die Lieferung vorbereitet und durchführt.
+Das mit `lieferung:freigabe` gekennzeichnete Freigabe-Issue zeigt den Stand,
+der geliefert werden soll. Eine Person mit
+wirksamer Repository-Berechtigung `maintain` oder `admin` startet die Lieferung
+mit dem Kommentar `/freigeben`. Die vorbereitende Person darf die Lieferung
+selbst freigeben. Der Workflow prüft die Berechtigung zum Zeitpunkt des
+Kommentars. Liefer-Tag und Commit-SHA stammen aus dem an die Issue-Nummer
+gebundenen Vorbereitungsartefakt und nicht aus dem editierbaren Issue-Text.
 
-**Lieferung ausführen** ruft einen Shared Workflow auf, der den Paketbau,
+**Lieferung ausführen** ruft anschließend einen Shared Workflow auf, der den Paketbau,
 die Mainframe-Übergabe und die Veröffentlichung des Lieferberichts in
 aufeinanderfolgenden Jobs ausführt. Der Paketbau stellt die Lieferdateien im
 Laufartefakt `release` bereit. Der Übergabejob lädt das Artefakt, überträgt die
@@ -506,11 +504,12 @@ Archive an den Mainframe und reicht die JCL ein. Anschließend veröffentlicht
 ein weiterer Job den Lieferbericht und die JSON-Informationsdateien im
 GitHub Release.
 
-Wird **Lieferung ausführen** mit einem bereits vorhandenen Liefer-Tag
-gestartet, beginnt die Paketbildung und Mainframe-Übergabe für diesen Stand
-erneut. Derselbe Git-Stand darf mehrfach übertragen werden, das Tag wird aber
-nur beim ersten Lauf gesetzt und auch nur dann ist eine Bestätigung
-durchzuführen.
+Nach erfolgreicher Lieferung ergänzt der Workflow das Issue um einen Link zum
+Actions-Lauf und schließt es. Wird **Lieferung ausführen** manuell mit einem
+bereits vorhandenen Liefer-Tag gestartet, beginnen Paketbildung und
+Mainframe-Übergabe für diesen Stand erneut. Eine neue Lieferung kann nicht über
+den manuellen Eingang gestartet werden. Auch eine Wiederholung erfordert die
+Repository-Berechtigung `maintain` oder `admin`.
 
 #### Lieferartefakt und Lieferbericht
 
@@ -520,10 +519,12 @@ projektbezogenen JSON-Informationsdateien und `lieferbericht.md` und wird
 wie das Vorbereitungsartefakt 30 Tage aufbewahrt. Der Übergabejob lädt dieses
 Artefakt, überträgt die Archive an den Mainframe und reicht die JCL ein.
 
-Der Lieferbericht nennt Liefer-Tag, Lieferart und Commit-SHA. Er zeigt je
-Projekt die Änderungen seit dem vorherigen Liefer-Tag und den Lieferumfang
-mit Status und Pfad. Bei DELTA umfasst der Lieferumfang die Änderungen seit
-`.100`, bei FULL den gesamten Projektstand. Die Bezugsstände sind im Bericht
+Der Lieferbericht nennt Liefer-Tag, Lieferart und Commit-SHA. Er zeigt die
+Projekte mit Ressourcenänderungen seit dem vorherigen Liefer-Tag. Anschließend
+zeigt er für jedes Projekt den Inhalt seines eigenen Archivs mit Status und
+Pfad. Bei DELTA umfasst der Archivinhalt die Änderungen seit `.100`, bei FULL
+den gesamten Projektstand. Ein DELTA-Archiv ohne geänderte oder gelöschte
+Ressourcen wird entsprechend ausgewiesen. Die Bezugsstände sind im Bericht
 angegeben, Löschungen mit `D` gekennzeichnet.
 
 Nach erfolgreicher Mainframe-Übergabe veröffentlicht der Shared Workflow den
@@ -559,8 +560,10 @@ Mandanten-Workflows unter `secrets.MAINFRAME_FTPS_PASSWORD` zur Verfügung.
 
 - **Lieferung vorbereiten**: Prüft den gewählten Branchstand und den geplanten
   Liefer-Tag, zeigt Änderungen und Lieferumfang in der Laufzusammenfassung und
-  hält die Vorbereitung mit Commit-SHA im Vorbereitungsartefakt fest.
-- **Lieferung ausführen**: Übernimmt die Vorbereitung nach Bestätigung und
+  im Freigabe-Issue und hält die Vorbereitung mit Commit-SHA im
+  Vorbereitungsartefakt fest.
+- **Lieferung ausführen**: Übernimmt die Vorbereitung nach einem berechtigten
+  `/freigeben`-Kommentar und
   erzeugt den Liefer-Tag auf dem festgehaltenen Commit. Baut die Archive, je
   Archiv eine JCL, die JSON-Informationsdateien und den Lieferbericht und
   speichert sie im Laufartefakt `release`. Der Übergabejob lädt dieses Artefakt,
@@ -727,7 +730,8 @@ JavaScript geprüft werden. Dies wird dynamisch ermittelt.
 | M/Text-Entwicklung synchronisieren | Push auf `feature/nnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `shared-check-resources.yml`, danach `shared-sync-resources.yml` | `mtext.py resources check`, danach `mtext.py resources sync` |
 | M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/nnn` sowie manueller Start | `sync-resources.yml` | `shared-check-resources.yml`, danach `shared-sync-resources.yml` | `mtext.py resources check`, danach `mtext.py resources sync` |
 | Lieferung vorbereiten | Manueller Start auf `main`, `release/nnn` oder `bereitstellung/nnn.nnn` | `lieferung-vorbereiten.yml` | `shared-check-resources.yml`, danach `shared-lieferung-check.yml` | `mtext.py resources check`, danach `mtext.py delivery check` |
-| Lieferung ausführen | Manueller Start mit einem geplanten oder vorhandenen Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` |
+| Lieferung freigeben | Kommentar `/freigeben` im offenen Freigabe-Issue durch eine Person mit `maintain` oder `admin` | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py delivery resolve`, `confirm` und `tag` |
+| Lieferung wiederholen | Manueller Start mit einem vorhandenen Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py delivery resolve` |
 | Lieferung bauen und übertragen | Erstellter oder vorhandener Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py release build`, `release mainframe`, danach `release github` |
 | `mtext_actions` testen | Pull Request, Push auf `main` oder manueller Start in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` |
 
@@ -739,8 +743,8 @@ Verarbeitung in `mtext_actions`:
 | Datei | Auslöser | Aufgabe |
 |---|---|---|
 | `check-resources.yml` | Manueller Start auf einem ausgewählten Branch | Mandantenkonfiguration und Ressourcen des Branchstands prüfen, Syntaxbefunde als Warnungen anzeigen |
-| `lieferung-vorbereiten.yml` | Manueller Start auf dem ausgewählten Branch | Ressourcen warnend prüfen, danach SHA und Lieferumfang unter dem geplanten Liefer-Tag festhalten |
-| `lieferung-ausfuehren.yml` | Manueller Start mit einem geplanten oder vorhandenen Liefer-Tag | Neueste Vorbereitung bestätigen und die Lieferung starten oder vorhandenen Lieferstand erneut übergeben |
+| `lieferung-vorbereiten.yml` | Manueller Start auf dem ausgewählten Branch | Ressourcen warnend prüfen, danach SHA und Lieferumfang im Freigabe-Issue und Vorbereitungsartefakt festhalten |
+| `lieferung-ausfuehren.yml` | Kommentar `/freigeben` im Freigabe-Issue oder manueller Start mit einem vorhandenen Liefer-Tag | Berechtigung und Vorbereitung prüfen und die Lieferung starten oder einen vorhandenen Lieferstand erneut übergeben |
 | `sync-resources.yml` | Push auf einen Feature-, `main`- oder Release-Branch sowie manueller Start | Ressourcen warnend prüfen, danach Projekte nach M/Text-Entwicklung oder -Funktionstest übertragen |
 
 ### Shared Workflows
@@ -749,8 +753,8 @@ Verarbeitung in `mtext_actions`:
 |---|---|---|
 | `shared-check-resources.yml` | Aufruf durch `check-resources.yml`, `sync-resources.yml` oder `lieferung-vorbereiten.yml` | Mandantenkonfiguration und konfigurierte Ressourcen ohne Zugriff auf Zielsysteme prüfen |
 | `shared-sync-resources.yml` | Aufruf durch `sync-resources.yml` | Projekte nach M/Text übertragen |
-| `shared-lieferung-check.yml` | Aufruf durch `lieferung-vorbereiten.yml` | Liefer-Tag und Branchstand prüfen, Lieferumfang anzeigen und Vorbereitungs-Artefakt bauen |
-| `shared-lieferung-ausfuehren.yml` | Aufruf durch `lieferung-ausfuehren.yml` | Lieferstand ermitteln, eine Vorbereitung bestätigen, bei einer erstmaligen Lieferung den Tag erstellen, Archive und Informationsdateien für FULL oder DELTA erzeugen, die Archive an den Mainframe übertragen und die Lieferinformationen im Mandanten-Repository bereitstellen |
+| `shared-lieferung-check.yml` | Aufruf durch `lieferung-vorbereiten.yml` | Liefer-Tag und Branchstand prüfen, Lieferumfang im Freigabe-Issue anzeigen und Vorbereitungsartefakt bauen |
+| `shared-lieferung-ausfuehren.yml` | Aufruf durch `lieferung-ausfuehren.yml` | Freigabe und Lieferstand prüfen, bei einer erstmaligen Lieferung den Tag erstellen, Archive und Informationsdateien für FULL oder DELTA erzeugen, die Archive an den Mainframe übertragen und das Ergebnis in GitHub bereitstellen |
 | `ci.yml` | Pull Request oder Push auf `main` oder manueller Start | Tests ausführen |
 
 Die eigenständige Ressourcenprüfung prüft den ausgewählten Branchstand. Als
@@ -767,8 +771,8 @@ gemeinsamen Komponenten ohne eigenes Zugriffstoken.
 
 GitHub stellt jedem Job automatisch einen zeitlich begrenzten Zugangsschlüssel
 namens `GITHUB_TOKEN` bereit. Damit kann der Job auf das Mandanten-Repository
-zugreifen, etwa um Vorbereitungsartefakte zu lesen oder einen Liefer-Tag und
-ein GitHub Release anzulegen. Die erlaubten Aktionen werden über
+zugreifen, etwa um Freigabe-Issues und Liefer-Tags anzulegen oder
+Vorbereitungsartefakte zu lesen. Die erlaubten Aktionen werden über
 `permissions` in den Workflow-Dateien festgelegt.
 
 Auch der aufgerufene Shared Workflow arbeitet mit diesem Zugang zum
@@ -803,9 +807,11 @@ mit dem zugehörigen Exitcode.
 |---|---|---|
 | `RESOURCE_CHECKED` | Die konfigurierten Ressourcen wurden geprüft, Befunde stehen als Warnungen bereit | – |
 | `VALIDATION_FAILED` | Eingaben oder Konfiguration sind ungültig | `2` |
+| `LIEFERSTAND_ERMITTELT` | Vorbereitungsartefakt oder vorhandener Liefer-Tag wurden ermittelt | – |
 | `LIEFERUNG_CHECKED` | SHA, Liefer-Tag und Lieferumfang der Vorbereitung wurden festgehalten | – |
-| `LIEFERUNG_BESTAETIGT` | Die vorbereitete Lieferung wurde durch dieselbe oder eine zweite Person bestätigt | – |
+| `LIEFERUNG_BESTAETIGT` | Die Vorbereitung gehört zum Freigabe-Issue | – |
 | `LIEFERUNG_TAGGED` | Der Liefer-Tag wurde auf der festgehaltenen SHA erstellt | – |
+| `LIEFERUNG_ABGESCHLOSSEN` | Der erfolgreiche Lauf wurde im geschlossenen Freigabe-Issue festgehalten | – |
 | `SOURCE_FAILED` | Checkout, Commit, Branch oder Tag können nicht als Quelle verwendet werden | `3` |
 | `ADAPTER_FAILED` | Adapteraufruf oder M/Text-Synchronisierung sind fehlgeschlagen | `6` |
 | `ADAPTER_COMPLETED` | Der M/Text-Adapter hat die Synchronisierung erfolgreich abgeschlossen | – |
@@ -814,4 +820,5 @@ mit dem zugehörigen Exitcode.
 | `MAINFRAME_TRANSFER_FAILED` | Die FTPS- oder JES-Übergabe ist fehlgeschlagen | `7` |
 | `MAINFRAME_SUBMITTED` | Archive und JCL wurden per FTPS und JES übergeben | – |
 | `GITHUB_RELEASE_FAILED` | Das GitHub Release oder seine Informationsdateien konnten nicht bereitgestellt werden | `8` |
+| `FREIGABE_FAILED` | Freigabe-Issue, Label oder Repository-Rolle konnten nicht über GitHub verarbeitet werden | `9` |
 | `GITHUB_RELEASE_PUBLISHED` | Zusammenfassung und Informationsdateien stehen im Mandanten-Repository bereit | – |

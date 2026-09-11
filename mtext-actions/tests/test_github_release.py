@@ -62,7 +62,6 @@ class GitHubReleaseTests(TempDirTestCase):
                 content = information.read_bytes()
                 document = json.loads(content)
                 self.assertEqual(document["lieferart"], delivery_type)
-                source_sha = document["scope"]["bis"]["commit"]
                 release = self.release | {"html_url": f"https://github.example/FI/mandant/releases/tag/{tag}"}
                 existing = None
                 if wiederholung:
@@ -79,7 +78,7 @@ class GitHubReleaseTests(TempDirTestCase):
 
                 with (
                     patch.dict(os.environ, {"RUNNER_TEMP": str(runner_temp)}),
-                    patch("lbs_delivery.github.request", side_effect=responses) as api,
+                    patch("lbs_delivery.github._request", side_effect=responses) as api,
                 ):
                     result = run(tag)
 
@@ -92,26 +91,7 @@ class GitHubReleaseTests(TempDirTestCase):
                 if wiederholung:
                     self.assertTrue(calls[2]["url"].endswith("/releases/assets/51"))
 
-                body = calls[1]["payload"]["body"]
-                self.assertIn(f"- Liefer-Tag: `{tag}`", body)
-                self.assertIn(f"- Lieferart: `{delivery_type}`", body)
-                self.assertIn(f"- Commit: `{source_sha}`", body)
-
-                # beide Vergleiche sind ohne Öffnen eines Anhangs im Release sichtbar
-                changes, contents = body.split("## Lieferumfang", 1)
-                self.assertIn("LOMS_Basis", contents)
-                self.assertIn("baseline.txt", contents)
-                if delivery_type == "DELTA":
-                    self.assertIn("Änderungen seit `r261.107`", changes)
-                    self.assertIn("`D` `deleted.txt`", changes)
-                    self.assertNotIn("baseline.txt", changes)
-                    self.assertIn("`r261.100` → `r261.108`", contents)
-                    self.assertIn("`M` `baseline.txt`", contents)
-                    self.assertIn("`D` `deleted.txt`", contents)
-                else:
-                    self.assertIn("Änderungen seit `r260.100`", changes)
-                    self.assertIn("Keine Änderungen", changes)
-                    self.assertIn("Vollständiger Projektstand", contents)
+                if delivery_type == "FULL":
                     self.assertEqual(document["scope"]["von"]["referenz"], "r260.100")
                     self.assertEqual(document["elemente"], [])
 

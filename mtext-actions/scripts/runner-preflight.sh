@@ -32,7 +32,7 @@ git --version
 python3 --version
 
 if command -v node >/dev/null 2>&1; then
-  node --version
+  echo "node $(node --version)"
 fi
 
 # Python-Pfad und Action-Pfad für die Folgeschritte bereitstellen

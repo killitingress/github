@@ -3,9 +3,9 @@ name: Shared Workflow – Lieferung vorprüfen
 # Dieser Workflow bereitet den ausgewählten Branchstand für eine spätere
 # Lieferung vor. Er lädt die festzuhaltende SHA mit ihrer Historie und prüft den
 # vorgesehenen Liefer-Tag, den Branch und den Lieferumfang. Das Ergebnis wird in
-# der Actions-Zusammenfassung angezeigt. Die geprüften Angaben werden als
-# Vorbereitung für 30 Tage im aufrufenden Mandantenlauf gespeichert. In diesem
-# Lauf entstehen weder ein Liefer-Tag noch eine Mainframe-Übergabe.
+# der Actions-Zusammenfassung und einem Freigabe-Issue angezeigt. Die geprüften
+# Angaben werden als Vorbereitung für 30 Tage im aufrufenden Mandantenlauf
+# gespeichert. In diesem Lauf entstehen weder Liefer-Tag noch Übergabe.
 'on':
   workflow_call:
     inputs:
@@ -15,6 +15,7 @@ name: Shared Workflow – Lieferung vorprüfen
         type: string
 permissions:
   contents: read
+  issues: write
 
 jobs:
   check:
@@ -39,6 +40,7 @@ jobs:
         id: check
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
+          GITHUB_TOKEN: ${{ github.token }}
           LIEFER_TAG: ${{ inputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}"

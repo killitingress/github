@@ -119,7 +119,9 @@ class ReleaseTests(TempDirTestCase):
             )
         with tarfile.open(delivery / "FIBASISD.tgz") as archive:
             self.assertEqual(archive.extractfile("FIBASISD.txt").read(), b"")
-        self.assertIn("Lieferart: `FULL`", (delivery / "lieferbericht.md").read_text())
+        report = (delivery / "lieferbericht.md").read_text()
+        self.assertIn("Lieferart: `FULL`", report)
+        self.assertIn("## Projektarchive", report)
 
         # FULL übernimmt erst den Projektstand und ersetzt danach das alte D-Archiv
         with patch("lbs_delivery.mainframe._submit_archive") as submit:

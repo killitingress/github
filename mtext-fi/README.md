@@ -60,15 +60,18 @@ diesen `.100`-Tag.
    `bereitstellung/nnn.nnn` auswählen und den geplanten Liefer-Tag eingeben.
 3. Die Warnungen der Ressourcenprüfung sowie in der Zusammenfassung Branch,
    Commit, Lieferart, Bezugsstand und Lieferumfang prüfen.
-4. Den Workflow **Lieferung ausführen** öffnen und denselben Liefer-Tag
-   eingeben.
-5. Hat dieselbe Person die Lieferung vorbereitet, die Direktlieferung im
-   Eingabefeld bewusst bestätigen.
-6. Nach dem Lauf die Mainframe-Übergabe und das GitHub Release zum Liefer-Tag
+4. Das in der Zusammenfassung verlinkte und mit `lieferung:freigabe`
+   gekennzeichnete Freigabe-Issue öffnen und die dort angezeigten Angaben
+   prüfen.
+5. Mit Repository-Berechtigung `maintain` oder `admin` den Kommentar
+   `/freigeben` eintragen. Die vorbereitende Person darf selbst freigeben.
+6. Nach dem ausgelösten Lauf die Mainframe-Übergabe und das GitHub Release
    kontrollieren.
 
-Ein vorhandener Liefer-Tag kann mit **Lieferung ausführen** erneut verarbeitet
-werden. Dafür ist keine neue Vorbereitung erforderlich.
+Das Freigabe-Issue erhält nach erfolgreicher Lieferung einen Link zum Lauf und
+wird geschlossen. Ein vorhandener Liefer-Tag kann über den manuellen Start von
+**Lieferung ausführen** erneut verarbeitet werden. Dafür ist keine neue
+Vorbereitung erforderlich, aber ebenfalls `maintain` oder `admin`.
 
 ## Workflows
 
@@ -86,7 +89,7 @@ Vergleichsstand geänderten Ressourcen geprüft.
 | `check-resources.yml` | manueller Start auf einem ausgewählten Branch | `shared-check-resources.yml` |
 | `sync-resources.yml` | Push auf `main`, `release/nnn` oder `feature/nnn/**` sowie manueller Start | zuerst `shared-check-resources.yml`, danach `shared-sync-resources.yml` |
 | `lieferung-vorbereiten.yml` | manueller Start mit einem Liefer-Tag | zuerst `shared-check-resources.yml`, danach `shared-lieferung-check.yml` |
-| `lieferung-ausfuehren.yml` | manueller Start mit einem Liefer-Tag und optionaler Bestätigung der Direktlieferung | `shared-lieferung-ausfuehren.yml` |
+| `lieferung-ausfuehren.yml` | Freigabekommentar im Issue oder manueller Start zur Wiederholung eines vorhandenen Liefer-Tags | `shared-lieferung-ausfuehren.yml` |
 
 Die Workflow-Aufrufe verwenden jeweils `@main` aus dem Repository
 `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`.
