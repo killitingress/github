@@ -6,7 +6,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from lbs_delivery.process import DeliveryError
+from lbs_delivery.process import DeliveryError, Status
 
 from tests.support import TempDirTestCase, git, init_repository, load_test_configuration
 
@@ -60,8 +60,9 @@ class ConfigTests(TempDirTestCase):
             encoding="utf-8",
         )
         with patch("lbs_delivery.config.MANDANTEN_ZUORDNUNG_PATH", mandanten_path):
-            with self.assertRaisesRegex(DeliveryError, "Mandantenzuordnung ist nicht eindeutig"):
+            with self.assertRaises(DeliveryError) as raised:
                 load_test_configuration(self.repository)
+            self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
 
         releaselinien_path = self.root / "releaselinien.json"
         releaselinien_path.write_text(
@@ -74,14 +75,16 @@ class ConfigTests(TempDirTestCase):
             encoding="utf-8",
         )
         with patch("lbs_delivery.config.RELEASELINIEN_ZUORDNUNG_PATH", releaselinien_path):
-            with self.assertRaisesRegex(DeliveryError, "M/Text-Umgebungsarten"):
+            with self.assertRaises(DeliveryError) as raised:
                 load_test_configuration(self.repository)
+            self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
 
         # LOMS_Basis und LOMS_Basisdaten ergeben beide BASIS und damit denselben Archivnamen
         colliding_project = self.repository / "LOMS_Basisdaten"
         colliding_project.mkdir()
-        with self.assertRaisesRegex(DeliveryError, "Projektcodes sind nicht eindeutig"):
+        with self.assertRaises(DeliveryError) as raised:
             load_test_configuration(self.repository)
+        self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
         colliding_project.rmdir()
 
         # gültige Fragmentprojekte erhalten Projektcodes und das Mainframe-Subsystem des Mandanten

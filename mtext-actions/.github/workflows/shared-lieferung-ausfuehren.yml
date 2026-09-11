@@ -103,7 +103,7 @@ jobs:
       # Lädt den in der Vorbereitung festgehaltenen Stand mit seiner Historie.
       - name: Check-Out Mandantenstand
         if: needs.check.outputs.wiederholung != 'true'
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           path: source
@@ -138,7 +138,7 @@ jobs:
     steps:
       # Lädt den Commit des Liefer-Tags mit seiner Historie.
       - name: Check-Out Liefer-Tag
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           path: source
@@ -162,7 +162,7 @@ jobs:
 
       # Speichert die erzeugten Lieferdateien als Laufartefakt.
       - name: Lieferartefakt speichern
-        uses: actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf
+        uses: actions/upload-artifact@v3
         with:
           name: release
           path: ${{ runner.temp }}/dist
@@ -189,7 +189,7 @@ jobs:
 
       # Lädt das Lieferartefakt in das temporäre Verzeichnis dieses Jobs.
       - name: Lieferartefakt herunterladen
-        uses: actions/download-artifact@a9bc5e6ef2cb54c177f32aa5726adaa15e7e2d59
+        uses: actions/download-artifact@v3
         with:
           name: release
           path: ${{ runner.temp }}/release
@@ -219,7 +219,7 @@ jobs:
 
       # Lädt das Lieferartefakt in das temporäre Verzeichnis dieses Jobs.
       - name: Lieferartefakt herunterladen
-        uses: actions/download-artifact@a9bc5e6ef2cb54c177f32aa5726adaa15e7e2d59
+        uses: actions/download-artifact@v3
         with:
           name: release
           path: ${{ runner.temp }}/release

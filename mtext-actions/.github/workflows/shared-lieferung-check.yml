@@ -23,7 +23,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Check-Out Mandantenstand
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           path: source
@@ -46,7 +46,7 @@ jobs:
           --tag "$LIEFER_TAG"
 
       - name: Vorbereitung festhalten
-        uses: actions/upload-artifact@c6a366c94c3e0affe28c06c8df20a878f24da3cf
+        uses: actions/upload-artifact@v3
         with:
           name: ${{ steps.check.outputs.vorbereitung_name }}
           path: ${{ steps.check.outputs.vorbereitung_path }}

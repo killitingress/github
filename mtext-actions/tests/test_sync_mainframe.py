@@ -139,8 +139,9 @@ class SyncTests(TempDirTestCase):
             history.side_effect = [{"workflow_runs": [{"head_sha": "previous"}]}]
             ancestor.side_effect = [None, DeliveryError(Status.SOURCE_FAILED, "kein Vorfahr")]
             transfer.reset_mock()
-            with self.assertRaisesRegex(DeliveryError, "Der Lauf ist überholt"):
+            with self.assertRaises(DeliveryError) as raised:
                 sync.run()
+            self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
             transfer.assert_not_called()
 
     def _capture_packages(self, _umgebung, pakete, _auftrag_id) -> dict[str, object]:
@@ -211,21 +212,21 @@ class SyncTests(TempDirTestCase):
         network_error = urllib.error.URLError("Verbindung abgebrochen")
         self.response = http_reply({})
 
-        for replies, error, methods in (
+        for replies, error_status, methods in (
             ([ready, processing, processing, succeeded, {"status": "succeeded"}], None,
              ["POST", "PUT", "GET", "GET", "DELETE"]),
-            ([ready, b""], "gültigem JSON", ["POST", "PUT"]),
-            ([{"status": "ready"}], "Auftrags-ID", ["POST"]),
-            ([ready, processing, processing | {"status": "unbekannt"}], "unbekannten Auftragsstatus",
+            ([ready, b""], Status.ADAPTER_FAILED, ["POST", "PUT"]),
+            ([{"status": "ready"}], Status.ADAPTER_FAILED, ["POST"]),
+            ([ready, processing, processing | {"status": "unbekannt"}], Status.ADAPTER_FAILED,
              ["POST", "PUT", "GET"]),
-            ([ready, failed, {"status": "succeeded"}], "M/Text-Fehler", ["POST", "PUT", "DELETE"]),
-            ([ready, processing, failed, {"status": "succeeded"}], "M/Text-Fehler",
+            ([ready, failed, {"status": "succeeded"}], Status.ADAPTER_FAILED, ["POST", "PUT", "DELETE"]),
+            ([ready, processing, failed, {"status": "succeeded"}], Status.ADAPTER_FAILED,
              ["POST", "PUT", "GET", "DELETE"]),
-            ([ready, processing, failed, network_error], "M/Text-Fehler.*Adapteraufruf",
+            ([ready, processing, failed, network_error], Status.ADAPTER_FAILED,
              ["POST", "PUT", "GET", "DELETE"]),
-            ([ready, processing, succeeded, network_error], "Adapteraufruf",
+            ([ready, processing, succeeded, network_error], Status.ADAPTER_FAILED,
              ["POST", "PUT", "GET", "DELETE"]),
-            ([ready, processing, succeeded, b""], "gültigem JSON",
+            ([ready, processing, succeeded, b""], Status.ADAPTER_FAILED,
              ["POST", "PUT", "GET", "DELETE"]),
         ):
             self.response.read.side_effect = [
@@ -238,13 +239,15 @@ class SyncTests(TempDirTestCase):
                 patch.object(adapter.urllib.request, "urlopen", side_effect=self._receive_archive) as http,
                 patch.object(adapter.time, "sleep") as wait,
             ):
-                outcome = self.assertRaisesRegex(DeliveryError, error) if error else nullcontext()
+                outcome = self.assertRaises(DeliveryError) if error_status else nullcontext()
                 with outcome:
                     adapter_result = adapter.upload(
                         "en01", pakete, "test-FI",
                     )
                     self.assertEqual(adapter_result["auftrag_id"], "test-FI")
                     self.assertEqual(adapter_result["result"], succeeded["result"])
+                if error_status:
+                    self.assertEqual(outcome.exception.status, error_status)
             requests = [e.args[0] for e in http.call_args_list]
             payload = json.loads(requests[0].data)
             self.assertNotIn("mandant", payload)

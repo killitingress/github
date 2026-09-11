@@ -17,7 +17,7 @@ jobs:
     steps:
       # Für Pull Requests wird der Vorgänger für den Änderungsvergleich geladen.
       - name: Check-Out Mandantenstand
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@v4
         with:
           path: source
           fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}

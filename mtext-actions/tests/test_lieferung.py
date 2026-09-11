@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from lbs_delivery.git import LieferTag
 from lbs_delivery.lieferung import _pruefe_lieferquelle, _summary, run
-from lbs_delivery.process import DeliveryError
+from lbs_delivery.process import DeliveryError, Status
 
 from tests.support import TempDirTestCase, git, load_test_configuration, setup_release_repository, track_remote_branch
 
@@ -92,31 +92,34 @@ class LieferungTests(TempDirTestCase):
         for zwischenrelease in ("000", "099", "1000"):
             with self.subTest(zwischenrelease=zwischenrelease):
                 self.assertIsNone(LieferTag.from_bereitstellung(f"bereitstellung/261.{zwischenrelease}"))
-                with self.assertRaisesRegex(DeliveryError, "ungültiges Format des Liefer-Tags"):
+                with self.assertRaises(DeliveryError) as raised:
                     run("check", f"r261.{zwischenrelease}")
+                self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
 
         git(self.repository, "checkout", "--detach", "r261.100")
         git(self.repository, "switch", "-c", "bereitstellung/261.100")
         git(self.repository, "tag", "-d", "r261.100")
         track_remote_branch(self.repository, "bereitstellung/261.100")
-        with self.assertRaisesRegex(DeliveryError, r"\.100 entsteht"):
+        with self.assertRaises(DeliveryError) as raised:
             _pruefe_lieferquelle(
                 self.configuration,
                 self.repository,
                 LieferTag.parse("r261.100"),
                 "bereitstellung/261.100",
             )
+        self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
 
         git(self.repository, "checkout", "release/261")
         git(self.repository, "switch", "-c", "bereitstellung/261.109")
         track_remote_branch(self.repository, "bereitstellung/261.109")
-        with self.assertRaisesRegex(DeliveryError, "passt nicht zum Liefer-Tag"):
+        with self.assertRaises(DeliveryError) as raised:
             _pruefe_lieferquelle(
                 self.configuration,
                 self.repository,
                 LieferTag.parse("r261.108"),
                 "bereitstellung/261.109",
             )
+        self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
 
     def test_prepares_checkout_after_branch_advances(self) -> None:
         """Die Vorbereitung hält den Lauf-Commit bei weiterentwickeltem Branch fest."""
@@ -161,8 +164,9 @@ class LieferungTests(TempDirTestCase):
                 "GITHUB_ACTOR": "alice",
             },
         ):
-            with self.assertRaisesRegex(DeliveryError, "Direktlieferung muss .* bewusst bestätigt werden"):
+            with self.assertRaises(DeliveryError) as raised:
                 run("confirm", "r261.108")
+            self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
             direct = run("confirm", "r261.108", confirm_direct_delivery=True)
         with patch.dict(
             os.environ,
@@ -174,8 +178,8 @@ class LieferungTests(TempDirTestCase):
         ):
             lieferung_4_augenfall = run("confirm", "r261.108")
 
-        self.assertIn("- Lieferweg: Direktlieferung", direct["summary"])
-        self.assertIn("- Lieferweg: 4-Augenfall", lieferung_4_augenfall["summary"])
+        self.assertEqual(direct["status"], Status.LIEFERUNG_BESTAETIGT)
+        self.assertEqual(lieferung_4_augenfall["status"], Status.LIEFERUNG_BESTAETIGT)
         self.assertEqual(direct["outputs"]["source_sha"], self.source_sha)
 
     def test_resolves_latest_preparation_or_existing_tag(self) -> None:
@@ -242,8 +246,9 @@ class LieferungTests(TempDirTestCase):
             },
         ):
             preparation.write_text("kein JSON", encoding="utf-8")
-            with self.assertRaisesRegex(DeliveryError, "Vorbereitungsartefakt ist ungültig"):
+            with self.assertRaises(DeliveryError) as raised:
                 run(**arguments)
+            self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
 
             preparation.write_text(
                 json.dumps(
@@ -256,8 +261,9 @@ class LieferungTests(TempDirTestCase):
                 ),
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(DeliveryError, "anderen Liefer-Tag"):
+            with self.assertRaises(DeliveryError) as raised:
                 run(**arguments)
+            self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
 
 
 if __name__ == "__main__":

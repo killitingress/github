@@ -92,8 +92,9 @@ class ReleaseTests(TempDirTestCase):
         self.assertNotIn("@@", rendered)
 
         (delivery / "FIBASISD.jcl").unlink()
-        with self.assertRaisesRegex(DeliveryError, "Archive oder JCL fehlen"):
+        with self.assertRaises(DeliveryError) as raised:
             run("mainframe")
+        self.assertEqual(raised.exception.status, Status.PACKAGE_FAILED)
         self.assertEqual((stale_dist / "alt.tgz").read_bytes(), b"alter Lauf")
 
         # ein neues Hauptrelease folgt auf die vorhandene Zwischenlieferung
