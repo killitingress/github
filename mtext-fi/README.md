@@ -53,11 +53,12 @@ Feature-Branch dieser Releaselinie übernommen.
 
 Liefer-Tags folgen dem Schema `rnnn.nnn`. Die Version `.100` erzeugt das FULL
 einer Releaselinie. Spätere Versionen erzeugen ein kumulatives DELTA gegen
-diesen `.100`-Tag.
+diesen `.100`-Tag. `main` und `release/nnn` ergeben `rnnn.100`. Ein Branch
+`bereitstellung/nnn.nnn` ergibt den gleichnamigen Liefer-Tag mit Präfix `r`.
 
 1. In GitHub unter **Actions** den Workflow **Lieferung vorbereiten** öffnen.
 2. `main`, den passenden Branch `release/nnn` oder einen vorbereiteten Branch
-   `bereitstellung/nnn.nnn` auswählen und den geplanten Liefer-Tag eingeben.
+   `bereitstellung/nnn.nnn` auswählen.
 3. Die Warnungen der Ressourcenprüfung sowie in der Zusammenfassung Branch,
    Commit, Lieferart, Bezugsstand und Lieferumfang prüfen.
 4. Das in der Zusammenfassung verlinkte und mit `lieferung:freigabe`
@@ -88,7 +89,7 @@ Vergleichsstand geänderten Ressourcen geprüft.
 |---|---|---|
 | `check-resources.yml` | manueller Start auf einem ausgewählten Branch | `shared-check-resources.yml` |
 | `sync-resources.yml` | Push auf `main`, `release/nnn` oder `feature/nnn/**` sowie manueller Start | zuerst `shared-check-resources.yml`, danach `shared-sync-resources.yml` |
-| `lieferung-vorbereiten.yml` | manueller Start mit einem Liefer-Tag | zuerst `shared-check-resources.yml`, danach `shared-lieferung-check.yml` |
+| `lieferung-vorbereiten.yml` | manueller Start auf einem Lieferzweig | zuerst `shared-check-resources.yml`, danach `shared-lieferung-check.yml` |
 | `lieferung-ausfuehren.yml` | Freigabekommentar im Issue oder manueller Start zur Wiederholung eines vorhandenen Liefer-Tags | `shared-lieferung-ausfuehren.yml` |
 
 Die Workflow-Aufrufe verwenden jeweils `@main` aus dem Repository

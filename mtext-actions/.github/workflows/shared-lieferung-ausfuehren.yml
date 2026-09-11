@@ -27,7 +27,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-      issues: read
+      issues: write
     runs-on: [self-hosted, linux]
     timeout-minutes: 10
     outputs:
@@ -88,68 +88,29 @@ jobs:
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           FREIGABE_ISSUE: ${{ inputs.freigabe_issue }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: >-
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" delivery confirm
           --issue "$FREIGABE_ISSUE"
 
-  # Erstellt den Liefer-Tag im Mandanten-Repository.
-  tag:
-    name: Liefer-Tag erstellen
+  # Erstellt die Projektpakete mit JCL und JSON-Informationsdateien.
+  build:
+    name: FULL- oder DELTA-Artefakt erstellen
     needs: check
     permissions:
-      contents: write
+      contents: read
     runs-on: [self-hosted, linux]
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Vorhandenen Liefer-Tag übernehmen
-        if: needs.check.outputs.wiederholung == 'true'
-        run: echo "Liefer-Tag ${{ needs.check.outputs.liefer_tag }} ist vorhanden."
-
       # Lädt den in der Vorbereitung festgehaltenen Stand mit seiner Historie.
-      - name: Check-Out Mandantenstand
-        if: needs.check.outputs.wiederholung != 'true'
+      - name: Check-Out Lieferstand
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           path: source
           persist-credentials: false
           ref: ${{ needs.check.outputs.source_sha }}
-
-      - name: mtext_actions laden
-        if: needs.check.outputs.wiederholung != 'true'
-        id: automation
-        uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
-
-      # Der Tag zeigt auf die in der bestätigten Vorbereitung festgehaltene SHA.
-      - name: Liefer-Tag erstellen
-        if: needs.check.outputs.wiederholung != 'true'
-        env:
-          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
-          GITHUB_TOKEN: ${{ github.token }}
-          LIEFER_TAG: ${{ needs.check.outputs.liefer_tag }}
-        run: >-
-          "${{ steps.automation.outputs.python }}"
-          "$ACTION_PATH/src/mtext.py" delivery tag
-          --tag "$LIEFER_TAG"
-
-  # Erstellt die Projektpakete mit JCL und JSON-Informationsdateien.
-  build:
-    name: FULL- oder DELTA-Artefakt erstellen
-    needs: [check, tag]
-    permissions:
-      contents: read
-    runs-on: [self-hosted, linux]
-    timeout-minutes: 15
-    steps:
-      # Lädt den Commit des Liefer-Tags mit seiner Historie.
-      - name: Check-Out Liefer-Tag
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          path: source
-          persist-credentials: false
-          ref: refs/tags/${{ needs.check.outputs.liefer_tag }}
 
       - name: mtext_actions laden
         id: automation
@@ -208,9 +169,9 @@ jobs:
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" release mainframe
 
-  # Veröffentlicht den Bereitstellungsbericht nach der Mainframe-Übergabe.
+  # Kennzeichnet den angenommenen Stand und veröffentlicht den Bereitstellungsbericht.
   report:
-    name: Bereitstellungsbericht im Mandanten-Repository veröffentlichen
+    name: Lieferstand in GitHub bereitstellen
     needs: [check, publish]
     permissions:
       contents: write
@@ -222,6 +183,19 @@ jobs:
       - name: mtext_actions laden
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
+
+      # Der Tag zeigt auf die zuvor erfolgreich an den Mainframe übergebene SHA.
+      - name: Liefer-Tag erstellen
+        if: needs.check.outputs.wiederholung != 'true'
+        env:
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
+          GITHUB_TOKEN: ${{ github.token }}
+          LIEFER_TAG: ${{ needs.check.outputs.liefer_tag }}
+          SOURCE_SHA: ${{ needs.check.outputs.source_sha }}
+        run: >-
+          "${{ steps.automation.outputs.python }}"
+          "$ACTION_PATH/src/mtext.py" delivery tag
+          --tag "$LIEFER_TAG"
 
       # Lädt das Lieferartefakt in das temporäre Verzeichnis dieses Jobs.
       - name: Lieferartefakt herunterladen
@@ -251,3 +225,27 @@ jobs:
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" delivery complete
           --tag "$LIEFER_TAG" --issue "$FREIGABE_ISSUE"
+
+  # Ein offenes Issue verweist auch bei einem fehlgeschlagenen Folgejob auf den Lauf.
+  rueckmeldung:
+    name: Nicht abgeschlossene Lieferung melden
+    needs: [check, build, publish, report]
+    if: ${{ always() && inputs.freigabe_issue != 0 && needs.report.result != 'success' }}
+    permissions:
+      issues: write
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 5
+    steps:
+      - name: mtext_actions laden
+        id: automation
+        uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
+
+      - name: Lieferlauf im Issue melden
+        env:
+          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
+          FREIGABE_ISSUE: ${{ inputs.freigabe_issue }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          "${{ steps.automation.outputs.python }}"
+          "$ACTION_PATH/src/mtext.py" delivery incomplete
+          --issue "$FREIGABE_ISSUE"

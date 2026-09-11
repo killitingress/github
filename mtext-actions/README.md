@@ -29,10 +29,11 @@ Die wiederverwendbaren Workflows unter `.github/workflows` sind:
 |---|---|
 | `resources check` | Mandantenkonfiguration sowie konfigurierte JSON-, XML- und verfügbare JavaScript-Ressourcen prüfen |
 | `resources sync` | Änderungen seit dem letzten erfolgreichen Branchstand mit M/Text synchronisieren |
-| `delivery check` | einen Lieferstand vorbereiten |
+| `delivery check` | Liefer-Tag aus dem Branch ableiten und den Lieferstand vorbereiten |
 | `delivery resolve` | eine Vorbereitung oder einen vorhandenen Liefer-Tag ermitteln |
-| `delivery confirm` | eine Vorbereitung bestätigen |
-| `delivery tag` | den Liefer-Tag auf der vorbereiteten SHA erstellen |
+| `delivery confirm` | eine Vorbereitung bestätigen und den gestarteten Lauf im Freigabe-Issue verknüpfen |
+| `delivery incomplete` | einen nicht abgeschlossenen Lauf im Freigabe-Issue melden |
+| `delivery tag` | den vom Mainframe angenommenen Stand mit dem Liefer-Tag kennzeichnen |
 | `release build` | FULL- oder DELTA-Lieferdateien erzeugen |
 | `release mainframe` | Lieferdateien per FTPS und JES an den Mainframe übergeben |
 | `release github` | Lieferinformationen als GitHub Release veröffentlichen |

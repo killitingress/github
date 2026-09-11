@@ -2,17 +2,12 @@ name: Shared Workflow – Lieferung vorprüfen
 
 # Dieser Workflow bereitet den ausgewählten Branchstand für eine spätere
 # Lieferung vor. Er lädt die festzuhaltende SHA mit ihrer Historie und prüft den
-# vorgesehenen Liefer-Tag, den Branch und den Lieferumfang. Das Ergebnis wird in
+# aus dem Branch abgeleiteten Liefer-Tag und den Lieferumfang. Das Ergebnis wird in
 # der Actions-Zusammenfassung und einem Freigabe-Issue angezeigt. Die geprüften
 # Angaben werden als Vorbereitung für 30 Tage im aufrufenden Mandantenlauf
 # gespeichert. In diesem Lauf entstehen weder Liefer-Tag noch Übergabe.
 'on':
   workflow_call:
-    inputs:
-      liefer_tag:
-        description: Vorgesehener Liefer-Tag
-        required: true
-        type: string
 permissions:
   contents: read
   issues: write
@@ -34,18 +29,16 @@ jobs:
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
-      # Prüft Liefer-Tag, Branch und Lieferumfang, schreibt die Vorprüfung in die
+      # Leitet den Liefer-Tag ab, prüft den Lieferumfang und schreibt die Vorprüfung in die
       # Actions-Zusammenfassung und legt vorbereitung.json an
       - name: Lieferung und Lieferumfang prüfen
         id: check
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           GITHUB_TOKEN: ${{ github.token }}
-          LIEFER_TAG: ${{ inputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" delivery check
-          --tag "$LIEFER_TAG"
 
       - name: Vorbereitung festhalten
         uses: actions/upload-artifact@v3

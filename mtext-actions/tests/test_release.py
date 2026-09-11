@@ -40,10 +40,10 @@ class ReleaseTests(TempDirTestCase):
     def test_release_files_and_mainframe_transfer(self) -> None:
         """Prüft DELTA und FULL vom Paketbau im Runner bis zur Mainframe-Übergabe."""
 
-        # ein Liefer-Tag außerhalb des Release-Branches und alte Arbeitsdateien sind zulässig
+        # Paketbau verwendet den vorbereiteten Commit, bevor der Liefer-Tag existiert
         git(self.repository, "checkout", "--detach", "r261.108")
+        git(self.repository, "tag", "-d", "r261.108")
         git(self.repository, "commit", "--allow-empty", "-m", "bereitstellung")
-        git(self.repository, "tag", "-f", "r261.108")
         stale_dist = self.root / "dist"
         stale_dist.mkdir()
         (stale_dist / "alt.tgz").write_bytes(b"alter Lauf")
@@ -97,11 +97,13 @@ class ReleaseTests(TempDirTestCase):
         self.assertEqual(raised.exception.status, Status.PACKAGE_FAILED)
         self.assertEqual((stale_dist / "alt.tgz").read_bytes(), b"alter Lauf")
 
+        # die angenommene Zwischenlieferung wird vor dem nächsten Hauptrelease gekennzeichnet
+        git(self.repository, "tag", "r261.108")
+
         # ein neues Hauptrelease folgt auf die vorhandene Zwischenlieferung
         (self.repository / "LOMS_Basis/new.txt").unlink()
         git(self.repository, "add", "-u")
         git(self.repository, "commit", "-m", "neues Hauptrelease")
-        git(self.repository, "tag", "r270.100")
 
         # der Berichtvergleich darf FULL nicht in ein DELTA umwandeln
         run("build", tag="r270.100")

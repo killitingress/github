@@ -8,6 +8,7 @@ name: Mandantenkonfiguration und Ressourcen prüfen
 
 permissions:
   contents: read
+  actions: read
 
 # Ein neuer manueller Start ersetzt die laufende Prüfung desselben Branchs.
 concurrency:

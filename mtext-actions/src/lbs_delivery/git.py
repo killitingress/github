@@ -28,6 +28,9 @@ LIEFER_TAG_RE = re.compile("r" + _LIEFERSTAND_PATTERN)
 # Releaselinie sowie Zwischenrelease, zum Beispiel `bereitstellung/261.108`.
 BEREITSTELLUNG_BRANCH_RE = re.compile("bereitstellung/" + _LIEFERSTAND_PATTERN)
 
+# Prüft einen Release-Branch und erfasst dessen Releaselinie.
+RELEASE_BRANCH_RE = re.compile(r"release/([0-9]{3})")
+
 
 @dataclass(frozen=True, order=True)
 class LieferTag:
@@ -57,6 +60,21 @@ class LieferTag:
             return None
 
         return cls(match.group("releaselinie"), match.group("zwischenrelease"))
+
+    @classmethod
+    def from_lieferzweig(cls, branch: str, fuehrende_releaselinie: str) -> LieferTag | None:
+        """Leitet den Liefer-Tag aus einem möglichen Lieferzweig ab."""
+
+        if tag := cls.from_bereitstellung(branch):
+            return tag
+
+        if branch == "main":
+            return cls(fuehrende_releaselinie, "100")
+
+        if match := RELEASE_BRANCH_RE.fullmatch(branch):
+            return cls(match.group(1), "100")
+
+        return None
 
     @property
     def ist_hauptrelease(self) -> bool:

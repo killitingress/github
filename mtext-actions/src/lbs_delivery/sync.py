@@ -17,9 +17,6 @@ from .project_packages import Scope, build_project_package, delta_scope
 # GitHub liefert für den ersten Push eines Branches diese Null-SHA als Vorgänger
 _LEERER_PUSH_COMMIT = "0" * 40
 
-# Release-Branches tragen ihre Releaselinie im Branch-Namen
-_RELEASE_BRANCH_RE = re.compile(r"release/([0-9]{3})")
-
 # Feature-Branches tragen Releaselinie und Bezeichnung im Branch-Namen
 _FEATURE_BRANCH_RE = re.compile(r"feature/([0-9]{3})/(.+)")
 
@@ -60,7 +57,7 @@ def _resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[st
     if source_branch == "main":
         return main_releaselinie, config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST
 
-    release_match = _RELEASE_BRANCH_RE.fullmatch(source_branch)
+    release_match = git.RELEASE_BRANCH_RE.fullmatch(source_branch)
     if release_match is not None:
         return release_match.group(1), config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST
 

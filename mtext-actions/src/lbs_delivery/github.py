@@ -208,16 +208,22 @@ def create_tag(tag: str, sha: str) -> None:
     _request(method="POST", url=url, failure=Status.SOURCE_FAILED, payload={"ref": f"refs/tags/{tag}", "sha": sha})
 
 
-def complete_issue(number: int, body: str) -> None:
-    """Ergänzt das Ergebnis und schließt das Issue im aktuellen Repository."""
+def comment_issue(number: int, body: str) -> None:
+    """Ergänzt einen Kommentar im angegebenen Issue."""
 
     issue_url = _repository_url(f"issues/{number}")
-
-    # erfolgreichen Lauf im Freigabeprotokoll ergänzen
     url = f"{issue_url}/comments"
     _request(method="POST", url=url, failure=Status.FREIGABE_FAILED, payload={"body": body})
 
+
+def complete_issue(number: int, body: str) -> None:
+    """Ergänzt das Ergebnis und schließt das Issue im aktuellen Repository."""
+
+    # erfolgreichen Lauf im Freigabeprotokoll ergänzen
+    comment_issue(number, body)
+
     # abgeschlossenes Issue als weiterhin lesbares Protokoll erhalten
+    issue_url = _repository_url(f"issues/{number}")
     _request(method="PATCH", url=issue_url, failure=Status.FREIGABE_FAILED, payload={"state": "closed"})
 
 

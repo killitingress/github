@@ -134,9 +134,9 @@ def _submit_mainframe_files(*, release_directory: Path) -> dict[str, object]:
 def _build_mainframe_files(configuration: config.Configuration, *, output_directory: Path, tag: git.LieferTag) -> None:
     """Erzeugt Archive, Informationsdateien und JCL für den Liefer-Tag."""
 
-    # Paketumfang und Vorrelease-Vergleich aus demselben Lieferstand ableiten
+    # Paketumfang und Vorrelease-Vergleich aus dem vorbereiteten Commit ableiten
     repository_root = config.mandant_source()
-    paket_scope = release_scope(repository_root, tag, git.resolve(repository_root, f"refs/tags/{tag}"))
+    paket_scope = release_scope(repository_root, tag, git.resolve(repository_root, "HEAD"))
     information_scope = previous_release_scope(repository_root, tag, paket_scope.bis[1])
 
     # Hostprofil und JCL-Vorlage für diese Releaselinie laden

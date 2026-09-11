@@ -1,8 +1,7 @@
 name: Unit-Tests
 
-# Dieser Workflow führt auf main, test und in Pull Requests die Unit-Tests aus.
-# Ein erfolgreicher Lauf bedeutet, dass die Python-Abläufe ausführbar und
-# konsistent sind.
+# Dieser Workflow führt die Unit-Tests aus. Ein erfolgreicher Lauf bedeutet,
+# dass die Python-Abläufe ausführbar und konsistent sind.
 'on':
   workflow_dispatch:
   pull_request:

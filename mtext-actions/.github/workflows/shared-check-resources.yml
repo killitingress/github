@@ -6,11 +6,11 @@ name: Shared Workflow – Tonic-Ressourcen prüfen
 'on':
   workflow_call:
     inputs:
-      liefer_tag:
-        description: Liefer-Tag zur Bestimmung des FULL- oder DELTA-Umfangs
+      lieferung:
+        description: Umfang der folgenden Lieferung verwenden
         required: false
-        type: string
-        default: ''
+        type: boolean
+        default: false
       synchronisierung:
         description: Vergleichsumfang der folgenden Synchronisierung verwenden
         required: false
@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: source
-          fetch-depth: ${{ (inputs.liefer_tag != '' || inputs.synchronisierung) && '0' || '1' }}
+          fetch-depth: ${{ (inputs.lieferung || inputs.synchronisierung) && '0' || '1' }}
           persist-credentials: false
 
       # Starte die Composite Action "action.yml"
@@ -45,8 +45,7 @@ jobs:
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           GITHUB_TOKEN: ${{ inputs.synchronisierung && github.token || '' }}
-          LIEFER_TAG: ${{ inputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}" "$ACTION_PATH/src/mtext.py" resources check
-          --tag "$LIEFER_TAG"
+          ${{ inputs.lieferung && '--delivery-scope' || '' }}
           ${{ inputs.synchronisierung && '--sync-scope' || '' }}

@@ -3,19 +3,14 @@ name: Lieferung vorbereiten
 # Dieser Workflow bereitet den in GitHub ausgewählten Branchstand für eine
 # Lieferung vor. Zuerst werden Mandantenkonfiguration und Ressourcen im FULL-
 # oder DELTA-Umfang der Lieferung geprüft. Befunde erscheinen als Warnungen und
-# unterbrechen die Vorbereitung nicht. Die vorbereitende Person gibt den
-# vorgesehenen Liefer-Tag beim manuellen Start an. Repository, Branch, SHA und
-# Person stammen aus dem auslösenden Mandantenlauf. Der Shared Workflow prüft
+# unterbrechen die Vorbereitung nicht. Der Liefer-Tag wird aus dem ausgewählten
+# Branch abgeleitet. Repository, Branch, SHA und Person stammen aus dem
+# auslösenden Mandantenlauf. Der Shared Workflow prüft
 # den Lieferstand und hält SHA und Lieferumfang als Laufartefakt fest. Ein Issue
 # zeigt die geprüften Angaben und nimmt die spätere Freigabe entgegen. Die
 # Vorbereitung erstellt noch keinen Liefer-Tag und startet keine Übergabe.
 'on':
   workflow_dispatch:
-    inputs:
-      liefer_tag:
-        description: Liefer-Tag, zum Beispiel r261.108
-        required: true
-        type: string
 
 # Verhindert konkurrierende Erzeugung des gemeinsamen Freigabe-Labels.
 concurrency:
@@ -24,6 +19,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
   issues: write
 
 jobs:
@@ -32,12 +28,10 @@ jobs:
     name: Mandantenkonfiguration und Ressourcen prüfen
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
     with:
-      liefer_tag: ${{ inputs.liefer_tag }}
+      lieferung: true
 
   # Startet den Shared Workflow für den ausgewählten Branchstand
   vorpruefen:
     name: Lieferung vorprüfen
     needs: ressourcen-pruefen
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-check.yml@main
-    with:
-      liefer_tag: ${{ inputs.liefer_tag }}

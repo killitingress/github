@@ -18,21 +18,23 @@ def run() -> dict[str, object]:
     parser.add_argument("schritt") # z.B. "check" oder "sync" oder "github" oder "mainframe"
     parser.add_argument("--tag")
     parser.add_argument("--issue", type=int) # Freigabe-Issue einer Lieferung
+    parser.add_argument("--delivery-scope", action="store_true") # Umfang der folgenden Lieferung
     parser.add_argument("--sync-scope", action="store_true") # Umfang der folgenden Synchronisierung
     args = parser.parse_args()
 
     if args.bereich == "resources" and args.schritt == "check":
         # Der Workflow-Aufruf legt genau einen fachlichen Prüfungsumfang fest.
-        if args.tag and args.sync_scope:
+        if args.delivery_scope and args.sync_scope:
             raise DeliveryError(Status.VALIDATION_FAILED, "Prüfungsumfang ist nicht eindeutig")
 
-        scope: Scope | None = None
         if args.tag:
-            try:
-                tag = git.LieferTag.parse(args.tag)
-            except ValueError as exc:
-                raise DeliveryError(Status.VALIDATION_FAILED, str(exc)) from exc
+            raise DeliveryError(Status.VALIDATION_FAILED, "Liefer-Tag wird aus dem Branch ermittelt")
+
+        scope: Scope | None = None
+        if args.delivery_scope:
             source = config.mandant_source()
+            configuration = config.Configuration.load(source, os.environ["GITHUB_REPOSITORY"])
+            tag = lieferung.liefer_tag_fuer_branch(configuration, os.environ["GITHUB_REF_NAME"])
             scope = release_scope(source, tag, git.resolve(source, "HEAD"))
         elif args.sync_scope:
             source = config.mandant_source()
