@@ -23,14 +23,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Startet den Shared Workflow für den gewählten Liefer-Tag
+  # Produktive Freigaben und manuelle Wiederholungen verwenden den Stand von main.
   lieferung-ausfuehren:
     name: Lieferung ausführen
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.issue.pull_request == null &&
       contains(github.event.issue.labels.*.name, 'lieferung:freigabe') &&
-      github.event.comment.body == '/freigeben')
+      github.event.comment.body == '/freigabe')
     permissions:
       contents: write
       actions: read
@@ -39,5 +39,24 @@ jobs:
     with:
       liefer_tag: ${{ inputs.liefer_tag || '' }}
       freigabe_issue: ${{ github.event.issue.number || 0 }}
+    secrets:
+      mainframe_ftps_password: ${{ secrets.MAINFRAME_FTPS_PASSWORD }}
+
+  # Der eigene Kommentarweg erlaubt Tests des noch nicht produktiven Shared Workflows.
+  lieferung-ausfuehren-test:
+    name: Lieferung mit Teststand ausführen
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request == null &&
+      contains(github.event.issue.labels.*.name, 'lieferung:freigabe') &&
+      github.event.comment.body == '/freigabe@test'
+    permissions:
+      contents: write
+      actions: read
+      issues: write
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@test
+    with:
+      liefer_tag: ''
+      freigabe_issue: ${{ github.event.issue.number }}
     secrets:
       mainframe_ftps_password: ${{ secrets.MAINFRAME_FTPS_PASSWORD }}

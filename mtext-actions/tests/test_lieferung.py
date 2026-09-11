@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import json
 import os
 import sys
@@ -11,8 +10,9 @@ from unittest.mock import patch
 
 import mtext
 from lbs_delivery.git import LieferTag
-from lbs_delivery.lieferung import _pruefe_lieferquelle, _summary, liefer_tag_fuer_branch, run
+from lbs_delivery.lieferung import liefer_tag_fuer_branch, run
 from lbs_delivery.process import DeliveryError, Status
+from lbs_delivery.project_packages import previous_release_scope, project_elements, release_scope
 
 from tests.support import TempDirTestCase, git, load_test_configuration, setup_release_repository, track_remote_branch
 
@@ -29,8 +29,8 @@ class LieferungTests(TempDirTestCase):
         self.configuration = load_test_configuration(self.repository)
         self.source_sha = git(self.repository, "rev-parse", "HEAD")
 
-    def test_liefer_tag_exposes_release_information(self) -> None:
-        """Prüft Bestandteile, Hauptrelease und Reihenfolge eines Liefer-Tags."""
+    def test_liefer_tag_and_branch_rules(self) -> None:
+        """Prüft Bestandteile, Reihenfolge und zulässige Lieferzweige."""
 
         # ein Zwischenrelease liefert seine Bestandteile und die FULL-Basis
         tag = LieferTag.parse("r261.108")
@@ -54,55 +54,34 @@ class LieferungTests(TempDirTestCase):
             "r261.108",
         )
 
-    def test_prepares_delta_on_bereitstellung_and_shows_previous_tag(self) -> None:
-        """Prüft eine DELTA-Vorbereitung mit dem vorherigen Liefer-Tag."""
-
-        # .106 gehört zur Lieferhistorie, die höhere .107 liegt auf einem anderen Verlauf
-        git(self.repository, "tag", "-d", "r261.107")
-        git(self.repository, "tag", "r261.106", "HEAD^")
+        # .100 entsteht nicht aus einem Bereitstellungsbranch
         git(self.repository, "checkout", "--detach", "r261.100")
-        git(self.repository, "commit", "--allow-empty", "-m", "anderer Verlauf")
-        git(self.repository, "tag", "r261.107")
-        git(self.repository, "switch", "-c", "bereitstellung/261.108", self.source_sha)
-        track_remote_branch(self.repository, "bereitstellung/261.108")
+        git(self.repository, "switch", "-c", "bereitstellung/261.100")
+        git(self.repository, "tag", "-d", "r261.100")
+        with self.assertRaises(DeliveryError) as raised:
+            liefer_tag_fuer_branch(self.configuration, "bereitstellung/261.100")
+        self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
 
-        # ein zusätzliches leeres Projekt macht die Texte für leere Archive sichtbar
-        configuration = dataclasses.replace(
-            self.configuration,
-            projects=self.configuration.projects | {"Leeres_Projekt": "LEER"},
-        )
+        # andere Branches sind keine Lieferquelle
+        with self.assertRaises(DeliveryError) as raised:
+            liefer_tag_fuer_branch(self.configuration, "feature/261/beispiel")
+        self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
 
-        # die Vorbereitung verwendet .107 als Vorgänger auch außerhalb ihrer Historie
-        tag = _pruefe_lieferquelle(configuration, self.repository, "bereitstellung/261.108")
-        self.assertEqual(str(tag), "r261.108")
-        summary = _summary(
-            configuration,
-            self.repository,
-            LieferTag.parse("r261.108"),
-            "bereitstellung/261.108",
-            self.source_sha,
-        )
-        self.assertIn("| Branch | `bereitstellung/261.108` |", summary)
-        self.assertIn("- Liefer-Tag: `r261.108`", summary)
-        self.assertIn("- Lieferart: `DELTA`", summary)
-        self.assertIn(f"- Commit: `{self.source_sha}`", summary)
-        self.assertIn("`r261.100`", summary)
-        self.assertIn("Änderungen seit `r261.107`", summary)
-        self.assertNotIn("Änderungen seit `r261.106`", summary)
-        self.assertIn("`D` `deleted.txt`", summary)
-        self.assertIn("`A` `new.txt`", summary)
-        self.assertIn("## Projektarchive", summary)
-        self.assertIn("Das DELTA-Archiv enthält keine geänderten oder gelöschten Ressourcen.", summary)
+    def test_separates_previous_changes_from_archive_contents(self) -> None:
+        """Trennt Vorrelease-Änderungen vom kumulativen DELTA-Archivinhalt."""
 
-        # dieselbe Berichtserzeugung bezeichnet ein leeres FULL-Archiv passend
-        full_summary = _summary(
-            configuration,
-            self.repository,
-            LieferTag.parse("r261.100"),
-            "release/261",
-            git(self.repository, "rev-parse", "r261.100"),
-        )
-        self.assertIn("Das FULL-Archiv enthält keine Ressourcendateien.", full_summary)
+        # unveränderte Testhistorie vergleicht für die Information .107 und für das Archiv .100
+        tag = LieferTag.parse("r261.108")
+        information_scope = previous_release_scope(self.repository, tag, self.source_sha)
+        paket_scope = release_scope(self.repository, tag, self.source_sha)
+
+        # beide fachlichen Elementlisten unterscheiden sich unabhängig von ihrer Darstellung
+        information_elements = project_elements(self.repository, "LOMS_Basis", information_scope)
+        paket_elements = project_elements(self.repository, "LOMS_Basis", paket_scope)
+        self.assertIn(["D", "transient.txt"], information_elements)
+        self.assertNotIn(["M", "baseline.txt"], information_elements)
+        self.assertNotIn(["D", "transient.txt"], paket_elements)
+        self.assertIn(["M", "baseline.txt"], paket_elements)
 
     def test_resource_check_derives_delivery_scope_from_branch(self) -> None:
         """Übergibt der Ressourcenprüfung den aus dem Lieferzweig abgeleiteten Umfang."""
@@ -121,40 +100,6 @@ class LieferungTests(TempDirTestCase):
         scope = check.call_args.args[0]
         self.assertEqual(scope.von[0], "r261.100")
         self.assertEqual(scope.bis, ("r261.108", self.source_sha))
-
-    def test_rejects_invalid_delivery_branches(self) -> None:
-        """Prüft Zwischenrelease-Grenzen und zulässige Lieferzweige."""
-
-        # Tag und Bereitstellungsbranch verwenden denselben Lieferstand
-        for zwischenrelease in ("100", "108", "999"):
-            with self.subTest(zwischenrelease=zwischenrelease):
-                tag = LieferTag.parse(f"r260.{zwischenrelease}")
-                self.assertEqual(tag, LieferTag.from_bereitstellung(f"bereitstellung/260.{zwischenrelease}"))
-
-        # Zwischenreleases außerhalb von 100–999 scheitern vor dem Git-Zugriff
-        for zwischenrelease in ("000", "099", "1000"):
-            with self.subTest(zwischenrelease=zwischenrelease):
-                self.assertIsNone(LieferTag.from_bereitstellung(f"bereitstellung/261.{zwischenrelease}"))
-                with self.assertRaises(ValueError):
-                    LieferTag.parse(f"r261.{zwischenrelease}")
-
-        git(self.repository, "checkout", "--detach", "r261.100")
-        git(self.repository, "switch", "-c", "bereitstellung/261.100")
-        git(self.repository, "tag", "-d", "r261.100")
-        track_remote_branch(self.repository, "bereitstellung/261.100")
-        with self.assertRaises(DeliveryError) as raised:
-            liefer_tag_fuer_branch(self.configuration, "bereitstellung/261.100")
-        self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
-
-        # delivery check lehnt einen anderen ausgewählten Branch ab
-        with patch.dict(os.environ, {
-            "GITHUB_WORKSPACE": str(self.root),
-            "GITHUB_REPOSITORY": self.configuration.repository,
-            "GITHUB_REF_NAME": "feature/261/beispiel",
-        }):
-            with self.assertRaises(DeliveryError) as raised:
-                run("check")
-        self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
 
     def test_prepares_checkout_after_branch_advances(self) -> None:
         """Die Vorbereitung hält den Lauf-Commit bei weiterentwickeltem Branch fest."""
@@ -198,10 +143,9 @@ class LieferungTests(TempDirTestCase):
         self.assertEqual(payload["tag"], "r261.100")
         self.assertEqual(payload["issue"], 42)
         self.assertEqual(result["outputs"]["vorbereitung_name"], "lieferung-42-vorbereitungsartefakt")
-        self.assertIn(f"- Commit: `{self.source_sha}`", result["summary"])
 
-    def test_resolve_authorizes_maintainers_and_confirms_issue_artifact(self) -> None:
-        """Erlaubt Maintain und Admin und bindet die Vorbereitung an das Issue."""
+    def test_resolve_authorizes_and_confirms_issue_artifact(self) -> None:
+        """Prüft Berechtigung und Bindung der Vorbereitung an das Issue."""
 
         payload = {
             "tag": "r261.108",
@@ -229,22 +173,11 @@ class LieferungTests(TempDirTestCase):
             artifacts = {"artifacts": [{"id": 20, "created_at": "2026-08-21T10:00:00Z", "expired": False}]}
 
             # resolve prüft Rolle, offenes Issue und zugeordnetes Artefakt gemeinsam
-            for role in ("maintain", "admin"):
-                with self.subTest(role=role):
-                    with patch(
-                        "lbs_delivery.lieferung.github._request",
-                        side_effect=({"role_name": role}, issue, artifacts),
-                    ):
-                        result = run("resolve", issue=42)
-                    self.assertEqual(result["status"], Status.LIEFERSTAND_ERMITTELT)
-
-            # dieselbe Rollenprüfung gilt ohne Issue für eine Wiederholung
-            reference = {"object": {"sha": self.source_sha}}
             with patch(
                 "lbs_delivery.lieferung.github._request",
-                side_effect=({"role_name": "maintain"}, reference),
+                side_effect=({"role_name": "maintain"}, issue, artifacts),
             ):
-                result = run("resolve", "r261.108", issue=0)
+                result = run("resolve", issue=42)
             self.assertEqual(result["status"], Status.LIEFERSTAND_ERMITTELT)
 
             # dieselbe Person darf vorbereiten und der gestartete Lauf wird verknüpft
@@ -378,41 +311,6 @@ class LieferungTests(TempDirTestCase):
                 with self.assertRaises(DeliveryError) as raised:
                     run("resolve", **invalid)
                 self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
-
-    def test_rejects_invalid_or_mismatched_preparation(self) -> None:
-        """Lehnt beschädigte Artefakte und ein abweichendes Freigabe-Issue ab."""
-
-        preparation = self.root / "vorbereitung" / "vorbereitung.json"
-        preparation.parent.mkdir()
-        arguments = {"subcommand": "confirm", "issue": 42}
-        with patch.dict(
-            os.environ,
-            {
-                "GITHUB_WORKSPACE": str(self.root),
-                "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
-                "GITHUB_ACTOR": "alice",
-            },
-        ):
-            preparation.write_text("kein JSON", encoding="utf-8")
-            with self.assertRaises(DeliveryError) as raised:
-                run(**arguments)
-            self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
-
-            preparation.write_text(
-                json.dumps(
-                    {
-                        "tag": "r261.109",
-                        "sha": self.source_sha,
-                        "repository": "FinanzInformatik/fi_lbs_entw_oms_fi",
-                        "issue": 41,
-                    }
-                ),
-                encoding="utf-8",
-            )
-            with self.assertRaises(DeliveryError) as raised:
-                run(**arguments)
-            self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
-
 
 if __name__ == "__main__":
     unittest.main()

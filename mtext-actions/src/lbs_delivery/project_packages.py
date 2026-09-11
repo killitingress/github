@@ -144,23 +144,27 @@ def release_report(configuration: Configuration, repository: Path, *, paket_scop
     else:
         lines.extend(("Keine Ressourcenänderungen in den gelieferten Projekten.", ""))
 
-    # jedes Projekt erhält ein eigenes Archiv mit dem kumulativen Lieferumfang
-    lines.extend(("## Projektarchive", "", "Für jedes Projekt wird ein eigenes Archiv erstellt.", ""))
+    # tatsächlichen Archivinhalt getrennt vom Vergleich zum vorherigen Liefer-Tag zeigen
+    lines.extend(("## Inhalt der Projektarchive", ""))
     if paket_scope.von is None:
         lines.extend(("Vollständiger Projektstand (FULL).", ""))
     else:
         lines.extend((f"Vergleich: `{paket_scope.von[0]}` → `{paket_scope.bis[0]}`", ""))
 
-    for project in configuration.projects:
-        elements = project_elements(repository, project, paket_scope)
-        lines.extend((f"### `{project}`", ""))
-        if elements:
+    archive_contents = [
+        (project, project_elements(repository, project, paket_scope))
+        for project in configuration.projects
+    ]
+    archive_contents = [e for e in archive_contents if e[1]]
+    if archive_contents:
+        for project, elements in archive_contents:
+            lines.extend((f"### `{project}`", ""))
             lines.extend(f"- `{status}` `{path}`" for status, path in elements)
-        elif paket_scope.von is None:
-            lines.append("Das FULL-Archiv enthält keine Ressourcendateien.")
-        else:
-            lines.append("Das DELTA-Archiv enthält keine geänderten oder gelöschten Ressourcen.")
-        lines.append("")
+            lines.append("")
+    elif paket_scope.von is None:
+        lines.extend(("Die Projektarchive enthalten keine Ressourcendateien.", ""))
+    else:
+        lines.extend(("Die Projektarchive enthalten keine geänderten oder gelöschten Ressourcen.", ""))
 
     return "\n".join(lines)
 

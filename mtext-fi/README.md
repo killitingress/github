@@ -65,7 +65,7 @@ diesen `.100`-Tag. `main` und `release/nnn` ergeben `rnnn.100`. Ein Branch
    gekennzeichnete Freigabe-Issue öffnen und die dort angezeigten Angaben
    prüfen.
 5. Mit Repository-Berechtigung `maintain` oder `admin` den Kommentar
-   `/freigeben` eintragen. Die vorbereitende Person darf selbst freigeben.
+   `/freigabe` eintragen. Die vorbereitende Person darf selbst freigeben.
 6. Nach dem ausgelösten Lauf die Mainframe-Übergabe und das GitHub Release
    kontrollieren.
 

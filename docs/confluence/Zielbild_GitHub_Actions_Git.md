@@ -86,9 +86,9 @@ Branch und Liefer-Tag auswählen
     │ Lieferung vorbereiten
     ▼
 Freigabe-Issue prüfen
-    │ /freigeben
+    │ /freigabe
     ▼
-Liefer-Tag, Paketbau und Mainframe-Übergabe
+Paketbau, Mainframe-Übergabe und Liefer-Tag
 ```
 
 ### Entscheidungen und Nutzen
@@ -494,7 +494,7 @@ ein neues Laufartefakt.
 Das mit `lieferung:freigabe` gekennzeichnete Freigabe-Issue zeigt den Stand,
 der geliefert werden soll. Eine Person mit
 wirksamer Repository-Berechtigung `maintain` oder `admin` startet die Lieferung
-mit dem Kommentar `/freigeben`. Die vorbereitende Person darf die Lieferung
+mit dem Kommentar `/freigabe`. Die vorbereitende Person darf die Lieferung
 selbst freigeben. Der Workflow prüft die Berechtigung zum Zeitpunkt des
 Kommentars. Liefer-Tag und Commit-SHA stammen aus dem an die Issue-Nummer
 gebundenen Vorbereitungsartefakt und nicht aus dem editierbaren Issue-Text.
@@ -527,10 +527,10 @@ Artefakt, überträgt die Archive an den Mainframe und reicht die JCL ein.
 
 Der Lieferbericht nennt Liefer-Tag, Lieferart und Commit-SHA. Er zeigt die
 Projekte mit Ressourcenänderungen seit dem vorherigen Liefer-Tag. Anschließend
-zeigt er für jedes Projekt den Inhalt seines eigenen Archivs mit Status und
-Pfad. Bei DELTA umfasst der Archivinhalt die Änderungen seit `.100`, bei FULL
-den gesamten Projektstand. Ein DELTA-Archiv ohne geänderte oder gelöschte
-Ressourcen wird entsprechend ausgewiesen. Die Bezugsstände sind im Bericht
+zeigt er den Inhalt der Projektarchive mit Ressourcenänderungen als Status und
+Pfad. Projekte ohne geänderte oder gelöschte Ressourcen werden dort nicht
+einzeln aufgeführt. Bei DELTA umfasst der Archivinhalt die Änderungen seit
+`.100`, bei FULL den gesamten Projektstand. Die Bezugsstände sind im Bericht
 angegeben, Löschungen mit `D` gekennzeichnet.
 
 Nach erfolgreicher Mainframe-Übergabe veröffentlicht der Shared Workflow den
@@ -569,7 +569,7 @@ Mandanten-Workflows unter `secrets.MAINFRAME_FTPS_PASSWORD` zur Verfügung.
   Laufzusammenfassung und im Freigabe-Issue und hält die Vorbereitung mit
   Commit-SHA im Vorbereitungsartefakt fest.
 - **Lieferung ausführen**: Übernimmt die Vorbereitung nach einem berechtigten
-  `/freigeben`-Kommentar und baut die Archive, je
+  `/freigabe`-Kommentar und baut die Archive, je
   Archiv eine JCL, die JSON-Informationsdateien und den Lieferbericht und
   speichert sie im Laufartefakt `release`. Der Übergabejob lädt dieses Artefakt,
   überträgt die Archive per FTPS und reicht nach jedem Archiv dessen JCL als
@@ -736,7 +736,7 @@ JavaScript geprüft werden. Dies wird dynamisch ermittelt.
 | M/Text-Entwicklung synchronisieren | Push auf `feature/nnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `shared-check-resources.yml`, danach `shared-sync-resources.yml` | `mtext.py resources check`, danach `mtext.py resources sync` |
 | M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/nnn` sowie manueller Start | `sync-resources.yml` | `shared-check-resources.yml`, danach `shared-sync-resources.yml` | `mtext.py resources check`, danach `mtext.py resources sync` |
 | Lieferung vorbereiten | Manueller Start auf `main`, `release/nnn` oder `bereitstellung/nnn.nnn` | `lieferung-vorbereiten.yml` | `shared-check-resources.yml`, danach `shared-lieferung-check.yml` | `mtext.py resources check`, danach `mtext.py delivery check` |
-| Lieferung freigeben | Kommentar `/freigeben` im offenen Freigabe-Issue durch eine Person mit `maintain` oder `admin` | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py delivery resolve` und `confirm` |
+| Lieferung freigeben | Kommentar `/freigabe` im offenen Freigabe-Issue durch eine Person mit `maintain` oder `admin` | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py delivery resolve` und `confirm` |
 | Lieferung wiederholen | Manueller Start mit einem vorhandenen Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py delivery resolve` |
 | Lieferung bauen und übertragen | Vorbereitete SHA oder vorhandener Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py release build`, `release mainframe`, danach `delivery tag` und `release github` |
 | `mtext_actions` testen | Pull Request, Push auf `main` oder manueller Start in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` |
@@ -750,7 +750,7 @@ Verarbeitung in `mtext_actions`:
 |---|---|---|
 | `check-resources.yml` | Manueller Start auf einem ausgewählten Branch | Mandantenkonfiguration und Ressourcen des Branchstands prüfen, Syntaxbefunde als Warnungen anzeigen |
 | `lieferung-vorbereiten.yml` | Manueller Start auf dem ausgewählten Branch | Ressourcen warnend prüfen, danach SHA und Lieferumfang im Freigabe-Issue und Vorbereitungsartefakt festhalten |
-| `lieferung-ausfuehren.yml` | Kommentar `/freigeben` im Freigabe-Issue oder manueller Start mit einem vorhandenen Liefer-Tag | Berechtigung und Vorbereitung prüfen und die Lieferung starten oder einen vorhandenen Lieferstand erneut übergeben |
+| `lieferung-ausfuehren.yml` | Kommentar `/freigabe` im Freigabe-Issue oder manueller Start mit einem vorhandenen Liefer-Tag | Berechtigung und Vorbereitung prüfen und die Lieferung starten oder einen vorhandenen Lieferstand erneut übergeben |
 | `sync-resources.yml` | Push auf einen Feature-, `main`- oder Release-Branch sowie manueller Start | Ressourcen warnend prüfen, danach Projekte nach M/Text-Entwicklung oder -Funktionstest übertragen |
 
 ### Shared Workflows

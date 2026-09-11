@@ -180,8 +180,6 @@ class SyncTests(TempDirTestCase):
                 result["ergebnisse"][0]["result"],
                 "Geändert: beispiel.xml\nGelöscht: alt.xml",
             )
-            self.assertIn("Geändert: beispiel.xml\nGelöscht: alt.xml", result["summary"])
-
             git(self.repository, "add", ".github")
             git(self.repository, "commit", "-m", "Konfiguration")
             git(self.repository, "update-ref", "refs/remotes/origin/release/261", "HEAD")

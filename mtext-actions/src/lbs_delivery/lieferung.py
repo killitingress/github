@@ -133,10 +133,8 @@ def _erstelle_freigabe_issue(tag: git.LieferTag, summary: str) -> tuple[int, str
         f"{summary}\n"
         "---\n\n"
         "## Freigabe\n\n"
-        f"- Vorbereitet durch: @{os.environ['GITHUB_ACTOR']}\n"
-        f"- Vorbereitung: [Actions-Lauf]({_actions_lauf_url()})\n\n"
-        "Mitglieder mit Repository-Berechtigung `maintain` oder `admin` starten "
-        "die Lieferung mit einem Kommentar, der ausschließlich `/freigeben` enthält.\n"
+        f"- Vorbereitet durch: @{os.environ['GITHUB_ACTOR']} ([Actions-Lauf]({_actions_lauf_url()}))\n\n"
+        "Lieferung starten durch einen Kommentar, der ausschließlich `/freigabe` enthält.\n"
     )
 
     # Issue-Nummer bindet das spätere Laufartefakt an diese Freigabe
