@@ -10,10 +10,12 @@ from contextlib import redirect_stdout
 from unittest.mock import patch
 
 import mtext
+from lbs_delivery.git import GitChange
 from lbs_delivery.process import Status
-from lbs_delivery.resource_check import _NODE_COMMAND
+from lbs_delivery.project_packages import Scope
+from lbs_delivery import resource_check
 
-from tests.support import TempDirTestCase, git, init_git_repository, load_test_configuration
+from tests.support import TempDirTestCase, load_test_configuration
 
 
 class CheckResourcesTests(TempDirTestCase):
@@ -33,9 +35,10 @@ class CheckResourcesTests(TempDirTestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
-    def test_full_resource_check(self) -> None:
-        """Prüft die Ressourcen beim manuellen Workflow-Start."""
+    def test_full_and_delta_resource_checks(self) -> None:
+        """Prüft Vollstand und einen übergebenen DELTA-Scope mit Warnungen."""
 
+        # gemischten Branchstand für die vollständige manuelle Prüfung aufbauen
         self.write("formular.formio", '{"components": [{"type": "textfield"}]}')
         self.write("brief.model", "<brief><absatz>Text</absatz></brief>")
         self.write("start.pageLayout", "<seite />")
@@ -51,10 +54,10 @@ class CheckResourcesTests(TempDirTestCase):
         load_test_configuration(self.repository, mandant={"excluded_projects": ["LOMS_Testdaten"]})
         output = io.StringIO()
 
+        # Vollstand mit allen konfigurierten Dateitypen prüfen
         with (
             patch.dict(os.environ, {
                 "GITHUB_WORKSPACE": str(self.root),
-                "GITHUB_EVENT_NAME": "workflow_dispatch",
                 "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
             }),
             patch.object(sys, "argv", ["mtext.py", "resources", "check"]),
@@ -63,14 +66,14 @@ class CheckResourcesTests(TempDirTestCase):
             result = mtext.run()
 
         command_output = output.getvalue()
-        files = 8 if _NODE_COMMAND else 6
-        warnings = 4 if _NODE_COMMAND else 3
+        files = 8 if resource_check._NODE_COMMAND else 6
+        warnings = 4 if resource_check._NODE_COMMAND else 3
         self.assertIn("::warning file=LOMS_Basis/brief.mapping,line=3,col=3", command_output)
         self.assertIn("::warning file=LOMS_Basis/formular.formio,line=3,col=1", command_output)
         self.assertIn("::warning file=variante.pageLayouts", command_output)
         self.assertNotIn("LOMS_Testdaten", command_output)
         self.assertNotIn("start.pageLayout", command_output)
-        if _NODE_COMMAND:
+        if resource_check._NODE_COMMAND:
             self.assertIn("::warning file=bruch.js,line=2,col=1", command_output)
             self.assertNotIn("aktion.js", command_output)
         else:
@@ -79,39 +82,27 @@ class CheckResourcesTests(TempDirTestCase):
         result.pop("summary")
         self.assertEqual(result, {"status": Status.RESOURCE_CHECKED, "files": files, "warnings": warnings})
 
-    def test_pull_request_checks_changed_resources(self) -> None:
-        """Prüft beim Pull Request die Ressourcen aus dem Git-Vergleich."""
-
-        init_git_repository(self.repository)
-        self.write("LOMS_Basis/platzhalter.txt", "Projektinhalt")
-        self.write("LOMS_Testdaten/ignoriert.xml", "<test />")
-        self.write("bestehend.formio", '{"bewusst": NaN}')
-        self.write("brief.datamodel", "<brief />")
-        load_test_configuration(self.repository, mandant={"excluded_projects": ["LOMS_Testdaten"]})
-        git(self.repository, "add", ".")
-        git(self.repository, "commit", "-q", "-m", "Ausgangsstand")
-        self.write("brief.datamodel", "<brief>")
-        self.write("LOMS_Testdaten/ignoriert.xml", "")
-        self.write("notiz.txt", "kein Prüfgegenstand")
-        git(self.repository, "add", ".")
-        git(self.repository, "commit", "-q", "-m", "Änderung")
-
+        # eine Ressource für den explizit übergebenen DELTA-Scope ändern
+        self.write("brief.model", "<brief>")
+        scope = Scope(
+            von=("release/261", "basis"),
+            bis=("release/261", "ziel"),
+            changes=[GitChange("M", "brief.model")],
+        )
         output = io.StringIO()
+
+        # Syntaxprüfer ohne Kenntnis von Lieferung oder Synchronisierung aufrufen
         with (
             patch.dict(os.environ, {
                 "GITHUB_WORKSPACE": str(self.root),
-                "GITHUB_EVENT_NAME": "pull_request",
                 "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
             }),
-            patch.object(sys, "argv", ["mtext.py", "resources", "check"]),
             redirect_stdout(output),
         ):
-            result = mtext.run()
+            result = resource_check.run(scope)
 
-        command_output = output.getvalue()
-        self.assertIn("::warning file=brief.datamodel", command_output)
-        self.assertNotIn("LOMS_Testdaten", command_output)
-        self.assertNotIn("bestehend.formio", command_output)
+        self.assertIn("::warning file=brief.model", output.getvalue())
+        self.assertNotIn("LOMS_Basis/formular.formio", output.getvalue())
         result.pop("summary")
         self.assertEqual(result, {"status": Status.RESOURCE_CHECKED, "files": 1, "warnings": 1})
 

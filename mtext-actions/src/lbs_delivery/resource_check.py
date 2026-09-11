@@ -11,9 +11,9 @@ from collections import Counter
 from fnmatch import fnmatch
 from pathlib import Path
 
-from . import git
 from .config import FILETYPE_MAPPINGS_PATH, Configuration, mandant_source
 from .process import Status
+from .project_packages import Scope
 
 
 # falls es das node Kommando gibt, wird auch eine Prüfung von JavaScript-Dateien ermöglicht
@@ -91,26 +91,29 @@ def _load_filetype_mappings() -> dict[str, str]:
     return filetype_mappings
 
 
-def _relevant_resources(root: Path, mappings: dict[str, str], configuration: Configuration, changed_only: bool) -> list[tuple[Path, str]]:
-    """Ermittelt Liste aller relevanten Ressourcen mit dem zugeordneten Parser."""
+def _relevant_resources(
+    root: Path,
+    mappings: dict[str, str],
+    configuration: Configuration,
+    scope: Scope | None,
+) -> list[tuple[Path, str]]:
+    """Ermittelt die Ressourcen des Prüfungsumfangs und ihre Parser."""
 
-    result: list[tuple[Path, str]] = [] # Liste aus Tupeln (Pfad, Dateityp)
-
-    # Kandidaten aus dem Pull-Request-Diff oder dem vollständigen Arbeitsbaum sammeln
-    candidates: list[Path] = []
-    if changed_only:
-        # versteckte Pfade aus dem Diff nicht weiter betrachten
+    # DELTA verwendet geänderte Pfade, FULL den sichtbaren Arbeitsbaum
+    if scope is not None and scope.von is not None:
         candidates = [
-            (root / e.path)
-            for e in git.changes(root, "HEAD^1", "HEAD")
+            root / e.path
+            for e in scope.changes
             if not any(part.startswith(".") for part in Path(e.path).parts)
         ]
     else:
+        candidates: list[Path] = []
         for directory, directories, filenames in os.walk(root):
-            directories[:] = [e for e in directories if not e.startswith(".")] # [:] ist ein Slice-Assignment, das die Liste in-place modifiziert
+            directories[:] = [e for e in directories if not e.startswith(".")] # [:] ändert die von os.walk weiterverwendete Liste
             candidates.extend((Path(directory) / e) for e in filenames if not e.startswith("."))
 
-    # nur reguläre Dateien behalten, für die auch ein Parser konfiguriert ist
+    # Dateien aus ausgeschlossenen Projekten und ohne konfigurierten Parser überspringen
+    result: list[tuple[Path, str]] = [] # Tupel aus Pfad und Dateityp
     for path in candidates:
         relative_path = path.relative_to(root)
 
@@ -127,8 +130,8 @@ def _relevant_resources(root: Path, mappings: dict[str, str], configuration: Con
     return sorted(result)
 
 
-def run() -> dict[str, object]:
-    """Lädt die Mandantenkonfiguration und prüft die ausgewählten Ressourcen."""
+def run(scope: Scope | None = None) -> dict[str, object]:
+    """Prüft die Ressourcen des übergebenen FULL- oder DELTA-Umfangs."""
 
     root = mandant_source().resolve()
     configuration = Configuration.load(root, os.environ["GITHUB_REPOSITORY"])
@@ -136,14 +139,11 @@ def run() -> dict[str, object]:
     # Prüf-Funktionen je Dateityp
     checkers = {"json": _check_json, "xml": _check_xml, "js": _check_javascript}
 
-    # Pull-Requests prüfen nur geänderte Ressourcen
-    changed_only = os.environ["GITHUB_EVENT_NAME"] == "pull_request"
-
     # Dateiendungs-Zuordnungen laden
     filetype_mappings = _load_filetype_mappings()
 
     # relevante Ressourcen ermitteln
-    resources = _relevant_resources(root, filetype_mappings, configuration, changed_only)
+    resources = _relevant_resources(root, filetype_mappings, configuration, scope)
     filetype_counts = Counter(e[1] for e in resources) # Anzahl der Ressourcen je Dateityp
     finding_counts: Counter[str] = Counter()
     findings: list[tuple[Path, int, int, str]] = []

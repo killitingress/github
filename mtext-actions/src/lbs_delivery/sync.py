@@ -6,11 +6,12 @@ import json
 import os
 import re
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import adapter, config, git, github
 from .process import DeliveryError, Status
-from .project_packages import Scope, build_project_package
+from .project_packages import Scope, build_project_package, delta_scope
 
 
 # GitHub liefert für den ersten Push eines Branches diese Null-SHA als Vorgänger
@@ -21,6 +22,16 @@ _RELEASE_BRANCH_RE = re.compile(r"release/([0-9]{3})")
 
 # Feature-Branches tragen Releaselinie und Bezeichnung im Branch-Namen
 _FEATURE_BRANCH_RE = re.compile(r"feature/([0-9]{3})/(.+)")
+
+
+@dataclass(frozen=True)
+class SyncPlan:
+    """Verbindet den Paketumfang mit den Zielumgebungen eines Sync-Laufs."""
+
+    # FULL- oder DELTA-Umfang für alle Pakete des Laufs
+    scope: Scope
+    # in Ausführungsreihenfolge anzusprechende M/Text-Umgebungen
+    umgebungen: list[str]
 
 
 def _previous_main_release_line(source: Path) -> str | None:
@@ -84,6 +95,48 @@ def _resolve_comparison_commit(source: Path, commit: str, basis_branch: str | No
     return vergleichsstand
 
 
+def resolve_plan(source: Path, configuration: config.Configuration) -> SyncPlan:
+    """Bestimmt Vergleichsumfang und Zielumgebungen der Synchronisierung."""
+
+    # Branchstand der Releaselinie und der zugeordneten Umgebungsart zuordnen
+    branch = os.environ["GITHUB_REF_NAME"]
+    commit = git.resolve(source, "HEAD")
+    event = os.environ["GITHUB_EVENT_NAME"]
+    releaselinie, umgebung_art = _resolve_sync_branch(branch, configuration.releaselinie)
+    if releaselinie not in configuration.releaselinien:
+        raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
+
+    etaps_linie = configuration.releaselinien[releaselinie]["etaps_linie"]
+    prefixe = configuration.mtext_umgebung_prefixe
+    umgebung = f"{prefixe[umgebung_art]}{etaps_linie}"
+    entwicklungsumgebung = f"{prefixe[config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG]}{etaps_linie}"
+
+    # nur den noch aktuellen Stand des Remote-Branches verarbeiten
+    git.require_ancestor(source, commit, f"refs/remotes/origin/{branch}")
+
+    # Linienwechsel auf main brauchen ein FULL in Entwicklung und Funktionstest
+    linienwechsel = False
+    if branch == "main" and event != "workflow_dispatch":
+        vorherige = _previous_main_release_line(source)
+        linienwechsel = bool(vorherige and vorherige != configuration.releaselinie)
+    umgebungen = [entwicklungsumgebung, umgebung] if linienwechsel else [umgebung]
+
+    # manueller Abgleich und Linienwechsel prüfen und übertragen den Vollstand
+    vergleichsstand = None
+    if event != "workflow_dispatch" and not linienwechsel:
+        basis_branch = None
+        if umgebung_art == config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG:
+            basis_branch = "main" if releaselinie == configuration.releaselinie else f"release/{releaselinie}"
+        vergleichsstand = _resolve_comparison_commit(source, commit, basis_branch)
+
+    # derselbe FULL- oder DELTA-Scope steuert Ressourcenprüfung und Paketbau
+    if vergleichsstand is None:
+        scope = Scope(von=None, bis=(branch, commit), changes=[])
+    else:
+        scope = delta_scope(source, (branch, vergleichsstand), (branch, commit))
+    return SyncPlan(scope, umgebungen)
+
+
 def _workflow_response(ergebnisse: list[dict[str, object]]) -> dict[str, object]:
     """Erzeugt Ergebnis und Zusammenfassung des Sync-Workflows."""
 
@@ -145,55 +198,18 @@ def run() -> dict[str, object]:
     source = config.mandant_source()
     configuration = config.Configuration.load(source, os.environ["GITHUB_REPOSITORY"])
 
-    # Branch der Releaselinie und der zugeordneten Umgebungsart zuordnen
-    branch = os.environ["GITHUB_REF_NAME"]
-    commit = git.resolve(source, "HEAD")
-    event = os.environ["GITHUB_EVENT_NAME"]
-    releaselinie, umgebung_art = _resolve_sync_branch(branch, configuration.releaselinie)
-    if releaselinie not in configuration.releaselinien:
-        raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
-
-    etaps_linie = configuration.releaselinien[releaselinie]["etaps_linie"]
-    prefixe = configuration.mtext_umgebung_prefixe
-    umgebung = f"{prefixe[umgebung_art]}{etaps_linie}"
-    entwicklungsumgebung = f"{prefixe[config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG]}{etaps_linie}"
-
-    # nur den noch aktuellen Stand des Remote-Branches synchronisieren
-    git.require_ancestor(source, commit, f"refs/remotes/origin/{branch}")
-
-    # Linienwechsel auf main: FULL zuerst in Entwicklung, danach in Funktionstest
-    linienwechsel = False
-    if branch == "main" and event != "workflow_dispatch":
-        vorherige = _previous_main_release_line(source)
-        linienwechsel = bool(vorherige and vorherige != configuration.releaselinie)
-
-    # beim Linienwechsel Entwicklung vor Funktionstest synchronisieren
-    umgebungen = [entwicklungsumgebung, umgebung] if linienwechsel else [umgebung]
+    # Vergleichsumfang und Zielumgebungen einmalig planen
+    plan = resolve_plan(source, configuration)
 
     # alle Zieladapter prüfen, bevor Archive für die erste Umgebung entstehen
-    for ziel in umgebungen:
+    for ziel in plan.umgebungen:
         adapter.check_reachability(ziel)
-
-    # manueller Abgleich und Linienwechsel brauchen keinen DELTA-Vergleichsstand
-    vergleichsstand = None
-    if event != "workflow_dispatch" and not linienwechsel:
-        basis_branch = None
-        if umgebung_art == config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG:
-            basis_branch = "main" if releaselinie == configuration.releaselinie else f"release/{releaselinie}"
-        vergleichsstand = _resolve_comparison_commit(source, commit, basis_branch)
-
-    # Vergleichsstand und aktueller Branchstand bilden den gemeinsamen Archiv-Scope
-    scope = Scope(
-        von=(branch, vergleichsstand) if vergleichsstand is not None else None,
-        bis=(branch, commit),
-        changes=git.changes(source, vergleichsstand, commit) if vergleichsstand is not None else [],
-    )
 
     # jede Umgebung erhält einen eigenständig gebauten und übertragenen Auftrag
     ergebnisse: list[dict[str, object]] = []
-    for ziel in umgebungen:
+    for ziel in plan.umgebungen:
         try:
-            ergebnisse.append(_synchronize_umgebung(configuration, source, scope, ziel))
+            ergebnisse.append(_synchronize_umgebung(configuration, source, plan.scope, ziel))
         except DeliveryError as exc:
             message = f"Synchronisierung mit der M/Text-Umgebung {ziel} fehlgeschlagen. {exc.args[0]}"
             if ergebnisse:

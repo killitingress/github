@@ -34,12 +34,13 @@ bearbeitet:
 2. Davon einen Branch `feature/nnn/<Bezeichnung>` erstellen.
 3. Die M/Text-Ressourcen bearbeiten, committen und den Feature-Branch nach
    GitHub pushen.
-4. Unter **Actions** den Lauf **M/Text-Ressourcen synchronisieren** prüfen und
-   die Änderung anschließend in M/Text-Entwicklung testen.
+4. Unter **Actions** die Ressourcenprüfung und Synchronisierung im Lauf
+   **M/Text-Ressourcen synchronisieren** prüfen und die Änderung anschließend
+   in M/Text-Entwicklung testen.
 5. Einen Pull Request auf `main` oder `release/nnn` erstellen. Ziel- und
    Feature-Branch gehören dabei zur selben Releaselinie.
-6. Die Ressourcenprüfung und das Review abschließen und die Änderung mit
-   **Squash and merge** zusammenführen.
+6. Das Review abschließen und die Änderung mit **Squash and merge**
+   zusammenführen.
 7. Den Synchronisierungslauf des Zielbranches prüfen und den Stand in
    M/Text-Funktionstest abnehmen.
 
@@ -57,8 +58,8 @@ diesen `.100`-Tag.
 1. In GitHub unter **Actions** den Workflow **Lieferung vorbereiten** öffnen.
 2. `main`, den passenden Branch `release/nnn` oder einen vorbereiteten Branch
    `bereitstellung/nnn.nnn` auswählen und den geplanten Liefer-Tag eingeben.
-3. In der Zusammenfassung Branch, Commit, Lieferart, Bezugsstand und
-   Lieferumfang prüfen.
+3. Die Warnungen der Ressourcenprüfung sowie in der Zusammenfassung Branch,
+   Commit, Lieferart, Bezugsstand und Lieferumfang prüfen.
 4. Den Workflow **Lieferung ausführen** öffnen und denselben Liefer-Tag
    eingeben.
 5. Hat dieselbe Person die Lieferung vorbereitet, die Direktlieferung im
@@ -75,11 +76,16 @@ Die Dateien unter `.github/workflows` stellen die manuellen und automatischen
 Einstiege des Repositories bereit. Die Verarbeitungsschritte werden aus
 `FinanzInformatik/fi_lbs_entw_oms_mtext_actions` geladen.
 
+Die eigenständige Ressourcenprüfung umfasst den ausgewählten Branchstand. In
+der Synchronisierung und Liefervorbereitung folgt ihr Umfang der jeweiligen
+FULL- oder DELTA-Verarbeitung. Bei einem DELTA werden die seit dem fachlichen
+Vergleichsstand geänderten Ressourcen geprüft.
+
 | Datei | Auslöser | Aufgerufener Shared Workflow |
 |---|---|---|
-| `check-resources.yml` | Pull Request oder manueller Start | `shared-check-resources.yml` |
-| `sync-resources.yml` | Push auf `main`, `release/nnn` oder `feature/nnn/**` sowie manueller Start | `shared-sync-resources.yml` |
-| `lieferung-vorbereiten.yml` | manueller Start mit einem Liefer-Tag | `shared-lieferung-check.yml` |
+| `check-resources.yml` | manueller Start auf einem ausgewählten Branch | `shared-check-resources.yml` |
+| `sync-resources.yml` | Push auf `main`, `release/nnn` oder `feature/nnn/**` sowie manueller Start | zuerst `shared-check-resources.yml`, danach `shared-sync-resources.yml` |
+| `lieferung-vorbereiten.yml` | manueller Start mit einem Liefer-Tag | zuerst `shared-check-resources.yml`, danach `shared-lieferung-check.yml` |
 | `lieferung-ausfuehren.yml` | manueller Start mit einem Liefer-Tag und optionaler Bestätigung der Direktlieferung | `shared-lieferung-ausfuehren.yml` |
 
 Die Workflow-Aufrufe verwenden jeweils `@main` aus dem Repository

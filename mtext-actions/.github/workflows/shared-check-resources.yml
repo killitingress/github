@@ -1,13 +1,26 @@
 name: Shared Workflow – Tonic-Ressourcen prüfen
 
-# Shared Workflow zur Prüfung der Tonic-Ressourcen des angegebenen Mandanten-
-# Repositories. Bei Pull-Requests werden nur die geänderten Elemente
-# geprüft, bei manuellem Lauf der gesamte Stand (ohne excluded_projects).
+# Shared Workflow zur Prüfung der Mandantenkonfiguration und der Ressourcen.
+# Der Aufruf bestimmt einen Vollstand oder den DELTA-Umfang der folgenden
+# Lieferung oder Synchronisierung. Ausgeschlossene Projekte entfallen.
 'on':
   workflow_call:
+    inputs:
+      liefer_tag:
+        description: Liefer-Tag zur Bestimmung des FULL- oder DELTA-Umfangs
+        required: false
+        type: string
+        default: ''
+      synchronisierung:
+        description: Vergleichsumfang der folgenden Synchronisierung verwenden
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+  # Der aufrufende Sync-Workflow gewährt diese Berechtigung für seinen Vergleichsstand.
+  actions: read
 
 jobs:
   check:
@@ -15,12 +28,11 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 15
     steps:
-      # Für Pull Requests wird der Vorgänger für den Änderungsvergleich geladen.
       - name: Check-Out Mandantenstand
         uses: actions/checkout@v4
         with:
           path: source
-          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
+          fetch-depth: ${{ (inputs.liefer_tag != '' || inputs.synchronisierung) && '0' || '1' }}
           persist-credentials: false
 
       # Starte die Composite Action "action.yml"
@@ -32,5 +44,9 @@ jobs:
       - name: Ressourcen prüfen
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
+          GITHUB_TOKEN: ${{ inputs.synchronisierung && github.token || '' }}
+          LIEFER_TAG: ${{ inputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}" "$ACTION_PATH/src/mtext.py" resources check
+          --tag "$LIEFER_TAG"
+          ${{ inputs.synchronisierung && '--sync-scope' || '' }}

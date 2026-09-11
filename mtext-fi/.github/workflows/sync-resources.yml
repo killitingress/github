@@ -1,10 +1,12 @@
 name: M/Text-Ressourcen synchronisieren
 
 # Dieser Workflow startet die Ressourcensynchronisierung für Feature-, main- und
-# Release-Branches. Der Shared Workflow verwendet den Branchstand des
-# auslösenden Ereignisses. Ein manueller Start gleicht den in GitHub
-# ausgewählten Branch vollständig ab. Die Läufe können ihre Aufträge
-# parallel an den Adapter übergeben.
+# Release-Branches. Zuerst werden Mandantenkonfiguration und Ressourcen im
+# FULL- oder DELTA-Umfang der Synchronisierung geprüft. Befunde erscheinen als
+# Warnungen und unterbrechen die Synchronisierung nicht. Der Shared Workflow
+# verwendet den Branchstand des auslösenden Ereignisses. Ein manueller Start
+# gleicht den in GitHub ausgewählten Branch vollständig ab. Die Läufe können
+# ihre Aufträge parallel an den Adapter übergeben.
 'on':
   push:
     branches:
@@ -20,7 +22,15 @@ permissions:
   actions: read
 
 jobs:
+  # Verwendet denselben FULL- oder DELTA-Umfang wie die Synchronisierung.
+  ressourcen-pruefen:
+    name: Mandantenkonfiguration und Ressourcen prüfen
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
+    with:
+      synchronisierung: true
+
   # Der Shared Workflow führt die Synchronisierung aus
   sync:
     name: Ressourcen mit M/Text synchronisieren
+    needs: ressourcen-pruefen
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-sync-resources.yml@main

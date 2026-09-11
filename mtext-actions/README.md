@@ -54,11 +54,14 @@ nach `RUNNER_TEMP/dist`, Übergabe und Berichtsjob lesen das heruntergeladene
 Artefakt aus `RUNNER_TEMP/release`. Das temporäre Basisverzeichnis wird vom
 Runner je Job bereinigt.
 
-Die Ressourcenprüfung leitet ihren Umfang aus `GITHUB_EVENT_NAME` ab. Bei
-`pull_request` prüft sie geänderte Ressourcen, beim manuellen Start den gesamten
-Stand. Projektverzeichnisse aus `excluded_projects` bleiben dabei unberücksichtigt.
-Die Actions-Zusammenfassung schlüsselt die geprüften Dateien nach JSON, XML und
-JavaScript auf.
+Die manuell gestartete Ressourcenprüfung prüft den vollständigen ausgewählten
+Branchstand. Vor einer DELTA-Lieferung verwendet sie die Änderungen seit dem
+`.100`-Tag der Releaselinie. Vor einer DELTA-Synchronisierung verwendet sie
+denselben Vergleichsstand wie der anschließende Paketbau. FULL-Läufe prüfen den
+vollständigen Stand. Projektverzeichnisse aus `excluded_projects` bleiben
+dabei unberücksichtigt. Die Actions-Zusammenfassung schlüsselt die geprüften
+Dateien nach JSON, XML und JavaScript auf. Syntaxbefunde werden als Warnungen
+ausgegeben und beenden den Job erfolgreich.
 
 Die Mindestversion in `.python-version` ist Python 3.12. Die Runner-Prüfung in
 `scripts/runner-preflight.sh` erwartet außerdem Git, `tar`, `curl` und `unzip`.
