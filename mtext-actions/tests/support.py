@@ -78,6 +78,7 @@ def setup_release_repository(root: Path) -> Path:
     (project / "baseline.txt").write_text("base\n", encoding="utf-8")
     (project / "deleted.txt").write_text("delete\n", encoding="utf-8")
     (project / "rename-old.txt").write_text("rename\n", encoding="utf-8")
+    load_test_configuration(repository)
     git(repository, "add", ".")
     git(repository, "commit", "-m", "full")
     # der Dummy-Liefer-Tag aus der Migration stellt den ersten Vergleichsstand bereit

@@ -47,14 +47,15 @@ class GitHubReleaseTests(TempDirTestCase):
     def test_publishes_release_and_refreshes_information_file(self) -> None:
         """Prüft FULL, DELTA und das Ersetzen der Informationsdatei bei Wiederholung."""
 
-        for tag, delivery_type, wiederholung in (
-            ("r261.108", "DELTA", False),
-            ("r261.100", "FULL", False),
-            ("r261.108", "DELTA", True),
+        for tag, delivery_type, wiederholung, dry_run in (
+            ("r261.108", "DELTA", False, False),
+            ("r261.100", "FULL", False, False),
+            ("r261.108", "DELTA", True, False),
+            ("r261.108", "DELTA", False, True),
         ):
-            with self.subTest(tag=tag, wiederholung=wiederholung):
+            with self.subTest(tag=tag, wiederholung=wiederholung, dry_run=dry_run):
                 git(self.repository, "checkout", "--detach", tag)
-                runner_temp = self.root / tag
+                runner_temp = self.root / f"{tag}-{dry_run}"
                 _build_mainframe_files(
                     self.configuration, output_directory=runner_temp / "release", tag=LieferTag.parse(tag),
                 )
@@ -77,7 +78,10 @@ class GitHubReleaseTests(TempDirTestCase):
                 responses.append({"id": 61})
 
                 with (
-                    patch.dict(os.environ, {"RUNNER_TEMP": str(runner_temp)}),
+                    patch.dict(os.environ, {
+                        "RUNNER_TEMP": str(runner_temp),
+                        "DRY_RUN": str(dry_run).lower(),
+                    }),
                     patch("lbs_delivery.github._request", side_effect=responses) as api,
                 ):
                     result = run(tag)
@@ -102,6 +106,8 @@ class GitHubReleaseTests(TempDirTestCase):
                 )
                 self.assertEqual(result["status"], Status.GITHUB_RELEASE_PUBLISHED)
                 self.assertEqual(result["release_url"], release["html_url"])
+                self.assertEqual(result["dry_run"], dry_run)
+                self.assertEqual(calls[1]["payload"]["prerelease"], dry_run)
 
 
 if __name__ == "__main__":

@@ -111,6 +111,7 @@ class LieferungTests(TempDirTestCase):
         git(self.repository, "commit", "--allow-empty", "-m", "später")
         track_remote_branch(self.repository, "release/261")
         git(self.repository, "checkout", "--detach", self.source_sha)
+        load_test_configuration(self.repository, mandant={"dry_run": True})
 
         # den gestarteten Stand für die spätere Lieferung vorbereiten
         with patch.dict(os.environ, {
@@ -128,13 +129,15 @@ class LieferungTests(TempDirTestCase):
                 side_effect=(
                     None,
                     {"name": "lieferung:freigabe"},
+                    None,
+                    {"name": "dry_run"},
                     {
                         "number": 42,
                         "html_url": "https://github.example/FI/mandant/issues/42",
-                        "labels": [{"name": "lieferung:freigabe"}],
+                        "labels": [{"name": "lieferung:freigabe"}, {"name": "dry_run"}],
                     },
                 ),
-            ):
+            ) as api:
                 result = run("check")
 
         # Artefakt und Vorprüfung beziehen sich auf den Checkout des Laufs
@@ -143,6 +146,7 @@ class LieferungTests(TempDirTestCase):
         self.assertEqual(payload["tag"], "r261.100")
         self.assertEqual(payload["issue"], 42)
         self.assertEqual(result["outputs"]["vorbereitung_name"], "lieferung-42-vorbereitungsartefakt")
+        self.assertEqual(api.call_args.kwargs["payload"]["labels"], ["lieferung:freigabe", "dry_run"])
 
     def test_resolve_authorizes_and_confirms_issue_artifact(self) -> None:
         """Prüft Berechtigung und Bindung der Vorbereitung an das Issue."""

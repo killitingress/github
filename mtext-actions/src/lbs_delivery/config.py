@@ -65,6 +65,8 @@ class Configuration:
     releaselinie: str
     # CodePipeline-Umgebung (Produktion oder Test)
     ispw: str
+    # Dry Run baut alle Dateien, führt aber keine externe Übergabe aus
+    dry_run: bool
     # Mainframe-Subsystem
     subsystem: str
     # Zuordnung der Projektverzeichnisse zu ihren Projektcodes (z.B. `LOMS_Basis[BY]` zu `BASIS`)
@@ -113,6 +115,9 @@ class Configuration:
         if mandant["ispw"] not in ISPW_INSTANZEN:
             raise DeliveryError(Status.VALIDATION_FAILED, f"ISPW-Instanz #{mandant['ispw']} ist ungültig")
 
+        if not isinstance(mandant.get("dry_run", False), bool):
+            raise DeliveryError(Status.VALIDATION_FAILED, "dry_run muss true oder false sein")
+
         for name, profile in mandant["hostprofile"].items():
             if profile["stage"] not in CODEPIPELINE_STAGES or not profile.get("assignment"):
                 raise DeliveryError(Status.VALIDATION_FAILED, f"Hostprofil #{name} ist ungültig")
@@ -138,6 +143,7 @@ class Configuration:
             kuerzel=mandant["kuerzel"],
             releaselinie=mandant["releaselinie"],
             ispw=mandant["ispw"],
+            dry_run=mandant.get("dry_run", False),
             subsystem=stammdaten["subsystem"],
             projects=projects,
             excluded_projects=tuple(mandant.get("excluded_projects", [])),

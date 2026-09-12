@@ -102,6 +102,8 @@ jobs:
       contents: read
     runs-on: [self-hosted, linux]
     timeout-minutes: 15
+    outputs:
+      dry_run: ${{ steps.package.outputs.dry_run }}
     steps:
       # Lädt den in der Vorbereitung festgehaltenen Stand mit seiner Historie.
       - name: Check-Out Lieferstand
@@ -119,6 +121,7 @@ jobs:
       # Schreibt die Lieferdateien nach runner.temp/dist. Das temporäre
       # Basisverzeichnis wird vom Runner je Job bereinigt.
       - name: Lieferdateien erstellen
+        id: package
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           LIEFER_TAG: ${{ needs.check.outputs.liefer_tag }}
@@ -136,9 +139,9 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # Übergibt die Lieferdateien an den Mainframe.
+  # Prüft die Lieferdateien und übergibt sie außerhalb eines Dry Runs an den Mainframe.
   publish:
-    name: Lieferung an Mainframe übergeben
+    name: Mainframe-Übergabe
     needs: build
     permissions:
       contents: read
@@ -160,19 +163,20 @@ jobs:
           name: release
           path: ${{ runner.temp }}/release
 
-      # Überträgt jedes Archiv per FTPS und reicht seine JCL bei JES ein.
+      # Überträgt außerhalb eines Dry Runs jedes Archiv und reicht seine JCL bei JES ein.
       - name: Lieferung an Mainframe übergeben
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
+          DRY_RUN: ${{ needs.build.outputs.dry_run }}
           MAINFRAME_FTPS_PASSWORD: ${{ secrets.mainframe_ftps_password }}
         run: >-
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" release mainframe
 
-  # Kennzeichnet den angenommenen Stand und veröffentlicht den Bereitstellungsbericht.
+  # Kennzeichnet den verarbeiteten Stand und veröffentlicht den Bereitstellungsbericht.
   report:
     name: Lieferstand in GitHub bereitstellen
-    needs: [check, publish]
+    needs: [check, build, publish]
     permissions:
       contents: write
       actions: read
@@ -184,7 +188,7 @@ jobs:
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
-      # Der Tag zeigt auf die zuvor erfolgreich an den Mainframe übergebene SHA.
+      # Der Tag zeigt auf die verarbeitete SHA, im Dry Run ohne Mainframe-Übergabe.
       - name: Liefer-Tag erstellen
         if: needs.check.outputs.wiederholung != 'true'
         env:
@@ -207,6 +211,7 @@ jobs:
       - name: GitHub Release veröffentlichen
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
+          DRY_RUN: ${{ needs.build.outputs.dry_run }}
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
           "${{ steps.automation.outputs.python }}"
@@ -219,6 +224,7 @@ jobs:
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           FREIGABE_ISSUE: ${{ inputs.freigabe_issue }}
+          DRY_RUN: ${{ needs.build.outputs.dry_run }}
           GITHUB_TOKEN: ${{ github.token }}
           LIEFER_TAG: ${{ needs.check.outputs.liefer_tag }}
         run: >-

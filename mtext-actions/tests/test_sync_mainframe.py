@@ -98,8 +98,9 @@ class SyncTests(TempDirTestCase):
                     {"workflow_runs": [{"head_sha": e}] if e else []} for e in commits
                 ]
                 read_git.reset_mock()
-                read_git.return_value = (
-                    json.dumps({"mandant": {"releaselinie": old_line}}).encode() if branch == "main" else b"base"
+                read_git.side_effect = lambda _source, command, *_arguments: (
+                    json.dumps({"mandant": {"releaselinie": old_line}}).encode()
+                    if command == "show" else b"base"
                 )
                 transfer.reset_mock()
                 build_package.reset_mock()
@@ -118,7 +119,7 @@ class SyncTests(TempDirTestCase):
                     if branch == "main" and event == "push":
                         self.assertIn("event=push", history.call_args_list[0].kwargs["url"])
                         reference = f"{commits[0] or 'before'}:{sync.config.MANDANT_CONFIG_PATH}"
-                        read_git.assert_called_once_with(self.repository, "show", reference)
+                        self.assertIn(call(self.repository, "show", reference), read_git.call_args_list)
 
                     if base == "base":
                         read_git.assert_called_with(
@@ -135,6 +136,20 @@ class SyncTests(TempDirTestCase):
                         project_count = len(load_test_configuration(self.repository).projects)
                         self.assertEqual(build_package.call_count, project_count * 2)
                         self.assertEqual(adapter_steps[:2], [("check", e) for e in targets])
+
+            # der erste echte Lauf nach einem Dry Run wird zum vollständigen Abgleich
+            history.side_effect = [{"workflow_runs": [{"head_sha": "previous"}]}]
+            read_git.reset_mock()
+            read_git.side_effect = lambda _source, command, *_arguments: (
+                json.dumps({"mandant": {"releaselinie": "270", "dry_run": True}}).encode()
+                if command == "show" else b"base"
+            )
+            changes.reset_mock()
+            with patch.dict(os.environ, {
+                "GITHUB_REF_NAME": "feature/261/test", "GITHUB_EVENT_NAME": "push",
+            }):
+                sync.run()
+            changes.assert_not_called()
 
             history.side_effect = [{"workflow_runs": [{"head_sha": "previous"}]}]
             ancestor.side_effect = [None, DeliveryError(Status.SOURCE_FAILED, "kein Vorfahr")]
@@ -164,8 +179,8 @@ class SyncTests(TempDirTestCase):
 
         with (
             patch.object(github, "last_sync_commit", return_value=baseline),
-            patch.object(adapter, "check_reachability"),
-            patch.object(adapter, "resume_existing", return_value=None),
+            patch.object(adapter, "check_reachability") as reachability,
+            patch.object(adapter, "resume_existing", return_value=None) as resume,
             patch.object(adapter, "upload", side_effect=self._capture_packages) as transfer,
         ):
             for event in ("push", "workflow_dispatch"):
@@ -180,6 +195,20 @@ class SyncTests(TempDirTestCase):
                 result["ergebnisse"][0]["result"],
                 "Geändert: beispiel.xml\nGelöscht: alt.xml",
             )
+
+            # Dry Run prüft die Erreichbarkeit und baut Pakete ohne Adapterauftrag
+            load_test_configuration(self.repository, mandant={"dry_run": True})
+            reachability.reset_mock()
+            resume.reset_mock()
+            transfer.reset_mock()
+            result = sync.run()
+            self.assertEqual(result["status"], Status.ADAPTER_SKIPPED)
+            self.assertEqual(result["ergebnisse"][0]["auftrag_id"], "test-FI")
+            self.assertIsInstance(result["ergebnisse"][0]["result"], str)
+            reachability.assert_called_once()
+            resume.assert_not_called()
+            transfer.assert_not_called()
+
             git(self.repository, "add", ".github")
             git(self.repository, "commit", "-m", "Konfiguration")
             git(self.repository, "update-ref", "refs/remotes/origin/release/261", "HEAD")

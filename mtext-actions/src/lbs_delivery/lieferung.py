@@ -20,6 +20,12 @@ _FREIGABE_LABEL = "lieferung:freigabe"
 # Beschreibung des Labels in der Repository-Oberfläche
 _FREIGABE_LABEL_BESCHREIBUNG = "Vorbereitete Mainframe-Lieferung wartet auf Freigabe"
 
+# Label für Lieferungen ohne Mainframe-Übergabe
+_DRY_RUN_LABEL = "dry_run"
+
+# Beschreibung des Dry-Run-Labels in der Repository-Oberfläche
+_DRY_RUN_LABEL_BESCHREIBUNG = "Externe Übergabe wird in diesem Lauf übersprungen"
+
 
 def liefer_tag_fuer_branch(configuration: config.Configuration, branch: str) -> git.LieferTag:
     """Leitet den Liefer-Tag aus einem zulässigen Lieferzweig ab."""
@@ -125,7 +131,7 @@ def _actions_lauf_url() -> str:
     )
 
 
-def _erstelle_freigabe_issue(tag: git.LieferTag, summary: str) -> tuple[int, str]:
+def _erstelle_freigabe_issue(tag: git.LieferTag, summary: str, dry_run: bool) -> tuple[int, str]:
     """Erstellt das Issue mit Lieferumfang und Bedienhinweis für die Freigabe."""
 
     # geprüften Bericht mit Urheber und Vorbereitungslauf im Issue zeigen
@@ -137,12 +143,16 @@ def _erstelle_freigabe_issue(tag: git.LieferTag, summary: str) -> tuple[int, str
         "Lieferung starten durch einen Kommentar, der ausschließlich `/freigabe` enthält.\n"
     )
 
+    # Dry Runs bereits am Freigabe-Issue sichtbar kennzeichnen
+    labels = {_FREIGABE_LABEL: _FREIGABE_LABEL_BESCHREIBUNG}
+    if dry_run:
+        labels[_DRY_RUN_LABEL] = _DRY_RUN_LABEL_BESCHREIBUNG
+
     # Issue-Nummer bindet das spätere Laufartefakt an diese Freigabe
     return github.create_labeled_issue(
         title=f"Lieferung {tag} freigeben",
         body=body,
-        label=_FREIGABE_LABEL,
-        label_description=_FREIGABE_LABEL_BESCHREIBUNG,
+        labels=labels,
     )
 
 
@@ -159,7 +169,7 @@ def _pruefe_lieferung() -> dict[str, object]:
 
     # Bericht im Freigabe-Issue veröffentlichen und den geprüften Stand daran binden
     summary = _summary(configuration, source, tag, branch, sha)
-    issue, issue_url = _erstelle_freigabe_issue(tag, summary)
+    issue, issue_url = _erstelle_freigabe_issue(tag, summary, configuration.dry_run)
     vorbereitung = Path(os.environ["GITHUB_WORKSPACE"]) / config.WORKFLOW_VORBEREITUNG_DATEI
     try:
         vorbereitung.write_text(
@@ -226,9 +236,11 @@ def _schliesse_freigabe(issue: int, tag: git.LieferTag) -> dict[str, object]:
     """Dokumentiert die erfolgreiche Lieferung und schließt ihr Freigabe-Issue."""
 
     # Ergebnis und ausführenden Actions-Lauf im Freigabeprotokoll ergänzen
+    dry_run = os.environ.get("DRY_RUN") == "true"
+    result = "Dry Run wurde erfolgreich ausgeführt" if dry_run else "Lieferung wurde erfolgreich ausgeführt"
     github.complete_issue(
         issue,
-        f"Lieferung `{tag}` wurde erfolgreich ausgeführt: [Actions-Lauf]({_actions_lauf_url()})",
+        f"{result}: `{tag}` ([Actions-Lauf]({_actions_lauf_url()}))",
     )
     return {"status": Status.LIEFERUNG_ABGESCHLOSSEN}
 

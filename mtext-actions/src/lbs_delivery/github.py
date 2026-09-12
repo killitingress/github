@@ -113,25 +113,26 @@ def _label_names(document: dict[str, object]) -> set[str]:
     }
 
 
-def create_labeled_issue(*, title: str, body: str, label: str, label_description: str) -> tuple[int, str]:
-    """Erstellt bei Bedarf das Label und danach das damit markierte Issue."""
+def create_labeled_issue(*, title: str, body: str, labels: dict[str, str]) -> tuple[int, str]:
+    """Erstellt bei Bedarf die Labels und danach das damit markierte Issue."""
 
-    # das fachliche Label bei der ersten Vorbereitung im Repository anlegen
-    url = _repository_url(f"labels/{urllib.parse.quote(label, safe='')}")
-    existing_label = _request(method="GET", url=url, failure=Status.FREIGABE_FAILED, missing_ok=True)
-    if existing_label is None:
-        payload = {"name": label, "color": "1f883d", "description": label_description}
-        _request(method="POST", url=_repository_url("labels"), failure=Status.FREIGABE_FAILED, payload=payload)
+    # fachliche Labels bei der ersten Verwendung im Repository anlegen
+    for label, description in labels.items():
+        url = _repository_url(f"labels/{urllib.parse.quote(label, safe='')}")
+        existing_label = _request(method="GET", url=url, failure=Status.FREIGABE_FAILED, missing_ok=True)
+        if existing_label is None:
+            payload = {"name": label, "color": "1f883d", "description": description}
+            _request(method="POST", url=_repository_url("labels"), failure=Status.FREIGABE_FAILED, payload=payload)
 
-    # das Issue erhält das (nun) vorhandene Label bereits beim Anlegen
-    payload = {"title": title, "body": body, "labels": [label]}
+    # das Issue erhält die nun vorhandenen Labels bereits beim Anlegen
+    payload = {"title": title, "body": body, "labels": list(labels)}
     document = _request(method="POST", url=_repository_url("issues"), failure=Status.FREIGABE_FAILED, payload=payload)
     if not isinstance(document, dict):
         raise DeliveryError(Status.FREIGABE_FAILED, "GitHub liefert kein Freigabe-Issue zurück")
 
     # fehlende Label-Berechtigung darf kein nicht freigebbares Issue hinterlassen
-    if label not in _label_names(document):
-        raise DeliveryError(Status.FREIGABE_FAILED, "GitHub hat das Freigabe-Label nicht gesetzt")
+    if not labels.keys() <= _label_names(document):
+        raise DeliveryError(Status.FREIGABE_FAILED, "GitHub hat nicht alle Freigabe-Labels gesetzt")
 
     # Nummer und HTML-Adresse an den Lieferablauf übergeben
     match document:
@@ -271,16 +272,21 @@ def run(tag: str) -> dict[str, object]:
     except (OSError, UnicodeError) as exc:
         raise DeliveryError(Status.GITHUB_RELEASE_FAILED, f"Lieferbericht kann nicht gelesen werden: {exc}") from exc
 
-    # nach erfolgreicher Übergabe beide Dateilisten direkt im GitHub Release veröffentlichen
+    # Release kennzeichnet eine übersprungene Mainframe-Übergabe sichtbar
+    dry_run = os.environ.get("DRY_RUN") == "true"
+    confirmation = (
+        "Dry Run: FTPS- und JES-Übergabe wurden übersprungen.\n"
+        if dry_run
+        else "Die Archive und die zugehörige JCL wurden von FTPS und JES angenommen.\n"
+    )
+
+    # nach der Übergabe beide Dateilisten direkt im GitHub Release veröffentlichen
     release_values = {
         "tag_name": tag,
-        "name": f"Release {tag}",
-        "body": (
-            report + "\n"
-            "Die Archive und die zugehörige JCL wurden von FTPS und JES angenommen.\n"
-        ),
+        "name": f"{'Dry Run ' if dry_run else 'Release '}{tag}",
+        "body": report + "\n" + confirmation,
         "draft": False,
-        "prerelease": False,
+        "prerelease": dry_run,
     }
 
     # vorhandenes Release samt Anhängen lesen oder ein neues Release vorbereiten
@@ -305,4 +311,5 @@ def run(tag: str) -> dict[str, object]:
         "repository": repository,
         "liefer_tag": tag,
         "release_url": release["html_url"],
+        "dry_run": dry_run,
     }

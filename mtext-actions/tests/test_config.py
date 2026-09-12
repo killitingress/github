@@ -33,8 +33,9 @@ class ConfigTests(TempDirTestCase):
         excluded_project.mkdir()
         configuration = load_test_configuration(
             self.repository,
-            mandant={"excluded_projects": [excluded_project.name]},
+            mandant={"excluded_projects": [excluded_project.name], "dry_run": True},
         )
+        self.assertTrue(configuration.dry_run)
         self.assertNotIn(excluded_project.name, configuration.projects)
         excluded_resource = excluded_project.relative_to(self.repository) / "daten.xml"
         self.assertTrue(configuration.excludes_project_path(excluded_resource))
@@ -47,6 +48,8 @@ class ConfigTests(TempDirTestCase):
             load_test_configuration(self.repository, repository="FinanzInformatik/fi_lbs_entw_oms_unbekannt")
         with self.assertRaises(DeliveryError):
             load_test_configuration(self.repository, mandant={"releaselinie": "999"})
+        with self.assertRaises(DeliveryError):
+            load_test_configuration(self.repository, mandant={"dry_run": "true"})
 
         # zentrale Zuordnungen verlangen eindeutige Repositories und beide Umgebungsarten
         mandanten_path = self.root / "mandanten.json"

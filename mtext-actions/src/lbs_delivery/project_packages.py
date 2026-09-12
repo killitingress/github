@@ -115,6 +115,22 @@ def previous_release_scope(repository: Path, tag: git.LieferTag, commit: str) ->
     return delta_scope(repository, (str(previous), previous_sha), (str(tag), commit))
 
 
+def _project_sections(configuration: Configuration, repository: Path, scope: Scope) -> list[str]:
+    """Stellt die nicht leeren Projektabschnitte eines Lieferberichts zusammen."""
+
+    # jedes betroffene Projekt mit seinen Ressourcen aufführen
+    lines: list[str] = []
+    for project in configuration.projects:
+        elements = project_elements(repository, project, scope)
+        if not elements:
+            continue
+
+        lines.extend((f"### `{project}`", ""))
+        lines.extend(f"- `{status}` `{path}`" for status, path in elements)
+        lines.append("")
+    return lines
+
+
 def release_report(configuration: Configuration, repository: Path, *, paket_scope: Scope, information_scope: Scope) -> str:
     """Erstellt den hübschen Lieferbericht als Markdown-Text, für Lieferungen und GitHub Release."""
 
@@ -131,16 +147,9 @@ def release_report(configuration: Configuration, repository: Path, *, paket_scop
     # Änderungen seit dem vorherigen Liefer-Tag ohne leere Projektabschnitte zeigen
     lines.extend((f"## Änderungen seit `{information_scope.von[0]}`", ""))
     lines.extend((f"Vergleich: `{information_scope.von[0]}` → `{information_scope.bis[0]}`", ""))
-    changes = [
-        (project, project_elements(repository, project, information_scope))
-        for project in configuration.projects
-    ]
-    changes = [e for e in changes if e[1]]
+    changes = _project_sections(configuration, repository, information_scope)
     if changes:
-        for project, elements in changes:
-            lines.extend((f"### `{project}`", ""))
-            lines.extend(f"- `{status}` `{path}`" for status, path in elements)
-            lines.append("")
+        lines.extend(changes)
     else:
         lines.extend(("Keine Ressourcenänderungen in den gelieferten Projekten.", ""))
 
@@ -151,16 +160,9 @@ def release_report(configuration: Configuration, repository: Path, *, paket_scop
     else:
         lines.extend((f"Vergleich: `{paket_scope.von[0]}` → `{paket_scope.bis[0]}`", ""))
 
-    archive_contents = [
-        (project, project_elements(repository, project, paket_scope))
-        for project in configuration.projects
-    ]
-    archive_contents = [e for e in archive_contents if e[1]]
+    archive_contents = _project_sections(configuration, repository, paket_scope)
     if archive_contents:
-        for project, elements in archive_contents:
-            lines.extend((f"### `{project}`", ""))
-            lines.extend(f"- `{status}` `{path}`" for status, path in elements)
-            lines.append("")
+        lines.extend(archive_contents)
     elif paket_scope.von is None:
         lines.extend(("Die Projektarchive enthalten keine Ressourcendateien.", ""))
     else:

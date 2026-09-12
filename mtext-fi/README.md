@@ -16,8 +16,15 @@ technischen Zielen zu:
 | `kuerzel` | Mandantenkürzel |
 | `releaselinie` | von `main` geführte Releaselinie |
 | `ispw` | CodePipeline-Umgebung |
+| `dry_run` | überspringt bei `true` die noch nicht verfügbare Adapter- und Mainframe-Übergabe |
 | `excluded_projects` | von Prüfung, Synchronisierung und Lieferung ausgeschlossene Projektverzeichnisse |
 | `hostprofile` | Assignment und CodePipeline-Stage der verwendeten Hostprofile |
+
+Mit aktiviertem Dry Run bleiben Adapter-Versionsabfrage, Ressourcenprüfung und
+Paketbau erhalten. Adapterauftrag, Archivupload sowie FTPS- und JES-Übergabe
+werden simuliert. Liefer-Tag und GitHub Release entstehen weiterhin, wobei das
+Freigabe-Issue das Label `dry_run` erhält und GitHub das Release als Pre-Release
+kennzeichnet.
 
 ## Voraussetzungen
 

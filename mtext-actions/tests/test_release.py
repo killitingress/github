@@ -91,6 +91,12 @@ class ReleaseTests(TempDirTestCase):
         self.assertIn("MEMBER=((FIBASISD,,R))", rendered)
         self.assertNotIn("@@", rendered)
 
+        # Dry Run prüft denselben Artefaktbestand, öffnet aber keine FTPS-Sitzung
+        with patch.dict(os.environ, {"DRY_RUN": "true"}), patch("lbs_delivery.mainframe._submit_archive") as submit:
+            result = run("mainframe")
+        self.assertEqual(result["status"], Status.MAINFRAME_SKIPPED)
+        submit.assert_not_called()
+
         (delivery / "FIBASISD.jcl").unlink()
         with self.assertRaises(DeliveryError) as raised:
             run("mainframe")

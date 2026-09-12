@@ -2,7 +2,7 @@
 
 Der Releasebau prüft die Git-Quelle und erstellt die Archive,
 JSON-Informationsdateien und JCL. Die Übergabe lädt die Archive per FTPS und
-reicht ihre JCL bei JES ein.
+reicht ihre JCL bei JES ein oder endet im Dry Run nach der Dateiprüfung.
 """
 
 from __future__ import annotations
@@ -116,13 +116,20 @@ def _submit_archive(archive_path: Path) -> None:
         raise DeliveryError(Status.MAINFRAME_TRANSFER_FAILED, f"FTPS-/JES-Übergabe fehlgeschlagen: {exc}") from exc
 
 
-def _submit_mainframe_files(*, release_directory: Path) -> dict[str, object]:
+def _submit_mainframe_files(*, release_directory: Path, dry_run: bool) -> dict[str, object]:
     """Übergibt alle vorbereiteten Archive und JCL-Dateien an den Mainframe."""
 
     # vollständige Paare aus Archiv und JCL im Release-Verzeichnis voraussetzen
     archives = list(release_directory.glob("*.tgz"))
     if not archives or any(not e.with_suffix(_MAINFRAME_JCL_SUFFIX).is_file() for e in archives):
         raise DeliveryError(Status.PACKAGE_FAILED, "Archive oder JCL fehlen")
+
+    # Dry Run bestätigt den geprüften Paketbestand ohne externe Übergabe
+    if dry_run:
+        return {
+            "status": Status.MAINFRAME_SKIPPED,
+            "summary": "## Dry Run\n\nFTPS- und JES-Übergabe wurden übersprungen.\n",
+        }
 
     # je Projekt zuerst F übertragen, danach mit D den alten Delta-Stand ersetzen
     for archive in sorted(archives, key=lambda e: (e.stem[:-1], e.stem[-1] == "D")):
@@ -196,10 +203,16 @@ def run(subcommand: str, tag: str | None = None) -> dict[str, object]:
         configuration = config.Configuration.load(config.mandant_source(), os.environ["GITHUB_REPOSITORY"])
         _build_mainframe_files(configuration, output_directory=Path(os.environ["RUNNER_TEMP"]) / "dist", tag=tag)
 
-        return {"status": Status.ARTIFACT_READY}
+        return {
+            "status": Status.ARTIFACT_READY,
+            "outputs": {"dry_run": str(configuration.dry_run).lower()},
+        }
 
     # Mainframe-Schritt übergibt das zuvor heruntergeladene Release-Verzeichnis
     if subcommand == "mainframe":
-        return _submit_mainframe_files(release_directory=Path(os.environ["RUNNER_TEMP"]) / "release")
+        return _submit_mainframe_files(
+            release_directory=Path(os.environ["RUNNER_TEMP"]) / "release",
+            dry_run=os.environ.get("DRY_RUN") == "true",
+        )
 
     raise DeliveryError(Status.VALIDATION_FAILED, "unbekannter Releasebefehl")

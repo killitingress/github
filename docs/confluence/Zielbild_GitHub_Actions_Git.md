@@ -419,6 +419,12 @@ auf. In beiden Fällen entfallen Archivbau und Uploads. Einen Auftrag in
 `ready`, `uploading` oder `failed` löscht er und startet mit neu gebauten
 Archiven unter derselben Auftrags-ID erneut.
 
+Für die technische Integrationsphase lässt sich in der Mandantenkonfiguration
+mit `dry_run: true` ein Dry Run aktivieren. Versionsabfrage und Paketbau bleiben
+dabei aktiv, während Auftragssuche, Adapterauftrag und Archivübertragung
+entfallen. Die Laufzusammenfassung zeigt für jede Zielumgebung eine simulierte
+erfolgreiche M/Text-Antwort.
+
 Ein neuer GitHub-Lauf verwendet eine neue Auftrags-ID und bildet sein
 DELTA ab dem letzten erfolgreichen Lauf desselben Branches. Dadurch schließt
 er die noch nicht erfolgreich synchronisierten Änderungen ein. Wenn durch
@@ -498,6 +504,7 @@ mit dem Kommentar `/freigabe`. Die vorbereitende Person darf die Lieferung
 selbst freigeben. Der Workflow prüft die Berechtigung zum Zeitpunkt des
 Kommentars. Liefer-Tag und Commit-SHA stammen aus dem an die Issue-Nummer
 gebundenen Vorbereitungsartefakt und nicht aus dem editierbaren Issue-Text.
+Bei `dry_run: true` trägt das Issue zusätzlich das Label `dry_run`.
 
 **Lieferung ausführen** ruft anschließend einen Shared Workflow auf, der den Paketbau,
 die Mainframe-Übergabe, die Tag-Erzeugung und die Veröffentlichung des
@@ -507,6 +514,11 @@ die festgehaltene Commit-SHA und stellt die Lieferdateien im Laufartefakt
 den Mainframe und reicht die JCL ein. Danach erzeugt der Workflow den
 Liefer-Tag auf der festgehaltenen SHA und veröffentlicht Lieferbericht und
 JSON-Informationsdateien im GitHub Release.
+
+Auch im Dry Run entstehen die Archive und JCL vollständig und werden geprüft.
+Die Übergabe per FTPS und JES entfällt. Liefer-Tag und GitHub Release stehen
+dennoch für die Verprobung bereit. Als Pre-Release gekennzeichnet, weist das
+GitHub Release auf die ausgebliebene Mainframe-Übergabe hin.
 
 Der Workflow verknüpft den gestarteten Actions-Lauf früh im Issue. Nach
 erfolgreicher Lieferung ergänzt er das Ergebnis und schließt das Issue. Schlägt
@@ -660,6 +672,7 @@ mit den M/Text-Projekten versioniert. Der Block `mandant` enthält:
 | `kuerzel` | Mandantenkürzel für Paketnamen und Fragmentprojekte |
 | `releaselinie` | Releaselinie von `main` |
 | `ispw` | CodePipeline-Instanz `T` oder `P` |
+| `dry_run` | überspringt bei `true` Adapterauftrag sowie FTPS- und JES-Übergabe |
 | `excluded_projects` | Projektverzeichnisse, die weder geprüft noch synchronisiert oder paketiert werden |
 | `hostprofile` | Assignment und CodePipeline-Stage je Hostprofil |
 
@@ -671,6 +684,7 @@ Beispiel:
     "kuerzel": "FI",
     "releaselinie": "270",
     "ispw": "P",
+    "dry_run": true,
     "excluded_projects": ["LOMS_Testdaten"],
     "hostprofile": {
       "FKT": {
@@ -822,10 +836,12 @@ mit dem zugehörigen Exitcode.
 | `SOURCE_FAILED` | Checkout, Commit, Branch oder Tag können nicht als Quelle verwendet werden | `3` |
 | `ADAPTER_FAILED` | Adapteraufruf oder M/Text-Synchronisierung sind fehlgeschlagen | `6` |
 | `ADAPTER_COMPLETED` | Der M/Text-Adapter hat die Synchronisierung erfolgreich abgeschlossen | – |
+| `ADAPTER_SKIPPED` | Adapterauftrag und Archivübertragung wurden übersprungen und eine erfolgreiche M/Text-Antwort simuliert | – |
 | `PACKAGE_FAILED` | Archiv, Informationsdatei oder JCL konnten nicht erstellt oder verwendet werden | `4` |
 | `ARTIFACT_READY` | Archive, Informationsdateien und JCL wurden erstellt | – |
 | `MAINFRAME_TRANSFER_FAILED` | Die FTPS- oder JES-Übergabe ist fehlgeschlagen | `7` |
 | `MAINFRAME_SUBMITTED` | Archive und JCL wurden per FTPS und JES übergeben | – |
+| `MAINFRAME_SKIPPED` | FTPS- und JES-Übergabe wurden im Dry Run übersprungen | – |
 | `GITHUB_RELEASE_FAILED` | Das GitHub Release oder seine Informationsdateien konnten nicht bereitgestellt werden | `8` |
 | `FREIGABE_FAILED` | Freigabe-Issue, Label oder Repository-Rolle konnten nicht über GitHub verarbeitet werden | `9` |
 | `GITHUB_RELEASE_PUBLISHED` | Zusammenfassung und Informationsdateien stehen im Mandanten-Repository bereit | – |
