@@ -113,16 +113,21 @@ def _label_names(document: dict[str, object]) -> set[str]:
     }
 
 
+def _ensure_label(name: str, description: str) -> None:
+    """Legt ein fachliches Label im Repository bei Bedarf an."""
+
+    url = _repository_url(f"labels/{urllib.parse.quote(name, safe='')}")
+    if _request(method="GET", url=url, failure=Status.FREIGABE_FAILED, missing_ok=True) is None:
+        payload = {"name": name, "color": "1f883d", "description": description}
+        _request(method="POST", url=_repository_url("labels"), failure=Status.FREIGABE_FAILED, payload=payload)
+
+
 def create_labeled_issue(*, title: str, body: str, labels: dict[str, str]) -> tuple[int, str]:
     """Erstellt bei Bedarf die Labels und danach das damit markierte Issue."""
 
     # fachliche Labels bei der ersten Verwendung im Repository anlegen
     for label, description in labels.items():
-        url = _repository_url(f"labels/{urllib.parse.quote(label, safe='')}")
-        existing_label = _request(method="GET", url=url, failure=Status.FREIGABE_FAILED, missing_ok=True)
-        if existing_label is None:
-            payload = {"name": label, "color": "1f883d", "description": description}
-            _request(method="POST", url=_repository_url("labels"), failure=Status.FREIGABE_FAILED, payload=payload)
+        _ensure_label(label, description)
 
     # das Issue erhält die nun vorhandenen Labels bereits beim Anlegen
     payload = {"title": title, "body": body, "labels": list(labels)}
@@ -226,6 +231,25 @@ def complete_issue(number: int, body: str) -> None:
     # abgeschlossenes Issue als weiterhin lesbares Protokoll erhalten
     issue_url = _repository_url(f"issues/{number}")
     _request(method="PATCH", url=issue_url, failure=Status.FREIGABE_FAILED, payload={"state": "closed"})
+
+
+def mark_issue_started(number: int, pending_label: str, started_label: str, description: str) -> None:
+    """Kennzeichnet eine angenommene Freigabe vor dem ersten Lieferjob."""
+
+    # vorhandene Kennzeichen wie dry_run für den Statuswechsel erhalten
+    _ensure_label(started_label, description)
+    _, labels = issue(number)
+    if pending_label not in labels:
+        raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue wartet nicht auf Freigabe")
+    labels.remove(pending_label)
+    labels.add(started_label)
+
+    # alle Issue-Labels in einem Aufruf setzen und die Antwort prüfen
+    issue_labels_url = _repository_url(f"issues/{number}/labels")
+    assigned = _request(method="PUT", url=issue_labels_url, failure=Status.FREIGABE_FAILED,
+                        payload={"labels": sorted(labels)})
+    if _label_names({"labels": assigned}) != labels:
+        raise DeliveryError(Status.FREIGABE_FAILED, "Label setzen am Issue fehlgeschlagen")
 
 
 def _replace_information_files(files: list[Path], assets: dict[str, int], upload_url: str) -> None:

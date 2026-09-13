@@ -184,13 +184,20 @@ class LieferungTests(TempDirTestCase):
                 result = run("resolve", issue=42)
             self.assertEqual(result["status"], Status.LIEFERSTAND_ERMITTELT)
 
-            # dieselbe Person darf vorbereiten und der gestartete Lauf wird verknüpft
-            with patch("lbs_delivery.lieferung.github._request") as api:
+            # nach dem Labelwechsel den gestarteten Lauf im Issue verknüpfen
+            with (
+                patch("lbs_delivery.lieferung.github.mark_issue_started") as mark_started,
+                patch("lbs_delivery.lieferung.github._request") as api,
+            ):
                 confirmed = run("confirm", issue=42)
             self.assertEqual(confirmed["status"], Status.LIEFERUNG_BESTAETIGT)
             self.assertEqual(
                 confirmed["outputs"],
                 {"source_sha": self.source_sha, "liefer_tag": "r261.108"},
+            )
+            mark_started.assert_called_once_with(
+                42, "lieferung:freigabe", "lieferung:gestartet",
+                "Freigabe angenommen, Lieferung wurde gestartet",
             )
             api.assert_called_once()
             self.assertIn("/actions/runs/1234", api.call_args.kwargs["payload"]["body"])

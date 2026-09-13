@@ -1,29 +1,29 @@
 name: Lieferung ausführen
 
-# Ein Freigabekommentar im Issue startet die vorbereitete Lieferung. Der Shared
-# Workflow prüft die Repository-Berechtigung der kommentierenden Person und
-# lädt den im Issue gezeigten Stand aus dem zugeordneten Laufartefakt. Ein
-# vorhandener Liefer-Tag kann weiterhin manuell erneut verarbeitet werden.
-# Paketbau, Mainframe-Übergabe und Bereitstellungsbericht bleiben Teil dieses
-# Laufs.
+# Eine vorbereitete Lieferung kann mittels eines `/freigabe` Kommentars im
+# entsprechenden Issue gestartet werden. Eine freigegebene Lieferung kann
+# manuell unter Angabe eines bereits existierenden Liefer-Tags wiederholt
+# werden - liefert allerdings den exakt selben Stand. Für eine Korrektur einer
+# Lieferung ist das Liefer-Tag zu löschen, der Bereitstellungs-Branch zu
+# korrigieren und dann eine erneute Vorbereitung durchzuführen.
 'on':
   issue_comment:
     types: [created]
   workflow_dispatch:
     inputs:
       liefer_tag:
-        description: Vorhandener Liefer-Tag für eine Wiederholung, zum Beispiel r261.108
+        description: Vorhandener Liefer-Tag für einen Wiederholungslauf (z.B. r270.144)
         required: true
         type: string
 
-# Lieferungen desselben Mandanten werden nacheinander ausgeführt. Nach einer
-# erfolgreichen Lieferung ist das zugehörige Issue geschlossen.
+# Lieferungen desselben Mandanten nacheinander ausführen. Nach erfolgreichem
+# Abschluss das zugehörige Issue schließen.
 concurrency:
   group: lieferung-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
-  # Produktive Freigaben und manuelle Wiederholungen verwenden den Stand von main.
+  # Für produktive Freigaben und manuelle Wiederholungen den Stand von main verwenden.
   lieferung-ausfuehren:
     name: Lieferung ausführen
     if: >-
@@ -42,9 +42,36 @@ jobs:
     secrets:
       mainframe_ftps_password: ${{ secrets.MAINFRAME_FTPS_PASSWORD }}
 
-  # Der eigene Kommentarweg erlaubt Tests des noch nicht produktiven Shared Workflows.
+  # Eine doppelte Freigabe wird abgelehnt und erhält einen Bot-Kommentar
+  freigabe-hinweis:
+    name: Verwendete Freigabe melden
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request == null &&
+      contains(github.event.issue.labels.*.name, 'lieferung:gestartet') &&
+      github.event.comment.body == '/freigabe'
+    permissions:
+      issues: write
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 5
+    steps:
+      - name: Hinweis im Issue ergänzen
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FREIGABE_ISSUE: ${{ github.event.issue.number }}
+        run: |
+          # bei verbrauchter Freigabe den Weg zum neuen Lauf direkt im Issue erklären
+          curl --fail --silent --show-error --output /dev/null \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'Content-Type: application/json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --data '{"body":"Für dieses Issue wurde bereits eine Freigabe durchgeführt. Für einen neuen Lauf unter Actions `Lieferung vorbereiten` starten und das neue Freigabe-Issue prüfen. Bei einer Korrektur den vorhandenen Liefer-Tag zuvor manuell löschen."}' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$FREIGABE_ISSUE/comments"
+
+  # Mittels `/freigabe@test` kann mtext_actions@test angesprochen werden
   lieferung-ausfuehren-test:
-    name: Lieferung mit Teststand ausführen
+    name: Lieferung mittels Testbranch
     if: >-
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request == null &&

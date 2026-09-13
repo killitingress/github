@@ -20,6 +20,12 @@ _FREIGABE_LABEL = "lieferung:freigabe"
 # Beschreibung des Labels in der Repository-Oberfläche
 _FREIGABE_LABEL_BESCHREIBUNG = "Vorbereitete Mainframe-Lieferung wartet auf Freigabe"
 
+# Kennzeichnet die verbrauchte Freigabe auch bei offenem oder erneut geöffnetem Issue
+_GESTARTET_LABEL = "lieferung:gestartet"
+
+# Beschreibung des gestarteten Lieferstands im Mandanten-Repository
+_GESTARTET_LABEL_BESCHREIBUNG = "Freigabe angenommen, Lieferung wurde gestartet"
+
 # Label für Lieferungen ohne Mainframe-Übergabe
 _DRY_RUN_LABEL = "dry_run"
 
@@ -212,6 +218,9 @@ def _bestaetige_lieferung(expected_issue: int) -> dict[str, object]:
 
     if issue != expected_issue:
         raise DeliveryError(Status.SOURCE_FAILED, "Vorbereitung gehört nicht zu diesem Freigabe-Issue")
+
+    # die erste gültige Freigabe verbrauchen, bevor Paketbau und Übergabe beginnen
+    github.mark_issue_started(issue, _FREIGABE_LABEL, _GESTARTET_LABEL, _GESTARTET_LABEL_BESCHREIBUNG)
 
     # gestarteten Lauf im Issue verknüpfen, bevor die Verarbeitung in Folgejobs wechselt
     github.comment_issue(

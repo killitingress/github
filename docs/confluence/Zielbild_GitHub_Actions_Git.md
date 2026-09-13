@@ -504,6 +504,12 @@ mit dem Kommentar `/freigabe`. Die vorbereitende Person darf die Lieferung
 selbst freigeben. Der Workflow prüft die Berechtigung zum Zeitpunkt des
 Kommentars. Liefer-Tag und Commit-SHA stammen aus dem an die Issue-Nummer
 gebundenen Vorbereitungsartefakt und nicht aus dem editierbaren Issue-Text.
+Bei der ersten gültigen Freigabe wechselt das Label von `lieferung:freigabe`
+zu `lieferung:gestartet`, bevor die Lieferdateien erstellt werden. Danach
+startet ein weiterer `/freigabe`-Kommentar aus diesem Issue keine Lieferung
+mehr, auch wenn es offen bleibt oder später wieder geöffnet wird. Stattdessen
+folgt ein Hinweis auf die neue Vorbereitung, ohne den Shared Workflow für die
+Lieferung aufzurufen.
 Bei `dry_run: true` trägt das Issue zusätzlich das Label `dry_run`.
 
 **Lieferung ausführen** ruft anschließend einen Shared Workflow auf, der den Paketbau,
@@ -751,6 +757,7 @@ JavaScript geprüft werden. Dies wird dynamisch ermittelt.
 | M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/nnn` sowie manueller Start | `sync-resources.yml` | `shared-check-resources.yml`, danach `shared-sync-resources.yml` | `mtext.py resources check`, danach `mtext.py resources sync` |
 | Lieferung vorbereiten | Manueller Start auf `main`, `release/nnn` oder `bereitstellung/nnn.nnn` | `lieferung-vorbereiten.yml` | `shared-check-resources.yml`, danach `shared-lieferung-check.yml` | `mtext.py resources check`, danach `mtext.py delivery check` |
 | Lieferung freigeben | Kommentar `/freigabe` im offenen Freigabe-Issue durch eine Person mit `maintain` oder `admin` | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py delivery resolve` und `confirm` |
+| Verwendete Freigabe melden | Weiterer Kommentar `/freigabe` in einem Issue mit `lieferung:gestartet` | `lieferung-ausfuehren.yml`, Job `freigabe-hinweis` | keiner | keiner, Issue-Kommentar per `curl` |
 | Lieferung wiederholen | Manueller Start mit einem vorhandenen Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py delivery resolve` |
 | Lieferung bauen und übertragen | Vorbereitete SHA oder vorhandener Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py release build`, `release mainframe`, danach `delivery tag` und `release github` |
 | `mtext_actions` testen | Pull Request, Push auf `main` oder manueller Start in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` |
@@ -764,7 +771,7 @@ Verarbeitung in `mtext_actions`:
 |---|---|---|
 | `check-resources.yml` | Manueller Start auf einem ausgewählten Branch | Mandantenkonfiguration und Ressourcen des Branchstands prüfen, Syntaxbefunde als Warnungen anzeigen |
 | `lieferung-vorbereiten.yml` | Manueller Start auf dem ausgewählten Branch | Ressourcen warnend prüfen, danach SHA und Lieferumfang im Freigabe-Issue und Vorbereitungsartefakt festhalten |
-| `lieferung-ausfuehren.yml` | Kommentar `/freigabe` im Freigabe-Issue oder manueller Start mit einem vorhandenen Liefer-Tag | Berechtigung und Vorbereitung prüfen und die Lieferung starten oder einen vorhandenen Lieferstand erneut übergeben |
+| `lieferung-ausfuehren.yml` | Kommentar `/freigabe` im Freigabe-Issue oder manueller Start mit einem vorhandenen Liefer-Tag | Bei `lieferung:freigabe` Berechtigung und Vorbereitung prüfen und die Lieferung starten. Bei `lieferung:gestartet` ohne Shared Workflow einen Hinweis ins Issue schreiben. Einen vorhandenen Lieferstand auf manuellen Start erneut übergeben |
 | `sync-resources.yml` | Push auf einen Feature-, `main`- oder Release-Branch sowie manueller Start | Ressourcen warnend prüfen, danach Projekte nach M/Text-Entwicklung oder -Funktionstest übertragen |
 
 ### Shared Workflows
