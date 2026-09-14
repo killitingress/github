@@ -46,6 +46,7 @@ class SyncTests(TempDirTestCase):
             "GITHUB_EVENT_NAME": "push",
             "GITHUB_RUN_ID": "test",
             "GITHUB_API_URL": "https://github.test/api/v3",
+            "GITHUB_SERVER_URL": "https://github.test",
             "GITHUB_TOKEN": "test-token",
             "MTEXT_PREVIOUS_COMMIT": "before",
         }))
@@ -53,7 +54,6 @@ class SyncTests(TempDirTestCase):
             "projekt": "LOMS_Basis",
             "lieferart": "FULL",
             "scope": {"bis": {"referenz": "release/261", "commit": "current"}},
-            "elemente": [["A", "beispiel.xml"]],
             "sha256": "checksum",
         }
         self.project_package = ProjectPackage(information, self.root / "full.tgz")
@@ -112,6 +112,12 @@ class SyncTests(TempDirTestCase):
                 }):
                     result = sync.run()
                     self.assertEqual([e["umgebung"] for e in result["ergebnisse"]], targets)
+                    self.assertEqual(result["outputs"], {})
+                    self.assertIn(f"/tree/current", result["summary"])
+                    if base:
+                        self.assertIn(f"/compare/{base}..current", result["summary"])
+                    else:
+                        self.assertNotIn("/compare/", result["summary"])
                     self.assertEqual(history.call_count, len(commits))
                     branch_check = call(self.repository, "current", f"refs/remotes/origin/{branch}")
                     self.assertEqual(ancestor.call_args_list.count(branch_check), 1)
@@ -186,15 +192,22 @@ class SyncTests(TempDirTestCase):
             for event in ("push", "workflow_dispatch"):
                 with patch.dict(os.environ, {"GITHUB_EVENT_NAME": event}):
                     result = sync.run()
+                if event == "push":
+                    self.assertIn(f"/compare/{baseline}..{commit}", result["summary"])
+                else:
+                    self.assertIn(f"/tree/{commit}", result["summary"])
+                    self.assertNotIn("/compare/", result["summary"])
             self.assertEqual([e["lieferart"] for e in self.documents], ["DELTA", "FULL"])
             self.assertEqual(self.documents[0]["scope"]["von"]["commit"], baseline)
             self.assertEqual(self.documents[0]["scope"]["bis"]["commit"], commit)
-            self.assertIn(["M", "baseline.txt"], self.documents[0]["elemente"])
+            self.assertTrue(all("elemente" not in e for e in self.documents))
             self.assertNotIn("von", self.documents[1]["scope"])
-            self.assertEqual(
-                result["ergebnisse"][0]["result"],
-                "Geändert: beispiel.xml\nGelöscht: alt.xml",
-            )
+            ergebnis_path = self.root / "mtext-ergebnis.txt"
+            self.assertEqual(result["outputs"]["ergebnis_path"], str(ergebnis_path))
+            self.assertIn("Geändert: beispiel.xml\nGelöscht: alt.xml", ergebnis_path.read_text())
+            self.assertNotIn("Geändert: beispiel.xml", result["summary"])
+            self.assertNotIn("result", result["ergebnisse"][0])
+            self.assertIn("Laufartefakt `mtext-ergebnis`", result["summary"])
 
             # Dry Run prüft die Erreichbarkeit und baut Pakete ohne Adapterauftrag
             load_test_configuration(self.repository, mandant={"dry_run": True})
@@ -204,7 +217,8 @@ class SyncTests(TempDirTestCase):
             result = sync.run()
             self.assertEqual(result["status"], Status.ADAPTER_SKIPPED)
             self.assertEqual(result["ergebnisse"][0]["auftrag_id"], "test-FI")
-            self.assertIsInstance(result["ergebnisse"][0]["result"], str)
+            self.assertNotIn("result", result["ergebnisse"][0])
+            self.assertIn("Dry Run", ergebnis_path.read_text())
             reachability.assert_called_once()
             resume.assert_not_called()
             transfer.assert_not_called()
@@ -236,7 +250,7 @@ class SyncTests(TempDirTestCase):
                     result = sync.run()
 
                 build.assert_not_called()
-                self.assertEqual(result["ergebnisse"][0]["result"], "fertig")
+                self.assertIn("fertig", ergebnis_path.read_text())
                 self.assertEqual([e.args[0].get_method() for e in http.call_args_list],
                                  ["GET", "GET", "DELETE"] if status == "processing" else ["GET", "DELETE"])
 
@@ -293,7 +307,6 @@ class SyncTests(TempDirTestCase):
                     "von": {"referenz": "release/261", "commit": "before"},
                     "bis": {"referenz": "release/261", "commit": "current"},
                 },
-                "elemente": [["M", "beispiel.xml"]],
                 "sha256": f"checksum-{project}",
             }
             archive = self.root / f"{project}D.tgz"

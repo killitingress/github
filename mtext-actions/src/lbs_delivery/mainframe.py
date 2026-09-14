@@ -80,9 +80,12 @@ def _submit_archive(archive_path: Path) -> None:
     member = archive_path.stem
     jcl_path = archive_path.with_suffix(_MAINFRAME_JCL_SUFFIX)
 
-    # Passwort aus der Umgebung lesen und FTPS-Sitzung herstellen
-    password = os.environ["MAINFRAME_FTPS_PASSWORD"]
-    session = ftplib.FTP_TLS(context=ssl.create_default_context())
+    # IZE9 ohne Prüfung des Serverzertifikats über TLS erreichen
+    password = os.environ["IZE9_FTPS_PASSWORD_MTEXT"]
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    session = ftplib.FTP_TLS(context=context)
     try:
         session.connect(_MAINFRAME_FTPS_HOST, _MAINFRAME_FTPS_PORT, timeout=NETWORK_TIMEOUT)
         session.login(_MAINFRAME_FTPS_USER, password)

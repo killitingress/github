@@ -10,8 +10,8 @@ fi
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 minimum_python="$(tr -d '[:space:]' < "$script_dir/../.python-version")"
 
-# Prüfen, ob Git, Python 3, tar, curl und unzip auf dem Runner verfügbar sind.
-for command_name in git python3 tar curl unzip; do
+# Prüfen, ob Git, Python 3, tar und curl auf dem Runner verfügbar sind.
+for command_name in git python3 tar curl; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "Fehlender Befehl auf dem Runner: $command_name" >&2
     exit 2

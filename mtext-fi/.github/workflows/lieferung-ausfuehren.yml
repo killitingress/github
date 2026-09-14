@@ -39,7 +39,7 @@ jobs:
     with:
       freigabe_issue: ${{ github.event.issue.number }}
     secrets:
-      mainframe_ftps_password: ${{ secrets.MAINFRAME_FTPS_PASSWORD }}
+      ize9_ftps_password_mtext: ${{ secrets.IZE9_FTPS_PASSWORD_MTEXT }}
 
   # Eine doppelte Freigabe wird abgelehnt und erhält einen Bot-Kommentar
   freigabe-hinweis:

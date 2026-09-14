@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import ssl
 import tarfile
 import unittest
 from unittest.mock import call, patch
@@ -118,13 +119,17 @@ class ReleaseTests(TempDirTestCase):
         archive = delivery / "FIBASISD.tgz"
         jcl = delivery / "FIBASISD.jcl"
         with (
-            patch.dict(os.environ, {"MAINFRAME_FTPS_PASSWORD": "password"}),
-            patch("lbs_delivery.mainframe.ssl.create_default_context") as create_context,
+            patch.dict(os.environ, {"IZE9_FTPS_PASSWORD_MTEXT": "password"}),
+            patch("lbs_delivery.mainframe.ssl.SSLContext") as create_context,
             patch("lbs_delivery.mainframe.ftplib.FTP_TLS") as ftp_tls,
         ):
             _submit_archive(archive)
 
-        create_context.assert_called_once_with()
+        create_context.assert_called_once_with(ssl.PROTOCOL_TLS_CLIENT)
+        context = create_context.return_value
+        self.assertFalse(context.check_hostname)
+        self.assertEqual(context.verify_mode, ssl.CERT_NONE)
+        ftp_tls.assert_called_once_with(context=context)
         session = ftp_tls.return_value
         session.connect.assert_called_once_with("ize9.lbs-it.de", 21, timeout=NETWORK_TIMEOUT)
         session.login.assert_called_once_with("LIT9028", "password")

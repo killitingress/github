@@ -29,6 +29,7 @@ jobs:
 
       # Synchronisiert die Ressourcen mit M/Text.
       - name: Ressourcen synchronisieren
+        id: sync
         env:
           GITHUB_TOKEN: ${{ github.token }}
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
@@ -36,3 +37,13 @@ jobs:
         run: >-
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" resources sync
+
+      # Vorhandene M/Text-Ausgaben zehn Tage am Lauf bereitstellen.
+      - name: M/Text-Ergebnis speichern
+        if: steps.sync.outputs.ergebnis_path != ''
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ steps.sync.outputs.ergebnis_name }}
+          path: ${{ steps.sync.outputs.ergebnis_path }}
+          if-no-files-found: error
+          retention-days: 10

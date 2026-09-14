@@ -153,3 +153,5 @@ def upload_archive(path: Path) -> Response:
 ## Sonstiges
 
 - Der alte Bash-Hook ist schreibgeschütztes Referenzmaterial und darf nie geändert werden.
+- Es sollen grundsätzlich keine neuen Testfälle mehr erstellt werden, es sei denn bestehende
+  fallen dadurch weg.

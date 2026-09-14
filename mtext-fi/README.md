@@ -112,7 +112,7 @@ Mandanten-Repository freigegebene organisationsweite Secret:
 
 | Name | Art |
 |---|---|
-| `MAINFRAME_FTPS_PASSWORD` | organisationsweites Secret |
+| `IZE9_FTPS_PASSWORD_MTEXT` | organisationsweites Secret |
 
 Das Secret wird nicht in den Einstellungen dieses Mandanten-Repositories
 gepflegt. Der Trigger-Workflow reicht es an den Shared

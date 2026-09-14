@@ -20,6 +20,9 @@ _LEERER_PUSH_COMMIT = "0" * 40
 # Feature-Branches tragen Releaselinie und Bezeichnung im Branch-Namen
 _FEATURE_BRANCH_RE = re.compile(r"feature/([0-9]{3})/(.+)")
 
+# Name des Laufartefakts mit der M/Text-Ausgabe
+_ERGEBNIS_ARTEFAKT = "mtext-ergebnis"
+
 
 @dataclass(frozen=True)
 class SyncPlan:
@@ -154,19 +157,35 @@ def resolve_plan(source: Path, configuration: config.Configuration) -> SyncPlan:
     return SyncPlan(scope, umgebungen)
 
 
-def _workflow_response(ergebnisse: list[dict[str, object]], dry_run: bool) -> dict[str, object]:
-    """Erzeugt Ergebnis und Zusammenfassung des Sync-Workflows."""
+def _workflow_response(
+    plan: SyncPlan, ergebnisse: list[dict[str, object]], dry_run: bool, ausgabe_umgebungen: set[str],
+) -> dict[str, object]:
+    """Verknüpft die Git-Stände und fasst die Umgebungsstatus zusammen."""
 
-    # vorhandene M/Text-Ausgaben in die Workflow-Zusammenfassung übernehmen
-    summary = ["## M/Text-Synchronisierung"]
+    # festgehaltene Commits bleiben auch bei späteren Branchänderungen verlinkbar
+    repository_url = f"{os.environ['GITHUB_SERVER_URL'].rstrip('/')}/{os.environ['GITHUB_REPOSITORY']}"
+    ziel_commit = plan.scope.bis[1]
+    summary = [
+        "## M/Text-Synchronisierung", "",
+        f"- Umfang: {'FULL' if plan.scope.von is None else 'DELTA'}",
+        f"- Zielstand: [`{ziel_commit[:12]}`]({repository_url}/tree/{ziel_commit})",
+    ]
+    if plan.scope.von is not None:
+        ausgangs_commit = plan.scope.von[1]
+        summary.extend((
+            f"- Ausgangsstand: [`{ausgangs_commit[:12]}`]({repository_url}/tree/{ausgangs_commit})",
+            f"- Änderungen: [GitHub-Vergleich]({repository_url}/compare/{ausgangs_commit}..{ziel_commit})",
+        ))
+
+    # vorhandene Ausgaben im Laufartefakt verorten
     if dry_run:
         summary.extend(("", "Dry Run: Adapteraufträge und Archivübertragung wurden übersprungen."))
     for entry in ergebnisse:
-        if "result" not in entry:
+        umgebung = str(entry["umgebung"])
+        if umgebung not in ausgabe_umgebungen:
+            summary.append(f"- {umgebung}: Keine M/Text-Ausgabe.")
             continue
-        output = entry["result"]
-        rendered = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False, indent=2)
-        summary.extend((f"### {entry['umgebung']}", "```text", rendered, "```"))
+        summary.append(f"- {umgebung}: M/Text-Ausgabe im Laufartefakt `{_ERGEBNIS_ARTEFAKT}`.")
 
     return {
         "status": Status.ADAPTER_SKIPPED if dry_run else Status.ADAPTER_COMPLETED,
@@ -239,13 +258,31 @@ def run() -> dict[str, object]:
 
     # jede Umgebung erhält einen eigenständig gebauten und übertragenen Auftrag
     ergebnisse: list[dict[str, object]] = []
+    ausgaben: list[str] = []
+    ausgabe_umgebungen: set[str] = set()
     for ziel in plan.umgebungen:
         try:
-            ergebnisse.append(_synchronize_umgebung(configuration, source, plan.scope, ziel))
+            ergebnis = _synchronize_umgebung(configuration, source, plan.scope, ziel)
         except DeliveryError as exc:
             message = f"Synchronisierung mit der M/Text-Umgebung {ziel} fehlgeschlagen. {exc.args[0]}"
             if ergebnisse:
                 message += f" Bereits erfolgreich: {ergebnisse[0]['umgebung']}."
             raise DeliveryError(exc.status, message) from exc
 
-    return _workflow_response(ergebnisse, configuration.dry_run)
+        # Adapterausgabe aus dem JSON-Ergebnis nehmen und als Datei vorbereiten
+        if "result" in ergebnis:
+            output = ergebnis.pop("result")
+            rendered = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False, indent=2)
+            ausgaben.extend((f"## {ziel}", "", rendered, ""))
+            ausgabe_umgebungen.add(ziel)
+        ergebnisse.append(ergebnis)
+
+    # vorhandene M/Text-Ausgaben für den Upload im folgenden Workflow-Schritt schreiben
+    response = _workflow_response(plan, ergebnisse, configuration.dry_run, ausgabe_umgebungen)
+    outputs: dict[str, str] = {}
+    if ausgaben:
+        path = Path(os.environ["GITHUB_WORKSPACE"]) / f"{_ERGEBNIS_ARTEFAKT}.txt"
+        path.write_text("\n".join(ausgaben), encoding="utf-8")
+        outputs = {"ergebnis_path": path.as_posix(), "ergebnis_name": _ERGEBNIS_ARTEFAKT}
+    response["outputs"] = outputs
+    return response

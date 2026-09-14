@@ -34,9 +34,6 @@ WORKFLOW_MANDANT_SOURCE = Path("source")
 # Mandantenkonfiguration im ausgecheckten Mandanten-Repository
 MANDANT_CONFIG_PATH = Path(".github/config.json")
 
-# Dateiname des Vorbereitungs-Berichts
-WORKFLOW_VORBEREITUNG_DATEI = Path("vorbereitung.json")
-
 # Arten der M/Text-Umgebungen in `releaselinien.json`.
 MTEXT_UMGEBUNG_ART_ENTWICKLUNG   = "Entwicklung"
 MTEXT_UMGEBUNG_ART_FUNKTIONSTEST = "Funktionstest"

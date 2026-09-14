@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
 import os
 import unittest
@@ -104,25 +103,31 @@ class LieferungTests(TempDirTestCase):
             ) as api:
                 result = run("check")
 
-        payload = json.loads((self.root / "vorbereitung.json").read_text(encoding="utf-8"))
-        self.assertEqual(payload["sha"], self.source_sha)
-        self.assertEqual(payload["tag"], "r261.100")
-        self.assertEqual(payload["issue"], 42)
-        self.assertEqual(result["outputs"]["vorbereitung_name"], "lieferung-42-vorbereitungsartefakt")
+        body = api.call_args.kwargs["payload"]["body"]
+        self.assertNotIn("outputs", result)
         self.assertEqual(api.call_args.kwargs["payload"]["labels"], ["lieferung:freigabe", "dry_run"])
 
-    def test_freigabe_lifecycle(self) -> None:
-        """Prüft Freigabe, Bestätigung, Abschluss, Tag und den GitHub-Issue-Pfad."""
+        # Der später gestartete Lauf übernimmt den im Issue festgehaltenen Commit.
+        with patch.dict(os.environ, {
+            "GITHUB_ACTOR": "alice",
+            "GITHUB_SERVER_URL": "https://github.example",
+            "GITHUB_REPOSITORY": "FinanzInformatik/fi_lbs_entw_oms_fi",
+            "GITHUB_RUN_ID": "5678",
+        }        ), patch("lbs_delivery.lieferung.github.repository_role", return_value="maintain"), patch(
+            "lbs_delivery.lieferung.github.issue",
+            return_value=("open", {"lieferung:freigabe"}, "Lieferung r261.100 freigeben", body),
+        ), patch("lbs_delivery.lieferung.github.replace_issue_label") as mark_started, patch(
+            "lbs_delivery.lieferung.github.comment_issue",
+        ) as comment:
+            confirmed = run("resolve", issue=42)
+        self.assertEqual(confirmed["status"], Status.LIEFERSTAND_ERMITTELT)
+        self.assertEqual(confirmed["outputs"]["source_sha"], self.source_sha)
+        self.assertEqual(confirmed["outputs"]["liefer_tag"], "r261.100")
+        mark_started.assert_called_once()
+        comment.assert_called_once()
 
-        payload = {
-            "tag": "r261.108",
-            "sha": self.source_sha,
-            "repository": "FinanzInformatik/fi_lbs_entw_oms_fi",
-            "issue": 42,
-        }
-        preparation = self.root / "vorbereitung" / "vorbereitung.json"
-        preparation.parent.mkdir()
-        preparation.write_text(json.dumps(payload), encoding="utf-8")
+    def test_freigabe_lifecycle(self) -> None:
+        """Prüft Abschluss, Tag und den GitHub-Issue-Pfad."""
 
         with patch.dict(
             os.environ,
@@ -137,26 +142,6 @@ class LieferungTests(TempDirTestCase):
                 "RUNNER_TEMP": str(self.root / "runner-temp"),
             },
         ):
-            issue = {"state": "open", "title": "Lieferung r261.108 freigeben",
-                     "labels": [{"name": "lieferung:freigabe"}]}
-            artifacts = {"artifacts": [{"id": 20, "created_at": "2026-08-21T10:00:00Z", "expired": False}]}
-
-            with patch(
-                "lbs_delivery.lieferung.github._request",
-                side_effect=({"role_name": "maintain"}, issue, artifacts),
-            ):
-                result = run("resolve", issue=42)
-            self.assertEqual(result["status"], Status.LIEFERSTAND_ERMITTELT)
-
-            with (
-                patch("lbs_delivery.lieferung.github.replace_issue_label") as mark_started,
-                patch("lbs_delivery.lieferung.github._request") as api,
-            ):
-                confirmed = run("confirm", issue=42)
-            self.assertEqual(confirmed["status"], Status.LIEFERUNG_BESTAETIGT)
-            self.assertEqual(confirmed["outputs"], {"source_sha": self.source_sha, "liefer_tag": "r261.108"})
-            mark_started.assert_called_once()
-
             with patch("lbs_delivery.lieferung.github._request") as api:
                 incomplete = run("incomplete", issue=42)
             self.assertEqual(incomplete["status"], Status.LIEFERUNG_NICHT_ABGESCHLOSSEN)
@@ -166,10 +151,6 @@ class LieferungTests(TempDirTestCase):
                 with self.assertRaises(DeliveryError) as raised:
                     run("resolve", issue=42)
             self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
-
-            with self.assertRaises(DeliveryError) as raised:
-                run("confirm", issue=41)
-            self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
 
             archives = self.root / "runner-temp" / "release"
             archives.mkdir(parents=True)
@@ -187,9 +168,9 @@ class LieferungTests(TempDirTestCase):
                 completed = run("complete", "r261.108", issue=42)
             self.assertEqual(completed["status"], Status.LIEFERUNG_ABGESCHLOSSEN)
             self.assertEqual([e.kwargs["method"] for e in api.call_args_list], ["POST", "GET", "GET", "PUT", "PATCH"])
-            body = api.call_args_list[0].kwargs["payload"]["body"]
-            self.assertIn(f"| `FIBASISD.tgz` | `{hashlib.sha256(b'lieferdatei').hexdigest()}` |", body)
-            self.assertNotIn("FIBASISD.jcl", body)
+            completion_body = api.call_args_list[0].kwargs["payload"]["body"]
+            self.assertIn(f"| `FIBASISD.tgz` | `{hashlib.sha256(b'lieferdatei').hexdigest()}` |", completion_body)
+            self.assertNotIn("FIBASISD.jcl", completion_body)
 
             with patch("lbs_delivery.github._request", side_effect=(
                 {},
@@ -248,31 +229,16 @@ class LieferungTests(TempDirTestCase):
                             run("tag", "r261.108", issue=42)
                     self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
 
-    def test_resolve_and_repeat(self) -> None:
-        """Ermittelt Vorbereitung oder Wiederholung und lehnt ungültige Fälle ab."""
+    def test_resolve_repetition(self) -> None:
+        """Ermittelt Wiederholungen und lehnt ungültige Aufrufe ab."""
 
-        artifacts = {
-            "artifacts": [
-                {"id": 10, "created_at": "2026-08-20T10:00:00Z", "expired": False, "workflow_run": {"id": 100}},
-                {"id": 20, "created_at": "2026-08-21T10:00:00Z", "expired": False, "workflow_run": {"id": 200}},
-                {"id": 30, "created_at": "2026-08-22T10:00:00Z", "expired": True, "workflow_run": {"id": 300}},
-            ]
-        }
         env = {
             "GITHUB_REPOSITORY": "FI/mandant",
             "GITHUB_ACTOR": "alice",
             "GITHUB_TOKEN": "secret",
             "GITHUB_API_URL": "https://github.example/api/v3",
+            "GITHUB_SERVER_URL": "https://github.example",
         }
-        issue = {"state": "open", "title": "Lieferung r261.108 freigeben",
-                 "labels": [{"name": "lieferung:freigabe"}]}
-        with patch.dict(os.environ, env), patch(
-            "lbs_delivery.lieferung.github._request",
-            side_effect=({"role_name": "maintain"}, issue, artifacts),
-        ):
-            planned = run("resolve", issue=42)
-        self.assertEqual(planned["outputs"], {"wiederholung": "false", "vorbereitung_artefakt_id": 20})
-
         reference = {"object": {"sha": "tag-object", "type": "tag"}}
         annotation = {"tag": "r261.108", "message": "Freigabe-Issue: #42",
                       "object": {"type": "commit", "sha": self.source_sha}}
@@ -285,7 +251,8 @@ class LieferungTests(TempDirTestCase):
                 reference, annotation,
             ),
         ):
-            repeated = run("repeat", issue=42)
+            repeated = run("resolve", issue=42)
+        self.assertEqual(repeated["status"], Status.LIEFERSTAND_ERMITTELT)
         self.assertEqual(
             repeated["outputs"],
             {"wiederholung": "true", "source_sha": self.source_sha, "liefer_tag": "r261.108"},
@@ -307,7 +274,7 @@ class LieferungTests(TempDirTestCase):
             ),
         ):
             with self.assertRaises(DeliveryError) as raised:
-                run("repeat", issue=42)
+                run("resolve", issue=42)
         self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
 
         with patch.dict(os.environ, {"GITHUB_ACTOR": "alice"}), patch(
@@ -315,17 +282,33 @@ class LieferungTests(TempDirTestCase):
         ), patch("lbs_delivery.lieferung.github.issue") as issue_mock, patch(
             "lbs_delivery.lieferung.github.tag_record"
         ) as tag_record:
-            issue_mock.return_value = ("closed", {"lieferung:gestartet"}, "Kein Liefer-Tag")
+            issue_mock.return_value = ("closed", {"lieferung:gestartet"}, "Kein Liefer-Tag", "")
             with self.assertRaises(DeliveryError) as raised:
-                run("repeat", issue=42)
+                run("resolve", issue=42)
             self.assertEqual(raised.exception.status, Status.FREIGABE_FAILED)
             tag_record.assert_not_called()
 
-            issue_mock.return_value = ("closed", {"lieferung:gestartet"}, "Lieferung r261.108 freigeben")
+            issue_mock.return_value = ("closed", {"lieferung:gestartet"}, "Lieferung r261.108 freigeben", "")
             tag_record.return_value = (self.source_sha, 41)
             with self.assertRaises(DeliveryError) as raised:
-                run("repeat", issue=42)
+                run("resolve", issue=42)
             self.assertEqual(raised.exception.status, Status.FREIGABE_FAILED)
+
+    def test_invalid_issue_body_does_not_start_delivery(self) -> None:
+        """Ein Issue ohne festgehaltenen Lieferstand startet keine Lieferung."""
+
+        with (
+            patch.dict(os.environ, {"GITHUB_ACTOR": "alice"}),
+            patch("lbs_delivery.lieferung.github.repository_role", return_value="maintain"),
+            patch("lbs_delivery.lieferung.github.issue", return_value=(
+                "open", {"lieferung:freigabe"}, "Lieferung r261.108 freigeben", "",
+            )),
+            patch("lbs_delivery.lieferung.github.replace_issue_label") as mark_started,
+        ):
+            with self.assertRaises(DeliveryError) as raised:
+                run("resolve", issue=42)
+        self.assertEqual(raised.exception.status, Status.FREIGABE_FAILED)
+        mark_started.assert_not_called()
 
 
 if __name__ == "__main__":

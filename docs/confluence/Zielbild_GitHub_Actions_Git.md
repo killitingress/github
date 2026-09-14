@@ -5,43 +5,38 @@
 SVN wird durch Git und Jenkins durch GitHub Actions ersetzt. Dafür wird
 voraussichtlich ab November oder Dezember 2026 ein SVN-Abzug nach Git
 übernommen und in GitHub verprobt. Während dieser Testphase bleibt der
-bisherige Prozess produktiv. Unmittelbar vor der für Januar 2027 geplanten
+bisherige Prozess produktiv. Unmittelbar vor der für Anfang 2027 geplanten
 Produktivsetzung wird der dann gültige SVN-Stand nach Git übertragen.
 Danach sind Git und GitHub Actions für den Prozess führend und SVN wird
 zusammen mit dem EN4920-Netz abgebaut.
 
 Jeder Mandant erhält ein eigenes Git-Repository in github.intern mit seinen
 M/Text-Ressourcen, Trigger-Workflows und einer für diesen Prozess relevanten
-Konfigurationsdatei. Die gemeinsam genutzte CI/CD-Automatisierung wird im
-Folgenden `mtext_actions` genannt. Sie führt Validierungen, Synchronisierung,
-Paketbau und Übergabe an den Mainframe (IZE9) durch. Das Repository
-`FinanzInformatik/fi_lbs_entw_oms_mtext_actions` enthält diese Automatisierung.
+Konfigurationsdatei. Die gemeinsam genutzte und im Folgenden beschriebene
+CI/CD-Automatisierung nennen wir `mtext_actions`. Sie führt Validierungen,
+Synchronisierung und Lieferung an CodePipeline zentral durch.
 
 ### Grundprinzipien
 
 In SVN ist ein Commit eine Aktion, durch die Änderungen an das zentrale
-Repository übertragen werden. Dabei entsteht eine neue Revision. In Git
-hingegen hält ein Commit einen Entwicklungsstand samt Historie zu einem
-bestimmten Zeitpunkt fest und entspricht damit am ehesten einer SVN-Revision.
-Seine Commit-SHA kennzeichnet ihn eindeutig. Diese besteht aus 40 hexadezimalen
-Zeichen, während eine SVN-Revision eine aufsteigende Nummer ist. Git-Commits
-werden normalerweise lokal erstellt und erst durch einen Push nach GitHub
-übertragen. Technisch ist ein Branch in Git ein Zeiger auf einen Commit. Beim
-Push eines Branches nach GitHub werden sämtliche fehlenden Commits dorthin
-übertragen und der Branch in GitHub auf den dann aktuellsten Commit
-*verschoben*.
-
-Die M/Workbench ist das zentrale Arbeitsmittel für die Bearbeitung der
-M/Text-Ressourcen und den Git-Abgleich. Über EGit werden lokale Branches und
-Commits verwaltet sowie Stände mit GitHub abgeglichen.
+Repository übertragen werden. Dabei entsteht eine neue Revision als
+aufsteigende Nummer. In Git hingegen werden Commits in einer lokalen Kopie
+eines Repositories getätigt und per Push an ein zentrales Repository
+übertragen. Zu jedem Commit gehört eine 40-stellige Commit-SHA, die den
+zugehörigen Entwicklungsstand samt Historie zu einem bestimmten Zeitpunkt
+eindeutig identifiziert und damit am ehesten einer SVN-Revision entspricht.
+Technisch ist ein Branch in Git ein Zeiger auf einen Commit. Beim Push eines
+Branches nach GitHub werden sämtliche fehlenden Commits dorthin übertragen und
+der Branch in GitHub auf den dann aktuellsten Commit *verschoben*.
 
 Jeder Entwicklungsauftrag (Änderung, Erweiterung, Korrektur, ...) wird als
 Feature in einem eigenen temporären Feature-Branch umgesetzt. Wenn ein Feature
 fertig entwickelt und getestet wurde, kann ein PR (Pull Request) angelegt
 werden, um es in einen Zielbranch wie z.B. `main` zu übernehmen. Der Pull
-Request muss dazu nach dem 4-Augenprinzip geprüft und freigegeben werden. Wenn das
-passiert ist, werden die Änderungen des Feature-Branches per Squash Merge in
-den Zielbranch übernommen. Dabei entsteht ein neuer Stand und somit auch ein
+Request muss dazu in GitHub nach dem 4-Augenprinzip geprüft und freigegeben
+werden, da Release-Branches und main generell geschützte Branches sind. Wenn
+das passiert ist, werden die Änderungen des Feature-Branches per Squash Merge
+in den Zielbranch übernommen. Dabei entsteht ein neuer Stand und somit auch ein
 neuer Commit.
 
 Wird ein Feature-Branch nach GitHub gepusht werden seine M/Text-Projekte
@@ -55,16 +50,20 @@ werden.
 Eine Mainframe-Lieferung kann entweder auf `main` oder `release/nnn`
 durchgeführt werden und verwendet dann dessen vollständigen Stand, oder auf
 einer in `bereitstellung/nnn.nnn` zusammengestellten Teillieferung. Ein
-Vorbereitungs-Workflow hält Commit-SHA, Liefer-Tag und Lieferumfang fest und
+Vorbereitungs-Workflow hält Branch, Commit-SHA und Lieferumfang fest und
 zeigt sie in einem Freigabe-Issue. Der Freigabekommentar startet anschließend
 Paketbau und Mainframe-Übergabe. Nach erfolgreicher Übergabe entsteht der
 Liefer-Tag.
 
+Die **M/Workbench** ist dabei das zentrale Arbeitsmittel für die Bearbeitung
+der M/Text-Ressourcen und die Arbeit mit Git via dem Eclipse-Plugin `EGit`.
+Dieses Plugin erlaubt dem Anwender lokale Branches und Commits zu verwalten und
+mit GitHub bzw. M/Text zu synchronisieren.
+
 #### Änderungsablauf
 
 ```text
-Ressourcen in M/Workbench auf lokalem Feature-Branch bearbeiten
-    (feature/nnn/<Bezeichnung>)
+Ressourcen in M/Workbench auf lokalem Feature-Branch bearbeiten (feature/nnn/<Bezeichnung>)
     │ Push
     ▼
 Synchronisierung mit M/Text-Entwicklung
@@ -82,8 +81,8 @@ Branchstand ist für eine Lieferung bereit
 #### Lieferablauf
 
 ```text
-Branch und Liefer-Tag auswählen
-    │ Lieferung vorbereiten
+Lieferung vorbereiten
+    │ Branch auswählen (bereitstellung/nnn.nnn, release/nnn oder main)
     ▼
 Freigabe-Issue prüfen
     │ /freigabe
@@ -96,11 +95,10 @@ Paketbau, Mainframe-Übergabe und Liefer-Tag
 | Entscheidung | Nutzen |
 |---|---|
 | GitHub Actions statt Jenkins | Natives Git-Feeling mit modernen Workflows in der zentralen Oberfläche in der auch das Repository liegt. |
-| Branches nach dem organisationsweiten Leitfaden | `main`, Release- und Feature-Branches bilden Entwicklung und Wartung gut ab. Pull Requests erhöhen Sicherheit und Transparenz und sind Git-native. |
-| Feature-Push nach M/Text-Entwicklung | Eine Änderung kann vor dem Pull Request vom Entwickler getestet werden. Parallelentwicklungen mehrerer Entwickler werden unterstützt. |
+| Branches nach dem organisationsweiten Leitfaden | `main`, Release- und Feature-Branches bilden Entwicklung und Wartung gut ab. Pull Requests erhöhen Sicherheit und Transparenz und sind GitHub-native. |
+| Feature-Push nach M/Text-Entwicklung | Eine Änderung kann vor dem Pull Request vom Entwickler getestet werden. |
 | Pull Request mit Squash Merge | Jeder Pull Request wird als ein fachlicher Commit in den Zielbranch übernommen und kann später Cherry-Picked werden (entspricht bisherigem Merge-Verfahren). Review und Arbeitscommits bleiben im Pull Request sichtbar. |
-| Gemeinsames Format für Archive und Informationen | Synchronisierung und Mainframe-Lieferung verwenden dieselben Dateiformate auf unterschiedlichen Transportwegen. |
-| Nachvollziehbare Lieferfreigabe | Ein Issue zeigt den vorbereiteten Stand, die Freigabe und das Ergebnis der Lieferung. |
+| Nachvollziehbare Lieferfreigabe | Ein Issue ist der zentrale Henkel für alle Informationen und Schritte die zu einer Mainframe-Lieferung gehören. |
 
 ## 2. Branch- und Pull-Request-Modell
 
@@ -145,11 +143,8 @@ verwenden.
 Squash Merge wird aus folgenden Gründen verwendet:
 
 - Aus allen Änderungen eines Pull Requests wird ein fachlich zusammengehöriger
-  Commit
-- Zwischenstände und Korrektur-Commits aus dem Feature-Branch belasten den
-  Verlauf des Zielbranches nicht
-- Der lineare Verlauf ist für wenig erfahrene Git-Anwender gut
-  nachvollziehbar
+  Einzel-Commit
+- Der lineare Verlauf ist für wenig erfahrene Git-Anwender gut nachvollziehbar
 - Squash-Commit kann bei Bedarf zurückgenommen oder mittels Cherry-Pick auf
   eine weitere Releaselinie übernommen werden
 - Review, Diskussion und ursprüngliche Commits bleiben im Pull Request
@@ -157,7 +152,7 @@ Squash Merge wird aus folgenden Gründen verwendet:
 
 ### Wechsel der führenden Releaselinie
 
-Die produktive Releaselinie wechselt mit dem OSPlus-Release, also zweimal im
+Die produktive Releaselinie wechselt mit jedem OSPlus-Release, also zweimal im
 Jahr. `main` zeigt auf die produktive Releaselinie. Das Feld `releaselinie` der
 Mandantenkonfiguration (`.github/config.json`) nennt diese Linie.
 
@@ -276,26 +271,20 @@ vorheriges DELTA den neuen FULL-Stand nicht verunreinigt.
 
 Bei der Synchronisierung via LTOMA stehen die Informationsdaten zu jedem
 Archiv im initialen POST-Body. Sie legen den Umfang der hochzuladenden
-Archive fest. `scope.von` bezeichnet den Ausgangsstand und `scope.bis` den
-zu synchronisierenden Stand. `referenz` nennt den Branch und `commit` die
-zugehörige Commit-SHA.
+Archive fest. `scope.von` (nur bei DELTA relevant) bezeichnet den Ausgangsstand
+und `scope.bis` den zu synchronisierenden Ziel-Stand. `referenz` nennt den
+Branch, `commit` die zugehörige Commit-SHA und `sha256` die Prüfsumme des
+Archivs.
 
-`elemente` enthält für jede relevante Datei den Git-Status und ihren
-projektbezogenen Pfad mit den Statuswerten `A`
-(hinzugefügt), `M` (geändert), `D` (gelöscht) und `T` (Typ geändert). `sha256`
-enthält die Prüfsumme des Archivs.
+Bei FULL baut der Workflow das F-Archiv aus dem vollständigen
+Projektverzeichnis. Dafür erstellt er keine Elementliste. Bei DELTA ermittelt
+er die geänderten und gelöschten Projektdateien aus dem Git-Vergleich und baut
+daraus das D-Archiv samt Löschliste. Die Elementliste dient dem Paketbau. Der
+POST-Body enthält sie nicht. Die Löschliste enthält die gelöschten Pfade mit
+vorangestelltem Projektnamen, damit das Format mit dem bestehenden
+Travic-Link-Folgeskript kompatibel bleibt.
 
-Bei FULL entfällt `scope.von`, und alle
-Projektdateien stehen mit Status `A` in `elemente`. Bei DELTA stimmen
-Elementliste und Archivumfang überein. Die Löschliste enthält die `D`-Einträge
-mit vorangestelltem Projektnamen um Kompatibilität mit dem Travic-Link
-Folgeskript
-zu gewährleisten.
-
-Das folgende Beispiel zeigt einen manuell gestarteten FULL-Abgleich eines
-Feature-Branches. Das Beispielprojekt besteht aus zwei Dateien. Beide werden
-als Teil des gesamten Projektbestands mit `A` aufgeführt, auch wenn sie bereits
-vor dem Abgleich vorhanden waren:
+Beispiel:
 
 ```json
 {
@@ -303,36 +292,31 @@ vor dem Abgleich vorhanden waren:
   "lieferart": "FULL",
   "scope": {
     "bis": {
-      "referenz": "feature/261/neues-Anschreiben",
+      "referenz": "release/270",
       "commit": "..."
     }
   },
-  "elemente": [
-    ["A", "Bausteine/integriert/BT0002/neu.model"],
-    ["A", "Daten/Modelle/integriert/BT0002/neu.datamodel"]
-  ],
   "sha256": "..."
 }
 ```
 
-Bei Mainframe-Lieferungen stehen Änderungen seit dem vorherigen Liefer-Tag
-und der tatsächliche Archivumfang im Freigabe-Issue. DELTA-Archive und ihre
-Löschlisten beziehen sich auf den zugehörigen `.100`-Tag und enthalten die
-Änderungen seit diesem Hauptrelease bis zum aktuellen Liefer-Tag.
+Bei Mainframe-Lieferungen stehen Abweichungen gegenüber dem vorherigen
+Liefer-Tag und der tatsächliche Archivumfang im Freigabe-Issue. DELTA-Archive
+und ihre Löschlisten beziehen sich auf den zugehörigen `.100`-Tag. Sie enthalten
+die Änderungen seit diesem Hauptrelease bis zum aktuellen Liefer-Tag.
 
 ### Transport der Synchronisierungsaufträge
 
 Vor dem Archivbau prüft der Workflow die Erreichbarkeit des Adapters über
-`GET /vMtextAdapter/version` und gibt die Antwort im Workflow-Log aus.
-Schlägt der Aufruf fehl, endet der Lauf mit `ADAPTER_FAILED`. Beim
-Linienwechsel werden beide Zieladapter vorab geprüft.
+`GET /vMtextAdapter/version`. Schlägt der Aufruf fehl, endet der Lauf mit
+`ADAPTER_FAILED`. Beim Linienwechsel werden beide Zieladapter vorab geprüft.
 
-Adapter und M/Text greifen auf den gemeinsamen Pfad `serverSync/` zu. Dieser
-enthält die Projektverzeichnisse aller Mandanten und bildet wie im alten Ablauf
-die Basis der M/Text-Synchronisierung. Der Workflow überträgt die
-zusammengestellten Archive und ihre Informationen einzeln per HTTP an LTOMA.
-Ein Synchronisierungsauftrag umfasst alle Archive, die mit einer M/Text-Umgebung
-synchronisiert werden sollen.
+Adapter und M/Text teilen sich den gemeinsamen Pfad `serverSync/` (ehemals ein
+NFS Share im EN4920). Dieser enthält die Projektverzeichnisse aller Mandanten
+und bildet wie im alten Ablauf die Basis der M/Text-Synchronisierung. Der
+Workflow überträgt die zusammengestellten Archive und ihre Informationen
+einzeln per HTTP PUT an LTOMA. Ein Synchronisierungsauftrag umfasst alle
+Archive, die mit einer M/Text-Umgebung synchronisiert werden sollen.
 
 Für einen neuen Auftrag gilt folgender Ablauf:
 
@@ -363,7 +347,8 @@ Für einen neuen Auftrag gilt folgender Ablauf:
 5. Der Workflow fragt den Auftragsstatus alle 5 Sekunden via GET-Request ab,
    bis der Auftrag `succeeded` oder `failed` erreicht. Die Ausgabe, die durch
    die Ressourcen-Cache Aktualisierung entsteht, wird an den Workflow
-   übermittelt und als informative Zusammenfassung angezeigt.
+   übermittelt und als Laufartefakt `mtext-ergebnis` zehn Tage bereitgestellt.
+   Die Laufzusammenfassung verweist auf das Artefakt.
 6. Danach sendet der Workflow HTTP-DELETE. Der Adapter entfernt den Auftrag,
    die Upload-Dateien und ein gegebenenfalls verwendetes temporäres
    Arbeitsverzeichnis.
@@ -384,7 +369,8 @@ Für die technische Integrationsphase lässt sich in der Mandantenkonfiguration
 mit `dry_run: true` ein Dry Run aktivieren. Versionsabfrage und Paketbau bleiben
 dabei aktiv, während Auftragssuche, Adapterauftrag und Archivübertragung
 entfallen. Die Laufzusammenfassung zeigt für jede Zielumgebung eine simulierte
-erfolgreiche M/Text-Antwort.
+erfolgreiche M/Text-Verarbeitung an. Die simulierte Antwort steht im
+Laufartefakt.
 
 Ein neuer GitHub-Lauf verwendet eine neue Auftrags-ID und bildet sein
 DELTA ab dem letzten erfolgreichen Lauf desselben Branches. Dadurch schließt
@@ -392,6 +378,15 @@ er die noch nicht erfolgreich synchronisierten Änderungen ein. Wenn durch
 Überholer-Situationen oder Abbrüche und Neustarts korrupte Stände in
 `serverSync/` entstehen sollten, ist eine manuelle Volllieferung durchzuführen.
 Die Auftragsdaten im Adapter überleben keinen Neustart.
+
+Die Laufzusammenfassung verlinkt den synchronisierten Git-Stand. Bei DELTA
+verlinkt sie auch den Ausgangsstand und den Vergleich beider Commits. Bei FULL
+zeigen die Projektverzeichnisse im Zielstand den Archivinhalt. Bei DELTA zeigt
+der Vergleich die Änderungen, aus denen die Projektarchive und Löschlisten
+entstehen. Er umfasst auch Änderungen außerhalb dieser Projekte. Eine
+gesonderte Elementliste wird für Synchronisierungen nicht aufbewahrt. Liegt
+eine M/Text-Ausgabe vor, steht sie im Laufartefakt `mtext-ergebnis` für zehn
+Tage bereit.
 
 ### Erfolg und Reihenfolge aufeinanderfolgender Synchronisierungen
 
@@ -420,21 +415,26 @@ Präfix 'v' für geschützte OSPlus-Releases. Dies erleichtert den Lieferprozess
 etwas, da geschützte Tags nur auf geschützten Branches erlaubt sind, was für
 Teillieferungen unpraktisch ist.
 
-Für eine Teillieferung zu einem bestimmten Liefer-Tag wird ein ungeschützter
-Branch `bereitstellung/nnn.nnn` aus dem vorherigen Liefer-Tag erstellt. Die
-relevanten Squash-Commits werden mittels EGit auf diesen Arbeitsbranch
-cherry-gepickt.
+Für eine Teillieferung wird ein ungeschützter Branch `bereitstellung/nnn.nnn`
+zusammengestellt. Als Ausgangspunkt bietet sich der vorherige Liefer-Tag der
+Releaselinie an: Sein Stand enthält die bereits gelieferten Änderungen, weitere
+ausgewählte Squash-Commits werden mit EGit cherry-gepickt. Ein Ausgangspunkt
+auf `main` oder `release/nnn` ist ebenfalls möglich. Dann gehört dessen
+gesamter Stand zur Lieferung. Für ein DELTA muss der `.100`-Tag der
+Releaselinie ein Vorfahr des vorbereiteten Commits sein.
 
-Der Liefer-Tag `r260.100` kennzeichnet die Volllieferung (FULL) des Hauptreleases
-`26.0`. Auf `main` und `release/nnn` entsteht der `.100`-Tag der jeweiligen
-Releaselinie. Zwischenrelease-Tags entstehen aus `bereitstellung/nnn.nnn`.
+Für den Vergleich im Freigabe-Issue ist der vorherige Liefer-Tag der höchste
+vorhandene Liefer-Tag mit kleinerer Tag-Nummer. Sein Commit muss kein Vorfahr
+des Bereitstellungsbranches sein. Dieser Vergleich bestimmt nicht den
+Archivinhalt.
 
-Bei der Verarbeitung einer Mainframe-Lieferung wird zuerst das F-Archiv und
-danach das D-Archiv entpackt. Die Archive bleiben erhalten und werden durch
-neue Lieferungen überschrieben. Ein Zwischenrelease ersetzt das D-Archiv,
-während das F-Archiv den Stand der `.100`-Lieferung behält. Das DELTA enthält
-deshalb kumulativ die Änderungen zwischen `.100` und dem aktuellen Liefer-Tag,
-damit FULL und aktuelles DELTA zusammen den Lieferstand ergeben.
+Bei der Verarbeitung einer Mainframe-Lieferung wird (aktuell und wie bisher)
+zuerst das F-Archiv und danach das D-Archiv entpackt. Die Archive bleiben
+erhalten und werden durch neue Lieferungen überschrieben. Ein Zwischenrelease
+ersetzt das D-Archiv, während das F-Archiv den Stand der `.100`-Lieferung
+behält. Das DELTA enthält deshalb kumulativ die Änderungen zwischen `.100` und
+dem aktuellen Liefer-Tag, damit FULL und aktuelles DELTA zusammen den
+Lieferstand ergeben.
 
 Anders als im bisherigen SVN Ablauf startet ein Tag-Push keine Übertragung - es
 müssen die vorgesehenen Workflows genutzt werden:
@@ -446,95 +446,51 @@ gestartet. Er leitet den Liefer-Tag aus dem Branch ab und prüft, ob der Tag noc
 frei ist. `main` und `release/nnn` ergeben `rnnn.100`.
 `bereitstellung/nnn.nnn` ergibt `rnnn.nnn`.
 
-Das neu angelegte Freigabe-Issue zeigt Branch, Änderungen seit dem vorherigen
-Liefer-Tag und vorgesehenen Lieferumfang. Die Laufzusammenfassung verweist
-auf das Issue. Der Workflow hält Liefer-Tag, Commit-SHA, Repository und
-Issue-Nummer in einem
-30 Tage aufbewahrten Laufartefakt fest. Das Artefakt heißt beispielsweise
-`lieferung-42-vorbereitungsartefakt` und enthält `vorbereitung.json`.
+Das dabei entstehende Freigabe-Issue zeigt Branch, Abweichungen gegenüber dem
+vorherigen Liefer-Tag und vorgesehenen Lieferumfang. Der Liefer-Tag steht im
+Titel, Branch und Commit-SHA im Text. Die Laufzusammenfassung verweist darauf.
 
 Sollte auffallen, dass etwas mit der Lieferung fachlich noch nicht stimmt, ist
 der Branch zu korrigieren und der Workflow erneut zu starten. Dabei entsteht
-ein neues Laufartefakt.
+ein neues Freigabe-Issue.
 
 ### Lieferung freigeben und ausführen
 
 Das mit `lieferung:freigabe` gekennzeichnete Freigabe-Issue zeigt den Stand,
-der geliefert werden soll. Eine Person mit
-wirksamer Repository-Berechtigung `maintain` oder `admin` startet die Lieferung
-mit dem Kommentar `/freigabe`. Die vorbereitende Person darf die Lieferung
-selbst freigeben. Der Workflow prüft die Berechtigung zum Zeitpunkt des
-Kommentars. Liefer-Tag und Commit-SHA stammen aus dem an die Issue-Nummer
-gebundenen Vorbereitungsartefakt und nicht aus dem editierbaren Issue-Text.
-Bei der ersten gültigen Freigabe wechselt das Label von `lieferung:freigabe`
-zu `lieferung:gestartet`, bevor die Lieferdateien erstellt werden. Nach
+der geliefert werden soll. Eine Person mit Repository-Berechtigung `maintain`
+(oder `admin`) startet die Lieferung mit dem Kommentar `/freigabe`. Die
+vorbereitende Person darf die Lieferung selbst freigeben. Der Workflow liest
+den Liefer-Tag aus dem Titel und die Commit-SHA aus dem Text. Die Commit-Zeile
+muss eindeutig sein. Bei der ersten gültigen Freigabe wechselt das Label von
+`lieferung:freigabe` zu
+`lieferung:gestartet`, bevor die Lieferdateien erstellt werden. Nach
 erfolgreichem Abschluss ersetzt `lieferung:abgeschlossen` das Label
-`lieferung:gestartet`, bevor das Issue geschlossen wird. Danach startet ein
-weiterer `/freigabe`-Kommentar aus diesem Issue keine Lieferung mehr, auch
-wenn es offen bleibt oder später wieder geöffnet wird. Stattdessen folgt ein
-Hinweis auf die neue Vorbereitung, ohne den Shared Workflow für die Lieferung
-aufzurufen.
-Bei `dry_run: true` trägt das Issue zusätzlich das Label `dry_run`.
+`lieferung:gestartet`, bevor das Issue geschlossen wird. Danach kann mittels
+`/freigabe`-Kommentar aus diesem Issue keine Lieferung mehr erfolgen. Mit
+/wiederholung kann die Lieferung allerdings erneut durchgeführt werden.
 
-**Lieferung ausführen** ruft anschließend einen Shared Workflow auf, der den
+Durch `/freigabe` wird ein Shared Workflow aus `mtext_actions` aufgerufen, der den
 Paketbau, die Mainframe-Übergabe und die Tag-Erzeugung in aufeinanderfolgenden
 Jobs ausführt. Der Paketbau verwendet die festgehaltene Commit-SHA und stellt
-die Lieferdateien im Laufartefakt
-`release` bereit. Der Übergabejob lädt das Artefakt, überträgt die Archive an
-den Mainframe und reicht die JCL ein. Danach erzeugt der Workflow den
-Liefer-Tag auf der festgehaltenen SHA. Der annotierte Tag enthält die
-Nummer des zugehörigen Freigabe-Issues. Im Abschlusskommentar verlinkt das
-Issue den Tag und listet Namen und SHA-256-Prüfsummen der übertragenen
-Archivdateien auf.
-
-Auch im Dry Run entstehen die Archive und JCL vollständig und werden geprüft.
-Die Übergabe per FTPS und JES entfällt. Der Liefer-Tag entsteht dennoch.
-Das Freigabe-Issue kennzeichnet den Dry Run und weist im Abschlusskommentar
-auf die ausgebliebene Mainframe-Übergabe hin.
-
-Der Workflow verknüpft den gestarteten Actions-Lauf früh im Issue. Nach
-erfolgreicher Lieferung ergänzt er Ergebnis, Dateinamen und Prüfsummen,
-ersetzt `lieferung:gestartet` durch `lieferung:abgeschlossen` und schließt
-das Issue. Schlägt ein Folgejob fehl, bleibt das Issue offen mit
-`lieferung:gestartet` und erhält einen weiteren Link zum Lauf. Ein
-Wiederanlauf wird als Sonderfall mit `/wiederholung` im zugehörigen
-Freigabe-Issue angefordert. Voraussetzung ist das Label `lieferung:gestartet`
-oder `lieferung:abgeschlossen`. Dafür sind `maintain` oder `admin`
-erforderlich. Der Liefer-Tag wird aus dem Issue-Titel
-gelesen und vor dem Paketbau über seine Annotation diesem Issue zugeordnet.
-Danach beginnen Paketbildung und Mainframe-Übergabe für denselben Stand erneut.
-Die Wiederholung ergänzt im Issue einen eigenen Abschlusskommentar. Mit
-`/wiederholung@test` wird der Shared Workflow vom Testbranch geladen.
-
-#### Lieferartefakt und Freigabe-Issue
-
-Beim Paketbau in **Lieferung ausführen** entsteht das Laufartefakt `release`.
-Es enthält die erzeugten Archive und je Archiv eine eigene JCL-Datei. Wie das
-Vorbereitungsartefakt wird es 30 Tage aufbewahrt. Der Übergabejob lädt dieses
-Artefakt, überträgt die Archive an den Mainframe und reicht die JCL ein.
-
-Das Freigabe-Issue nennt Liefer-Tag, Lieferart und Commit-SHA. Es zeigt die
-Projekte mit Ressourcenänderungen seit dem vorherigen Liefer-Tag. Anschließend
-zeigt es den Inhalt der Projektarchive mit Ressourcenänderungen als Status und
-Pfad. Projekte ohne geänderte oder gelöschte Ressourcen werden dort nicht
-einzeln aufgeführt. Bei DELTA umfasst der Archivinhalt die Änderungen seit
-`.100`, bei FULL den gesamten Projektstand. Die Bezugsstände sind im Issue
-angegeben, Löschungen mit `D` gekennzeichnet.
-
-Nach erfolgreicher Mainframe-Übergabe ergänzt der Shared Workflow im
-Freigabe-Issue einen Kommentar mit dem Ergebnis, dem Actions-Lauf und einer
-Tabelle der Archivnamen und SHA-256-Prüfsummen. Das Label wechselt zu
-`lieferung:abgeschlossen`, danach schließt er das Issue.
+die Lieferdateien im Laufartefakt `release` bereit, so dass diese innerhalb der
+nächsten 30 Tage ggf. kontrolliert werden können. Der Übergabejob liest das
+Artefakt, überträgt die Archive an den Mainframe und reicht die JCL ein. Danach
+erzeugt der Workflow den Liefer-Tag. Es wird eine Annotation am Tag erzeugt, um
+das zugehörigen Freigabe-Issue zu referenzieren. Anschließend wird ein
+Abschlusskommentar im Issue erzeugt, der zum Tag verlinkt und die Namen und
+SHA-256-Prüfsummen der übertragenen Archivdateien auflistet, und das Issue
+geschlossen.
 
 #### Mainframe-Übergabe
 
-Für die technische Vorbereitung wird angenommen, dass die IZE9 explizites FTPS
-anbietet. Unter dieser Annahme überträgt der Client jedes Archiv zunächst
-unter seinem Membernamen in `IEA.LOMS.TONICZ`. Der Client
-prüft das Mainframe-Zertifikat gegen die vertrauenswürdigen CA-Zertifikate im
-Truststore des Runners und schützt Steuerungs- und passive Datenverbindungen
-mit TLS. Nach jedem Archiv-Upload schaltet der Client mit `SITE FILETYPE=JES`
-auf die Jobübergabe um und reicht die für dieses Archiv aus
+Die IZE9 unterstützt FTPS ohne Client-Zertifikat. Diesen Betriebsweg verwendet
+der Client mit technischem Benutzer und Passwort. Er prüft das
+Serverzertifikat nicht (unbedingt) und benötigt dann weder ein hinterlegtes
+Zertifikat noch den Truststore des Runners. Damit sind Steuerungs- und passive
+Datenverbindungen verschlüsselt, auch wenn die Identität der Gegenstelle
+nicht bestätigt wird. Der Client überträgt jedes Archiv zunächst unter seinem
+Membernamen in `IEA.LOMS.TONICZ`. Nach jedem Archiv-Upload schaltet er mit
+`SITE FILETYPE=JES` auf die Jobübergabe um und reicht die für dieses Archiv aus
 `templates/mainframe-upload.jcl` erzeugte JCL als eigenen Job ein. Dieser
 Mainframe-Job kopiert das Member dann nach `IEA.ISPW<ISPW>.BOAS.<LEVEL>.TONICZ`
 und registriert es in CodePipeline.
@@ -547,21 +503,7 @@ Mandanten können gleichzeitig liefern.
 Host, Port und technischer User sind in `mtext_actions` festgelegt. Das
 Passwort soll auf Ebene der GitHub-Organisation verwaltet und für die
 vorgesehenen Mandanten-Repositories freigegeben werden und steht dann in
-Mandanten-Workflows unter `secrets.MAINFRAME_FTPS_PASSWORD` zur Verfügung.
-
-### Kurz zusammengefasst
-
-- **Lieferung vorbereiten**: Prüft den gewählten Branchstand und den daraus
-  abgeleiteten Liefer-Tag, zeigt Änderungen und Lieferumfang im Freigabe-Issue
-  und hält die Vorbereitung mit Commit-SHA im Vorbereitungsartefakt fest.
-- **Lieferung ausführen**: Übernimmt die Vorbereitung nach einem berechtigten
-  `/freigabe`-Kommentar, baut die Archive samt JCL und speichert sie im
-  Laufartefakt `release`. Der Übergabejob lädt dieses Artefakt, überträgt die
-  Archive per FTPS und reicht nach jedem Archiv dessen JCL als eigenen Job
-  bei JES ein. Nach erfolgreicher Übergabe entsteht der Liefer-Tag. Das
-  Freigabe-Issue erhält Archivnamen und SHA-256-Prüfsummen und wird geschlossen.
-  Ein `/wiederholung`-Kommentar im Freigabe-Issue beginnt bei vorhandenem
-  Liefer-Tag erneut beim Paketbau.
+Mandanten-Workflows unter `secrets.IZE9_FTPS_PASSWORD_MTEXT` zur Verfügung.
 
 ## 5. Repositories
 
@@ -586,7 +528,7 @@ Mandanten-Repositories. Die M/Text-Projekte liegen als Verzeichnisse direkt in
 der Repositorywurzel. Sie werden synchronisiert und in Lieferpakete
 aufgenommen. Einzelne Verzeichnisse wie `LOMS_Testdaten` können in
 `.github/config.json` davon ausgeschlossen werden, bleiben aber Teil des
-Git-Repositories. Dateien, die gar nicht in Git aufgenommen werden sollen,
+Git-Repositories. Elemente, die gar nicht von Git verwaltet werden sollen,
 werden wie üblich in `.gitignore` eingetragen.
 
 ### Repository für Shared Workflows und Action `mtext_actions`
@@ -638,18 +580,7 @@ mtext-actions/
 ### Mandantenkonfiguration
 
 Die Datei `.github/config.json` liegt im Mandanten-Repository und wird zusammen
-mit den M/Text-Projekten versioniert. Der Block `mandant` enthält:
-
-| Feld | Bedeutung |
-|---|---|
-| `kuerzel` | Mandantenkürzel für Paketnamen und Fragmentprojekte |
-| `releaselinie` | Releaselinie von `main` |
-| `ispw` | CodePipeline-Instanz `T` oder `P` |
-| `dry_run` | überspringt bei `true` Adapterauftrag sowie FTPS- und JES-Übergabe |
-| `excluded_projects` | Projektverzeichnisse, die weder geprüft noch synchronisiert oder paketiert werden |
-| `hostprofile` | Assignment und CodePipeline-Stage je Hostprofil |
-
-Beispiel:
+mit den M/Text-Projekten versioniert. Beispiel für den Block `mandant`:
 
 ```json
 {
@@ -673,6 +604,11 @@ Beispiel:
 }
 ```
 
+`ispw` bezeichnet die CodePipeline-Instanz `T` oder `P`. Projektverzeichnisse
+in `excluded_projects` bleiben bei Prüfung, Synchronisierung und Paketbau
+außen vor. `hostprofile` ordnet jedem Hostprofil ein Assignment und eine
+CodePipeline-Stage zu.
+
 Bei Feature- und Release-Branches steht die Releaselinie im Branchnamen. Bei
 `main` steht sie im Feld `releaselinie`.
 
@@ -691,18 +627,6 @@ Bei Feature- und Release-Branches steht die Releaselinie im Branchnamen. Bei
   "IT": {"repository": "FinanzInformatik/fi_lbs_entw_oms_it", "subsystem": "ITMT"}
 }
 ```
-
-Die derzeit versionierten Projekte:
-
-| Repository | Mandantenkürzel | Projekte |
-|---|---|---|
-| `FinanzInformatik/fi_lbs_entw_oms_fi` | `FI` | `Configuration`, `Fonts`, `LOMS_Framework`, `LOMS_Basis`, `LOMS_PKA` |
-| `FinanzInformatik/fi_lbs_entw_oms_it` | `IT` | `LOMS_Autonom` |
-| `FinanzInformatik/fi_lbs_entw_oms_by` | `BY` | `LOMS_Basis[BY]`, `LOMS_Autonom[BY]` |
-| `FinanzInformatik/fi_lbs_entw_oms_lh` | `LH` | `LOMS_Basis[LH]`, `LOMS_Autonom[LH]` |
-| `FinanzInformatik/fi_lbs_entw_oms_nw` | `NW` | `LOMS_Basis[NW]`, `LOMS_Autonom[NW]` |
-| `FinanzInformatik/fi_lbs_entw_oms_os` | `OS` | `LOMS_Basis[OS]`, `LOMS_Autonom[OS]` |
-| `FinanzInformatik/fi_lbs_entw_oms_sa` | `SA` | `LOMS_Basis[SA]`, `LOMS_Autonom[SA]` |
 
 `config/releaselinien.json` ist in Kapitel 3 beschrieben.
 
@@ -723,7 +647,7 @@ JavaScript geprüft werden. Dies wird dynamisch ermittelt.
 | M/Text-Entwicklung synchronisieren | Push auf `feature/nnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `shared-check-resources.yml`, danach `shared-sync-resources.yml` | `mtext.py resources check`, danach `mtext.py resources sync` |
 | M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/nnn` sowie manueller Start | `sync-resources.yml` | `shared-check-resources.yml`, danach `shared-sync-resources.yml` | `mtext.py resources check`, danach `mtext.py resources sync` |
 | Lieferung vorbereiten | Manueller Start auf `main`, `release/nnn` oder `bereitstellung/nnn.nnn` | `lieferung-vorbereiten.yml` | `shared-check-resources.yml`, danach `shared-lieferung-check.yml` | `mtext.py resources check`, danach `mtext.py delivery check` |
-| Lieferung freigeben | Kommentar `/freigabe` im offenen Freigabe-Issue durch eine Person mit `maintain` oder `admin` | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py delivery resolve` und `confirm` |
+| Lieferung freigeben | Kommentar `/freigabe` im offenen Freigabe-Issue durch eine Person mit `maintain` oder `admin` | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py delivery resolve` |
 | Verwendete Freigabe melden | Weiterer Kommentar `/freigabe` in einem Issue mit `lieferung:gestartet` oder `lieferung:abgeschlossen` | `lieferung-ausfuehren.yml`, Job `freigabe-hinweis` | keiner | keiner, Issue-Kommentar per `curl` |
 | Lieferung wiederholen | Kommentar `/wiederholung` oder `/wiederholung@test` in einem Issue mit `lieferung:gestartet` oder `lieferung:abgeschlossen` | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py delivery resolve` |
 | Lieferung bauen und übertragen | Vorbereitete SHA oder vorhandener Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py release build`, `release mainframe`, bei Erstlieferung `delivery tag`, danach `delivery complete` |
@@ -737,7 +661,7 @@ Verarbeitung in `mtext_actions`:
 | Datei | Auslöser | Aufgabe |
 |---|---|---|
 | `check-resources.yml` | Manueller Start auf einem ausgewählten Branch | Mandantenkonfiguration und Ressourcen des Branchstands prüfen, Syntaxbefunde als Warnungen anzeigen |
-| `lieferung-vorbereiten.yml` | Manueller Start auf dem ausgewählten Branch | Ressourcen warnend prüfen, danach SHA und Lieferumfang im Freigabe-Issue und Vorbereitungsartefakt festhalten |
+| `lieferung-vorbereiten.yml` | Manueller Start auf dem ausgewählten Branch | Ressourcen warnend prüfen, danach SHA und Lieferumfang im Freigabe-Issue festhalten |
 | `lieferung-ausfuehren.yml` | Kommentar `/freigabe` oder `/wiederholung` im Freigabe-Issue, jeweils auch mit `@test` | Bei `lieferung:freigabe` Vorbereitung und Berechtigung prüfen. Bei `lieferung:gestartet` oder `lieferung:abgeschlossen` eine erneute `/freigabe` melden oder den Wiederanlauf starten |
 | `sync-resources.yml` | Push auf einen Feature-, `main`- oder Release-Branch sowie manueller Start | Ressourcen warnend prüfen, danach Projekte nach M/Text-Entwicklung oder -Funktionstest übertragen |
 
@@ -747,7 +671,7 @@ Verarbeitung in `mtext_actions`:
 |---|---|---|
 | `shared-check-resources.yml` | Aufruf durch `check-resources.yml`, `sync-resources.yml` oder `lieferung-vorbereiten.yml` | Mandantenkonfiguration und konfigurierte Ressourcen ohne Zugriff auf Zielsysteme prüfen |
 | `shared-sync-resources.yml` | Aufruf durch `sync-resources.yml` | Projekte nach M/Text übertragen |
-| `shared-lieferung-check.yml` | Aufruf durch `lieferung-vorbereiten.yml` | Liefer-Tag aus dem Branch ableiten, Lieferumfang im Freigabe-Issue anzeigen und Vorbereitungsartefakt bauen |
+| `shared-lieferung-check.yml` | Aufruf durch `lieferung-vorbereiten.yml` | Liefer-Tag aus dem Branch ableiten und Lieferumfang im Freigabe-Issue anzeigen |
 | `shared-lieferung-ausfuehren.yml` | Aufruf durch `lieferung-ausfuehren.yml` | Freigabe und Lieferstand prüfen, Archive und JCL für FULL oder DELTA erzeugen, an den Mainframe übertragen, den angenommenen Stand taggen und das Ergebnis im Freigabe-Issue festhalten |
 | `ci.yml` | Pull Request oder Push auf `main` oder manueller Start | Tests ausführen |
 
@@ -765,31 +689,14 @@ gemeinsamen Komponenten ohne eigenes Zugriffstoken.
 
 GitHub stellt jedem Job automatisch einen zeitlich begrenzten Zugangsschlüssel
 namens `GITHUB_TOKEN` bereit. Damit kann der Job auf das Mandanten-Repository
-zugreifen, etwa um Freigabe-Issues und Liefer-Tags anzulegen oder
-Vorbereitungsartefakte zu lesen. Die erlaubten Aktionen werden über
+zugreifen, etwa um Freigabe-Issues zu lesen und anzulegen oder Liefer-Tags zu
+erstellen. Die erlaubten Aktionen werden über
 `permissions` in den Workflow-Dateien festgelegt.
 
 Auch der aufgerufene Shared Workflow arbeitet mit diesem Zugang zum
 Mandanten-Repository. Er gehört zum selben Lauf und verwendet die vom
 aufrufenden Workflow gewährten Rechte. Liefer-Tag und Freigabe-Issue entstehen
 daher im Mandanten-Repository.
-
-Für den Mainframe-Zugang sind Host, Port und technischer Benutzer in
-`mtext_actions` festgelegt. Das Passwort soll als Organisations-Secret
-`MAINFRAME_FTPS_PASSWORD` hinterlegt und für die vorgesehenen
-Mandanten-Repositories freigegeben werden. Ein Secret ist ein in GitHub
-geschützt gespeicherter Wert.
-
-### Protokolle und Rückmeldung
-
-GitHub Actions übernimmt `stdout` und `stderr` der Workflows in das Protokoll.
-Die Python-Skripte schreiben ein erfolgreiches Ergebnis als JSON nach `stdout`
-und Warnungen oder Fehler nach `stderr`. Bei der Konfigurationsprüfung und der
-M/Text-Synchronisierung sind diese Ausgaben im Mandanten-Repository sichtbar.
-
-Prüfung, Paketbau und Mainframe-Übergabe sind im Mandantenlauf sichtbar.
-Die Laufzusammenfassung verweist auf das Freigabe-Issue. Dort stehen nach
-Abschluss Ergebnis, Dateinamen und SHA-256-Prüfsummen.
 
 ### Status und Fehlercodes
 
@@ -801,9 +708,8 @@ mit dem zugehörigen Exitcode.
 |---|---|---|
 | `RESOURCE_CHECKED` | Die konfigurierten Ressourcen wurden geprüft, Befunde stehen als Warnungen bereit | – |
 | `VALIDATION_FAILED` | Eingaben oder Konfiguration sind ungültig | `2` |
-| `LIEFERSTAND_ERMITTELT` | Vorbereitungsartefakt oder vorhandener Liefer-Tag wurden ermittelt | – |
-| `LIEFERUNG_CHECKED` | SHA, Liefer-Tag und Lieferumfang der Vorbereitung wurden festgehalten | – |
-| `LIEFERUNG_BESTAETIGT` | Die Vorbereitung gehört zum Freigabe-Issue und der gestartete Lauf ist dort verknüpft | – |
+| `LIEFERSTAND_ERMITTELT` | Der Lieferstand für Freigabe oder Wiederholung wurde ermittelt | – |
+| `LIEFERUNG_CHECKED` | Branch, Commit-SHA und Lieferumfang wurden im Freigabe-Issue festgehalten | – |
 | `LIEFERUNG_TAGGED` | Der Liefer-Tag wurde auf der festgehaltenen SHA mit Freigabe-Issue-Zuordnung erstellt | – |
 | `LIEFERUNG_ABGESCHLOSSEN` | Der erfolgreiche Lauf wurde im geschlossenen Freigabe-Issue festgehalten | – |
 | `LIEFERUNG_NICHT_ABGESCHLOSSEN` | Der nicht abgeschlossene Lauf wurde im offenen Freigabe-Issue festgehalten | – |

@@ -140,13 +140,17 @@ def create_labeled_issue(*, title: str, body: str, labels: dict[str, str]) -> in
             raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue ist ungültig")
 
 
-def issue(number: int) -> tuple[str, set[str], str]:
-    """Gibt Status, Labels und Titel eines Issues im aktuellen Repository zurück."""
+def issue(number: int) -> tuple[str, set[str], str, str]:
+    """Gibt Status, Labels, Titel und Text eines Issues im aktuellen Repository zurück."""
 
     document = _request(method="GET", url=_repository_url(f"issues/{number}"), failure=Status.FREIGABE_FAILED)
     match document:
         case {"state": str(state), "title": str(title)}:
-            return state, _label_names(document.get("labels")), title
+            # GitHub liefert bei einem Issue ohne Text null
+            body = document.get("body") or ""
+            if not isinstance(body, str):
+                raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue enthält keinen gültigen Text")
+            return state, _label_names(document.get("labels")), title, body
         case _:
             raise DeliveryError(Status.FREIGABE_FAILED, "GitHub liefert kein Freigabe-Issue zurück")
 
@@ -158,23 +162,6 @@ def repository_role(username: str) -> str | None:
     url = _repository_url(f"collaborators/{actor}/permission")
     document = _request(method="GET", url=url, failure=Status.FREIGABE_FAILED)
     return document.get("role_name")
-
-
-def latest_artifact(name: str) -> int | None:
-    """Ermittelt die ID des jüngsten nicht abgelaufenen Artefakts dieses Namens."""
-
-    query = urllib.parse.urlencode({"name": name, "per_page": 100})
-    url = f"{_repository_url('actions/artifacts')}?{query}"
-    document = _request(method="GET", url=url, failure=Status.SOURCE_FAILED)
-
-    # abgelaufene Artefakte aus der möglichen Fortsetzung entfernen
-    available = [e for e in document["artifacts"] if e.get("expired") is False]
-    if not available:
-        return None
-
-    # jüngstes Artefakt stabil nach Erstellungszeit und Artefakt-ID bestimmen
-    newest = max(available, key=lambda e: (e["created_at"], e["id"]))
-    return newest["id"]
 
 
 def tag_record(tag: str) -> tuple[str, int] | None:
@@ -244,7 +231,7 @@ def replace_issue_label(number: int, old_label: str, new_label: str, description
 
     # vorhandene Kennzeichen wie dry_run für den Statuswechsel erhalten
     _ensure_label(new_label, description)
-    _, labels, _ = issue(number)
+    _, labels, _, _ = issue(number)
     if old_label not in labels:
         # wiederholter Abschluss behält den bereits erreichten Status
         if accept_existing and new_label in labels:
@@ -252,8 +239,7 @@ def replace_issue_label(number: int, old_label: str, new_label: str, description
         raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue hat nicht das erwartete Status-Label")
 
     # bisherigen Status ersetzen, andere Kennzeichen wie dry_run erhalten
-    labels.remove(old_label)
-    labels.add(new_label)
+    labels = (labels - {old_label}) | {new_label}
 
     # alle Issue-Labels in einem Aufruf setzen und die Antwort prüfen
     issue_labels_url = _repository_url(f"issues/{number}/labels")

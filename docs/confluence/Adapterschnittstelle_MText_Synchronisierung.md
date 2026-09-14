@@ -88,7 +88,6 @@ Content-Type: application/json
             "commit": "0123456789abcdef0123456789abcdef0123456789"
           }
         },
-        "elemente": [["A", "beispiel.xml"]],
         "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       }
     }
@@ -108,13 +107,10 @@ die Informationsdaten der Synchronisierung.
 | `information.lieferart` | String, `FULL` oder `DELTA`, für alle Archive des Auftrags gleich |
 | `information.scope.bis` | Objekt mit `referenz` und `commit` als Strings für den Zielstand |
 | `information.scope.von` | entsprechendes Objekt für den Ausgangsstand, bei DELTA vorhanden, bei FULL weggelassen |
-| `information.elemente` | Array aus Paaren `[Status, projektbezogener Pfad]`, darf leer sein |
 | `information.sha256` | String, SHA-256 der übertragenen Archivbytes als 64 hexadezimale Zeichen |
 
-Alle Felder außer `scope.von` bei FULL sind vorhanden. Die Statuswerte in
-`elemente` sind `A` (hinzugefügt), `M` (geändert), `D` (gelöscht) und `T`
-(Typ geändert). Pfade verwenden `/` als Trennzeichen. Der Archivname endet
-bei FULL auf `F.tgz`, bei DELTA auf `D.tgz`.
+Alle aufgeführten Felder außer `scope.von` bei FULL sind vorhanden. Der
+Archivname endet bei FULL auf `F.tgz`, bei DELTA auf `D.tgz`.
 
 Ein neuer Auftrag antwortet mit `{"auftrag_id": "123456-FI", "status": "ready"}`.
 Das Mandantenkürzel am Ende der Auftrags-ID bestimmt den Mandanten des
@@ -150,9 +146,8 @@ Die Archive sind gzip-komprimierte TAR-Dateien:
 
 Die Löschliste heißt wie das D-Archiv mit `.txt` statt `.tgz`, ist UTF-8-kodiert
 und enthält je Zeile einen repositorybezogenen Pfad einschließlich Projektname.
-Sie kann leer sein. `elemente` verwendet dagegen Pfade ohne Projektname.
-Bei FULL haben die Elemente Status `A`. Bei DELTA nennt die Löschliste die
-`D`-Einträge, die übrigen Elemente beschreiben die übertragenen Dateien.
+Sie kann leer sein. Die Elementliste für den Archivbau verbleibt beim Client
+und gehört nicht zum POST-Request.
 
 `serverSync/` enthält die Projektverzeichnisse. Uploads und Löschlisten gehören
 nicht in diesen Bestand. Bei der Übernahme dürfen Archiv- und Löschlistenpfade

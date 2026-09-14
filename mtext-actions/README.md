@@ -30,8 +30,7 @@ Die wiederverwendbaren Workflows unter `.github/workflows` sind:
 | `resources check` | Mandantenkonfiguration sowie konfigurierte JSON-, XML- und verfügbare JavaScript-Ressourcen prüfen |
 | `resources sync` | Änderungen seit dem letzten erfolgreichen Branchstand mit M/Text synchronisieren |
 | `delivery check` | Liefer-Tag aus dem Branch ableiten und den Lieferstand vorbereiten |
-| `delivery resolve` | die Vorbereitung oder den Wiederholungsstand aus dem Freigabe-Issue ermitteln |
-| `delivery confirm` | eine Vorbereitung bestätigen und den gestarteten Lauf im Freigabe-Issue verknüpfen |
+| `delivery resolve` | die Freigabe aus dem Issue bestätigen oder den Wiederholungsstand ermitteln |
 | `delivery complete` | Archivnamen und SHA-256-Prüfsummen im Freigabe-Issue festhalten und es schließen |
 | `delivery incomplete` | einen nicht abgeschlossenen Lauf im Freigabe-Issue melden |
 | `delivery tag` | den vom Mainframe angenommenen Stand mit einem annotierten Liefer-Tag und zugehöriger Issue-Nummer kennzeichnen |
@@ -65,11 +64,9 @@ Dateien nach JSON, XML und JavaScript auf. Syntaxbefunde werden als Warnungen
 ausgegeben und beenden den Job erfolgreich.
 
 Die Mindestversion in `.python-version` ist Python 3.12. Die Runner-Prüfung in
-`scripts/runner-preflight.sh` erwartet außerdem Git, `tar`, `curl` und `unzip`.
-Der Lieferworkflow lädt die Vorbereitung per REST-API mit `curl` und liest
-`vorbereitung.json` mit `unzip` aus dem heruntergeladenen Artefakt.
-Die aktuelle GHES Version kann Artefakte nur aus eigenen Läufen laden, daher
-dieser Umweg.
+`scripts/runner-preflight.sh` erwartet außerdem Git, `tar` und `curl`.
+Die Lieferung liest den Liefer-Tag aus dem Titel des Freigabe-Issues und den
+vorbereiteten Commit aus dessen Text.
 
 Ist Node.js auf dem Runner verfügbar, zeigt die Runner-Prüfung seine Version an
 und `resources check` prüft zusätzlich JavaScript-Dateien mit `node --check`.

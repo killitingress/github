@@ -124,21 +124,16 @@ def _project_sections(configuration: Configuration, repository: Path, scope: Sco
     return lines
 
 
-def delivery_report(configuration: Configuration, repository: Path, *, paket_scope: Scope, vorrelease_scope: Scope) -> str:
+def delivery_report(
+    configuration: Configuration, repository: Path, *, paket_scope: Scope,
+    vorrelease_scope: Scope, standzeilen: list[str],
+) -> str:
     """Erstellt den Lieferumfang für das Freigabe-Issue als Markdown-Text."""
 
-    delivery_type = "FULL" if paket_scope.von is None else "DELTA"
-    lines = [
-        "## Lieferung",
-        "",
-        f"- Liefer-Tag: `{paket_scope.bis[0]}`",
-        f"- Lieferart: `{delivery_type}`",
-        f"- Commit: `{paket_scope.bis[1]}`",
-        "",
-    ]
+    lines = ["## Lieferung", "", *standzeilen, ""]
 
-    # Änderungen seit dem vorherigen Liefer-Tag ohne leere Projektabschnitte zeigen
-    lines.extend((f"## Änderungen seit `{vorrelease_scope.von[0]}`", ""))
+    # Abweichungen vom vorherigen Lieferstand ohne leere Projektabschnitte zeigen
+    lines.extend((f"## Abweichungen gegenüber `{vorrelease_scope.von[0]}`", ""))
     lines.extend((f"Vergleich: `{vorrelease_scope.von[0]}` → `{vorrelease_scope.bis[0]}`", ""))
     changes = _project_sections(configuration, repository, vorrelease_scope)
     if changes:
@@ -240,30 +235,12 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def informations_dokument(repository_root: Path, project: str, scope: Scope, lieferart: str) -> dict[str, object]:
-    """Baut das Informations-Dokument zu einem Archiv."""
-
-    # Bezugsstand und Zielstand gehören zum Vergleich der aufgeführten Elemente
-    scope_json: dict[str, object] = {"bis": {"referenz": scope.bis[0], "commit": scope.bis[1]}}
-    if scope.von is not None:
-        scope_json["von"] = {"referenz": scope.von[0], "commit": scope.von[1]}
-
-    return {
-        "projekt": project,
-        "lieferart": lieferart,
-        "scope": scope_json,
-        "elemente": project_elements(repository_root, project, scope),
-    }
-
-
 def build_project_archive(
     configuration: Configuration,
     repository_root: Path,
     project: str,
     output_directory: Path,
     scope: Scope,
-    *,
-    elements: list[list[str]] | None = None,
 ) -> Path:
     """Erzeugt ein Projektarchiv für Synchronisierung oder Mainframe-Lieferung."""
 
@@ -279,8 +256,7 @@ def build_project_archive(
         _write_archive(archive, repository_root, [f"./{project}"])
     else:
         archive = project_archive_path(configuration, project, output_directory, "D")
-        if elements is None:
-            elements = project_elements(repository_root, project, scope)
+        elements = project_elements(repository_root, project, scope)
         build_delta_archive(repository_root, project, archive, elements)
 
     return archive
@@ -289,17 +265,22 @@ def build_project_archive(
 def build_project_package(configuration: Configuration, repository_root: Path, project: str, output_directory: Path, scope: Scope) -> ProjectPackage:
     """Ergänzt das Projektarchiv um die Informationsdaten für den Adapter."""
 
+    # Auftrag auf Bezugsstand, Zielstand und Archivart beziehen
     lieferart = "FULL" if scope.von is None else "DELTA"
-    information = informations_dokument(repository_root, project, scope, lieferart)
+    scope_json: dict[str, object] = {"bis": {"referenz": scope.bis[0], "commit": scope.bis[1]}}
+    if scope.von is not None:
+        scope_json["von"] = {"referenz": scope.von[0], "commit": scope.von[1]}
 
-    # DELTA-Archiv aus der im Informations-Dokument beschriebenen Elementliste bauen
-    archive = build_project_archive(
-        configuration, repository_root, project, output_directory, scope,
-        elements=information["elemente"],
-    )
+    # Archivinhalt bauen, ohne die interne Elementliste an den Adapter zu geben
+    archive = build_project_archive(configuration, repository_root, project, output_directory, scope)
 
     # Prüfsumme des fertigen Archivs ergänzen
     return ProjectPackage(
-        information={**information, "sha256": sha256_file(archive)},
+        information={
+            "projekt": project,
+            "lieferart": lieferart,
+            "scope": scope_json,
+            "sha256": sha256_file(archive),
+        },
         archive=archive,
     )
