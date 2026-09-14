@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 
-from lbs_delivery import config, git, github, lieferung, mainframe, resource_check, sync
+from lbs_delivery import config, git, lieferung, mainframe, resource_check, sync
 from lbs_delivery.process import DeliveryError, Status, execute
 from lbs_delivery.project_packages import Scope, release_scope
 
@@ -15,7 +15,7 @@ def run() -> dict[str, object]:
 
     parser = argparse.ArgumentParser(prog="mtext")
     parser.add_argument("bereich") # z.B. "resources" oder "delivery" oder "release"
-    parser.add_argument("schritt") # z.B. "check" oder "sync" oder "github" oder "mainframe"
+    parser.add_argument("schritt") # z.B. "check" oder "sync" oder "mainframe"
     parser.add_argument("--tag")
     parser.add_argument("--issue", type=int) # Freigabe-Issue einer Lieferung
     parser.add_argument("--delivery-scope", action="store_true") # Umfang der folgenden Lieferung
@@ -49,9 +49,6 @@ def run() -> dict[str, object]:
 
     if args.bereich == "delivery":
         return lieferung.run(args.schritt, args.tag, args.issue)
-
-    if args.bereich == "release" and args.schritt == "github":
-        return github.run(args.tag)
 
     if args.bereich == "release" and args.schritt in ("build", "mainframe"):
         return mainframe.run(args.schritt, args.tag)

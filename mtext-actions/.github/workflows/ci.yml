@@ -31,14 +31,9 @@ jobs:
         with:
           persist-credentials: false
 
-      # Starte die Composite Action "action.yml"
-      - name: action.yml ausführen
+      - name: mtext_actions laden
         id: automation
         uses: ./
-
-      # Wenn actionlint zur Verfügung stehen würde, könnte man die Workflows an sich damit prüfen
-      # - name: Workflow-Dateien prüfen
-      #   run: actionlint
 
       # Startet die Testsuite
       - name: Unit-Tests ausführen

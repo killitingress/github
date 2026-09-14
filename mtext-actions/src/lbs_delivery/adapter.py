@@ -31,17 +31,31 @@ _POLL_INTERVAL_SECONDS = 5
 # URL-Muster des Adapters. `{umgebung}` ist Präfix und ETAPS-Linie.
 _ADAPTER_URL = "http://{umgebung}.ltoma.intern/vMtextAdapter"
 
+# dokumentierte Auftragsstatus der sync2-Schnittstelle
+_AUFTRAG_STATUS = frozenset({"ready", "uploading", "processing", "succeeded", "failed"})
+_ABBRUCH_STATUS = frozenset({"ready", "uploading", "failed"})
+_UPLOAD_STATUS = frozenset({"ready", "uploading"})
+_END_STATUS = frozenset({"succeeded", "failed"})
+
+
+def _sync2_url(umgebung: str) -> str:
+    """Gibt die sync2-Basis-URL einer M/Text-Umgebung zurück."""
+
+    return f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2"
+
+
+def _auftrag_url(umgebung: str, auftrag_id: str) -> str:
+    """Gibt die URL eines konkreten Adapterauftrags zurück."""
+
+    return f"{_sync2_url(umgebung)}/{urllib.parse.quote(auftrag_id, safe='')}"
+
 
 def check_reachability(umgebung: str) -> None:
-    """Prüft Erreichbarkeit des /version Endpunkts und protokolliert die Antwort"""
+    """Prüft Erreichbarkeit des /version Endpunkts und protokolliert die Antwort."""
 
-    # Versionsendpunkt abrufen, urlopen meldet HTTP- und Verbindungsfehler
     url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/version"
     try:
         with urllib.request.urlopen(url, timeout=NETWORK_TIMEOUT) as response:
-            if response.status != 200:
-                raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter unter {url} antwortet mit HTTP {response.status}")
-            # Antwortzeile nach STDERR schreiben
             print(response.read().decode().strip(), file=sys.stderr)
     except (urllib.error.URLError, OSError, HTTPException) as exc:
         raise DeliveryError(Status.ADAPTER_FAILED, f"Versionsabfrage unter {url} ist fehlgeschlagen: {exc}") from exc
@@ -52,8 +66,7 @@ def resume_existing(umgebung: str, auftrag_id: str) -> dict[str, object] | None:
     oder schießt ihn ab, wenn er im Wald steht. Gibt None zurück wenn es keinen
     solchen Auftrag (mehr) gibt."""
 
-    url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2"
-    auftrag_url = f"{url}/{urllib.parse.quote(auftrag_id, safe='')}"
+    auftrag_url = _auftrag_url(umgebung, auftrag_id)
 
     # Das ist etwas seltsam hier: der Adapter antwortet HTTP 404, wenn es den
     # Auftrag nicht gibt - und anders als sonst ist 404 hier OK, da es sowieso
@@ -65,7 +78,7 @@ def resume_existing(umgebung: str, auftrag_id: str) -> dict[str, object] | None:
 
     # wenn es den Auftrag schon gibt, er aber in einem Status ist, in dem er
     # nicht sauber beendet werden kann, wird er hier entfernt
-    if result["status"] in {"ready", "uploading", "failed"}:
+    if result["status"] in _ABBRUCH_STATUS:
         _call_adapter("DELETE", auftrag_url)
         return None
 
@@ -76,21 +89,18 @@ def resume_existing(umgebung: str, auftrag_id: str) -> dict[str, object] | None:
 def upload(umgebung: str, pakete: list[ProjectPackage], auftrag_id: str) -> dict[str, object]:
     """Legt einen Auftrag an, lädt die Pakete hoch und wartet auf das Ergebnis."""
 
-    url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2"
-
     # Pakete unter der Auftrags-ID beim Adapter anmelden
     archive_list = [
         {"name": paket.archive.name, "information": paket.information} for paket in pakete
     ]
-    payload = {"archive": archive_list}
-    auftrag_url = f"{url}/{urllib.parse.quote(auftrag_id, safe='')}"
-    result = _call_adapter("POST", auftrag_url, payload)
+    auftrag_url = _auftrag_url(umgebung, auftrag_id)
+    result = _call_adapter("POST", auftrag_url, {"archive": archive_list})
 
     # noch erwartete Archive nacheinander als unveränderten Datenstrom übertragen
-    if result["status"] in {"ready", "uploading"}:
+    if result["status"] in _UPLOAD_STATUS:
         for paket in pakete:
             result = _upload_archive(auftrag_url, paket.archive)
-            if result["status"] not in {"ready", "uploading"}:
+            if result["status"] not in _UPLOAD_STATUS:
                 break
 
     return _finish_job(umgebung, result)
@@ -103,15 +113,13 @@ def _finish_job(umgebung: str, result: dict[str, object]) -> dict[str, object]:
     fehlgeschlagener Auftrag beendet den Versuch ohne erneute Verarbeitung.
     """
 
-    # übergebene Auftrags-ID für Status und Aufräumen verwenden
-    url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2"
     auftrag_id = result["auftrag_id"]
-    auftrag_url = f"{url}/{urllib.parse.quote(auftrag_id, safe='')}"
+    auftrag_url = _auftrag_url(umgebung, str(auftrag_id))
 
     # Verarbeitung nach dem Upload bis zu einem Endstatus abfragen
-    while result["status"] not in {"succeeded", "failed"}:
+    while result["status"] not in _END_STATUS:
         result = _call_adapter("GET", auftrag_url)
-        if result["status"] not in {"succeeded", "failed"}:
+        if result["status"] not in _END_STATUS:
             time.sleep(_POLL_INTERVAL_SECONDS)
 
     # Auftrag entfernen, ohne eine M/Text-Fehlermeldung zu überschreiben
@@ -134,13 +142,31 @@ def _finish_job(umgebung: str, result: dict[str, object]) -> dict[str, object]:
 def _upload_archive(auftrag_url: str, archive: Path) -> dict[str, object]:
     """Streamt ein angekündigtes Archiv mit unverändertem Inhalt zum Adapter."""
 
-    # Archivname adressiert den beim Anlegen angekündigten Upload
     archive_url = f"{auftrag_url}/archive/{urllib.parse.quote(archive.name, safe='')}"
 
     # Dateigröße ankündigen und Datei während des PUT blockweise lesen
     headers = {"Content-Type": "application/gzip", "Content-Length": str(archive.stat().st_size)}
     with closing(_iter_file(archive)) as data:
         return _call_adapter("PUT", archive_url, data, headers)
+
+
+def _validate_auftrag_response(document: dict[str, object]) -> dict[str, object]:
+    """Prüft eine sync2-Auftragsantwort gegen die dokumentierte Schnittstelle."""
+
+    match document:
+        case {"status": str(status), "auftrag_id": str(auftrag_id)} if status and auftrag_id:
+            if status not in _AUFTRAG_STATUS:
+                raise DeliveryError(Status.ADAPTER_FAILED, "Adapter meldet einen unbekannten Auftragsstatus")
+            message = document.get("message")
+            if message is not None and not isinstance(message, str):
+                raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort ist ungültig")
+            return document
+        case {"status": str(status)} if status:
+            if status not in _AUFTRAG_STATUS:
+                raise DeliveryError(Status.ADAPTER_FAILED, "Adapter meldet einen unbekannten Auftragsstatus")
+            raise DeliveryError(Status.ADAPTER_FAILED, "Adapter liefert keine gültige Auftrags-ID")
+        case _:
+            raise DeliveryError(Status.ADAPTER_FAILED, "Adapter meldet keinen Auftragsstatus")
 
 
 def _call_adapter(
@@ -202,27 +228,13 @@ def _call_adapter(
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort ist ungültig")
 
     if method == "DELETE":
-        if document.get("status") != "succeeded":
-            raise DeliveryError(Status.ADAPTER_FAILED, "Adapter bestätigt das Löschen des Auftrags nicht")
-        return document
+        match document.get("status"):
+            case "succeeded":
+                return document
+            case _:
+                raise DeliveryError(Status.ADAPTER_FAILED, "Adapter bestätigt das Löschen des Auftrags nicht")
 
-    # gemeinsame Auftragsfelder aller übrigen Antworten prüfen
-    auftrag_status = document.get("status")
-    if not isinstance(auftrag_status, str) or not auftrag_status:
-        raise DeliveryError(Status.ADAPTER_FAILED, "Adapter meldet keinen Auftragsstatus")
-
-    if auftrag_status not in {"ready", "uploading", "processing", "succeeded", "failed"}:
-        raise DeliveryError(Status.ADAPTER_FAILED, "Adapter meldet einen unbekannten Auftragsstatus")
-
-    auftrag_id = document.get("auftrag_id")
-    if not isinstance(auftrag_id, str) or not auftrag_id:
-        raise DeliveryError(Status.ADAPTER_FAILED, "Adapter liefert keine gültige Auftrags-ID")
-
-    message = document.get("message")
-    if message is not None and not isinstance(message, str):
-        raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort ist ungültig")
-
-    return document
+    return _validate_auftrag_response(document)
 
 
 def _iter_file(path: Path) -> Iterator[bytes]:

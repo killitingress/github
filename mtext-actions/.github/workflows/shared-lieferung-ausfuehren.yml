@@ -1,20 +1,14 @@
 name: Shared Workflow – Lieferung ausführen
 
 # Dieser Workflow prüft die Freigabe, übernimmt die zugehörige Vorbereitung und
-# führt die Lieferung im Mandanten-Repository aus. Ein vorhandener Liefer-Tag
-# bezeichnet eine manuell gestartete Wiederholung und benötigt kein Issue.
+# führt die Lieferung im Mandanten-Repository aus. Freigabe und Wiederholung
+# werden ausschließlich über das Freigabe-Issue angestoßen.
 'on':
   workflow_call:
     inputs:
-      liefer_tag:
-        description: Vorhandener Liefer-Tag für eine Wiederholung
-        required: false
-        default: ''
-        type: string
       freigabe_issue:
         description: Issue-Nummer der freigegebenen Vorbereitung
-        required: false
-        default: 0
+        required: true
         type: number
     secrets:
       mainframe_ftps_password:
@@ -31,13 +25,9 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 10
     outputs:
-      source_sha: >-
-        ${{ steps.resolve.outputs.wiederholung == 'true' &&
-        steps.resolve.outputs.source_sha || steps.confirm.outputs.source_sha }}
+      source_sha: ${{ steps.resolve.outputs.source_sha || steps.confirm.outputs.source_sha }}
       wiederholung: ${{ steps.resolve.outputs.wiederholung }}
-      liefer_tag: >-
-        ${{ steps.resolve.outputs.wiederholung == 'true' &&
-        steps.resolve.outputs.liefer_tag || steps.confirm.outputs.liefer_tag }}
+      liefer_tag: ${{ steps.resolve.outputs.liefer_tag || steps.confirm.outputs.liefer_tag }}
     steps:
       - name: mtext_actions laden
         id: automation
@@ -50,16 +40,14 @@ jobs:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           GITHUB_TOKEN: ${{ github.token }}
           FREIGABE_ISSUE: ${{ inputs.freigabe_issue }}
-          LIEFER_TAG: ${{ inputs.liefer_tag }}
         run: >-
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" delivery resolve
-          --tag "$LIEFER_TAG" --issue "$FREIGABE_ISSUE"
+          --issue "$FREIGABE_ISSUE"
 
       # Lädt die ermittelte Vorbereitung aus dem Laufartefakt des Mandanten-Repositories
       - name: Vorbereitung herunterladen
         if: steps.resolve.outputs.wiederholung != 'true'
-        shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
           ARTEFAKT_ID: ${{ steps.resolve.outputs.vorbereitung_artefakt_id }}
@@ -94,7 +82,7 @@ jobs:
           "$ACTION_PATH/src/mtext.py" delivery confirm
           --issue "$FREIGABE_ISSUE"
 
-  # Erstellt die Projektpakete mit JCL und JSON-Informationsdateien.
+  # Erstellt die Projektarchive mit ihrer JCL.
   build:
     name: FULL- oder DELTA-Artefakt erstellen
     needs: check
@@ -147,6 +135,8 @@ jobs:
       contents: read
       actions: read
     runs-on: [self-hosted, linux]
+    outputs:
+      dry_run: ${{ needs.build.outputs.dry_run }}
     concurrency:
       group: mainframe-${{ github.repository }}
       cancel-in-progress: false
@@ -173,10 +163,10 @@ jobs:
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" release mainframe
 
-  # Kennzeichnet den verarbeiteten Stand und veröffentlicht den Bereitstellungsbericht.
+  # Kennzeichnet den verarbeiteten Stand und schließt das Freigabe-Issue ab.
   report:
-    name: Lieferstand in GitHub bereitstellen
-    needs: [check, build, publish]
+    name: Lieferung abschließen
+    needs: [check, publish]
     permissions:
       contents: write
       actions: read
@@ -196,10 +186,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           LIEFER_TAG: ${{ needs.check.outputs.liefer_tag }}
           SOURCE_SHA: ${{ needs.check.outputs.source_sha }}
+          FREIGABE_ISSUE: ${{ inputs.freigabe_issue }}
         run: >-
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" delivery tag
-          --tag "$LIEFER_TAG"
+          --tag "$LIEFER_TAG" --issue "$FREIGABE_ISSUE"
 
       # Lädt das Lieferartefakt in das temporäre Verzeichnis dieses Jobs.
       - name: Lieferartefakt herunterladen
@@ -208,23 +199,12 @@ jobs:
           name: release
           path: ${{ runner.temp }}/release
 
-      - name: GitHub Release veröffentlichen
-        env:
-          ACTION_PATH: ${{ steps.automation.outputs.action_path }}
-          DRY_RUN: ${{ needs.build.outputs.dry_run }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: >-
-          "${{ steps.automation.outputs.python }}"
-          "$ACTION_PATH/src/mtext.py" release github
-          --tag "${{ needs.check.outputs.liefer_tag }}"
-
-      # Das Issue protokolliert den erfolgreichen Lauf und bleibt danach lesbar geschlossen.
+      # Das Issue protokolliert Dateinamen und Prüfsummen und bleibt danach lesbar geschlossen.
       - name: Freigabe abschließen
-        if: inputs.freigabe_issue != 0
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           FREIGABE_ISSUE: ${{ inputs.freigabe_issue }}
-          DRY_RUN: ${{ needs.build.outputs.dry_run }}
+          DRY_RUN: ${{ needs.publish.outputs.dry_run }}
           GITHUB_TOKEN: ${{ github.token }}
           LIEFER_TAG: ${{ needs.check.outputs.liefer_tag }}
         run: >-
@@ -232,11 +212,11 @@ jobs:
           "$ACTION_PATH/src/mtext.py" delivery complete
           --tag "$LIEFER_TAG" --issue "$FREIGABE_ISSUE"
 
-  # Ein offenes Issue verweist auch bei einem fehlgeschlagenen Folgejob auf den Lauf.
+  # Das Freigabe-Issue verweist auch bei einem fehlgeschlagenen Folgejob auf den Lauf.
   rueckmeldung:
     name: Nicht abgeschlossene Lieferung melden
-    needs: [check, build, publish, report]
-    if: ${{ always() && inputs.freigabe_issue != 0 && needs.report.result != 'success' }}
+    needs: [check, publish, report]
+    if: ${{ always() && needs.report.result != 'success' }}
     permissions:
       issues: write
     runs-on: [self-hosted, linux]

@@ -96,8 +96,8 @@ Content-Type: application/json
 }
 ```
 
-Commit und Prüfsumme im Beispiel sind Platzhalter. Siehe Zielbild Dokument für
-volle Beschreibung der Info-Datei.
+Commit und Prüfsumme im Beispiel sind Platzhalter. Das Zielbild beschreibt
+die Informationsdaten der Synchronisierung.
 
 | Feld | Typ und Bedeutung |
 |---|---|

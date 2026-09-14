@@ -8,46 +8,41 @@ from pathlib import Path
 
 from . import config, git, github
 from .process import DeliveryError, Status
-from .project_packages import previous_release_scope, release_report, release_scope
+from .project_packages import delivery_report, previous_release_scope, release_scope, sha256_file
 
 
 # Name des GitHub-Actions-Artefakts für das zugehörige Freigabe-Issue
 _VORBEREITUNG_ARTEFAKT = "lieferung-{issue}-vorbereitungsartefakt"
 
-# Label zur fachlichen Kennzeichnung automatisch erzeugter Freigabe-Issues
-_FREIGABE_LABEL = "lieferung:freigabe"
+# Name und Repository-Beschreibung der Freigabe-Issue-Labels
+_LABEL_FREIGABE = "lieferung:freigabe"
+_LABEL_GESTARTET = "lieferung:gestartet"
+_LABEL_ABGESCHLOSSEN = "lieferung:abgeschlossen"
+_LABEL_DRY_RUN = "dry_run"
 
-# Beschreibung des Labels in der Repository-Oberfläche
-_FREIGABE_LABEL_BESCHREIBUNG = "Vorbereitete Mainframe-Lieferung wartet auf Freigabe"
-
-# Kennzeichnet die verbrauchte Freigabe auch bei offenem oder erneut geöffnetem Issue
-_GESTARTET_LABEL = "lieferung:gestartet"
-
-# Beschreibung des gestarteten Lieferstands im Mandanten-Repository
-_GESTARTET_LABEL_BESCHREIBUNG = "Freigabe angenommen, Lieferung wurde gestartet"
-
-# Label für Lieferungen ohne Mainframe-Übergabe
-_DRY_RUN_LABEL = "dry_run"
-
-# Beschreibung des Dry-Run-Labels in der Repository-Oberfläche
-_DRY_RUN_LABEL_BESCHREIBUNG = "Externe Übergabe wird in diesem Lauf übersprungen"
+_LIEFERUNG_LABELS: dict[str, str] = {
+    _LABEL_FREIGABE: "Vorbereitete Mainframe-Lieferung wartet auf Freigabe",
+    _LABEL_GESTARTET: "Freigabe angenommen, Lieferung wurde gestartet",
+    _LABEL_ABGESCHLOSSEN: "Lieferlauf wurde abgeschlossen",
+    _LABEL_DRY_RUN: "Externe Übergabe wird in diesem Lauf übersprungen",
+}
 
 
 def liefer_tag_fuer_branch(configuration: config.Configuration, branch: str) -> git.LieferTag:
     """Leitet den Liefer-Tag aus einem zulässigen Lieferzweig ab."""
 
-    # Git-Namen auswerten, bevor die fachlichen Lieferregeln greifen
+    # Liefer-Tag aus dem Branch und der Releaselinie berechnen
     tag = git.LieferTag.from_lieferzweig(branch, configuration.releaselinie)
     if tag is None:
         raise DeliveryError(Status.SOURCE_FAILED, "Branch ist kein Lieferzweig")
 
     # .100 bezeichnet den Vollstand und darf nicht als Teillieferung entstehen
     if tag.ist_hauptrelease and git.LieferTag.from_bereitstellung(branch) is not None:
-        raise DeliveryError(Status.VALIDATION_FAILED, ".100 entsteht auf main oder release/nnn")
+        raise DeliveryError(Status.VALIDATION_FAILED, ".100 darf nur auf main oder release/nnn entstehen")
 
     # Releaselinie muss in der gemeinsamen Zielzuordnung aktiv sein
     if tag.releaselinie not in configuration.releaselinien:
-        raise DeliveryError(Status.VALIDATION_FAILED, f"Releaselinie {tag.releaselinie} ist ungültig")
+        raise DeliveryError(Status.VALIDATION_FAILED, f"Releaselinie {tag.releaselinie} ist unbekannt")
 
     return tag
 
@@ -78,32 +73,28 @@ def _summary(configuration: config.Configuration, root: Path, tag: git.LieferTag
         "",
     ]
 
-    # den hübschen Lieferbericht aus den beiden Vergleichsumfängen erzeugen
+    # den Lieferumfang aus den beiden Vergleichsständen für das Issue erzeugen
     paket_scope = release_scope(root, tag, sha)
-    information_scope = previous_release_scope(root, tag, sha)
-    return "\n".join(lines) + "\n" + release_report(
-        configuration, root, paket_scope=paket_scope, information_scope=information_scope,
+    vorrelease_scope = previous_release_scope(root, tag, sha)
+
+    return "\n".join(lines) + "\n" + delivery_report(
+        configuration, root, paket_scope=paket_scope, vorrelease_scope=vorrelease_scope,
     )
 
 
-def _ermittle_lieferung(tag: git.LieferTag | None, issue: int | None) -> dict[str, object]:
-    """Ermittelt für `resolve` einen vorhandenen Tag oder die freigegebene Vorbereitung."""
-
-    # genau einer der beiden Lieferwege muss ausgewählt sein
-    if (tag is None) == (issue is None):
-        raise DeliveryError(Status.VALIDATION_FAILED, "Liefer-Tag oder Freigabe-Issue muss angegeben werden")
+def _ermittle_lieferung(issue: int) -> dict[str, object]:
+    """Ermittelt die Vorbereitung oder den im Freigabe-Issue genannten Liefer-Tag."""
 
     # jede neue Lieferung und Wiederholung erfordert Maintain oder Admin
     role = github.repository_role(os.environ["GITHUB_ACTOR"])
     if role not in ("maintain", "admin"):
         raise DeliveryError(Status.VALIDATION_FAILED, "Freigabe erfordert Repository-Berechtigung maintain oder admin")
 
-    # offene und markierte Freigabe dem zugeordneten Artefakt zuweisen
-    if issue is not None:
-        state, labels = github.issue(issue)
-        if state != "open" or _FREIGABE_LABEL not in labels:
-            raise DeliveryError(Status.VALIDATION_FAILED, "Freigabe-Issue ist nicht offen oder nicht gekennzeichnet")
+    # Issue als gemeinsame Grundlage für Freigabe und Wiederholung lesen
+    state, labels, title = github.issue(issue)
 
+    # offene Freigabe dem zugeordneten Vorbereitungsartefakt zuweisen
+    if state == "open" and _LABEL_FREIGABE in labels:
         artifact_id = github.latest_artifact(_VORBEREITUNG_ARTEFAKT.format(issue=issue))
         if artifact_id is None:
             raise DeliveryError(Status.SOURCE_FAILED, "Für das Freigabe-Issue besteht keine Vorbereitung")
@@ -113,10 +104,25 @@ def _ermittle_lieferung(tag: git.LieferTag | None, issue: int | None) -> dict[st
             "outputs": {"wiederholung": "false", "vorbereitung_artefakt_id": artifact_id},
         }
 
-    # ein manueller Aufruf ist ausschließlich für einen vorhandenen Liefer-Tag vorgesehen
-    source_sha = github.tag_sha(str(tag))
-    if source_sha is None:
-        raise DeliveryError(Status.SOURCE_FAILED, "Neue Lieferung muss über ihr Freigabe-Issue gestartet werden")
+    # bereits angenommene Freigabe erneut an den Mainframe geben
+    if _LABEL_GESTARTET not in labels and _LABEL_ABGESCHLOSSEN not in labels:
+        raise DeliveryError(Status.VALIDATION_FAILED, "Freigabe-Issue ist nicht zur Freigabe oder Wiederholung gekennzeichnet")
+
+    # den beim Anlegen festgelegten Tag aus dem Titel des bekannten Issues lesen
+    prefix = "Lieferung "
+    suffix = " freigeben"
+    if not title.startswith(prefix) or not title.endswith(suffix):
+        raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue enthält keinen eindeutigen Liefer-Tag")
+    try:
+        tag = git.LieferTag.parse(title[len(prefix):-len(suffix)])
+    except ValueError as exc:
+        raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue enthält keinen gültigen Liefer-Tag") from exc
+
+    # die gespeicherte Tag-Annotation muss auf genau dieses Issue zeigen
+    record = github.tag_record(str(tag))
+    if record is None or record[1] != issue:
+        raise DeliveryError(Status.FREIGABE_FAILED, "Liefer-Tag fehlt oder gehört nicht zu diesem Freigabe-Issue")
+    source_sha, _ = record
 
     return {
         "status": Status.LIEFERSTAND_ERMITTELT,
@@ -137,7 +143,15 @@ def _actions_lauf_url() -> str:
     )
 
 
-def _erstelle_freigabe_issue(tag: git.LieferTag, summary: str, dry_run: bool) -> tuple[int, str]:
+def _issue_link(issue: int) -> str:
+    """Verlinkt das Freigabe-Issue aus einer Laufzusammenfassung."""
+
+    repository = os.environ["GITHUB_REPOSITORY"]
+    server = os.environ["GITHUB_SERVER_URL"].rstrip("/")
+    return f"[Freigabe-Issue #{issue}]({server}/{repository}/issues/{issue})\n"
+
+
+def _erstelle_freigabe_issue(tag: git.LieferTag, summary: str, dry_run: bool) -> int:
     """Erstellt das Issue mit Lieferumfang und Bedienhinweis für die Freigabe."""
 
     # geprüften Bericht mit Urheber und Vorbereitungslauf im Issue zeigen
@@ -150,9 +164,9 @@ def _erstelle_freigabe_issue(tag: git.LieferTag, summary: str, dry_run: bool) ->
     )
 
     # Dry Runs bereits am Freigabe-Issue sichtbar kennzeichnen
-    labels = {_FREIGABE_LABEL: _FREIGABE_LABEL_BESCHREIBUNG}
+    labels = {_LABEL_FREIGABE: _LIEFERUNG_LABELS[_LABEL_FREIGABE]}
     if dry_run:
-        labels[_DRY_RUN_LABEL] = _DRY_RUN_LABEL_BESCHREIBUNG
+        labels[_LABEL_DRY_RUN] = _LIEFERUNG_LABELS[_LABEL_DRY_RUN]
 
     # Issue-Nummer bindet das spätere Laufartefakt an diese Freigabe
     return github.create_labeled_issue(
@@ -175,7 +189,7 @@ def _pruefe_lieferung() -> dict[str, object]:
 
     # Bericht im Freigabe-Issue veröffentlichen und den geprüften Stand daran binden
     summary = _summary(configuration, source, tag, branch, sha)
-    issue, issue_url = _erstelle_freigabe_issue(tag, summary, configuration.dry_run)
+    issue = _erstelle_freigabe_issue(tag, summary, configuration.dry_run)
     vorbereitung = Path(os.environ["GITHUB_WORKSPACE"]) / config.WORKFLOW_VORBEREITUNG_DATEI
     try:
         vorbereitung.write_text(
@@ -189,7 +203,7 @@ def _pruefe_lieferung() -> dict[str, object]:
     # Vorbereitung, Vorprüfung und Freigabeweg an den Workflow übergeben
     return {
         "status": Status.LIEFERUNG_CHECKED,
-        "summary": f"{summary}\n## Freigabe\n\n[Freigabe-Issue #{issue}]({issue_url})\n",
+        "summary": _issue_link(issue),
         "outputs": {"vorbereitung_path": vorbereitung.as_posix(),
                     "vorbereitung_name": _VORBEREITUNG_ARTEFAKT.format(issue=issue)},
     }
@@ -220,7 +234,7 @@ def _bestaetige_lieferung(expected_issue: int) -> dict[str, object]:
         raise DeliveryError(Status.SOURCE_FAILED, "Vorbereitung gehört nicht zu diesem Freigabe-Issue")
 
     # die erste gültige Freigabe verbrauchen, bevor Paketbau und Übergabe beginnen
-    github.mark_issue_started(issue, _FREIGABE_LABEL, _GESTARTET_LABEL, _GESTARTET_LABEL_BESCHREIBUNG)
+    github.replace_issue_label(issue, _LABEL_FREIGABE, _LABEL_GESTARTET, _LIEFERUNG_LABELS[_LABEL_GESTARTET])
 
     # gestarteten Lauf im Issue verknüpfen, bevor die Verarbeitung in Folgejobs wechselt
     github.comment_issue(
@@ -231,41 +245,49 @@ def _bestaetige_lieferung(expected_issue: int) -> dict[str, object]:
     # bestätigten Commit und Liefer-Tag für die Folgeschritte ausgeben
     return {
         "status": Status.LIEFERUNG_BESTAETIGT,
-        "summary": (
-            "## Lieferung bestätigt\n\n"
-            f"- Liefer-Tag: `{tag}`\n"
-            f"- Commit: `{sha}`\n"
-            f"- Freigegeben durch: `{os.environ['GITHUB_ACTOR']}`\n"
-        ),
+        "summary": _issue_link(issue),
         "outputs": {"source_sha": sha, "liefer_tag": tag},
     }
 
 
 def _schliesse_freigabe(issue: int, tag: git.LieferTag) -> dict[str, object]:
-    """Dokumentiert die erfolgreiche Lieferung und schließt ihr Freigabe-Issue."""
+    """Dokumentiert die Lieferdateien und schließt ihr Freigabe-Issue."""
 
-    # Ergebnis und ausführenden Actions-Lauf im Freigabeprotokoll ergänzen
+    # die Prüfsummen der übertragenen Archive für das Issue berechnen
+    archives = sorted((Path(os.environ["RUNNER_TEMP"]) / "release").glob("*.tgz"))
+    if not archives:
+        raise DeliveryError(Status.PACKAGE_FAILED, "Lieferarchive fehlen")
+
+    rows = [f"| `{e.name}` | `{sha256_file(e)}` |" for e in archives]
+
+    # Ergebnis, Dateiliste und ausführenden Lauf im Freigabeprotokoll ergänzen
     dry_run = os.environ.get("DRY_RUN") == "true"
-    result = "Dry Run wurde erfolgreich ausgeführt" if dry_run else "Lieferung wurde erfolgreich ausgeführt"
-    github.complete_issue(
-        issue,
-        f"{result}: `{tag}` ([Actions-Lauf]({_actions_lauf_url()}))",
-    )
-    return {"status": Status.LIEFERUNG_ABGESCHLOSSEN}
+    result = "Dry Run ohne Mainframe-Übergabe" if dry_run else "Mainframe-Lieferung abgeschlossen"
+    body = "\n".join([
+        f"{result}: [Liefer-Tag `{tag}`]({os.environ['GITHUB_SERVER_URL'].rstrip('/')}/"
+        f"{os.environ['GITHUB_REPOSITORY']}/tree/{tag}) ([Actions-Lauf]({_actions_lauf_url()}))",
+        "",
+        "| Datei | SHA-256 |",
+        "|---|---|",
+        *rows,
+    ])
+    github.complete_issue(issue, body, _LABEL_GESTARTET, _LABEL_ABGESCHLOSSEN, _LIEFERUNG_LABELS[_LABEL_ABGESCHLOSSEN])
+    
+    return {"status": Status.LIEFERUNG_ABGESCHLOSSEN, "summary": _issue_link(issue)}
 
 
-def _erstelle_liefer_tag(tag: git.LieferTag) -> dict[str, object]:
-    """Erzeugt den Liefer-Tag auf der vorbereiteten Commit-SHA."""
+def _erstelle_liefer_tag(tag: git.LieferTag, issue: int) -> dict[str, object]:
+    """Erzeugt den Liefer-Tag mit Commit-SHA und Freigabe-Issue."""
 
     # identischen Tag aus einem wiederholten GitHub-Abschluss übernehmen
     source_sha = os.environ["SOURCE_SHA"]
-    existing_sha = github.tag_sha(str(tag))
-    if existing_sha is not None and existing_sha != source_sha:
-        raise DeliveryError(Status.SOURCE_FAILED, "Liefer-Tag zeigt auf einen anderen Commit")
+    record = github.tag_record(str(tag))
+    if record is not None and record != (source_sha, issue):
+        raise DeliveryError(Status.SOURCE_FAILED, "Liefer-Tag zeigt auf einen anderen Commit oder ein anderes Freigabe-Issue")
 
-    # fehlenden Tag direkt auf der bereits bekannten SHA anlegen
-    if existing_sha is None:
-        github.create_tag(str(tag), source_sha)
+    # fehlenden Tag mit der bereits bekannten SHA und Issue-Nummer anlegen
+    if record is None:
+        github.create_tag(str(tag), source_sha, issue)
 
     return {"status": Status.LIEFERUNG_TAGGED}
 
@@ -281,23 +303,29 @@ def run(subcommand: str, tag: str | None = None, issue: int | None = None) -> di
         except ValueError as exc:
             raise DeliveryError(Status.VALIDATION_FAILED, str(exc)) from exc
 
-    # GitHub Actions verwendet 0 als technischen Standardwert für ein fehlendes Issue
-    if issue == 0:
-        issue = None
+    # GitHub-Issue-Nummern sind positiv
+    if issue is not None and issue <= 0:
+        raise DeliveryError(Status.VALIDATION_FAILED, "Freigabe-Issue-Nummer ist ungültig")
 
-    if subcommand == "resolve":
-        return _ermittle_lieferung(parsed_tag, issue)
+    # Lieferstand aus dem Freigabe-Issue ermitteln — Freigabe oder Wiederholung erkennt der Ablauf an den Labels
+    if subcommand in ("resolve", "repeat"):
+        if parsed_tag is not None or issue is None:
+            raise DeliveryError(Status.VALIDATION_FAILED, "Freigabe-Issue fehlt oder Liefer-Tag wurde zusätzlich angegeben")
+        return _ermittle_lieferung(issue)
 
+    # Vorbereitung prüfen und Freigabe-Issue anlegen, der Liefer-Tag folgt aus dem Branch
     if subcommand == "check":
         if parsed_tag is not None:
             raise DeliveryError(Status.VALIDATION_FAILED, "Liefer-Tag wird aus dem Branch ermittelt")
         return _pruefe_lieferung()
 
+    # Freigabe annehmen und das Issue von freigabe auf gestartet setzen
     if subcommand == "confirm":
         if issue is None:
             raise DeliveryError(Status.VALIDATION_FAILED, "Freigabe-Issue fehlt")
         return _bestaetige_lieferung(issue)
 
+    # fehlgeschlagenen Lauf im Issue vermerken, ohne das Label zurückzusetzen — Wiederholung bleibt möglich
     if subcommand == "incomplete":
         if issue is None:
             raise DeliveryError(Status.VALIDATION_FAILED, "Freigabe-Issue fehlt")
@@ -307,11 +335,13 @@ def run(subcommand: str, tag: str | None = None, issue: int | None = None) -> di
         )
         return {"status": Status.LIEFERUNG_NICHT_ABGESCHLOSSEN}
 
+    # Liefer-Tag am vorbereiteten Commit setzen, sobald Mainframe und GitHub-Release durch sind
     if subcommand == "tag":
-        if parsed_tag is None:
-            raise DeliveryError(Status.VALIDATION_FAILED, "Liefer-Tag fehlt")
-        return _erstelle_liefer_tag(parsed_tag)
+        if parsed_tag is None or issue is None:
+            raise DeliveryError(Status.VALIDATION_FAILED, "Liefer-Tag oder Freigabe-Issue fehlt")
+        return _erstelle_liefer_tag(parsed_tag, issue)
 
+    # erfolgreichen Abschluss melden und gestartet durch abgeschlossen ersetzen
     if subcommand == "complete":
         if parsed_tag is None or issue is None:
             raise DeliveryError(Status.VALIDATION_FAILED, "Liefer-Tag oder Freigabe-Issue fehlt")

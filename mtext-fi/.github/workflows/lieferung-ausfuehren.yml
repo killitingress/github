@@ -1,20 +1,14 @@
 name: Lieferung ausführen
 
-# Eine vorbereitete Lieferung kann mittels eines `/freigabe` Kommentars im
-# entsprechenden Issue gestartet werden. Eine freigegebene Lieferung kann
-# manuell unter Angabe eines bereits existierenden Liefer-Tags wiederholt
-# werden - liefert allerdings den exakt selben Stand. Für eine Korrektur einer
-# Lieferung ist das Liefer-Tag zu löschen, der Bereitstellungs-Branch zu
+# Eine vorbereitete Lieferung beginnt mit `/freigabe` im Freigabe-Issue.
+# `/wiederholung` führt eine bereits getaggte Lieferung aus demselben Issue
+# erneut aus. Der Tag wird aus dem Issue gelesen und mit seiner Annotation geprüft.
+# Mit `@test` im Kommentar wird der Shared Workflow vom Testbranch geladen.
+# Für eine Korrektur ist der Liefer-Tag zu löschen, der Bereitstellungs-Branch zu
 # korrigieren und dann eine erneute Vorbereitung durchzuführen.
 'on':
   issue_comment:
     types: [created]
-  workflow_dispatch:
-    inputs:
-      liefer_tag:
-        description: Vorhandener Liefer-Tag für einen Wiederholungslauf (z.B. r270.144)
-        required: true
-        type: string
 
 # Lieferungen desselben Mandanten nacheinander ausführen. Nach erfolgreichem
 # Abschluss das zugehörige Issue schließen.
@@ -23,22 +17,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Für produktive Freigaben und manuelle Wiederholungen den Stand von main verwenden.
+  # Freigabe und Wiederholung gehören zum jeweiligen Freigabe-Issue.
   lieferung-ausfuehren:
     name: Lieferung ausführen
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.issue.pull_request == null &&
-      contains(github.event.issue.labels.*.name, 'lieferung:freigabe') &&
-      github.event.comment.body == '/freigabe')
+      github.event.issue.pull_request == null &&
+      (
+        (contains(github.event.issue.labels.*.name, 'lieferung:freigabe') &&
+         (github.event.comment.body == '/freigabe' ||
+          github.event.comment.body == '/freigabe@test')) ||
+        ((contains(github.event.issue.labels.*.name, 'lieferung:gestartet') ||
+          contains(github.event.issue.labels.*.name, 'lieferung:abgeschlossen')) &&
+         (github.event.comment.body == '/wiederholung' ||
+          github.event.comment.body == '/wiederholung@test'))
+      )
     permissions:
       contents: write
       actions: read
       issues: write
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@main
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@${{ contains(github.event.comment.body, '@test') && 'test' || 'main' }}
     with:
-      liefer_tag: ${{ inputs.liefer_tag || '' }}
-      freigabe_issue: ${{ github.event.issue.number || 0 }}
+      freigabe_issue: ${{ github.event.issue.number }}
     secrets:
       mainframe_ftps_password: ${{ secrets.MAINFRAME_FTPS_PASSWORD }}
 
@@ -46,10 +45,11 @@ jobs:
   freigabe-hinweis:
     name: Verwendete Freigabe melden
     if: >-
-      github.event_name == 'issue_comment' &&
       github.event.issue.pull_request == null &&
-      contains(github.event.issue.labels.*.name, 'lieferung:gestartet') &&
-      github.event.comment.body == '/freigabe'
+      (contains(github.event.issue.labels.*.name, 'lieferung:gestartet') ||
+      contains(github.event.issue.labels.*.name, 'lieferung:abgeschlossen')) &&
+      (github.event.comment.body == '/freigabe' ||
+       github.event.comment.body == '/freigabe@test')
     permissions:
       issues: write
     runs-on: [self-hosted, linux]
@@ -68,22 +68,3 @@ jobs:
             --header 'X-GitHub-Api-Version: 2022-11-28' \
             --data '{"body":"Für dieses Issue wurde bereits eine Freigabe durchgeführt. Für einen neuen Lauf unter Actions `Lieferung vorbereiten` starten und das neue Freigabe-Issue prüfen. Bei einer Korrektur den vorhandenen Liefer-Tag zuvor manuell löschen."}' \
             "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$FREIGABE_ISSUE/comments"
-
-  # Mittels `/freigabe@test` kann mtext_actions@test angesprochen werden
-  lieferung-ausfuehren-test:
-    name: Lieferung mittels Testbranch
-    if: >-
-      github.event_name == 'issue_comment' &&
-      github.event.issue.pull_request == null &&
-      contains(github.event.issue.labels.*.name, 'lieferung:freigabe') &&
-      github.event.comment.body == '/freigabe@test'
-    permissions:
-      contents: write
-      actions: read
-      issues: write
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@test
-    with:
-      liefer_tag: ''
-      freigabe_issue: ${{ github.event.issue.number }}
-    secrets:
-      mainframe_ftps_password: ${{ secrets.MAINFRAME_FTPS_PASSWORD }}

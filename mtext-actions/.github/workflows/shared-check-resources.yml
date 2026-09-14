@@ -6,16 +6,11 @@ name: Shared Workflow – Tonic-Ressourcen prüfen
 'on':
   workflow_call:
     inputs:
-      lieferung:
-        description: Umfang der folgenden Lieferung verwenden
+      umfang:
+        description: Prüfumfang — leer, lieferung oder synchronisierung
         required: false
-        type: boolean
-        default: false
-      synchronisierung:
-        description: Vergleichsumfang der folgenden Synchronisierung verwenden
-        required: false
-        type: boolean
-        default: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -32,11 +27,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: source
-          fetch-depth: ${{ (inputs.lieferung || inputs.synchronisierung) && '0' || '1' }}
+          fetch-depth: ${{ inputs.umfang != '' && '0' || '1' }}
           persist-credentials: false
 
-      # Starte die Composite Action "action.yml"
-      - name: action.yml ausführen
+      - name: mtext_actions laden
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
@@ -44,8 +38,8 @@ jobs:
       - name: Ressourcen prüfen
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
-          GITHUB_TOKEN: ${{ inputs.synchronisierung && github.token || '' }}
+          GITHUB_TOKEN: ${{ inputs.umfang == 'synchronisierung' && github.token || '' }}
         run: >-
           "${{ steps.automation.outputs.python }}" "$ACTION_PATH/src/mtext.py" resources check
-          ${{ inputs.lieferung && '--delivery-scope' || '' }}
-          ${{ inputs.synchronisierung && '--sync-scope' || '' }}
+          ${{ inputs.umfang == 'lieferung' && '--delivery-scope' || '' }}
+          ${{ inputs.umfang == 'synchronisierung' && '--sync-scope' || '' }}

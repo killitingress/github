@@ -1,8 +1,4 @@
-"""Liest Workflow-Läufe, Issues, Artefakte, Tags und Rollen und veröffentlicht Releases.
-
-Header, Fehlerauswertung und die fachlichen GitHub-Aktionen liegen zusammen,
-damit die Workflows einen gemeinsamen Weg zu GitHub verwenden.
-"""
+"""Modul für die Kommunikation mit GitHub."""
 
 from __future__ import annotations
 
@@ -11,11 +7,9 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
-from pathlib import Path
 from typing import Any
 
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
-from .project_packages import INFORMATION_PATTERN, RELEASE_REPORT_NAME
 
 
 # Von GitHub für die REST-API vorgegebene Version des Anfrageformats.
@@ -23,6 +17,9 @@ _API_VERSION = "2022-11-28"
 
 # GitHub empfiehlt diesen Medientyp für JSON-Antworten der REST-API.
 _JSON_MEDIA_TYPE = "application/vnd.github+json"
+
+# Präfix der festen Issue-Zuordnung im annotierten Liefer-Tag
+_TAG_ISSUE_PREFIX = "Freigabe-Issue: #"
 
 
 def _repository_url(path: str) -> str:
@@ -32,7 +29,7 @@ def _repository_url(path: str) -> str:
     return f"{os.environ['GITHUB_API_URL'].rstrip('/')}/repos/{repository}/{path}"
 
 
-def _request(*, method: str, url: str, failure: Status, payload: dict[str, object] | bytes | None = None, missing_ok: bool = False) -> Any:
+def _request(*, method: str, url: str, failure: Status, payload: dict[str, object] | None = None, missing_ok: bool = False) -> Any:
     """Sendet eine Anfrage an GitHub und liest die JSON-Antwort.
 
     Bei einer fehlenden Ressource (404) gibt die Funktion mit `missing_ok`
@@ -40,8 +37,8 @@ def _request(*, method: str, url: str, failure: Status, payload: dict[str, objec
     dem vom Aufrufer festgelegten Status.
     """
 
-    # JSON oder Binärinhalt in den gemeinsamen GitHub-Request übernehmen
-    body = json.dumps(payload).encode() if isinstance(payload, dict) else payload
+    # JSON-Inhalt in den gemeinsamen GitHub-Request übernehmen
+    body = json.dumps(payload).encode() if payload is not None else None
     headers = {
         "Accept": _JSON_MEDIA_TYPE,
         "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
@@ -82,35 +79,33 @@ def _request(*, method: str, url: str, failure: Status, payload: dict[str, objec
 
 
 def last_sync_commit(*, event: str | None = None) -> str | None:
-    """Liest den Commit des jüngsten erfolgreichen Sync-Laufs dieses Branches.
-
-    GitHub speichert den zum Lauf gehörenden Branchstand als `head_sha`.
-    Die Abfrage dient als Vergleichsstand für das nächste DELTA. Beim Wechsel
-    der Releaselinie auf main wird zusätzlich der erfolgreiche Push-Lauf
-    benötigt, weil ein manueller Abgleich eine einzelne Umgebung bedient.
-    """
+    """Liest den Commit des jüngsten erfolgreichen Sync-Laufs dieses Branches."""
 
     parameters = {"branch": os.environ["GITHUB_REF_NAME"], "status": "success", "per_page": 1}
     if event:
         parameters["event"] = event
 
-    query = urllib.parse.urlencode(parameters)
+    # GitHub Abfrage durchführen
+    query = urllib.parse.urlencode(parameters) # Parameter in die Query-String-Notation umwandeln
     url = f"{_repository_url('actions/workflows/sync-resources.yml/runs')}?{query}"
     document = _request(method="GET", url=url, failure=Status.SOURCE_FAILED)
+
+    # Workflow-Läufe aus der Antwort lesen
     runs = document["workflow_runs"]
-    return runs[0]["head_sha"] if runs else None
+
+    # wenn es keine erfolgreichen Läufe gibt, wird None zurückgegeben
+    if not runs:
+        return None
+
+    return runs[0]["head_sha"] # Commit-SHA des jüngsten erfolgreichen Sync-Laufs
 
 
-def _label_names(document: dict[str, object]) -> set[str]:
-    """Liest die Labelnamen aus einer GitHub-Issue-Antwort."""
+def _label_names(labels: object) -> set[str]:
+    """Liest die Labelnamen aus einer GitHub-Antwort."""
 
-    labels = document.get("labels")
     if not isinstance(labels, list):
         return set()
-    return {
-        e.get("name") for e in labels
-        if isinstance(e, dict) and isinstance(e.get("name"), str)
-    }
+    return {e["name"] for e in labels if isinstance(e, dict) and isinstance(e.get("name"), str)}
 
 
 def _ensure_label(name: str, description: str) -> None:
@@ -122,7 +117,7 @@ def _ensure_label(name: str, description: str) -> None:
         _request(method="POST", url=_repository_url("labels"), failure=Status.FREIGABE_FAILED, payload=payload)
 
 
-def create_labeled_issue(*, title: str, body: str, labels: dict[str, str]) -> tuple[int, str]:
+def create_labeled_issue(*, title: str, body: str, labels: dict[str, str]) -> int:
     """Erstellt bei Bedarf die Labels und danach das damit markierte Issue."""
 
     # fachliche Labels bei der ersten Verwendung im Repository anlegen
@@ -132,28 +127,26 @@ def create_labeled_issue(*, title: str, body: str, labels: dict[str, str]) -> tu
     # das Issue erhält die nun vorhandenen Labels bereits beim Anlegen
     payload = {"title": title, "body": body, "labels": list(labels)}
     document = _request(method="POST", url=_repository_url("issues"), failure=Status.FREIGABE_FAILED, payload=payload)
-    if not isinstance(document, dict):
-        raise DeliveryError(Status.FREIGABE_FAILED, "GitHub liefert kein Freigabe-Issue zurück")
 
     # fehlende Label-Berechtigung darf kein nicht freigebbares Issue hinterlassen
-    if not labels.keys() <= _label_names(document):
+    if labels.keys() - _label_names(document.get("labels")):
         raise DeliveryError(Status.FREIGABE_FAILED, "GitHub hat nicht alle Freigabe-Labels gesetzt")
 
-    # Nummer und HTML-Adresse an den Lieferablauf übergeben
+    # Issue-Nummer an den Lieferablauf übergeben
     match document:
-        case {"number": int(number), "html_url": str(html_url)}:
-            return number, html_url
+        case {"number": int(number)}:
+            return number
         case _:
             raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue ist ungültig")
 
 
-def issue(number: int) -> tuple[str, set[str]]:
-    """Gibt Status und Labelnamen eines Issues aus dem aktuellen Repository zurück."""
+def issue(number: int) -> tuple[str, set[str], str]:
+    """Gibt Status, Labels und Titel eines Issues im aktuellen Repository zurück."""
 
     document = _request(method="GET", url=_repository_url(f"issues/{number}"), failure=Status.FREIGABE_FAILED)
     match document:
-        case {"state": str(state)}:
-            return state, _label_names(document)
+        case {"state": str(state), "title": str(title)}:
+            return state, _label_names(document.get("labels")), title
         case _:
             raise DeliveryError(Status.FREIGABE_FAILED, "GitHub liefert kein Freigabe-Issue zurück")
 
@@ -164,8 +157,7 @@ def repository_role(username: str) -> str | None:
     actor = urllib.parse.quote(username, safe="")
     url = _repository_url(f"collaborators/{actor}/permission")
     document = _request(method="GET", url=url, failure=Status.FREIGABE_FAILED)
-
-    return document.get("role_name") if isinstance(document, dict) else None
+    return document.get("role_name")
 
 
 def latest_artifact(name: str) -> int | None:
@@ -175,165 +167,98 @@ def latest_artifact(name: str) -> int | None:
     url = f"{_repository_url('actions/artifacts')}?{query}"
     document = _request(method="GET", url=url, failure=Status.SOURCE_FAILED)
 
-    # unerwartete GitHub-Antwort vor der Auswahl ablehnen
-    if not isinstance(document, dict) or not isinstance(document.get("artifacts"), list):
-        raise DeliveryError(Status.SOURCE_FAILED, "Artefakte können nicht ermittelt werden")
-
     # abgelaufene Artefakte aus der möglichen Fortsetzung entfernen
-    available = [
-        e for e in document["artifacts"]
-        if isinstance(e, dict) and e.get("expired") is False
-    ]
+    available = [e for e in document["artifacts"] if e.get("expired") is False]
     if not available:
         return None
 
     # jüngstes Artefakt stabil nach Erstellungszeit und Artefakt-ID bestimmen
-    try:
-        newest = max(available, key=lambda artifact: (artifact["created_at"], artifact["id"]))
-        return newest["id"]
-    except (KeyError, TypeError) as exc:
-        raise DeliveryError(Status.SOURCE_FAILED, f"Artefakt ist ungültig: {exc}") from exc
+    newest = max(available, key=lambda e: (e["created_at"], e["id"]))
+    return newest["id"]
 
 
-def tag_sha(tag: str) -> str | None:
-    """Liest die Commit-SHA eines Tags oder None, wenn der Tag fehlt."""
+def tag_record(tag: str) -> tuple[str, int] | None:
+    """Liest Commit-SHA und Freigabe-Issue eines Liefer-Tags."""
 
     url = _repository_url(f"git/ref/tags/{urllib.parse.quote(tag, safe='')}")
     reference = _request(method="GET", url=url, failure=Status.SOURCE_FAILED, missing_ok=True)
-
     if reference is None:
         return None
 
-    return reference["object"]["sha"]
+    # Liefer-Tags tragen die Issue-Zuordnung in ihrem annotierten Tag-Inhalt
+    match reference:
+        case {"object": {"type": "tag", "sha": str(tag_sha)}}:
+            document = _request(method="GET", url=_repository_url(f"git/tags/{tag_sha}"), failure=Status.SOURCE_FAILED)
+        case _:
+            raise DeliveryError(Status.SOURCE_FAILED, "Liefer-Tag ist nicht annotiert")
+
+    match document:
+        case {"tag": str(name), "message": str(message), "object": {"type": "commit", "sha": str(sha)}} if name == tag:
+            issue_text = message.strip().removeprefix(_TAG_ISSUE_PREFIX)
+            if issue_text.isdecimal() and (issue_number := int(issue_text)) > 0:
+                return sha, issue_number
+
+    # Fehler wenn der Tag keine gültige Zuordnung zu einem Freigabe-Issue hat
+    raise DeliveryError(Status.SOURCE_FAILED, "Liefer-Tag enthält keine gültige Freigabe-Issue-Zuordnung")
 
 
-def create_tag(tag: str, sha: str) -> None:
-    """Erzeugt eine Git-Tag-Referenz auf dem angegebenen Commit."""
+def create_tag(tag: str, sha: str, issue: int) -> None:
+    """Erzeugt einen annotierten Liefer-Tag mit Freigabe-Issue und Commit."""
 
-    url = _repository_url("git/refs")
-    _request(method="POST", url=url, failure=Status.SOURCE_FAILED, payload={"ref": f"refs/tags/{tag}", "sha": sha})
+    # zuerst den Tag-Inhalt mit seiner festen Issue-Zuordnung anlegen
+    payload = {"tag": tag, "message": f"{_TAG_ISSUE_PREFIX}{issue}", "object": sha, "type": "commit"}
+    document = _request(method="POST", url=_repository_url("git/tags"), failure=Status.SOURCE_FAILED, payload=payload)
+
+    # prüft ob der Tag-Inhalt erfolgreich erstellt wurde und erstellt die Git-Referenz
+    match document:
+        case {"sha": str(tag_sha)}:
+            payload = {"ref": f"refs/tags/{tag}", "sha": tag_sha}
+            _request(method="POST", url=_repository_url("git/refs"), failure=Status.SOURCE_FAILED, payload=payload)
+        case _:
+            raise DeliveryError(Status.SOURCE_FAILED, "GitHub liefert keinen Tag-Inhalt zurück")
 
 
 def comment_issue(number: int, body: str) -> None:
     """Ergänzt einen Kommentar im angegebenen Issue."""
 
     issue_url = _repository_url(f"issues/{number}")
-    url = f"{issue_url}/comments"
-    _request(method="POST", url=url, failure=Status.FREIGABE_FAILED, payload={"body": body})
+    _request(method="POST", url=f"{issue_url}/comments", failure=Status.FREIGABE_FAILED, payload={"body": body})
 
 
-def complete_issue(number: int, body: str) -> None:
-    """Ergänzt das Ergebnis und schließt das Issue im aktuellen Repository."""
+def complete_issue(number: int, body: str, started_label: str, completed_label: str, description: str) -> None:
+    """Dokumentiert den Erfolg, kennzeichnet den Abschluss und schließt das Issue."""
 
     # erfolgreichen Lauf im Freigabeprotokoll ergänzen
     comment_issue(number, body)
+
+    # erst nach dem Kommentar den erfolgreichen Status setzen
+    replace_issue_label(number, started_label, completed_label, description, accept_existing=True)
 
     # abgeschlossenes Issue als weiterhin lesbares Protokoll erhalten
     issue_url = _repository_url(f"issues/{number}")
     _request(method="PATCH", url=issue_url, failure=Status.FREIGABE_FAILED, payload={"state": "closed"})
 
 
-def mark_issue_started(number: int, pending_label: str, started_label: str, description: str) -> None:
-    """Kennzeichnet eine angenommene Freigabe vor dem ersten Lieferjob."""
+def replace_issue_label(number: int, old_label: str, new_label: str, description: str, *, accept_existing: bool = False) -> None:
+    """Ersetzt ein Status-Label und erhält weitere Kennzeichen des Issues."""
 
     # vorhandene Kennzeichen wie dry_run für den Statuswechsel erhalten
-    _ensure_label(started_label, description)
-    _, labels = issue(number)
-    if pending_label not in labels:
-        raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue wartet nicht auf Freigabe")
-    labels.remove(pending_label)
-    labels.add(started_label)
+    _ensure_label(new_label, description)
+    _, labels, _ = issue(number)
+    if old_label not in labels:
+        # wiederholter Abschluss behält den bereits erreichten Status
+        if accept_existing and new_label in labels:
+            return
+        raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue hat nicht das erwartete Status-Label")
+
+    # bisherigen Status ersetzen, andere Kennzeichen wie dry_run erhalten
+    labels.remove(old_label)
+    labels.add(new_label)
 
     # alle Issue-Labels in einem Aufruf setzen und die Antwort prüfen
     issue_labels_url = _repository_url(f"issues/{number}/labels")
-    assigned = _request(method="PUT", url=issue_labels_url, failure=Status.FREIGABE_FAILED,
-                        payload={"labels": sorted(labels)})
-    if _label_names({"labels": assigned}) != labels:
+    payload = {"labels": sorted(labels)}
+    assigned = _request(method="PUT", url=issue_labels_url, failure=Status.FREIGABE_FAILED, payload=payload)
+
+    if _label_names(assigned) != labels:
         raise DeliveryError(Status.FREIGABE_FAILED, "Label setzen am Issue fehlgeschlagen")
-
-
-def _replace_information_files(files: list[Path], assets: dict[str, int], upload_url: str) -> None:
-    """Ersetzt die Informationsdateien eines GitHub Releases.
-
-    GitHub kann den Inhalt eines Release-Anhangs nicht per PATCH ändern.
-    Gleichnamige Dateien werden deshalb gelöscht und anschließend neu hochgeladen.
-    """
-
-    for information in files:
-        # Datei erst unmittelbar vor ihrem Upload aus dem Release-Verzeichnis lesen
-        try:
-            content = information.read_bytes()
-        except OSError as exc:
-            raise DeliveryError(Status.GITHUB_RELEASE_FAILED, f"Informationsdatei kann nicht gelesen werden: {information.name}: {exc}") from exc
-
-        # vorhandenen Anhang entfernen, damit GitHub denselben Namen erneut annimmt
-        if (asset_id := assets.get(information.name)) is not None:
-            url = _repository_url(f"releases/assets/{asset_id}")
-            _request(method="DELETE", url=url, failure=Status.GITHUB_RELEASE_FAILED)
-
-        # unveränderte JSON-Datei unter ihrem bisherigen Namen neu hochladen
-        url = f"{upload_url}?{urllib.parse.urlencode({'name': information.name})}"
-        _request(method="POST", url=url, failure=Status.GITHUB_RELEASE_FAILED, payload=content)
-
-
-def run(tag: str) -> dict[str, object]:
-    """Veröffentlicht den Lieferbericht und die erzeugten Informationsdateien.
-
-    Ein vorhandenes Release wird aktualisiert. Gleichnamige, hier erzeugte
-    Informationsdateien werden dabei ersetzt.
-    """
-
-    # GitHub-Ziel und erzeugte Informationsdateien des Releasebaus bestimmen
-    repository = os.environ["GITHUB_REPOSITORY"]
-    releases_url = _repository_url("releases")
-    information_files = sorted((Path(os.environ["RUNNER_TEMP"]) / "release").glob(INFORMATION_PATTERN))
-    if not information_files:
-        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, "Informationsdateien fehlen")
-
-    # der beim Paketbau erstellte Bericht enthält Vorrelease-Diff und Lieferumfang
-    try:
-        report = (Path(os.environ["RUNNER_TEMP"]) / "release" / RELEASE_REPORT_NAME).read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        raise DeliveryError(Status.GITHUB_RELEASE_FAILED, f"Lieferbericht kann nicht gelesen werden: {exc}") from exc
-
-    # Release kennzeichnet eine übersprungene Mainframe-Übergabe sichtbar
-    dry_run = os.environ.get("DRY_RUN") == "true"
-    confirmation = (
-        "Dry Run: FTPS- und JES-Übergabe wurden übersprungen.\n"
-        if dry_run
-        else "Die Archive und die zugehörige JCL wurden von FTPS und JES angenommen.\n"
-    )
-
-    # nach der Übergabe beide Dateilisten direkt im GitHub Release veröffentlichen
-    release_values = {
-        "tag_name": tag,
-        "name": f"{'Dry Run ' if dry_run else 'Release '}{tag}",
-        "body": report + "\n" + confirmation,
-        "draft": False,
-        "prerelease": dry_run,
-    }
-
-    # vorhandenes Release samt Anhängen lesen oder ein neues Release vorbereiten
-    url = f"{releases_url}/tags/{urllib.parse.quote(tag, safe='')}"
-    release = _request(method="GET", url=url, failure=Status.GITHUB_RELEASE_FAILED, missing_ok=True)
-    assets = {e["name"]: e["id"] for e in release["assets"]} if release is not None else {}
-
-    # Lieferbericht durch Anlegen oder Aktualisieren veröffentlichen
-    url = releases_url if release is None else f"{releases_url}/{release['id']}"
-    method = "POST" if release is None else "PATCH"
-    release = _request(method=method, url=url, failure=Status.GITHUB_RELEASE_FAILED, payload=release_values)
-
-    # URI-Vorlage auf den Upload-Endpunkt ohne GitHub-Platzhalter reduzieren
-    upload_url = release["upload_url"].split("{", 1)[0]
-
-    # Informationsdateien hochladen und gleichnamige Anhänge vorher ersetzen
-    _replace_information_files(information_files, assets, upload_url)
-
-    # veröffentlichte Release-Adresse an den Workflow zurückgeben
-    return {
-        "status": Status.GITHUB_RELEASE_PUBLISHED,
-        "repository": repository,
-        "liefer_tag": tag,
-        "release_url": release["html_url"],
-        "dry_run": dry_run,
-    }

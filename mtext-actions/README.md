@@ -18,7 +18,7 @@ Die wiederverwendbaren Workflows unter `.github/workflows` sind:
 | `shared-check-resources.yml` | Mandantenkonfiguration und konfigurierte Ressourcen prüfen |
 | `shared-sync-resources.yml` | Den ausgewählten Branchstand mit M/Text synchronisieren |
 | `shared-lieferung-check.yml` | Branchstand und Lieferumfang prüfen und als Vorbereitung speichern |
-| `shared-lieferung-ausfuehren.yml` | Lieferstand ermitteln, Lieferdateien bauen, an den Mainframe übertragen und ein GitHub Release veröffentlichen |
+| `shared-lieferung-ausfuehren.yml` | Lieferstand ermitteln, Lieferdateien bauen, an den Mainframe übertragen und das Freigabe-Issue abschließen |
 | `ci.yml` | Python-Tests bei Pull Requests, Änderungen an `main` oder manuell ausführen |
 
 ## Python-Anwendung
@@ -30,13 +30,13 @@ Die wiederverwendbaren Workflows unter `.github/workflows` sind:
 | `resources check` | Mandantenkonfiguration sowie konfigurierte JSON-, XML- und verfügbare JavaScript-Ressourcen prüfen |
 | `resources sync` | Änderungen seit dem letzten erfolgreichen Branchstand mit M/Text synchronisieren |
 | `delivery check` | Liefer-Tag aus dem Branch ableiten und den Lieferstand vorbereiten |
-| `delivery resolve` | eine Vorbereitung oder einen vorhandenen Liefer-Tag ermitteln |
+| `delivery resolve` | die Vorbereitung oder den Wiederholungsstand aus dem Freigabe-Issue ermitteln |
 | `delivery confirm` | eine Vorbereitung bestätigen und den gestarteten Lauf im Freigabe-Issue verknüpfen |
+| `delivery complete` | Archivnamen und SHA-256-Prüfsummen im Freigabe-Issue festhalten und es schließen |
 | `delivery incomplete` | einen nicht abgeschlossenen Lauf im Freigabe-Issue melden |
-| `delivery tag` | den vom Mainframe angenommenen Stand mit dem Liefer-Tag kennzeichnen |
+| `delivery tag` | den vom Mainframe angenommenen Stand mit einem annotierten Liefer-Tag und zugehöriger Issue-Nummer kennzeichnen |
 | `release build` | FULL- oder DELTA-Lieferdateien erzeugen |
 | `release mainframe` | Lieferdateien per FTPS und JES an den Mainframe übergeben |
-| `release github` | Lieferinformationen als GitHub Release veröffentlichen |
 
 Die Implementierung liegt in `src/lbs_delivery`. Das Repository verwendet
 dabei folgende versionierte Daten:
@@ -51,7 +51,7 @@ dabei folgende versionierte Daten:
 ## Laufzeit und Tests
 
 Die Mandantenquelle liegt unter `GITHUB_WORKSPACE/source`. Der Paketbau schreibt
-nach `RUNNER_TEMP/dist`, Übergabe und Berichtsjob lesen das heruntergeladene
+nach `RUNNER_TEMP/dist`, Übergabe und Abschlussjob lesen das heruntergeladene
 Artefakt aus `RUNNER_TEMP/release`. Das temporäre Basisverzeichnis wird vom
 Runner je Job bereinigt.
 

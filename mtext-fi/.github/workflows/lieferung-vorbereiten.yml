@@ -28,7 +28,7 @@ jobs:
     name: Mandantenkonfiguration und Ressourcen prüfen
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
     with:
-      lieferung: true
+      umfang: lieferung
 
   # Startet den Shared Workflow für den ausgewählten Branchstand
   vorpruefen:

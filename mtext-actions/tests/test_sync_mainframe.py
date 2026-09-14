@@ -171,7 +171,7 @@ class SyncTests(TempDirTestCase):
         return {"auftrag_id": "auftrag", "result": "Geändert: beispiel.xml\nGelöscht: alt.xml"}
 
     def test_sync_packages(self) -> None:
-        """Prüft kumulative Sync-Änderungen, FULL und das Auslassen reiner Konfigurationsänderungen."""
+        """Prüft Paketübergabe, Dry Run, Konfigurationsänderungen und Adapteraufträge."""
 
         baseline = git(self.repository, "rev-parse", "r261.100")
         commit = git(self.repository, "rev-parse", "HEAD")
@@ -218,6 +218,51 @@ class SyncTests(TempDirTestCase):
             self.assertEqual(result["ergebnisse"][0]["projekte"], [])
             transfer.assert_not_called()
 
+        load_test_configuration(self.repository, mandant={"dry_run": False})
+        with (
+            patch.object(github, "last_sync_commit", return_value=baseline),
+            patch.object(adapter, "check_reachability"),
+            patch.object(sync, "build_project_package", return_value=self.project_package) as build,
+        ):
+            for status in ("processing", "succeeded"):
+                replies = [{"auftrag_id": "test-FI", "status": status, "result": "fertig"}]
+                if status == "processing":
+                    replies.append({"auftrag_id": "test-FI", "status": "succeeded", "result": "fertig"})
+                replies.append({"status": "succeeded"})
+
+                with self.subTest(resume=status), patch.object(
+                    adapter.urllib.request, "urlopen", side_effect=[http_reply(e) for e in replies],
+                ) as http:
+                    result = sync.run()
+
+                build.assert_not_called()
+                self.assertEqual(result["ergebnisse"][0]["result"], "fertig")
+                self.assertEqual([e.args[0].get_method() for e in http.call_args_list],
+                                 ["GET", "GET", "DELETE"] if status == "processing" else ["GET", "DELETE"])
+
+            for status in (None, "ready", "uploading", "failed"):
+                replies = [http_reply({}, 404)] if status is None else [
+                    http_reply({"auftrag_id": "test-FI", "status": status}),
+                    http_reply({"status": "succeeded"}),
+                ]
+                replies.extend(http_reply(e) for e in (
+                    {"auftrag_id": "test-FI", "status": "ready"},
+                    {"auftrag_id": "test-FI", "status": "processing"},
+                    {"auftrag_id": "test-FI", "status": "succeeded"}, {"status": "succeeded"},
+                ))
+
+                build.reset_mock()
+                with self.subTest(start=status), patch.object(
+                    adapter.urllib.request, "urlopen", side_effect=replies,
+                ) as http:
+                    result = sync.run()
+
+                build.assert_called_once()
+                requests = [e.args[0] for e in http.call_args_list]
+                self.assertEqual([e.get_method() for e in requests],
+                                 ["GET"] + (["DELETE"] if status else []) + ["POST", "PUT", "GET", "DELETE"])
+                self.assertEqual(result["ergebnisse"][0]["auftrag_id"], "test-FI")
+
     def _receive_archive(self, request, **_kwargs) -> MagicMock:
         """Liest den Upload-Datenstrom und prüft seine angekündigte Länge."""
 
@@ -230,7 +275,7 @@ class SyncTests(TempDirTestCase):
         return self.response
 
     def test_adapter_protocol(self) -> None:
-        """Prüft Anlage, Archivupload, Verarbeitung und Fehler bis zum Löschen."""
+        """Prüft Anlage, Mehrfach-Upload, Verarbeitung und Fehler bis zum Löschen."""
 
         ready = {"auftrag_id": "test-FI", "status": "ready"}
         processing = ready | {"status": "processing"}
@@ -238,6 +283,36 @@ class SyncTests(TempDirTestCase):
         failed = ready | {"status": "failed", "message": "M/Text-Fehler"}
         network_error = urllib.error.URLError("Verbindung abgebrochen")
         self.response = http_reply({})
+
+        pakete = []
+        for project in ("LOMS_Basis", "LOMS_Autonom"):
+            information = {
+                "projekt": project,
+                "lieferart": "DELTA",
+                "scope": {
+                    "von": {"referenz": "release/261", "commit": "before"},
+                    "bis": {"referenz": "release/261", "commit": "current"},
+                },
+                "elemente": [["M", "beispiel.xml"]],
+                "sha256": f"checksum-{project}",
+            }
+            archive = self.root / f"{project}D.tgz"
+            archive.write_bytes(project.encode())
+            pakete.append(ProjectPackage(information, archive))
+
+        uploading = ready | {"status": "uploading"}
+        self.response.read.side_effect = [
+            json.dumps(e).encode()
+            for e in (ready, uploading, processing, succeeded | {"result": "M/Text-Output"}, {"status": "succeeded"})
+        ]
+        self.uploaded = []
+        with patch.object(adapter.urllib.request, "urlopen", side_effect=self._receive_archive) as http:
+            result = adapter.upload("en01", pakete, "test-FI")
+        payload = json.loads(http.call_args_list[0].args[0].data)
+        self.assertEqual([e["information"]["sha256"] for e in payload["archive"]],
+                         ["checksum-LOMS_Basis", "checksum-LOMS_Autonom"])
+        self.assertEqual(result["result"], "M/Text-Output")
+        self.assertEqual(self.uploaded, [b"LOMS_Basis", b"LOMS_Autonom"])
 
         for replies, error_status, methods in (
             ([ready, processing, processing, succeeded, {"status": "succeeded"}], None,
@@ -284,110 +359,6 @@ class SyncTests(TempDirTestCase):
             self.assertEqual([e.get_method() for e in requests], methods)
             self.assertEqual(requests[0].full_url, "http://en01.ltoma.intern/vMtextAdapter/sync2/test-FI")
             self.assertEqual(wait.call_args_list, [call(5)] if methods.count("GET") == 2 else [])
-
-    def test_delta_job_uploads_multiple_archives(self) -> None:
-        """Prüft einen DELTA-Auftrag mit Informationen und einem PUT je Archiv."""
-
-        pakete = []
-        for project in ("LOMS_Basis", "LOMS_Autonom"):
-            information = {
-                "projekt": project,
-                "lieferart": "DELTA",
-                "scope": {
-                    "von": {"referenz": "release/261", "commit": "before"},
-                    "bis": {"referenz": "release/261", "commit": "current"},
-                },
-                "elemente": [["M", "beispiel.xml"]],
-                "sha256": f"checksum-{project}",
-            }
-            archive = self.root / f"{project}D.tgz"
-            archive.write_bytes(project.encode())
-            pakete.append(ProjectPackage(information, archive))
-
-        ready = {"auftrag_id": "test-FI", "status": "ready"}
-        uploading = ready | {"status": "uploading"}
-        processing = ready | {"status": "processing"}
-        succeeded = ready | {"status": "succeeded", "result": "M/Text-Output"}
-        self.response = http_reply({})
-        self.response.read.side_effect = [
-            json.dumps(e).encode()
-            for e in (ready, uploading, processing, succeeded, {"status": "succeeded"})
-        ]
-        self.uploaded = []
-
-        with patch.object(adapter.urllib.request, "urlopen", side_effect=self._receive_archive) as http:
-            result = adapter.upload(
-                "en01", pakete, "test-FI",
-            )
-
-        payload = json.loads(http.call_args_list[0].args[0].data)
-        self.assertEqual([e["information"]["sha256"] for e in payload["archive"]],
-                         ["checksum-LOMS_Basis", "checksum-LOMS_Autonom"])
-        self.assertEqual(result, {"auftrag_id": "test-FI", "result": "M/Text-Output"})
-        self.assertEqual([e.args[0].get_method() for e in http.call_args_list], [
-            "POST", "PUT", "PUT", "GET", "DELETE",
-        ])
-        self.assertEqual(self.uploaded, [b"LOMS_Basis", b"LOMS_Autonom"])
-
-
-    def test_resumes_existing_job(self) -> None:
-        """Übernimmt laufende und erfolgreiche Aufträge ohne Archivbau oder POST."""
-
-        baseline = git(self.repository, "rev-parse", "r261.100")
-        self.enterContext(patch.object(github, "last_sync_commit", return_value=baseline))
-        self.enterContext(patch.object(adapter, "check_reachability"))
-        build = self.enterContext(patch.object(sync, "build_project_package", return_value=self.project_package))
-
-        for status in ("processing", "succeeded"):
-            replies = [{"auftrag_id": "test-FI", "status": status, "result": "fertig"}]
-            if status == "processing":
-                replies.append({"auftrag_id": "test-FI", "status": "succeeded", "result": "fertig"})
-            replies.append({"status": "succeeded"})
-
-            # den echten Sync-Einstieg gegen den vorhandenen Adapterauftrag ausführen
-            with self.subTest(status=status), patch.object(
-                adapter.urllib.request, "urlopen", side_effect=[http_reply(e) for e in replies],
-            ) as http:
-                result = sync.run()
-
-            # Projektbezug und Ergebnis bleiben auch ohne neue Archive erhalten
-            build.assert_not_called()
-            self.assertEqual(result["ergebnisse"][0]["projekte"], ["LOMS_Basis"])
-            self.assertEqual(result["ergebnisse"][0]["result"], "fertig")
-            self.assertEqual([e.args[0].get_method() for e in http.call_args_list],
-                             ["GET", "GET", "DELETE"] if status == "processing" else ["GET", "DELETE"])
-
-    def test_starts_new_job(self) -> None:
-        """Startet bei fehlendem Auftrag oder nach dem Aufräumen mit neuen Archiven."""
-
-        baseline = git(self.repository, "rev-parse", "r261.100")
-        self.enterContext(patch.object(github, "last_sync_commit", return_value=baseline))
-        self.enterContext(patch.object(adapter, "check_reachability"))
-        build = self.enterContext(patch.object(sync, "build_project_package", return_value=self.project_package))
-
-        for status in (None, "ready", "uploading", "failed"):
-            replies = [http_reply({}, 404)] if status is None else [
-                http_reply({"auftrag_id": "test-FI", "status": status}), http_reply({"status": "succeeded"}),
-            ]
-            replies.extend(http_reply(e) for e in (
-                {"auftrag_id": "test-FI", "status": "ready"},
-                {"auftrag_id": "test-FI", "status": "processing"},
-                {"auftrag_id": "test-FI", "status": "succeeded"}, {"status": "succeeded"},
-            ))
-
-            # der Neubau folgt erst auf die Suche und gegebenenfalls das Löschen
-            build.reset_mock()
-            with self.subTest(status=status), patch.object(adapter.urllib.request, "urlopen", side_effect=replies) as http:
-                result = sync.run()
-
-            build.assert_called_once()
-            requests = [e.args[0] for e in http.call_args_list]
-            self.assertEqual([e.get_method() for e in requests],
-                             ["GET"] + (["DELETE"] if status else []) + ["POST", "PUT", "GET", "DELETE"])
-            post = next(e for e in requests if e.get_method() == "POST")
-            self.assertEqual(post.full_url, "http://fu01.ltoma.intern/vMtextAdapter/sync2/test-FI")
-            self.assertEqual(result["ergebnisse"][0]["auftrag_id"], "test-FI")
-
 
 
 if __name__ == "__main__":

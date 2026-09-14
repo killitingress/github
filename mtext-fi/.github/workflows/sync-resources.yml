@@ -27,7 +27,7 @@ jobs:
     name: Mandantenkonfiguration und Ressourcen prüfen
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
     with:
-      synchronisierung: true
+      umfang: synchronisierung
 
   # Der Shared Workflow führt die Synchronisierung aus
   sync:

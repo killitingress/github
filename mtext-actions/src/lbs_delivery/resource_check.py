@@ -47,8 +47,9 @@ def _check_xml(path: Path) -> tuple[int, int, str] | None:
 def _check_javascript(path: Path) -> tuple[int, int, str] | None:
     """Prüft eine JavaScript-Datei mit Node.js und lokalisiert Syntaxfehler."""
 
+    # Syntax nur prüfen, ohne die Datei auszuführen
     result = subprocess.run(
-        [_NODE_COMMAND, "--check", str(path)], # Syntax-Prüfung mittels --check
+        [_NODE_COMMAND, "--check", str(path)],
         capture_output=True,
         check=False,
         encoding="utf-8",
@@ -79,9 +80,6 @@ def _load_filetype_mappings() -> dict[str, str]:
     extensions = json.loads(FILETYPE_MAPPINGS_PATH.read_text(encoding="utf-8"))["dateiendungen"]
 
     for extension, filetype in extensions.items():
-        if filetype not in ("js", "json", "xml"):
-            raise ValueError(f"Dateitypen-Zuordnung ist ungültig: {filetype}")
-
         # JavaScript wird nur geprüft, wenn Node.js verfügbar ist
         if filetype == "js" and _NODE_COMMAND is None:
             continue
@@ -109,16 +107,17 @@ def _relevant_resources(
     else:
         candidates: list[Path] = []
         for directory, directories, filenames in os.walk(root):
-            directories[:] = [e for e in directories if not e.startswith(".")] # [:] ändert die von os.walk weiterverwendete Liste
+            # os.walk liest directories in-place weiter, daher die Liste ersetzen
+            directories[:] = [e for e in directories if not e.startswith(".")]
             candidates.extend((Path(directory) / e) for e in filenames if not e.startswith("."))
 
     # Dateien aus ausgeschlossenen Projekten und ohne konfigurierten Parser überspringen
-    result: list[tuple[Path, str]] = [] # Tupel aus Pfad und Dateityp
+    result: list[tuple[Path, str]] = []
     for path in candidates:
         relative_path = path.relative_to(root)
 
         # ausgeschlossene Projekte und ungültige Elemente (z.B. gelöschte Dateien oder Symlinks) überspringen
-        if configuration.excludes_project_path(relative_path) or (not path.is_file() or path.is_symlink()):
+        if configuration.excludes_project_path(relative_path) or not path.is_file() or path.is_symlink():
             continue
 
         # feststellen ob die Dateiendung zu einem konfigurierten Dateityp passt
@@ -133,7 +132,7 @@ def _relevant_resources(
 def run(scope: Scope | None = None) -> dict[str, object]:
     """Prüft die Ressourcen des übergebenen FULL- oder DELTA-Umfangs."""
 
-    root = mandant_source().resolve()
+    root = mandant_source()
     configuration = Configuration.load(root, os.environ["GITHUB_REPOSITORY"])
 
     # Prüf-Funktionen je Dateityp
@@ -144,20 +143,20 @@ def run(scope: Scope | None = None) -> dict[str, object]:
 
     # relevante Ressourcen ermitteln
     resources = _relevant_resources(root, filetype_mappings, configuration, scope)
-    filetype_counts = Counter(e[1] for e in resources) # Anzahl der Ressourcen je Dateityp
-    finding_counts: Counter[str] = Counter()
-    findings: list[tuple[Path, int, int, str]] = []
+    filetype_counts = Counter(filetype for _, filetype in resources)
+    findings: list[tuple[Path, str, int, int, str]] = []
 
     # Befunde sammeln
     for path, filetype in resources:
         if (finding := checkers[filetype](path)) is not None:
-            findings.append((path.relative_to(root), *finding))
-            finding_counts[filetype] += 1
+            findings.append((path.relative_to(root), filetype, *finding))
+
+    finding_counts = Counter(filetype for _, filetype, _, _, _ in findings)
 
     # Syntaxbefunde auf STDOUT ausgeben - mittels dem ::warning Kommando werden
     # daraus auch Annotations in der Job-Zusammenfassung. % und Zeilenumbrüche
     # ersetzen wir, um das Kommando nicht zu zerlegen.
-    for path, line, column, message in findings:
+    for path, _, line, column, message in findings:
         print(
             f"::warning file={path.as_posix()},line={line},col={column},"
             f"title=Ungültige Ressource::{message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')}"

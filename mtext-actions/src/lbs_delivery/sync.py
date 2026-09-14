@@ -37,13 +37,14 @@ def _historische_mandantenkonfiguration(source: Path, reference: str) -> dict[st
     # versionierte Konfiguration lesen, ohne den früheren Stand auszuchecken
     try:
         document = json.loads(git.execute(source, "show", f"{reference}:{config.MANDANT_CONFIG_PATH}"))
-        mandant = document["mandant"]
     except (UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
         raise DeliveryError(Status.SOURCE_FAILED, f"Konfiguration kann nicht gelesen werden: {exc}") from exc
 
-    if not isinstance(mandant, dict):
-        raise DeliveryError(Status.SOURCE_FAILED, "Konfiguration enthält keine Mandantenangaben")
-    return mandant
+    match document.get("mandant"):
+        case dict() as mandant:
+            return mandant
+        case _:
+            raise DeliveryError(Status.SOURCE_FAILED, "Konfiguration enthält keine Mandantenangaben")
 
 
 def _previous_main_release_line(source: Path) -> str | None:
@@ -55,10 +56,11 @@ def _previous_main_release_line(source: Path) -> str | None:
         return None
 
     # Releaselinie aus der damaligen Mandantenkonfiguration übernehmen
-    releaselinie = _historische_mandantenkonfiguration(source, reference).get("releaselinie")
-    if not isinstance(releaselinie, str):
-        raise DeliveryError(Status.SOURCE_FAILED, "Historische Konfiguration enthält keine Releaselinie")
-    return releaselinie
+    match _historische_mandantenkonfiguration(source, reference).get("releaselinie"):
+        case str(releaselinie):
+            return releaselinie
+        case _:
+            raise DeliveryError(Status.SOURCE_FAILED, "Historische Konfiguration enthält keine Releaselinie")
 
 
 def _resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str, str]:
@@ -68,18 +70,15 @@ def _resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[st
     `feature/nnn/<Bezeichnung>` die Umgebungsart "Entwicklung".
     """
 
-    if source_branch == "main":
-        return main_releaselinie, config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST
-
-    release_match = git.RELEASE_BRANCH_RE.fullmatch(source_branch)
-    if release_match is not None:
-        return release_match.group(1), config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST
-
-    feature_match = _FEATURE_BRANCH_RE.fullmatch(source_branch)
-    if feature_match is not None:
-        return feature_match.group(1), config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG
-
-    raise DeliveryError(Status.VALIDATION_FAILED, "Branch ist kein Synchronisierungszweig")
+    match source_branch:
+        case "main":
+            return main_releaselinie, config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST
+        case branch if (release_match := git.RELEASE_BRANCH_RE.fullmatch(branch)):
+            return release_match.group(1), config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST
+        case branch if (feature_match := _FEATURE_BRANCH_RE.fullmatch(branch)):
+            return feature_match.group(1), config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG
+        case _:
+            raise DeliveryError(Status.VALIDATION_FAILED, "Branch ist kein Synchronisierungszweig")
 
 
 def _resolve_comparison_commit(
@@ -128,7 +127,7 @@ def resolve_plan(source: Path, configuration: config.Configuration) -> SyncPlan:
     linienwechsel = False
     if branch == "main" and event != "workflow_dispatch":
         vorherige = _previous_main_release_line(source)
-        linienwechsel = bool(vorherige and vorherige != configuration.releaselinie)
+        linienwechsel = vorherige is not None and vorherige != configuration.releaselinie
     umgebungen = [entwicklungsumgebung, umgebung] if linienwechsel else [umgebung]
 
     # manueller Abgleich und Linienwechsel prüfen und übertragen den Vollstand

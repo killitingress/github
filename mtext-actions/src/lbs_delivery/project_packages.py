@@ -15,16 +15,6 @@ from .config import Configuration
 from .process import DeliveryError, Status
 
 
-# beim Paketbau erstellter Bericht für das GitHub Release
-RELEASE_REPORT_NAME = "lieferbericht.md"
-
-# Name einer Informationsdatei im Release-Artefakt
-INFORMATION_NAME = "_INFO_{kuerzel}-{project}.json"
-
-# Suchmuster für Informationsdateien im Release-Artefakt
-INFORMATION_PATTERN = "_INFO_*.json"
-
-
 @dataclass(frozen=True)
 class Scope:
     """Hält Bezugsstand, Zielstand und die Änderungen eines Git-Vergleichs."""
@@ -105,9 +95,12 @@ def previous_release_scope(repository: Path, tag: git.LieferTag, commit: str) ->
     # aus den vorhandenen Liefer-Tags den namentlich nächsten Vorgänger entnehmen
     tags = []
     for value in git.execute(repository, "tag", "--list", "r*").decode().splitlines():
-        match = git.LIEFER_TAG_RE.fullmatch(value)
-        if match is not None:
-            tags.append(git.LieferTag(match.group("releaselinie"), match.group("zwischenrelease")))
+        if not value:
+            continue
+        try:
+            tags.append(git.LieferTag.parse(value))
+        except ValueError:
+            continue
 
     previous = max(e for e in tags if e < tag)
     previous_sha = git.resolve(repository, f"refs/tags/{previous}")
@@ -116,7 +109,7 @@ def previous_release_scope(repository: Path, tag: git.LieferTag, commit: str) ->
 
 
 def _project_sections(configuration: Configuration, repository: Path, scope: Scope) -> list[str]:
-    """Stellt die nicht leeren Projektabschnitte eines Lieferberichts zusammen."""
+    """Stellt die nicht leeren Projektabschnitte für das Freigabe-Issue zusammen."""
 
     # jedes betroffene Projekt mit seinen Ressourcen aufführen
     lines: list[str] = []
@@ -131,8 +124,8 @@ def _project_sections(configuration: Configuration, repository: Path, scope: Sco
     return lines
 
 
-def release_report(configuration: Configuration, repository: Path, *, paket_scope: Scope, information_scope: Scope) -> str:
-    """Erstellt den hübschen Lieferbericht als Markdown-Text, für Lieferungen und GitHub Release."""
+def delivery_report(configuration: Configuration, repository: Path, *, paket_scope: Scope, vorrelease_scope: Scope) -> str:
+    """Erstellt den Lieferumfang für das Freigabe-Issue als Markdown-Text."""
 
     delivery_type = "FULL" if paket_scope.von is None else "DELTA"
     lines = [
@@ -145,9 +138,9 @@ def release_report(configuration: Configuration, repository: Path, *, paket_scop
     ]
 
     # Änderungen seit dem vorherigen Liefer-Tag ohne leere Projektabschnitte zeigen
-    lines.extend((f"## Änderungen seit `{information_scope.von[0]}`", ""))
-    lines.extend((f"Vergleich: `{information_scope.von[0]}` → `{information_scope.bis[0]}`", ""))
-    changes = _project_sections(configuration, repository, information_scope)
+    lines.extend((f"## Änderungen seit `{vorrelease_scope.von[0]}`", ""))
+    lines.extend((f"Vergleich: `{vorrelease_scope.von[0]}` → `{vorrelease_scope.bis[0]}`", ""))
+    changes = _project_sections(configuration, repository, vorrelease_scope)
     if changes:
         lines.extend(changes)
     else:
@@ -176,7 +169,7 @@ def _write_archive(target_name: Path, source_directory: Path, entries: Iterable[
 
     try:
         subprocess.run(
-            ["tar", "-czf", str(target_name.resolve()), "--", *entries],
+            ["tar", "-czf", str(target_name), "--", *entries],
             cwd=source_directory,
             check=True,
             stdout=subprocess.PIPE,
@@ -233,7 +226,7 @@ def build_delta_archive(source: Path, project: str, target: Path, elements: list
         _write_archive(target, staging, entries)
 
 
-def _sha256(path: Path) -> str:
+def sha256_file(path: Path) -> str:
     """Berechnet die SHA-256-Prüfsumme einer Datei, blockweise."""
 
     digest = hashlib.sha256()
@@ -247,8 +240,8 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def informations_dokument(repository_root: Path, project: str, scope: Scope, lieferart: str, sha256: str) -> dict[str, object]:
-    """Baut das JSON-Dokument zu einem Archiv."""
+def informations_dokument(repository_root: Path, project: str, scope: Scope, lieferart: str) -> dict[str, object]:
+    """Baut das Informations-Dokument zu einem Archiv."""
 
     # Bezugsstand und Zielstand gehören zum Vergleich der aufgeführten Elemente
     scope_json: dict[str, object] = {"bis": {"referenz": scope.bis[0], "commit": scope.bis[1]}}
@@ -260,12 +253,19 @@ def informations_dokument(repository_root: Path, project: str, scope: Scope, lie
         "lieferart": lieferart,
         "scope": scope_json,
         "elemente": project_elements(repository_root, project, scope),
-        "sha256": sha256,
     }
 
 
-def build_project_package(configuration: Configuration, repository_root: Path, project: str, output_directory: Path, scope: Scope) -> ProjectPackage:
-    """Erzeugt Archiv und Informations-Dokument für einen Scope."""
+def build_project_archive(
+    configuration: Configuration,
+    repository_root: Path,
+    project: str,
+    output_directory: Path,
+    scope: Scope,
+    *,
+    elements: list[list[str]] | None = None,
+) -> Path:
+    """Erzeugt ein Projektarchiv für Synchronisierung oder Mainframe-Lieferung."""
 
     # Ausgabeverzeichnis für das Archiv vorbereiten
     try:
@@ -275,15 +275,31 @@ def build_project_package(configuration: Configuration, repository_root: Path, p
 
     # FULL überträgt den Projektbaum, DELTA die geänderten Dateien
     if scope.von is None:
-        lieferart = "FULL"
         archive = project_archive_path(configuration, project, output_directory, "F")
         _write_archive(archive, repository_root, [f"./{project}"])
     else:
-        lieferart = "DELTA"
         archive = project_archive_path(configuration, project, output_directory, "D")
-        build_delta_archive(repository_root, project, archive, project_elements(repository_root, project, scope))
+        if elements is None:
+            elements = project_elements(repository_root, project, scope)
+        build_delta_archive(repository_root, project, archive, elements)
 
+    return archive
+
+
+def build_project_package(configuration: Configuration, repository_root: Path, project: str, output_directory: Path, scope: Scope) -> ProjectPackage:
+    """Ergänzt das Projektarchiv um die Informationsdaten für den Adapter."""
+
+    lieferart = "FULL" if scope.von is None else "DELTA"
+    information = informations_dokument(repository_root, project, scope, lieferart)
+
+    # DELTA-Archiv aus der im Informations-Dokument beschriebenen Elementliste bauen
+    archive = build_project_archive(
+        configuration, repository_root, project, output_directory, scope,
+        elements=information["elemente"],
+    )
+
+    # Prüfsumme des fertigen Archivs ergänzen
     return ProjectPackage(
-        information=informations_dokument(repository_root, project, scope, lieferart, _sha256(archive)),
+        information={**information, "sha256": sha256_file(archive)},
         archive=archive,
     )

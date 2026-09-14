@@ -1,14 +1,13 @@
 """Erzeugt und übergibt FULL- und DELTA-Lieferungen an den Mainframe.
 
-Der Releasebau prüft die Git-Quelle und erstellt die Archive,
-JSON-Informationsdateien und JCL. Die Übergabe lädt die Archive per FTPS und
-reicht ihre JCL bei JES ein oder endet im Dry Run nach der Dateiprüfung.
+Der Paketbau prüft die Git-Quelle und erstellt Archive und JCL. Die Übergabe
+lädt die Archive per FTPS, reicht ihre JCL bei JES ein oder endet im Dry Run
+nach der Dateiprüfung.
 """
 
 from __future__ import annotations
 
 import ftplib
-import json
 import os
 import re
 import ssl
@@ -17,14 +16,9 @@ from pathlib import Path
 from . import config, git
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
 from .project_packages import (
-    INFORMATION_NAME,
-    RELEASE_REPORT_NAME,
     build_delta_archive,
-    build_project_package,
-    informations_dokument,
-    previous_release_scope,
+    build_project_archive,
     project_archive_path,
-    release_report,
     release_scope,
 )
 
@@ -44,7 +38,7 @@ _MAINFRAME_FTPS_PORT = 21
 # Dieser technische Benutzer führt die zentrale FTPS- und JES-Übergabe aus.
 _MAINFRAME_FTPS_USER = "LIT9028"
 
-# Dateierweiterung der JCL-Datei zum jeweiligen Archiv-Member im Release-Artefakt.
+# Dateierweiterung der JCL-Datei zum jeweiligen Archiv-Member im Lieferartefakt.
 _MAINFRAME_JCL_SUFFIX = ".jcl"
 
 # Vorlage für die JCL-Übergabe eines Archiv-Members an JES.
@@ -60,12 +54,13 @@ def _render_jcl(template: str, ispw: str, level: str, subsystem: str, assignment
     """Prüft die Mainframe-Werte und setzt sie in die JCL-Vorlage ein."""
 
     # nur Werte einsetzen, die von Vorlage und Mainframe akzeptiert werden
-    if (
-        _SUBSYSTEM_RE.fullmatch(subsystem) is None
-        or _ASSIGNMENT_RE.fullmatch(assignment) is None
-        or _MEMBER_RE.fullmatch(member) is None
+    for value, pattern in (
+        (subsystem, _SUBSYSTEM_RE),
+        (assignment, _ASSIGNMENT_RE),
+        (member, _MEMBER_RE),
     ):
-        raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Werte sind ungültig")
+        if pattern.fullmatch(value) is None:
+            raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Werte sind ungültig")
 
     # geprüfte Werte in die JCL-Vorlage einsetzen
     rendered = (
@@ -75,10 +70,6 @@ def _render_jcl(template: str, ispw: str, level: str, subsystem: str, assignment
         .replace("@@ASSIGNMENT@@", assignment)
         .replace("@@MEMBER@@", member)
     )
-
-    # übrige nicht ersetzte Platzhalter als Fehler melden
-    if "@@" in rendered:
-        raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Template ist ungültig: nicht alle Platzhalter wurden ersetzt")
 
     return rendered
 
@@ -120,15 +111,17 @@ def _submit_mainframe_files(*, release_directory: Path, dry_run: bool) -> dict[s
     """Übergibt alle vorbereiteten Archive und JCL-Dateien an den Mainframe."""
 
     # vollständige Paare aus Archiv und JCL im Release-Verzeichnis voraussetzen
-    archives = list(release_directory.glob("*.tgz"))
-    if not archives or any(not e.with_suffix(_MAINFRAME_JCL_SUFFIX).is_file() for e in archives):
+    archives = sorted(release_directory.glob("*.tgz"))
+    if not archives:
         raise DeliveryError(Status.PACKAGE_FAILED, "Archive oder JCL fehlen")
+    for archive in archives:
+        if not archive.with_suffix(_MAINFRAME_JCL_SUFFIX).is_file():
+            raise DeliveryError(Status.PACKAGE_FAILED, "Archive oder JCL fehlen")
 
     # Dry Run bestätigt den geprüften Paketbestand ohne externe Übergabe
     if dry_run:
         return {
             "status": Status.MAINFRAME_SKIPPED,
-            "summary": "## Dry Run\n\nFTPS- und JES-Übergabe wurden übersprungen.\n",
         }
 
     # je Projekt zuerst F übertragen, danach mit D den alten Delta-Stand ersetzen
@@ -139,12 +132,11 @@ def _submit_mainframe_files(*, release_directory: Path, dry_run: bool) -> dict[s
 
 
 def _build_mainframe_files(configuration: config.Configuration, *, output_directory: Path, tag: git.LieferTag) -> None:
-    """Erzeugt Archive, Informationsdateien und JCL für den Liefer-Tag."""
+    """Erzeugt Archive und JCL für den Liefer-Tag."""
 
-    # Paketumfang und Vorrelease-Vergleich aus dem vorbereiteten Commit ableiten
+    # Paketumfang aus dem vorbereiteten Commit ableiten
     repository_root = config.mandant_source()
     paket_scope = release_scope(repository_root, tag, git.resolve(repository_root, "HEAD"))
-    information_scope = previous_release_scope(repository_root, tag, paket_scope.bis[1])
 
     # Hostprofil und JCL-Vorlage für diese Releaselinie laden
     hostprofil = configuration.hostprofile[configuration.releaselinien[tag.releaselinie]["hostprofil"]]
@@ -153,20 +145,12 @@ def _build_mainframe_files(configuration: config.Configuration, *, output_direct
     except (OSError, UnicodeError) as exc:
         raise DeliveryError(Status.PACKAGE_FAILED, f"JCL-Template kann nicht gelesen werden: {exc}") from exc
 
-    # Projekt-Pakete erstellen und JCL-Dateien generieren (1 JCL-Datei pro Archiv-Member)
+    # Projektarchive erstellen und je Archiv-Member eine JCL-Datei generieren
     for project in configuration.projects:
-        paket = build_project_package(configuration, repository_root, project, output_directory, paket_scope)
-
-        # Informations-Dokument für das Release-Artefakt serialisieren
-        information = output_directory / INFORMATION_NAME.format(kuerzel=configuration.kuerzel, project=project)
-        document = informations_dokument(repository_root, project, information_scope, str(paket.information["lieferart"]), str(paket.information["sha256"]))
-        try:
-            information.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-        except OSError as exc:
-            raise DeliveryError(Status.PACKAGE_FAILED, f"Informationsdatei kann nicht geschrieben werden: {exc}") from exc
+        archive = build_project_archive(configuration, repository_root, project, output_directory, paket_scope)
 
         # FULL-Archiv um ein leeres D-Archiv ergänzen (für duseligen Travic-Link Folgejob)
-        archive_paths = [paket.archive]
+        archive_paths = [archive]
         if paket_scope.von is None:
             delta_archive = project_archive_path(configuration, project, output_directory, "D")
             build_delta_archive(repository_root, project, delta_archive, [])
@@ -183,17 +167,11 @@ def _build_mainframe_files(configuration: config.Configuration, *, output_direct
             except OSError as exc:
                 raise DeliveryError(Status.PACKAGE_FAILED, f"JCL kann nicht geschrieben werden: {exc}") from exc
 
-    # Lieferbericht erstellen
-    report = release_report(configuration, repository_root, paket_scope=paket_scope, information_scope=information_scope)
-    try:
-        (output_directory / RELEASE_REPORT_NAME).write_text(report, encoding="utf-8")
-    except OSError as exc:
-        raise DeliveryError(Status.PACKAGE_FAILED, f"Lieferbericht kann nicht geschrieben werden: {exc}") from exc
-
 
 def run(subcommand: str, tag: str | None = None) -> dict[str, object]:
-    """Erzeugt Release-Dateien oder übergibt sie an den Mainframe."""
+    """Erzeugt Lieferdateien oder übergibt sie an den Mainframe."""
 
+    # Build-Schritt erzeugt die Lieferdateien
     if subcommand == "build":
         try:
             tag = git.LieferTag.parse(tag)

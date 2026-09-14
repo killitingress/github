@@ -22,9 +22,8 @@ technischen Zielen zu:
 
 Mit aktiviertem Dry Run bleiben Adapter-Versionsabfrage, Ressourcenprüfung und
 Paketbau erhalten. Adapterauftrag, Archivupload sowie FTPS- und JES-Übergabe
-werden simuliert. Liefer-Tag und GitHub Release entstehen weiterhin, wobei das
-Freigabe-Issue das Label `dry_run` erhält und GitHub das Release als Pre-Release
-kennzeichnet.
+werden simuliert. Der Liefer-Tag entsteht weiterhin. Das Freigabe-Issue erhält
+das Label `dry_run` und vermerkt, dass keine Mainframe-Übergabe stattfand.
 
 ## Voraussetzungen
 
@@ -66,20 +65,26 @@ diesen `.100`-Tag. `main` und `release/nnn` ergeben `rnnn.100`. Ein Branch
 1. In GitHub unter **Actions** den Workflow **Lieferung vorbereiten** öffnen.
 2. `main`, den passenden Branch `release/nnn` oder einen vorbereiteten Branch
    `bereitstellung/nnn.nnn` auswählen.
-3. Die Warnungen der Ressourcenprüfung sowie in der Zusammenfassung Branch,
-   Commit, Lieferart, Bezugsstand und Lieferumfang prüfen.
-4. Das in der Zusammenfassung verlinkte und mit `lieferung:freigabe`
-   gekennzeichnete Freigabe-Issue öffnen und die dort angezeigten Angaben
-   prüfen.
+3. Die Warnungen der Ressourcenprüfung prüfen und das in der Zusammenfassung
+   verlinkte Freigabe-Issue öffnen.
+4. Im mit `lieferung:freigabe` gekennzeichneten Issue Branch, Commit,
+   Lieferart, Bezugsstand und Lieferumfang prüfen.
 5. Mit Repository-Berechtigung `maintain` oder `admin` den Kommentar
    `/freigabe` eintragen. Die vorbereitende Person darf selbst freigeben.
-6. Nach dem ausgelösten Lauf die Mainframe-Übergabe und das GitHub Release
-   kontrollieren.
+6. Nach dem ausgelösten Lauf die Mainframe-Übergabe und den Abschlusskommentar
+   mit Archivnamen und SHA-256-Prüfsummen im Issue kontrollieren.
 
-Das Freigabe-Issue erhält nach erfolgreicher Lieferung einen Link zum Lauf und
-wird geschlossen. Ein vorhandener Liefer-Tag kann über den manuellen Start von
-**Lieferung ausführen** erneut verarbeitet werden. Dafür ist keine neue
-Vorbereitung erforderlich, aber ebenfalls `maintain` oder `admin`.
+Das Freigabe-Issue erhält nach erfolgreicher Lieferung Links zum Lauf und zum
+Liefer-Tag sowie eine Tabelle der übertragenen Archivdateien mit
+SHA-256-Prüfsummen. Danach wird es geschlossen. Der annotierte Liefer-Tag
+enthält die Nummer des Freigabe-Issues. Für einen Wiederanlauf im zugehörigen
+Issue `/wiederholung` kommentieren. Mit `/wiederholung@test` wird der
+Shared Workflow vom Testbranch von `mtext_actions` geladen. Eine neue
+Vorbereitung ist nicht erforderlich. Die kommentierende Person benötigt
+`maintain` oder `admin`.
+Vor dem Paketbau wird der Tag aus dem Issue-Titel gelesen und geprüft, ob
+seine Annotation auf dieses Issue verweist. Das Issue erhält danach einen weiteren
+Abschlusskommentar.
 
 ## Workflows
 
@@ -97,7 +102,7 @@ Vergleichsstand geänderten Ressourcen geprüft.
 | `check-resources.yml` | manueller Start auf einem ausgewählten Branch | `shared-check-resources.yml` |
 | `sync-resources.yml` | Push auf `main`, `release/nnn` oder `feature/nnn/**` sowie manueller Start | zuerst `shared-check-resources.yml`, danach `shared-sync-resources.yml` |
 | `lieferung-vorbereiten.yml` | manueller Start auf einem Lieferzweig | zuerst `shared-check-resources.yml`, danach `shared-lieferung-check.yml` |
-| `lieferung-ausfuehren.yml` | Freigabekommentar im Issue oder manueller Start zur Wiederholung eines vorhandenen Liefer-Tags | `shared-lieferung-ausfuehren.yml` |
+| `lieferung-ausfuehren.yml` | `/freigabe` oder `/wiederholung` im Freigabe-Issue, jeweils auch mit `@test` | `shared-lieferung-ausfuehren.yml` |
 
 Die Workflow-Aufrufe verwenden jeweils `@main` aus dem Repository
 `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`.

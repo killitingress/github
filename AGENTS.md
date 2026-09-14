@@ -7,16 +7,19 @@
 - Einfach und auch für technisch unbedarfte Leser schreiben. Keine Semikolons zur
   Satztrennung verwenden.
 - In Dokumentation und längeren Kommentaren Satzanfänge, Satzlänge und Übergänge
-  natürlich variieren. Folgen gleichförmiger Aussagesätze wie `Der Workflow ...`,
-  `Ein Lauf ...` oder `Im Dry Run ...` vermeiden. Zusammengehörige Gedanken flüssig
-  verbinden, statt jede Einzelheit in einen eigenen, formal vollständigen Satz zu
-  pressen. Kurze technische Aussagen dürfen direkt bleiben.
+  natürlich variieren. Folgen gleichförmiger Aussagesätze der Form `<Artikel>
+  <Gegenstand> <tut>`, vermeiden. Zusammengehörige Gedanken flüssig verbinden,
+  statt jede Einzelheit in einen eigenen, formal vollständigen Satz zu pressen.
+  Kurze technische Aussagen dürfen direkt bleiben.
 - Aussagen nicht über bestätigte fachliche oder technische Sachverhalte hinaus erweitern.
   Ungeklärte Komponenten, Abläufe, Rollen oder Schutzmaßnahmen als offene Frage benennen.
 - Verstärkungen und Einschränkungen wie `genau`, `nur`, `immer`, `vollständig` oder
   `zwingend` nur verwenden, wenn sie bestätigt und inhaltlich wichtig sind.
 - Positive Aussagen unbegründeten Ausschlüssen vorziehen, etwa `Repository X darf
-  zugreifen` statt `Nur Repository X darf zugreifen`.
+  zugreifen` statt `Nur Repository X darf zugreifen` oder `Es darf
+  ausschließlich Repository X zugreifen`.
+- Es heißt bei uns "Synchronisierung", nicht "Synchronisation"
+
 
 ## Dokumentation
 

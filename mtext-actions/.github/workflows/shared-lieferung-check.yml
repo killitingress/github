@@ -2,8 +2,8 @@ name: Shared Workflow – Lieferung vorprüfen
 
 # Dieser Workflow bereitet den ausgewählten Branchstand für eine spätere
 # Lieferung vor. Er lädt die festzuhaltende SHA mit ihrer Historie und prüft den
-# aus dem Branch abgeleiteten Liefer-Tag und den Lieferumfang. Das Ergebnis wird in
-# der Actions-Zusammenfassung und einem Freigabe-Issue angezeigt. Die geprüften
+# aus dem Branch abgeleiteten Liefer-Tag und den Lieferumfang. Das Ergebnis steht
+# im Freigabe-Issue, auf das die Actions-Zusammenfassung verweist. Die geprüften
 # Angaben werden als Vorbereitung für 30 Tage im aufrufenden Mandantenlauf
 # gespeichert. In diesem Lauf entstehen weder Liefer-Tag noch Übergabe.
 'on':
@@ -29,8 +29,8 @@ jobs:
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
-      # Leitet den Liefer-Tag ab, prüft den Lieferumfang und schreibt die Vorprüfung in die
-      # Actions-Zusammenfassung und legt vorbereitung.json an
+      # Leitet den Liefer-Tag ab, prüft den Lieferumfang und legt das Issue
+      # sowie vorbereitung.json an.
       - name: Lieferung und Lieferumfang prüfen
         id: check
         env:
