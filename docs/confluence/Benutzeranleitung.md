@@ -2,45 +2,40 @@
 
 ## 1. Einstieg von SVN zu Git
 
-Diese Anleitung beschreibt die tägliche Arbeit mit M/Text-Ressourcen in Git.
-Sie richtet sich an Entwickler und Repository-Verantwortliche, die bisher mit
-SVN gearbeitet haben.
+Diese Anleitung beschreibt die tägliche Arbeit mit M/Text-Ressourcen in Git
+für Entwickler und Repository-Verantwortliche, die bisher mit SVN gearbeitet
+haben.
 
 ### Grundprinzipien
 
-In SVN ist ein Commit eine Aktion, durch die Änderungen an das zentrale
-Repository übertragen werden. Dabei entsteht eine neue Revision. In Git
-hingegen hält ein Commit einen Entwicklungsstand samt Historie zu einem
-bestimmten Zeitpunkt fest und entspricht damit am ehesten einer SVN-Revision.
-Seine Commit-SHA kennzeichnet ihn eindeutig. Diese besteht aus 40 hexadezimalen
-Zeichen, während eine SVN-Revision eine aufsteigende Nummer ist. Git-Commits
-werden normalerweise lokal erstellt und erst durch einen Push nach GitHub
-übertragen. Technisch ist ein Branch in Git ein Zeiger auf einen Commit. Beim
-Push eines Branches nach GitHub werden sämtliche fehlenden Commits dorthin
-übertragen und der Branch in GitHub auf den dann aktuellsten Commit
-*verschoben*.
+In SVN überträgt ein Commit die Änderungen an das zentrale Repository und
+erzeugt dort eine neue Revision. Git hält dagegen einen Entwicklungsstand samt
+Historie fest, der am ehesten einer SVN-Revision entspricht und durch seine
+40-stellige Commit-SHA eindeutig gekennzeichnet ist. Anders als die
+aufsteigenden SVN-Revisionsnummern entstehen Git-Commits normalerweise zuerst
+lokal und gelangen durch einen Push nach GitHub. Ein Branch ist dabei ein
+Zeiger auf einen Commit. Beim Push werden die fehlenden Commits übertragen und
+der Branch in GitHub auf den aktuellen Commit *verschoben*.
 
-Jeder Entwicklungsauftrag wie eine Änderung, Erweiterung oder Korrektur wird
-als Feature in einem eigenen temporären Feature-Branch umgesetzt. Wenn ein
-Feature fertig entwickelt und getestet wurde, kann ein Pull Request angelegt
-werden, um es in `main` oder `release/nnn` zu übernehmen. Der Pull Request muss
-dazu im 4-Augenfall geprüft und freigegeben werden. Danach werden die
-Änderungen des Feature-Branches per Squash Merge in den Zielbranch
-übernommen. Dabei entsteht ein neuer Stand und somit auch ein neuer Commit.
+Für jeden Entwicklungsauftrag wie eine Änderung, Erweiterung oder Korrektur
+entsteht ein eigener temporärer Feature-Branch. Sobald das Feature entwickelt
+und getestet ist, kann es über einen Pull Request nach `main` oder
+`release/nnn` gelangen. Nach Prüfung und Freigabe im 4-Augenfall übernimmt ein
+Squash Merge die Änderungen als neuen Commit in den Zielbranch.
 
-Wird ein Feature-Branch nach GitHub gepusht, werden die von ihm geänderten
-M/Text-Ressourcen automatisch mit der M/Text-Entwicklungsumgebung
-synchronisiert. Dort kann der Entwickler das Feature testen. Ein Merge nach
-`main` oder `release/nnn` synchronisiert automatisch die
-M/Text-Funktionstestumgebung. Dort soll das Feature von der LBS getestet und
-fachlich freigegeben werden.
+Mit dem Push eines Feature-Branches werden seine M/Text-Ressourcen automatisch
+mit der M/Text-Entwicklungsumgebung synchronisiert und können dort getestet
+werden. Nach einem Merge in `main` oder `release/nnn` folgt die
+M/Text-Funktionstestumgebung, in der die LBS das Feature testet und fachlich
+freigibt.
 
 Eine Mainframe-Lieferung wird aus einem fachlich freigegebenen Stand auf
 `main`, `release/nnn` oder `bereitstellung/nnn.nnn` vorbereitet. Die
-Vorbereitung hält den gewählten Commit, den Liefer-Tag und den Lieferumfang
-fest. Anschließend führt dieselbe oder eine zweite Person die vorbereitete
-Lieferung aus. Der Shared Workflow erzeugt den Liefer-Tag und startet
-Paketbau sowie Mainframe-Übergabe.
+Vorbereitung hält den gewählten Commit, den daraus abgeleiteten Liefer-Tag und
+den Lieferumfang in einem Freigabe-Issue fest. Eine Person mit der
+Repository-Berechtigung `maintain` oder `admin` startet die Lieferung dort mit
+`/freigabe`. Nach der Mainframe-Übergabe erzeugt der Workflow den Liefer-Tag
+und schließt das Issue mit dem Lieferprotokoll.
 
 ### Grundablauf einer Änderung
 
@@ -52,7 +47,7 @@ Feature-Branch erstellen und Änderung committen
     │ Pull Request und Review
     ▼
 Squash Merge nach main oder release/nnn
-    │ automatische Synchronisation
+    │ automatische Synchronisierung
     ▼
 Änderung in M/Text-Funktionstest abnehmen
 ```
@@ -60,11 +55,11 @@ Squash Merge nach main oder release/nnn
 ### Grundablauf einer Mainframe-Lieferung
 
 ```text
-Branch und Liefer-Tag auswählen
+Lieferzweig auswählen
     │ Lieferung vorbereiten
     ▼
-Lieferumfang prüfen
-    │ Lieferung mit demselben geplanten Liefer-Tag ausführen
+Freigabe-Issue mit Lieferstand und Lieferumfang prüfen
+    │ /freigabe
     ▼
 Liefer-Tag, Paketbau und Mainframe-Übergabe
 ```
@@ -147,16 +142,17 @@ Sie werden beim späteren Squash Merge auf dem Zielbranch zusammengefasst.
 4. Nach erfolgreichem Lauf die Änderung in M/Text-Entwicklung testen.
 5. Erforderliche Korrekturen erneut committen und pushen.
 
-Der erfolgreiche Workflow bestätigt die technische Übertragung. Die fachliche
-Richtigkeit wird anschließend in M/Text geprüft.
+Mit dem erfolgreichen Workflow ist die technische Übertragung bestätigt,
+anschließend wird die fachliche Richtigkeit in M/Text geprüft. Hat M/Text eine
+Ausgabe geliefert, verweist die Laufzusammenfassung auf das zehn Tage
+verfügbare Laufartefakt `mtext-ergebnis`.
 
 ### Gemeinsame M/Text-Entwicklungsumgebung beachten
 
-Alle Feature-Branches einer Releaselinie verwenden dieselbe
-M/Text-Entwicklungsumgebung. Ändern mehrere Feature-Branches dieselbe
-Ressource, ist dort die zuletzt synchronisierte Änderung sichtbar. Die
-beteiligten Entwickler stimmen deshalb ab, wann sie diese Ressource übertragen
-und testen.
+Da alle Feature-Branches einer Releaselinie dieselbe
+M/Text-Entwicklungsumgebung verwenden, ist bei konkurrierenden Änderungen an
+einer Ressource der zuletzt synchronisierte Stand sichtbar. Die beteiligten
+Entwickler stimmen deshalb ab, wann sie diese Ressource übertragen und testen.
 
 ## 3. Pull Request und M/Text-Funktionstest
 
@@ -182,8 +178,8 @@ feature/271/neuer-brief  → release/271
 
 Hat sich der Zielbranch geändert, kann GitHub im Pull Request **Update branch**
 anbieten. Damit wird der aktuelle Stand des Zielbranches in den Feature-Branch
-übernommen. Anschließend wird die Änderung erneut in M/Text-Entwicklung
-getestet. Hinweise zu Konflikten und abgelehnten Pushes stehen in Kapitel 7.
+übernommen und anschließend erneut in M/Text-Entwicklung getestet. Hinweise zu
+Konflikten und abgelehnten Pushes stehen in Kapitel 7.
 
 ### Prüfen und zusammenführen
 
@@ -199,14 +195,14 @@ getestet. Hinweise zu Konflikten und abgelehnten Pushes stehen in Kapitel 7.
 6. Die endgültige Commit-Nachricht wird kontrolliert.
 7. Der Feature-Branch wird nach dem Merge gelöscht.
 
-Der Squash Merge erzeugt einen Commit auf `main` oder `release/nnn`. Dieser
-Push startet die Synchronisation mit M/Text-Funktionstest.
+Der beim Squash Merge auf `main` oder `release/nnn` erzeugte Commit startet die
+Synchronisierung mit M/Text-Funktionstest.
 
 ### Stand in M/Text-Funktionstest abnehmen
 
-1. Unter **Actions** den Synchronisationslauf des Zielbranches öffnen.
+1. Unter **Actions** den Synchronisierungslauf des Zielbranches öffnen.
 2. Prüfen, dass der Lauf den Squash-Commit des Pull Requests verarbeitet.
-3. Nach erfolgreicher Synchronisation den Stand in M/Text-Funktionstest prüfen.
+3. Nach erfolgreicher Synchronisierung den Stand in M/Text-Funktionstest prüfen.
 4. Einen festgestellten Fehler über einen neuen Feature-Branch korrigieren.
 
 Auf `main` und `release/nnn` werden fachliche Änderungen nicht direkt
@@ -244,25 +240,31 @@ feature/270/issue-5678 ── Pull Request nach Kapitel 3 ──▶ main
 
 ### Kurzfassung
 
-Branch und Liefer-Tag wählen → **Lieferung vorbereiten** → Lieferumfang prüfen
-→ **Lieferung ausführen** mit demselben Liefer-Tag → Mainframe-Übergabe und
-GitHub Release kontrollieren.
+Lieferzweig wählen → **Lieferung vorbereiten** → Freigabe-Issue prüfen →
+`/freigabe` kommentieren → Mainframe-Übergabe, Liefer-Tag und
+Abschlussprotokoll kontrollieren.
 
 ### Lieferstand und Liefer-Tag bestimmen
 
-Der Liefer-Tag enthält das Hauptrelease als dreistellige Releaselinie und das
-Zwischenrelease (`100` bis `999`), beispielsweise:
+Aus dem ausgewählten Branch leitet der Workflow den Liefer-Tag ab, sodass er
+weder bei der Vorbereitung noch bei der Freigabe eingegeben wird.
+
+| Ausgewählter Branch | Lieferart | Liefer-Tag |
+|---|---|---|
+| `main` | FULL | `r<Releaselinie von main>.100` |
+| `release/nnn` | FULL | `rnnn.100` |
+| `bereitstellung/nnn.nnn` | DELTA | `rnnn.nnn` |
+
+Beispiele:
 
 ```text
 r261.100   FULL-Basis der Releaselinie 261
 r261.108   kumulatives DELTA gegen r261.100
 ```
 
-Das Zwischenrelease `.100` bezeichnet das Hauptrelease. Diese FULL-Lieferung
-enthält die vollständigen Projektstände von `main` oder `release/nnn`.
-Eine Teillieferung mit dem Zwischenrelease `.100` ist nicht vorgesehen.
-Spätere Liefer-Tags derselben Releaselinie erzeugen ein kumulatives DELTA
-gegen den `.100`-Tag.
+Das Zwischenrelease `.100` bezeichnet die FULL-Basis einer Releaselinie. Ein
+Bereitstellungsbranch mit `.100` ist nicht zulässig. Spätere Liefer-Tags
+derselben Releaselinie erzeugen ein kumulatives DELTA gegen den `.100`-Tag.
 
 Entspricht der gewünschte Lieferstand dem aktuellen Stand von `main` oder
 `release/nnn`, kann dieser Branch direkt verwendet werden. Sollen ausgewählte,
@@ -280,9 +282,8 @@ ein Bereitstellungsbranch erstellt.
 5. Den Bereitstellungsbranch nach GitHub pushen.
 
 Der Bereitstellungsbranch wird nicht nach M/Text synchronisiert. Vor der
-Lieferung wird deshalb der in der Zusammenfassung angezeigte Lieferumfang
-geprüft. Nach erfolgreicher Lieferung kann der Bereitstellungsbranch gelöscht
-werden.
+Lieferung wird deshalb der im Freigabe-Issue angezeigte Lieferumfang geprüft,
+nach erfolgreichem Abschluss kann der Branch gelöscht werden.
 
 ### Lieferung vorbereiten
 
@@ -291,66 +292,85 @@ werden.
 3. **Run workflow** öffnen.
 4. `main`, den passenden `release/nnn` oder den Bereitstellungsbranch
    auswählen.
-5. Den Liefer-Tag `rnnn.nnn` eingeben und den Workflow starten.
-6. In der Zusammenfassung Branch, Commit, FULL oder DELTA, Bezugsstand und
-   projektbezogenen Lieferumfang prüfen.
+5. Den Workflow starten.
+6. Nach erfolgreichem Lauf den Link zum neu angelegten Freigabe-Issue in der
+   Laufzusammenfassung öffnen.
 
-Die Commit-SHA wird aus dem ausgewählten Branch ermittelt. Sie wird nicht
-eingegeben. Die Vorbereitung hält diesen Stand fest, damit spätere Änderungen
-am Branch die vorbereitete Lieferung nicht verändern.
+Die Commit-SHA stammt aus dem ausgewählten Branch und muss nicht eingegeben
+werden. Bevor das Freigabe-Issue entsteht, prüft der Workflow die
+Mandantenkonfiguration und die Ressourcen im Lieferumfang. Syntaxbefunde
+erscheinen als Warnungen und werden vor der Freigabe fachlich bewertet.
 
-Wird derselbe Liefer-Tag mehrmals vorbereitet, verwendet **Lieferung
-ausführen** die neueste Vorbereitung.
+Das Freigabe-Issue trägt das Label `lieferung:freigabe` und zeigt:
 
-### Lieferung ausführen
+- den aus dem Branch abgeleiteten Liefer-Tag
+- Lieferart, Branch und festgehaltene Commit-SHA
+- Abweichungen gegenüber dem vorherigen Liefer-Tag
+- den vorgesehenen Inhalt der FULL- oder DELTA-Archive
+- die vorbereitende Person und den Vorbereitungslauf
 
-1. Nach der Prüfung unter **Actions** den Workflow **Lieferung ausführen**
-   öffnen.
-2. Den geplanten Liefer-Tag eingeben.
-3. Wenn dieselbe Person die Lieferung vorbereitet hat, **Direktlieferung,
-   Abweichung vom 4-Augenfall und Risiko bewusst bestätigen** auswählen.
-4. Den Workflow starten.
-5. Den angezeigten Lieferweg und den Start des Lieferlaufs prüfen.
+Die festgehaltene Commit-SHA bleibt die Grundlage der Lieferung, wenn der
+Branch nach der Vorbereitung weitere Commits erhält. Ist der angezeigte Stand
+nicht freigabefähig, wird der Branch korrigiert und **Lieferung vorbereiten**
+erneut gestartet. Dabei entsteht ein neues Freigabe-Issue.
 
-Führt die vorbereitende Person auch diesen Workflow aus, ist die bewusste
-Bestätigung erforderlich und die Zusammenfassung zeigt **Direktlieferung**.
-Bei einer anderen Person zeigt sie **4-Augenfall**.
+### Lieferung freigeben
 
-Der Lieferlauf erstellt den Liefer-Tag auf dem vorbereiteten Commit, baut
-die Pakete und startet die Mainframe-Übergabe.
+1. Liefer-Tag, Branch, Commit-SHA und Lieferumfang im Freigabe-Issue prüfen.
+2. Sicherstellen, dass der Liefer-Tag noch nicht im Repository vorhanden ist.
+3. Als Person mit der Repository-Berechtigung `maintain` oder `admin` einen
+   Kommentar schreiben, der ausschließlich `/freigabe` enthält.
+4. Den vom Bot im Issue verlinkten Actions-Lauf öffnen und seinen Abschluss
+   kontrollieren.
+
+Auch die vorbereitende Person darf die Lieferung freigeben. Mit einer gültigen
+Freigabe wechselt das Label von `lieferung:freigabe` zu
+`lieferung:gestartet` und weitere `/freigabe`-Kommentare starten aus diesem
+Issue keine zweite Lieferung.
+
+Zum Lieferlauf gehören der Bau der FULL- oder DELTA-Archive mit ihrer JCL, die
+Mainframe-Übergabe und das Einreichen der JCL-Aufträge. Alle Lieferdateien
+stehen danach 30 Tage im Laufartefakt `release` bereit. Abschließend entsteht
+der Liefer-Tag auf der im Issue festgehaltenen Commit-SHA.
 
 ### Ergebnis kontrollieren
 
 Nach Abschluss wird geprüft:
 
 1. Der Lieferlauf ist erfolgreich beendet.
-2. Die Pakete wurden an den Mainframe übergeben.
-3. Im Mandanten-Repository besteht zum Liefer-Tag ein GitHub Release.
-4. Das GitHub Release nennt den gelieferten Commit und enthält die
-   JSON-Informationsdateien der Projekte.
+2. Das Freigabe-Issue trägt das Label `lieferung:abgeschlossen` und ist
+   geschlossen.
+3. Der Liefer-Tag zeigt auf die im Issue festgehaltene Commit-SHA.
+4. Der Abschlusskommentar nennt den Lieferlauf, die Archivnamen und ihre
+   SHA-256-Prüfsummen.
+5. Das Laufartefakt `release` enthält zu jedem `.tgz`-Archiv die zugehörige
+   `.jcl`-Datei.
 
 ### Vorhandene Lieferung erneut ausführen
 
-Eine vorhandene Lieferung kann erneut an den Mainframe übergeben werden:
+Eine abgeschlossene oder bereits gestartete Lieferung mit vorhandenem
+Liefer-Tag kann aus ihrem Freigabe-Issue erneut ausgeführt werden:
 
-1. Im Mandanten-Repository **Actions** öffnen.
-2. **Lieferung ausführen** auswählen.
-3. Den vorhandenen Liefer-Tag eingeben.
-4. Den Workflow starten und den Lieferlauf kontrollieren.
+1. Das zum Liefer-Tag gehörende Freigabe-Issue öffnen.
+2. Als Person mit `maintain` oder `admin` einen Kommentar schreiben, der
+   ausschließlich `/wiederholung` enthält.
+3. Den neuen, im Issue verlinkten Actions-Lauf kontrollieren.
 
-Der vorhandene Liefer-Tag bleibt unverändert. Eine neue Vorbereitung ist nicht
-erforderlich.
+Für die Wiederholung liest der Workflow den Lieferstand aus dem annotierten
+Tag und prüft dessen Zuordnung zum Freigabe-Issue. Dabei bleibt der Liefer-Tag
+unverändert, während die Lieferdateien neu gebaut und erneut an den Mainframe
+übergeben werden.
 
 ## 6. Sonderabläufe für Repository-Verantwortliche
 
 ### Mandantenkonfiguration ändern
 
-Die Mandantenkonfiguration steht in `.github/config.json`. Änderungen werden
-in einem Feature-Branch bearbeitet und über einen Pull Request übernommen. Das
-Feld `releaselinie` wird beim Wechsel der produktiven Releaselinie geändert.
+Die Mandantenkonfiguration steht in `.github/config.json` und wird über einen
+Feature-Branch mit Pull Request geändert. Beim Wechsel der produktiven
+Releaselinie erhält das Feld `releaselinie` den neuen Wert.
 
 Der Workflow **Mandantenkonfiguration und Ressourcen prüfen** kontrolliert die
-Konfiguration. Fehler werden vor dem Merge korrigiert.
+Konfiguration, damit Fehler vor dem Merge korrigiert werden können.
 
 Als M/Text-Projekt gilt jedes nicht versteckte Verzeichnis direkt in der
 Repositorywurzel, sofern es nicht in `excluded_projects` ausgeschlossen ist.
@@ -364,8 +384,8 @@ sein Projektcode eindeutig bleibt.
 ### Manuellen Vollabgleich starten
 
 Ein manueller Vollabgleich ersetzt die einbezogenen Projekte in der
-M/Text-Zielumgebung durch den Stand des ausgewählten Branches. Der Lauf wird deshalb mit
-anderen Arbeiten auf derselben Releaselinie abgestimmt.
+M/Text-Zielumgebung durch den Stand des ausgewählten Branches. Deshalb wird der
+Lauf mit anderen Arbeiten auf derselben Releaselinie abgestimmt.
 
 1. Im Mandanten-Repository **Actions** öffnen.
 2. **M/Text-Ressourcen synchronisieren** auswählen.
@@ -424,9 +444,9 @@ Beim Erstellen von `release/261` entsteht kein neuer Commit.
 Der vollständige Vergleich ist erforderlich, weil ein Merge konfliktfreie
 Änderungen des bisherigen `main` beibehalten kann.
 
-#### Synchronisation und nächste Linie
+#### Synchronisierung und nächste Linie
 
-1. Den automatisch gestarteten Synchronisationslauf von `main` kontrollieren.
+1. Den automatisch gestarteten Synchronisierungslauf von `main` kontrollieren.
 2. Prüfen, dass der vollständige Stand zuerst nach M/Text-Entwicklung und
    anschließend nach M/Text-Funktionstest übertragen wurde.
 3. Den Stand in beiden Umgebungen kontrollieren.
@@ -444,7 +464,7 @@ führt jetzt 270.
 Erwarteten Branch, Commit oder Liefer-Tag feststellen → erste aussagekräftige
 Fehlermeldung prüfen → Ursache im Feature-Branch oder in der technischen
 Einrichtung beheben → aktuellen gewünschten Stand erneut verarbeiten. Alte
-Synchronisationsläufe nicht unkontrolliert wiederholen.
+Synchronisierungsläufe nicht unkontrolliert wiederholen.
 
 ### Eigene Änderungen korrigieren
 
@@ -484,10 +504,10 @@ gepusht.
 5. Zugangsdaten nicht in Kommentare, Workflow-Eingaben oder Support-Tickets
    kopieren.
 
-Paketbau und Mainframe-Übergabe bleiben Bestandteil des Mandantenlaufs. Die
-gemeinsame Implementierung wird dabei aus
-`FI_Actions/fi_lbs_entw_oms_mtext_actions` geladen. Das abschließende GitHub
-Release steht im Mandanten-Repository.
+Paketbau und Mainframe-Übergabe bleiben Bestandteil des Mandantenlaufs, dessen
+gemeinsame Implementierung aus
+`FinanzInformatik/fi_lbs_entw_oms_mtext_actions` geladen wird. Liefer-Tag und
+Freigabe-Issue entstehen dagegen im Mandanten-Repository.
 
 ### Fehlgeschlagene Ressourcenprüfung
 
@@ -496,7 +516,7 @@ Release steht im Mandanten-Repository.
   Datei und Fundstelle geprüft und bei Bedarf korrigiert.
 - Nach einer Korrektur wird derselbe Feature-Branch erneut gepusht.
 
-### Fehlgeschlagene M/Text-Synchronisation
+### Fehlgeschlagene M/Text-Synchronisierung
 
 Fehler beim Ermitteln des Vergleichsstands, beim Paketbau, Upload oder bei der
 Adapterverarbeitung erscheinen im Schritt **Ressourcen synchronisieren**.
@@ -504,7 +524,7 @@ Adapterverarbeitung erscheinen im Schritt **Ressourcen synchronisieren**.
 1. Im Repository unter **Actions** den betroffenen Lauf öffnen und die
    Fehlerursache prüfen und beheben.
 2. Den jüngsten fehlgeschlagenen Lauf des Branches über **Re-run jobs** erneut
-   ausführen oder die Korrektur pushen. Die Synchronisation holt dabei die noch
+   ausführen oder die Korrektur pushen. Die Synchronisierung holt dabei die noch
    fehlenden Änderungen früherer Pushes nach.
 3. Das erfolgreiche Ende abwarten. Meldet der Lauf einen überholten
    Branchstand, den neueren Lauf prüfen und diesen bei Bedarf wiederholen.
@@ -517,17 +537,23 @@ startet ein Repository-Verantwortlicher nach Abstimmung den manuellen Vollabglei
 
 ### Fehlerhafte oder fehlgeschlagene Mainframe-Lieferung
 
-Zeigt ein Liefer-Tag auf den falschen Stand, wird er nicht erneut ausgeführt.
-Nach seiner Löschung kann die Lieferung unter demselben geplanten Liefer-Tag
-neu vorbereitet werden. Bei `.100` ist vor der Löschung zu prüfen, ob spätere
-DELTA-Lieferungen diesen Tag bereits als Bezugsstand verwenden.
+Ein nicht abgeschlossener Lieferlauf wird im Freigabe-Issue mit einem Link zum
+betroffenen Actions-Lauf dokumentiert. Dort wird zuerst festgestellt, ob der
+Liefer-Tag bereits erzeugt wurde.
 
-Im Lieferlauf wird geprüft, ob Paketbau oder Mainframe-Übergabe
-fehlgeschlagen sind. In diesem Fall wird **Lieferung ausführen** mit dem
-vorhandenen Liefer-Tag gestartet. Ein neuer Tag und eine neue Vorbereitung
-sind nicht erforderlich.
+Ist der Liefer-Tag noch nicht vorhanden:
 
-Ist ausschließlich das Bereitstellen der Lieferinformationen in GitHub
-fehlgeschlagen, wird im Lieferlauf der fehlgeschlagene Job
-**Bereitstellungsbericht im Mandanten-Repository veröffentlichen** erneut
-ausgeführt. Das Paket wird dabei nicht noch einmal an den Mainframe übertragen.
+1. Den verlinkten Actions-Lauf öffnen und den fehlgeschlagenen Job prüfen.
+2. Die Ursache beheben oder mit den technisch Verantwortlichen klären.
+3. Im selben Lauf **Re-run failed jobs** verwenden, damit die bereits bestätigte
+   Freigabe und der festgehaltene Lieferstand erhalten bleiben.
+4. Danach Issue, Liefer-Tag und Abschlusskommentar erneut kontrollieren.
+
+Ist der Liefer-Tag vorhanden und soll derselbe Stand erneut übergeben werden,
+wird im zugehörigen Freigabe-Issue `/wiederholung` kommentiert. Mit dem
+unveränderten Tag baut der neue Lauf die Lieferdateien erneut.
+
+Zeigt ein Liefer-Tag auf einen fachlich falschen Stand, darf er nicht
+wiederholt werden. Vor seiner Löschung ist bei einem `.100`-Tag zu prüfen, ob
+spätere DELTA-Lieferungen ihn bereits als Bezugsstand verwenden. Nach der
+Löschung wird der Branch korrigiert und die Lieferung neu vorbereitet.
