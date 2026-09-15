@@ -1,12 +1,10 @@
-# Benutzeranleitung für M/Text-Ressourcen mit Git
-
-## 1. Einstieg von SVN zu Git
+# Einstieg von SVN zu Git
 
 Diese Anleitung beschreibt die tägliche Arbeit mit M/Text-Ressourcen in Git
 für Entwickler und Repository-Verantwortliche, die bisher mit SVN gearbeitet
 haben.
 
-### Grundprinzipien
+## Grundprinzipien
 
 In SVN überträgt ein Commit die Änderungen an das zentrale Repository und
 erzeugt dort eine neue Revision. Git hält dagegen einen Entwicklungsstand samt
@@ -37,7 +35,7 @@ Repository-Berechtigung `maintain` oder `admin` startet die Lieferung dort mit
 `/freigabe`. Nach der Mainframe-Übergabe erzeugt der Workflow den Liefer-Tag
 und schließt das Issue mit dem Lieferprotokoll.
 
-### Grundablauf einer Änderung
+## Grundablauf einer Änderung
 
 ```text
 Feature-Branch erstellen und Änderung committen
@@ -52,7 +50,7 @@ Squash Merge nach main oder release/nnn
 Änderung in M/Text-Funktionstest abnehmen
 ```
 
-### Grundablauf einer Mainframe-Lieferung
+## Grundablauf einer Mainframe-Lieferung
 
 ```text
 Lieferzweig auswählen
@@ -64,7 +62,7 @@ Freigabe-Issue mit Lieferstand und Lieferumfang prüfen
 Liefer-Tag, Paketbau und Mainframe-Übergabe
 ```
 
-### Verwendete Namen
+## Verwendete Namen
 
 | Gegenstand | Namensschema | Beispiel |
 |---|---|---|
@@ -74,7 +72,7 @@ Liefer-Tag, Paketbau und Mainframe-Übergabe
 | Arbeitsbranch einer Teillieferung | `bereitstellung/nnn.nnn` | `bereitstellung/261.108` |
 | Liefer-Tag | `rnnn.nnn` | `r261.108` |
 
-### Arbeitsmittel und Voraussetzungen
+## Arbeitsmittel und Voraussetzungen
 
 Benötigt werden:
 
@@ -102,9 +100,9 @@ Arbeitsbereich 261  → release/261 oder feature/261/...
 Arbeitsbereich 271  → release/271 oder feature/271/...
 ```
 
-## 2. Feature entwickeln und in M/Text-Entwicklung testen
+# Feature entwickeln und in M/Text-Entwicklung testen
 
-### Feature-Branch erstellen
+## Feature-Branch erstellen
 
 1. Im passenden lokalen Klon den Branch der Releaselinie auswählen.
 2. Diesen Branch auf den aktuellen GitHub-Stand bringen.
@@ -119,7 +117,7 @@ feature/261/issue-5678
 feature/271/adresse-korrigieren
 ```
 
-### Änderung bearbeiten und committen
+## Änderung bearbeiten und committen
 
 1. Die Ressourcen in der M/Workbench bearbeiten.
 2. In der Git-Ansicht die geänderten, neuen und gelöschten Dateien prüfen.
@@ -132,7 +130,7 @@ feature/271/adresse-korrigieren
 Bei Bedarf können auf dem Feature-Branch mehrere Zwischen-Commits entstehen.
 Sie werden beim späteren Squash Merge auf dem Zielbranch zusammengefasst.
 
-### Nach M/Text-Entwicklung übertragen
+## Nach M/Text-Entwicklung übertragen
 
 1. Den Feature-Branch nach GitHub pushen.
 2. Im Mandanten-Repository unter **Actions** den Lauf **M/Text-Ressourcen
@@ -147,14 +145,14 @@ anschließend wird die fachliche Richtigkeit in M/Text geprüft. Hat M/Text eine
 Ausgabe geliefert, verweist die Laufzusammenfassung auf das zehn Tage
 verfügbare Laufartefakt `mtext-ergebnis`.
 
-### Gemeinsame M/Text-Entwicklungsumgebung beachten
+## Gemeinsame M/Text-Entwicklungsumgebung beachten
 
 Da alle Feature-Branches einer Releaselinie dieselbe
 M/Text-Entwicklungsumgebung verwenden, ist bei konkurrierenden Änderungen an
 einer Ressource der zuletzt synchronisierte Stand sichtbar. Die beteiligten
 Entwickler stimmen deshalb ab, wann sie diese Ressource übertragen und testen.
 
-## 3. Pull Request und M/Text-Funktionstest
+# Pull Request und M/Text-Funktionstest
 
 Wenn die Änderung in M/Text-Entwicklung erfolgreich geprüft wurde:
 
@@ -174,14 +172,14 @@ feature/261/issue-5678   → release/261
 feature/271/neuer-brief  → release/271
 ```
 
-### Feature-Branch vor dem Merge aktualisieren
+## Feature-Branch vor dem Merge aktualisieren
 
 Hat sich der Zielbranch geändert, kann GitHub im Pull Request **Update branch**
 anbieten. Damit wird der aktuelle Stand des Zielbranches in den Feature-Branch
 übernommen und anschließend erneut in M/Text-Entwicklung getestet. Hinweise zu
 Konflikten und abgelehnten Pushes stehen in Kapitel 7.
 
-### Prüfen und zusammenführen
+## Prüfen und zusammenführen
 
 1. Die zweite Person prüft geänderte und gelöschte Ressourcen sowie die
    Testbeschreibung.
@@ -198,7 +196,7 @@ Konflikten und abgelehnten Pushes stehen in Kapitel 7.
 Der beim Squash Merge auf `main` oder `release/nnn` erzeugte Commit startet die
 Synchronisierung mit M/Text-Funktionstest.
 
-### Stand in M/Text-Funktionstest abnehmen
+## Stand in M/Text-Funktionstest abnehmen
 
 1. Unter **Actions** den Synchronisierungslauf des Zielbranches öffnen.
 2. Prüfen, dass der Lauf den Squash-Commit des Pull Requests verarbeitet.
@@ -208,7 +206,7 @@ Synchronisierung mit M/Text-Funktionstest.
 Auf `main` und `release/nnn` werden fachliche Änderungen nicht direkt
 committet.
 
-## 4. Änderung auf eine weitere Releaselinie übernehmen
+# Änderung auf eine weitere Releaselinie übernehmen
 
 Durch den Squash Merge liegt die zusammengeführte Änderung als ein Commit vor.
 Soll die Änderung auch in eine weitere Releaselinie gelangen, wird dieser
@@ -236,15 +234,15 @@ release/261 ── Squash-Commit per Cherry-Pick übernehmen ──────�
 feature/270/issue-5678 ── Pull Request nach Kapitel 3 ──▶ main
 ```
 
-## 5. Mainframe-Lieferung ausführen
+# Mainframe-Lieferung ausführen
 
-### Kurzfassung
+## Kurzfassung
 
 Lieferzweig wählen → **Lieferung vorbereiten** → Freigabe-Issue prüfen →
 `/freigabe` kommentieren → Mainframe-Übergabe, Liefer-Tag und
 Abschlussprotokoll kontrollieren.
 
-### Lieferstand und Liefer-Tag bestimmen
+## Lieferstand und Liefer-Tag bestimmen
 
 Aus dem ausgewählten Branch leitet der Workflow den Liefer-Tag ab, sodass er
 weder bei der Vorbereitung noch bei der Freigabe eingegeben wird.
@@ -271,7 +269,7 @@ Entspricht der gewünschte Lieferstand dem aktuellen Stand von `main` oder
 bereits in M/Text-Funktionstest abgenommene Änderungen geliefert werden, wird
 ein Bereitstellungsbranch erstellt.
 
-### Teillieferung zusammenstellen
+## Teillieferung zusammenstellen
 
 1. Branches und Tags mit EGit aus GitHub abrufen und den vorherigen Liefer-Tag
    auswählen, beispielsweise `r261.107`.
@@ -285,7 +283,7 @@ Der Bereitstellungsbranch wird nicht nach M/Text synchronisiert. Vor der
 Lieferung wird deshalb der im Freigabe-Issue angezeigte Lieferumfang geprüft,
 nach erfolgreichem Abschluss kann der Branch gelöscht werden.
 
-### Lieferung vorbereiten
+## Lieferung vorbereiten
 
 1. Im Mandanten-Repository **Actions** öffnen.
 2. **Lieferung vorbereiten** auswählen.
@@ -314,7 +312,7 @@ Branch nach der Vorbereitung weitere Commits erhält. Ist der angezeigte Stand
 nicht freigabefähig, wird der Branch korrigiert und **Lieferung vorbereiten**
 erneut gestartet. Dabei entsteht ein neues Freigabe-Issue.
 
-### Lieferung freigeben
+## Lieferung freigeben
 
 1. Liefer-Tag, Branch, Commit-SHA und Lieferumfang im Freigabe-Issue prüfen.
 2. Sicherstellen, dass der Liefer-Tag noch nicht im Repository vorhanden ist.
@@ -333,7 +331,7 @@ Mainframe-Übergabe und das Einreichen der JCL-Aufträge. Alle Lieferdateien
 stehen danach 30 Tage im Laufartefakt `release` bereit. Abschließend entsteht
 der Liefer-Tag auf der im Issue festgehaltenen Commit-SHA.
 
-### Ergebnis kontrollieren
+## Ergebnis kontrollieren
 
 Nach Abschluss wird geprüft:
 
@@ -346,7 +344,7 @@ Nach Abschluss wird geprüft:
 5. Das Laufartefakt `release` enthält zu jedem `.tgz`-Archiv die zugehörige
    `.jcl`-Datei.
 
-### Vorhandene Lieferung erneut ausführen
+## Vorhandene Lieferung erneut ausführen
 
 Eine abgeschlossene oder bereits gestartete Lieferung mit vorhandenem
 Liefer-Tag kann aus ihrem Freigabe-Issue erneut ausgeführt werden:
@@ -361,9 +359,9 @@ Tag und prüft dessen Zuordnung zum Freigabe-Issue. Dabei bleibt der Liefer-Tag
 unverändert, während die Lieferdateien neu gebaut und erneut an den Mainframe
 übergeben werden.
 
-## 6. Sonderabläufe für Repository-Verantwortliche
+# Sonderabläufe für Repository-Verantwortliche
 
-### Mandantenkonfiguration ändern
+## Mandantenkonfiguration ändern
 
 Die Mandantenkonfiguration steht in `.github/config.json` und wird über einen
 Feature-Branch mit Pull Request geändert. Beim Wechsel der produktiven
@@ -381,7 +379,7 @@ Zeichen in Großschreibung verwendet. Beispielsweise erhält
 eines Projektverzeichnisses ist zu prüfen, ob es verarbeitet werden soll und ob
 sein Projektcode eindeutig bleibt.
 
-### Manuellen Vollabgleich starten
+## Manuellen Vollabgleich starten
 
 Ein manueller Vollabgleich ersetzt die einbezogenen Projekte in der
 M/Text-Zielumgebung durch den Stand des ausgewählten Branches. Deshalb wird der
@@ -397,7 +395,7 @@ Lauf mit anderen Arbeiten auf derselben Releaselinie abgestimmt.
 `main` und `release/nnn` werden mit M/Text-Funktionstest synchronisiert. Ein
 Feature-Branch wird mit M/Text-Entwicklung synchronisiert.
 
-### Die produktive Releaselinie wechseln
+## Die produktive Releaselinie wechseln
 
 Vor dem Wechsel bestehen beispielsweise diese Stände:
 
@@ -407,7 +405,7 @@ main          produktive Releaselinie 261
 release/270   kommende Releaselinie
 ```
 
-#### Bisherige und kommende Linie abschließen
+### Bisherige und kommende Linie abschließen
 
 1. Prüfen, dass `release/270` den vollständigen neuen Stand enthält und in
    M/Text-Funktionstest abgenommen wurde.
@@ -420,7 +418,7 @@ release/270   kommende Releaselinie
 
 Beim Erstellen von `release/261` entsteht kein neuer Commit.
 
-#### Kommende Linie nach main übernehmen
+### Kommende Linie nach main übernehmen
 
 1. Die aktuellen Stände von `main` und `release/270` abrufen.
 2. Vom aktuellen `main` den Branch
@@ -444,7 +442,7 @@ Beim Erstellen von `release/261` entsteht kein neuer Commit.
 Der vollständige Vergleich ist erforderlich, weil ein Merge konfliktfreie
 Änderungen des bisherigen `main` beibehalten kann.
 
-#### Synchronisierung und nächste Linie
+### Synchronisierung und nächste Linie
 
 1. Den automatisch gestarteten Synchronisierungslauf von `main` kontrollieren.
 2. Prüfen, dass der vollständige Stand zuerst nach M/Text-Entwicklung und
@@ -457,16 +455,16 @@ Der vollständige Vergleich ist erforderlich, weil ein Merge konfliktfreie
 Die bisherige Linie 261 wird anschließend über `release/261` gepflegt. `main`
 führt jetzt 270.
 
-## 7. Fehler beheben und Workflow-Läufe kontrollieren
+# Fehler beheben und Workflow-Läufe kontrollieren
 
-### Kurzfassung
+## Kurzfassung
 
 Erwarteten Branch, Commit oder Liefer-Tag feststellen → erste aussagekräftige
 Fehlermeldung prüfen → Ursache im Feature-Branch oder in der technischen
 Einrichtung beheben → aktuellen gewünschten Stand erneut verarbeiten. Alte
 Synchronisierungsläufe nicht unkontrolliert wiederholen.
 
-### Eigene Änderungen korrigieren
+## Eigene Änderungen korrigieren
 
 Solange der Pull Request noch nicht zusammengeführt wurde, wird die Korrektur
 im selben Feature-Branch bearbeitet, committet und erneut getestet. Ist eine
@@ -476,7 +474,7 @@ vorher geprüft und gezielt mit **Restore** zurückgesetzt.
 Nach dem Squash Merge wird die Korrektur in einem neuen Feature-Branch
 bearbeitet und über einen neuen Pull Request übernommen.
 
-### Konflikte und abgelehnte Pushes behandeln
+## Konflikte und abgelehnte Pushes behandeln
 
 Entsteht beim Aktualisieren oder bei einem Cherry-Pick ein Konflikt:
 
@@ -494,7 +492,7 @@ Abruf geändert wurde, wird der GitHub-Stand abgerufen und mit dem lokalen Stand
 verglichen. Die Änderungen werden erst danach zusammengeführt und erneut
 gepusht.
 
-### Workflow-Lauf prüfen
+## Workflow-Lauf prüfen
 
 1. Im Mandanten-Repository **Actions** öffnen.
 2. Den Workflow und den betroffenen Lauf auswählen.
@@ -509,14 +507,14 @@ gemeinsame Implementierung aus
 `FinanzInformatik/fi_lbs_entw_oms_mtext_actions` geladen wird. Liefer-Tag und
 Freigabe-Issue entstehen dagegen im Mandanten-Repository.
 
-### Fehlgeschlagene Ressourcenprüfung
+## Fehlgeschlagene Ressourcenprüfung
 
 - Fehler in `.github/config.json` werden im Feature-Branch korrigiert.
 - Bei Hinweisen zu JSON-, XML- oder JavaScript-Ressourcen werden die genannte
   Datei und Fundstelle geprüft und bei Bedarf korrigiert.
 - Nach einer Korrektur wird derselbe Feature-Branch erneut gepusht.
 
-### Fehlgeschlagene M/Text-Synchronisierung
+## Fehlgeschlagene M/Text-Synchronisierung
 
 Fehler beim Ermitteln des Vergleichsstands, beim Paketbau, Upload oder bei der
 Adapterverarbeitung erscheinen im Schritt **Ressourcen synchronisieren**.
@@ -535,7 +533,7 @@ das Repository.
 Ist der M/Text-Stand unklar oder ein vollständiger Abgleich erforderlich,
 startet ein Repository-Verantwortlicher nach Abstimmung den manuellen Vollabgleich.
 
-### Fehlerhafte oder fehlgeschlagene Mainframe-Lieferung
+## Fehlerhafte oder fehlgeschlagene Mainframe-Lieferung
 
 Ein nicht abgeschlossener Lieferlauf wird im Freigabe-Issue mit einem Link zum
 betroffenen Actions-Lauf dokumentiert. Dort wird zuerst festgestellt, ob der
