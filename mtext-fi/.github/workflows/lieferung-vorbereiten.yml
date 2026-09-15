@@ -5,9 +5,9 @@ name: Lieferung vorbereiten
 # oder DELTA-Umfang der Lieferung geprüft. Befunde erscheinen als Warnungen und
 # unterbrechen die Vorbereitung nicht. Der Liefer-Tag wird aus dem ausgewählten
 # Branch abgeleitet. Repository, Branch, SHA und Person stammen aus dem
-# auslösenden Mandantenlauf. Der Shared Workflow prüft
-# den Lieferstand und hält SHA und Lieferumfang als Laufartefakt fest. Ein Issue
-# zeigt die geprüften Angaben und nimmt die spätere Freigabe entgegen. Die
+# auslösenden Mandantenlauf. Der Shared Workflow prüft den Lieferstand und hält
+# SHA und Lieferumfang im Freigabe-Issue fest. Das Issue zeigt die geprüften
+# Angaben und nimmt die spätere Freigabe entgegen. Die
 # Vorbereitung erstellt noch keinen Liefer-Tag und startet keine Übergabe.
 'on':
   workflow_dispatch:

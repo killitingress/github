@@ -39,7 +39,7 @@ das passiert ist, werden die Änderungen des Feature-Branches per Squash Merge
 in den Zielbranch übernommen. Dabei entsteht ein neuer Stand und somit auch ein
 neuer Commit.
 
-Wird ein Feature-Branch nach GitHub gepusht werden seine M/Text-Projekte
+Wird ein Feature-Branch nach GitHub gepusht, werden seine M/Text-Projekte
 automatisch mit der M/Text-Entwicklungsumgebung synchronisiert, damit das
 Feature vom Entwickler dort vorab getestet werden kann. Ein Merge nach `main`
 oder `release/nnn` synchronisiert in der Folge automatisch die entsprechende
@@ -56,7 +56,7 @@ Paketbau und Mainframe-Übergabe. Nach erfolgreicher Übergabe entsteht der
 Liefer-Tag.
 
 Die **M/Workbench** ist dabei das zentrale Arbeitsmittel für die Bearbeitung
-der M/Text-Ressourcen und die Arbeit mit Git via dem Eclipse-Plugin `EGit`.
+der M/Text-Ressourcen und die Arbeit mit Git über das Eclipse-Plugin `EGit`.
 Dieses Plugin erlaubt dem Anwender lokale Branches und Commits zu verwalten und
 mit GitHub bzw. M/Text zu synchronisieren.
 
@@ -94,11 +94,11 @@ Paketbau, Mainframe-Übergabe und Liefer-Tag
 
 | Entscheidung | Nutzen |
 |---|---|
-| GitHub Actions statt Jenkins | Natives Git-Feeling mit modernen Workflows in der zentralen Oberfläche in der auch das Repository liegt. |
+| GitHub Actions statt Jenkins | Moderne Workflows in der dafür vorgesehenen zentralen Oberfläche, in der auch das Repository liegt. |
 | Branches nach dem organisationsweiten Leitfaden | `main`, Release- und Feature-Branches bilden Entwicklung und Wartung gut ab. Pull Requests erhöhen Sicherheit und Transparenz und sind GitHub-native. |
 | Feature-Push nach M/Text-Entwicklung | Eine Änderung kann vor dem Pull Request vom Entwickler getestet werden. |
 | Pull Request mit Squash Merge | Jeder Pull Request wird als ein fachlicher Commit in den Zielbranch übernommen und kann später Cherry-Picked werden (entspricht bisherigem Merge-Verfahren). Review und Arbeitscommits bleiben im Pull Request sichtbar. |
-| Nachvollziehbare Lieferfreigabe | Ein Issue ist der zentrale Henkel für alle Informationen und Schritte die zu einer Mainframe-Lieferung gehören. |
+| Nachvollziehbare Lieferfreigabe | Ein Issue ist der zentrale Henkel für alle Informationen und Schritte, die zu einer Mainframe-Lieferung gehören. |
 
 ## 2. Branch- und Pull-Request-Modell
 
@@ -132,8 +132,8 @@ bereitstellung/261.350
 
 Wenn eine Änderung fertig entwickelt und in M/Text-Entwicklung geprüft ist,
 erstellt der Entwickler einen Pull Request auf `main` oder den passenden
-Release-Branch. Eine zweite Person prüft die Änderung und gibt sie idealer
-Weise frei. Danach wird der Pull Request mittels Squash Merge im Zielbranch
+Release-Branch. Eine zweite Person prüft die Änderung und gibt sie idealerweise
+frei. Danach wird der Pull Request mittels Squash Merge im Zielbranch
 zusammengeführt.
 
 In den Repository-Einstellungen soll `Allow squash merging` als einziges
@@ -346,8 +346,8 @@ Für einen neuen Auftrag gilt folgender Ablauf:
    aktualisiert. Der Lock wird im Anschluss gelöst.
 5. Der Workflow fragt den Auftragsstatus alle 5 Sekunden via GET-Request ab,
    bis der Auftrag `succeeded` oder `failed` erreicht. Die Ausgabe, die durch
-   die Ressourcen-Cache Aktualisierung entsteht, wird an den Workflow
-   übermittelt und als Laufartefakt `mtext-ergebnis` zehn Tage bereitgestellt.
+   die Ressourcen-Cache-Aktualisierung entsteht, wird an den Workflow
+   übermittelt und als Laufartefakt `mtext-ergebnis` bereitgestellt.
    Die Laufzusammenfassung verweist auf das Artefakt.
 6. Danach sendet der Workflow HTTP-DELETE. Der Adapter entfernt den Auftrag,
    die Upload-Dateien und ein gegebenenfalls verwendetes temporäres
@@ -363,14 +363,8 @@ Besteht der Auftrag bereits in `processing`, wartet der Workflow auf dessen
 Abschluss. Bei `succeeded` übernimmt er das Ergebnis und räumt den Auftrag
 auf. In beiden Fällen entfallen Archivbau und Uploads. Einen Auftrag in
 `ready`, `uploading` oder `failed` löscht er und startet mit neu gebauten
-Archiven unter derselben Auftrags-ID erneut.
-
-Für die technische Integrationsphase lässt sich in der Mandantenkonfiguration
-mit `dry_run: true` ein Dry Run aktivieren. Versionsabfrage und Paketbau bleiben
-dabei aktiv, während Auftragssuche, Adapterauftrag und Archivübertragung
-entfallen. Die Laufzusammenfassung zeigt für jede Zielumgebung eine simulierte
-erfolgreiche M/Text-Verarbeitung an. Die simulierte Antwort steht im
-Laufartefakt.
+Archiven unter derselben Auftrags-ID erneut, da bei so einem Status ein
+Zustand vorliegt, der nicht einfach repariert werden kann.
 
 Ein neuer GitHub-Lauf verwendet eine neue Auftrags-ID und bildet sein
 DELTA ab dem letzten erfolgreichen Lauf desselben Branches. Dadurch schließt
@@ -385,14 +379,14 @@ zeigen die Projektverzeichnisse im Zielstand den Archivinhalt. Bei DELTA zeigt
 der Vergleich die Änderungen, aus denen die Projektarchive und Löschlisten
 entstehen. Er umfasst auch Änderungen außerhalb dieser Projekte. Eine
 gesonderte Elementliste wird für Synchronisierungen nicht aufbewahrt. Liegt
-eine M/Text-Ausgabe vor, steht sie im Laufartefakt `mtext-ergebnis` für zehn
-Tage bereit.
+eine M/Text-Ausgabe vor, wird sie in das Laufartefakt `mtext-ergebnis`
+übernommen.
 
 ### Erfolg und Reihenfolge aufeinanderfolgender Synchronisierungen
 
 Ein DELTA liefert die Änderungen seit dem letzten erfolgreichen Sync-Lauf
 desselben Branches. Damit umfassen die D-Archive auch Änderungen
-zwischenzeitlich ausgefallener Läufe.  Auf `main` bestimmt ein Push zusätzlich,
+zwischenzeitlich ausgefallener Läufe. Auf `main` bestimmt ein Push zusätzlich,
 ob ein Releaselinienwechsel noch den FULL-Abgleich beider Umgebungen erfordert.
 
 Mehrere Synchronisierungsläufe können gleichzeitig ausgeführt werden.
@@ -401,9 +395,9 @@ Adapter verarbeitet Aufträge unter dem Lock nacheinander.
 
 ## 4. Mainframe-Lieferung
 
-Die Mainframe-Lieferung verwendet dasselbe Archivformat wie die Synchronisierung,
-aber einen anderen Transportweg über CodePipeline der
-IZE9, MT91 und letztlich im Batch via LXT90#SV, Travic-Link und dessen Folgejob
+Die Mainframe-Lieferung verwendet dasselbe Archivformat wie die
+Synchronisierung, aber einen anderen Transportweg über CodePipeline der IZE9,
+MT91 und letztlich im Batch via LXT90#SV, Travic-Link und dessen Folgejob
 (`ressourcen_aktualisieren.sh`).
 
 ### Liefer-Tags und Lieferstand
@@ -472,20 +466,20 @@ erfolgreichem Abschluss ersetzt `lieferung:abgeschlossen` das Label
 Durch `/freigabe` wird ein Shared Workflow aus `mtext_actions` aufgerufen, der den
 Paketbau, die Mainframe-Übergabe und die Tag-Erzeugung in aufeinanderfolgenden
 Jobs ausführt. Der Paketbau verwendet die festgehaltene Commit-SHA und stellt
-die Lieferdateien im Laufartefakt `release` bereit, so dass diese innerhalb der
-nächsten 30 Tage ggf. kontrolliert werden können. Der Übergabejob liest das
-Artefakt, überträgt die Archive an den Mainframe und reicht die JCL ein. Danach
-erzeugt der Workflow den Liefer-Tag. Es wird eine Annotation am Tag erzeugt, um
-das zugehörigen Freigabe-Issue zu referenzieren. Anschließend wird ein
-Abschlusskommentar im Issue erzeugt, der zum Tag verlinkt und die Namen und
-SHA-256-Prüfsummen der übertragenen Archivdateien auflistet, und das Issue
-geschlossen.
+alle an den Mainframe übergebenen Dateien (.tgz und .jcl) im Laufartefakt
+`release` bereit, so dass diese innerhalb der nächsten 30 Tage ggf.
+kontrolliert werden können. Der Übergabejob liest das Artefakt, überträgt die
+Archive an den Mainframe und reicht die JCL ein. Danach erzeugt der Workflow
+den Liefer-Tag. Es wird eine Annotation am Tag erzeugt, um das zugehörige
+Freigabe-Issue zu referenzieren. Anschließend wird ein Abschlusskommentar im
+Issue erzeugt, der zum Tag verlinkt und die Namen und SHA-256-Prüfsummen der
+übertragenen Archivdateien auflistet, und das Issue geschlossen.
 
 #### Mainframe-Übergabe
 
 Die IZE9 unterstützt FTPS ohne Client-Zertifikat. Diesen Betriebsweg verwendet
 der Client mit technischem Benutzer und Passwort. Er prüft das
-Serverzertifikat nicht (unbedingt) und benötigt dann weder ein hinterlegtes
+Serverzertifikat nicht und benötigt daher weder ein hinterlegtes
 Zertifikat noch den Truststore des Runners. Damit sind Steuerungs- und passive
 Datenverbindungen verschlüsselt, auch wenn die Identität der Gegenstelle
 nicht bestätigt wird. Der Client überträgt jedes Archiv zunächst unter seinem
@@ -533,7 +527,7 @@ werden wie üblich in `.gitignore` eingetragen.
 
 ### Repository für Shared Workflows und Action `mtext_actions`
 
-Im Mandanten-Repository stehen nur kleine Trigger-Workflows. Die eigentlichen
+Im Mandanten-Repository stehen nur Trigger-Workflows. Die eigentlichen
 Arbeitsschritte liegen in `FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Die
 Trigger-Workflows nutzen dort den `main` Branch, welcher immer die freigegebene
 Version darstellt.
@@ -565,7 +559,7 @@ mtext-actions/
       github.py
       mainframe.py
       process.py
-      project_archives.py
+      project_packages.py
       lieferung.py
       resource_check.py
       sync.py
@@ -630,11 +624,11 @@ Bei Feature- und Release-Branches steht die Releaselinie im Branchnamen. Bei
 
 `config/releaselinien.json` ist in Kapitel 3 beschrieben.
 
-`config/ressourcenformate.json` wird für die Ressourcenprüfung genutzt um
+`config/ressourcenformate.json` wird für die Ressourcenprüfung genutzt, um
 Dateiendungen einem Prüfverfahren zuzuordnen, da Tonic-Elemente verschiedenste
-Endungen haben können, unabhängig von ihrem wahren Dateityp.  Dateien, deren
+Endungen haben können, unabhängig von ihrem wahren Dateityp. Dateien, deren
 Endung zu keinem Eintrag oder Glob-Muster in `ressourcenformate.json` passt,
-werden nicht geprüft.  Wenn Node.js auf dem Runner verfügbar ist, kann auch
+werden nicht geprüft. Wenn Node.js auf dem Runner verfügbar ist, kann auch
 JavaScript geprüft werden. Dies wird dynamisch ermittelt.
 
 ## 7. Workflows
@@ -642,7 +636,7 @@ JavaScript geprüft werden. Dies wird dynamisch ermittelt.
 ### Gesamtzusammenhang
 
 | Prozessschritt | Auslöser | Trigger-Workflow | Shared Workflow | Python-Skript |
-|---|---|---|---|---|---|
+|---|---|---|---|---|
 | Mandantenkonfiguration und Ressourcen prüfen | Manueller Start auf einem ausgewählten Branch | `check-resources.yml` | `shared-check-resources.yml` | `mtext.py resources check` |
 | M/Text-Entwicklung synchronisieren | Push auf `feature/nnn/<Bezeichnung>` oder manueller Start | `sync-resources.yml` | `shared-check-resources.yml`, danach `shared-sync-resources.yml` | `mtext.py resources check`, danach `mtext.py resources sync` |
 | M/Text-Funktionstest synchronisieren | Push oder Merge auf `main` oder `release/nnn` sowie manueller Start | `sync-resources.yml` | `shared-check-resources.yml`, danach `shared-sync-resources.yml` | `mtext.py resources check`, danach `mtext.py resources sync` |
@@ -652,18 +646,6 @@ JavaScript geprüft werden. Dies wird dynamisch ermittelt.
 | Lieferung wiederholen | Kommentar `/wiederholung` oder `/wiederholung@test` in einem Issue mit `lieferung:gestartet` oder `lieferung:abgeschlossen` | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py delivery resolve` |
 | Lieferung bauen und übertragen | Vorbereitete SHA oder vorhandener Liefer-Tag | `lieferung-ausfuehren.yml` | `shared-lieferung-ausfuehren.yml` | `mtext.py release build`, `release mainframe`, bei Erstlieferung `delivery tag`, danach `delivery complete` |
 | `mtext_actions` testen | Pull Request, Push auf `main` oder manueller Start in `mtext_actions` | keiner | `ci.yml` | `python -m unittest discover` |
-
-### Trigger-Workflows in den Mandanten-Repositories
-
-Die Trigger-Workflows reagieren auf Änderungen und starten die
-Verarbeitung in `mtext_actions`:
-
-| Datei | Auslöser | Aufgabe |
-|---|---|---|
-| `check-resources.yml` | Manueller Start auf einem ausgewählten Branch | Mandantenkonfiguration und Ressourcen des Branchstands prüfen, Syntaxbefunde als Warnungen anzeigen |
-| `lieferung-vorbereiten.yml` | Manueller Start auf dem ausgewählten Branch | Ressourcen warnend prüfen, danach SHA und Lieferumfang im Freigabe-Issue festhalten |
-| `lieferung-ausfuehren.yml` | Kommentar `/freigabe` oder `/wiederholung` im Freigabe-Issue, jeweils auch mit `@test` | Bei `lieferung:freigabe` Vorbereitung und Berechtigung prüfen. Bei `lieferung:gestartet` oder `lieferung:abgeschlossen` eine erneute `/freigabe` melden oder den Wiederanlauf starten |
-| `sync-resources.yml` | Push auf einen Feature-, `main`- oder Release-Branch sowie manueller Start | Ressourcen warnend prüfen, danach Projekte nach M/Text-Entwicklung oder -Funktionstest übertragen |
 
 ### Shared Workflows
 
@@ -675,13 +657,6 @@ Verarbeitung in `mtext_actions`:
 | `shared-lieferung-ausfuehren.yml` | Aufruf durch `lieferung-ausfuehren.yml` | Freigabe und Lieferstand prüfen, Archive und JCL für FULL oder DELTA erzeugen, an den Mainframe übertragen, den angenommenen Stand taggen und das Ergebnis im Freigabe-Issue festhalten |
 | `ci.yml` | Pull Request oder Push auf `main` oder manueller Start | Tests ausführen |
 
-Die eigenständige Ressourcenprüfung prüft den ausgewählten Branchstand. Als
-erster Job einer Lieferung oder Synchronisierung übernimmt sie deren FULL- oder
-DELTA-Umfang. Bei einer DELTA-Lieferung ist der `.100`-Tag der Releaselinie der
-Vergleichsstand. Bei einer DELTA-Synchronisierung gilt der für den Paketbau
-ermittelte Vergleichsstand. Syntaxbefunde bleiben Warnungen und verhindern den
-Folgejob nicht.
-
 Die Shared Workflows werden direkt in einen Mandantenlauf eingebunden. Die
 Python-Implementierung wird als Action aus `mtext_actions` geladen. Die
 Repositoryfreigabe in `FinanzInformatik` erlaubt GitHub das Laden dieser
@@ -690,8 +665,8 @@ gemeinsamen Komponenten ohne eigenes Zugriffstoken.
 GitHub stellt jedem Job automatisch einen zeitlich begrenzten Zugangsschlüssel
 namens `GITHUB_TOKEN` bereit. Damit kann der Job auf das Mandanten-Repository
 zugreifen, etwa um Freigabe-Issues zu lesen und anzulegen oder Liefer-Tags zu
-erstellen. Die erlaubten Aktionen werden über
-`permissions` in den Workflow-Dateien festgelegt.
+erstellen. Die erlaubten Aktionen werden über `permissions` in den
+Workflow-Dateien festgelegt.
 
 Auch der aufgerufene Shared Workflow arbeitet mit diesem Zugang zum
 Mandanten-Repository. Er gehört zum selben Lauf und verwendet die vom
