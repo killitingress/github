@@ -6,60 +6,76 @@ haben.
 
 ## Grundprinzipien
 
-In SVN überträgt ein Commit die Änderungen an das zentrale Repository und
-erzeugt dort eine neue Revision. Git hält dagegen einen Entwicklungsstand samt
-Historie fest, der am ehesten einer SVN-Revision entspricht und durch seine
-40-stellige Commit-SHA eindeutig gekennzeichnet ist. Anders als die
-aufsteigenden SVN-Revisionsnummern entstehen Git-Commits normalerweise zuerst
-lokal und gelangen durch einen Push nach GitHub. Ein Branch ist dabei ein
-Zeiger auf einen Commit. Beim Push werden die fehlenden Commits übertragen und
-der Branch in GitHub auf den aktuellen Commit *verschoben*.
+In SVN ist ein Commit eine Aktion, durch die Änderungen an das zentrale
+Repository übertragen werden. Dabei entsteht eine neue Revision als
+aufsteigende Nummer. In Git hingegen werden Commits in einer lokalen Kopie
+eines Repositories getätigt und per Push an ein zentrales Repository
+übertragen. Zu jedem Commit gehört eine 40-stellige Commit-SHA, die den
+zugehörigen Entwicklungsstand samt Historie zu einem bestimmten Zeitpunkt
+eindeutig identifiziert und damit am ehesten einer SVN-Revision entspricht.
+Technisch ist ein Branch in Git ein Zeiger auf einen Commit. Beim Push eines
+Branches nach GitHub werden sämtliche fehlenden Commits dorthin übertragen und
+der Branch in GitHub auf den dann aktuellsten Commit *verschoben*.
 
-Für jeden Entwicklungsauftrag wie eine Änderung, Erweiterung oder Korrektur
-entsteht ein eigener temporärer Feature-Branch. Sobald das Feature entwickelt
-und getestet ist, kann es über einen Pull Request nach `main` oder
-`release/nnn` gelangen. Nach Prüfung und Freigabe im 4-Augenfall übernimmt ein
-Squash Merge die Änderungen als neuen Commit in den Zielbranch.
+Jeder Entwicklungsauftrag (Änderung, Erweiterung, Korrektur, ...) wird als
+Feature in einem eigenen temporären Feature-Branch umgesetzt. Wenn ein Feature
+fertig entwickelt und getestet wurde, kann ein PR (Pull Request) angelegt
+werden, um es in einen Zielbranch wie z.B. `main` zu übernehmen. Der Pull
+Request muss dazu in GitHub nach dem 4-Augenprinzip geprüft und freigegeben
+werden, da Release-Branches und main generell geschützte Branches sind. Wenn
+das passiert ist, werden die Änderungen des Feature-Branches per Squash Merge
+in den Zielbranch übernommen. Dabei entsteht ein neuer Stand und somit auch ein
+neuer Commit.
 
-Mit dem Push eines Feature-Branches werden seine M/Text-Ressourcen automatisch
-mit der M/Text-Entwicklungsumgebung synchronisiert und können dort getestet
-werden. Nach einem Merge in `main` oder `release/nnn` folgt die
-M/Text-Funktionstestumgebung, in der die LBS das Feature testet und fachlich
-freigibt.
+Wird ein Feature-Branch nach GitHub gepusht, werden seine M/Text-Projekte
+automatisch mit der M/Text-Entwicklungsumgebung synchronisiert, damit das
+Feature vom Entwickler dort vorab getestet werden kann. Ein Merge nach `main`
+oder `release/nnn` synchronisiert in der Folge automatisch die entsprechende
+M/Text-Funktionstestumgebung. Dort soll das Feature dann von der LBS getestet
+und fachlich freigegeben werden. Danach kann der Feature-Branch wieder gelöscht
+werden.
 
-Eine Mainframe-Lieferung wird aus einem fachlich freigegebenen Stand auf
-`main`, `release/nnn` oder `bereitstellung/nnn.nnn` vorbereitet. Die
-Vorbereitung hält den gewählten Commit, den daraus abgeleiteten Liefer-Tag und
-den Lieferumfang in einem Freigabe-Issue fest. Eine Person mit der
-Repository-Berechtigung `maintain` oder `admin` startet die Lieferung dort mit
-`/freigabe`. Nach der Mainframe-Übergabe erzeugt der Workflow den Liefer-Tag
-und schließt das Issue mit dem Lieferprotokoll.
+Eine Mainframe-Lieferung kann entweder auf `main` oder `release/nnn`
+durchgeführt werden und verwendet dann dessen vollständigen Stand, oder auf
+einer in `bereitstellung/nnn.nnn` zusammengestellten Teillieferung. Ein
+Vorbereitungs-Workflow hält Branch, Commit-SHA und Lieferumfang fest und
+zeigt sie in einem Freigabe-Issue. Der Freigabekommentar startet anschließend
+Paketbau und Mainframe-Übergabe. Nach erfolgreicher Übergabe entsteht der
+Liefer-Tag.
+
+Die **M/Workbench** ist dabei das zentrale Arbeitsmittel für die Bearbeitung
+der M/Text-Ressourcen und die Arbeit mit Git über das Eclipse-Plugin `EGit`.
+Dieses Plugin erlaubt dem Anwender lokale Branches und Commits zu verwalten und
+mit GitHub bzw. M/Text zu synchronisieren.
 
 ## Grundablauf einer Änderung
 
 ```text
-Feature-Branch erstellen und Änderung committen
+Ressourcen in M/Workbench auf lokalem Feature-Branch bearbeiten (feature/nnn/<Bezeichnung>)
     │ Push
     ▼
-Änderung in M/Text-Entwicklung testen
-    │ Pull Request und Review
+Synchronisierung mit M/Text-Entwicklung
+    │ Entwicklung testen
     ▼
-Squash Merge nach main oder release/nnn
-    │ automatische Synchronisierung
+Pull Request nach main (oder release/nnn)
+    │ Review und Merge
     ▼
-Änderung in M/Text-Funktionstest abnehmen
+Synchronisierung mit M/Text-Funktionstest
+    │ fachlich freigeben lassen
+    ▼
+Branchstand ist für eine Lieferung bereit
 ```
 
 ## Grundablauf einer Mainframe-Lieferung
 
 ```text
-Lieferzweig auswählen
-    │ Lieferung vorbereiten
+Lieferung vorbereiten
+    │ Branch auswählen (bereitstellung/nnn.nnn, release/nnn oder main)
     ▼
-Freigabe-Issue mit Lieferstand und Lieferumfang prüfen
+Freigabe-Issue prüfen
     │ /freigabe
     ▼
-Liefer-Tag, Paketbau und Mainframe-Übergabe
+Paketbau, Mainframe-Übergabe und Liefer-Tag
 ```
 
 ## Verwendete Namen
