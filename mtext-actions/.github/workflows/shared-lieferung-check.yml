@@ -1,4 +1,4 @@
-name: Shared Workflow – Lieferung vorprüfen
+name: Lieferung vorbereiten
 
 # Dieser Workflow bereitet den ausgewählten Branchstand für eine spätere
 # Lieferung vor. Er lädt die festzuhaltende SHA mit ihrer Historie und prüft den
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   check:
-    name: Lieferung vorprüfen
+    name: Freigabe-Issue erstellen
     runs-on: [self-hosted, linux]
     timeout-minutes: 10
     steps:

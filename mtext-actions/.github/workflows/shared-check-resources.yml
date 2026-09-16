@@ -1,4 +1,4 @@
-name: Shared Workflow – Tonic-Ressourcen prüfen
+name: Ressourcen prüfen
 
 # Shared Workflow zur Prüfung der Mandantenkonfiguration und der Ressourcen.
 # Der Aufruf bestimmt einen Vollstand oder den DELTA-Umfang der folgenden
@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   check:
-    name: Mandantenkonfiguration und Ressourcen prüfen
+    name: Ressourcen prüfen
     runs-on: [self-hosted, linux]
     timeout-minutes: 15
     steps:

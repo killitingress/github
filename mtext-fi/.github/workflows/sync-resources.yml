@@ -1,4 +1,4 @@
-name: M/Text-Ressourcen synchronisieren
+name: Ressourcen synchronisieren
 
 # Dieser Workflow startet die Ressourcensynchronisierung für Feature-, main- und
 # Release-Branches. Zuerst werden Mandantenkonfiguration und Ressourcen im
@@ -24,13 +24,13 @@ permissions:
 jobs:
   # Verwendet denselben FULL- oder DELTA-Umfang wie die Synchronisierung.
   ressourcen-pruefen:
-    name: Mandantenkonfiguration und Ressourcen prüfen
+    name: Prüfung
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
     with:
       umfang: synchronisierung
 
   # Der Shared Workflow führt die Synchronisierung aus
   sync:
-    name: Ressourcen mit M/Text synchronisieren
+    name: Synchronisierung
     needs: ressourcen-pruefen
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-sync-resources.yml@main

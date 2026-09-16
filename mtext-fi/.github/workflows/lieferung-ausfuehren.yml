@@ -19,7 +19,7 @@ concurrency:
 jobs:
   # Produktive Freigaben und Wiederholungen verwenden den Stand von main.
   lieferung-ausfuehren:
-    name: Lieferung ausführen
+    name: Lieferung
     if: >-
       github.event.issue.pull_request == null &&
       (
@@ -41,7 +41,7 @@ jobs:
 
   # Testkommandos verwenden denselben Ablauf aus dem Testbranch.
   lieferung-ausfuehren-test:
-    name: Lieferung mittels Testbranch
+    name: Testlieferung
     if: >-
       github.event.issue.pull_request == null &&
       (
@@ -63,7 +63,7 @@ jobs:
 
   # Eine doppelte Freigabe wird abgelehnt und erhält einen Bot-Kommentar
   freigabe-hinweis:
-    name: Verwendete Freigabe melden
+    name: Freigabe melden
     if: >-
       github.event.issue.pull_request == null &&
       (contains(github.event.issue.labels.*.name, 'lieferung:gestartet') ||

@@ -1,4 +1,4 @@
-name: Unit-Tests
+name: Tests
 
 # Dieser Workflow führt die Unit-Tests aus. Ein erfolgreicher Lauf bedeutet,
 # dass die Python-Abläufe ausführbar und konsistent sind.
@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   test:
-    name: Unit-Tests durchführen
+    name: Tests
     runs-on: [self-hosted, linux]
     timeout-minutes: 5
     steps:

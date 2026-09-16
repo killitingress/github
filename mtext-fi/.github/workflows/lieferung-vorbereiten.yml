@@ -25,13 +25,13 @@ permissions:
 jobs:
   # Prüft bei FULL den Branchstand und bei DELTA die geänderten Ressourcen.
   ressourcen-pruefen:
-    name: Mandantenkonfiguration und Ressourcen prüfen
+    name: Prüfung
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
     with:
       umfang: lieferung
 
   # Startet den Shared Workflow für den ausgewählten Branchstand
   vorpruefen:
-    name: Lieferung vorprüfen
+    name: Vorbereitung
     needs: ressourcen-pruefen
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-check.yml@main

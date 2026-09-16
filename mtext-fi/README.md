@@ -41,7 +41,7 @@ bearbeitet:
 3. Die M/Text-Ressourcen bearbeiten, committen und den Feature-Branch nach
    GitHub pushen.
 4. Unter **Actions** die Ressourcenprüfung und Synchronisierung im Lauf
-   **M/Text-Ressourcen synchronisieren** prüfen und die Änderung anschließend
+   **Ressourcen synchronisieren** prüfen und die Änderung anschließend
    in M/Text-Entwicklung testen.
 5. Einen Pull Request auf `main` oder `release/nnn` erstellen. Ziel- und
    Feature-Branch gehören dabei zur selben Releaselinie.

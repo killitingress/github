@@ -1,4 +1,4 @@
-name: Shared Workflow – Lieferung ausführen
+name: Lieferung ausführen
 
 # Dieser Workflow prüft die Freigabe, übernimmt den Lieferstand aus dem Issue und
 # führt die Lieferung im Mandanten-Repository aus. Freigabe und Wiederholung
@@ -46,7 +46,7 @@ jobs:
 
   # Erstellt die Projektarchive mit ihrer JCL.
   build:
-    name: FULL- oder DELTA-Artefakt erstellen
+    name: Lieferartefakt erstellen
     needs: check
     permissions:
       contents: read
@@ -91,7 +91,7 @@ jobs:
 
   # Prüft die Lieferdateien und übergibt sie außerhalb eines Dry Runs an den Mainframe.
   publish:
-    name: Mainframe-Übergabe
+    name: An Mainframe übergeben
     needs: build
     permissions:
       contents: read
@@ -127,7 +127,7 @@ jobs:
 
   # Kennzeichnet den verarbeiteten Stand und schließt das Freigabe-Issue ab.
   report:
-    name: Lieferung abschließen
+    name: Abschließen
     needs: [check, publish]
     permissions:
       contents: write
@@ -176,7 +176,7 @@ jobs:
 
   # Das Freigabe-Issue verweist auch bei einem fehlgeschlagenen Folgejob auf den Lauf.
   rueckmeldung:
-    name: Nicht abgeschlossene Lieferung melden
+    name: Abbruch melden
     needs: [check, publish, report]
     if: ${{ always() && needs.report.result != 'success' }}
     permissions:

@@ -1,4 +1,4 @@
-name: Mandantenkonfiguration und Ressourcen prüfen
+name: Ressourcen prüfen
 
 # Dieser Workflow prüft bei einem manuellen Start den ausgewählten Branchstand.
 # Die Verarbeitung erfolgt im Shared Workflow aus der freigegebenen Version von
@@ -18,5 +18,5 @@ concurrency:
 jobs:
   # Startet den Shared Workflow für den gewählten Mandantenstand
   check:
-    name: Mandantenkonfiguration und Ressourcen prüfen
+    name: Prüfung
     uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
