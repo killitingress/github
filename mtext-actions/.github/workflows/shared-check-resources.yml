@@ -1,4 +1,4 @@
-name: Ressourcen prüfen
+name: Ressourcenprüfung
 
 # Shared Workflow zur Prüfung der Mandantenkonfiguration und der Ressourcen.
 # Der Aufruf bestimmt einen Vollstand oder den DELTA-Umfang der folgenden

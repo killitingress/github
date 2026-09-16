@@ -1,4 +1,4 @@
-name: Ressourcen synchronisieren
+name: Synchronisierung
 
 # Dieser Workflow synchronisiert den ausgewählten Branchstand eines
 # Mandanten-Repositories mit M/Text.

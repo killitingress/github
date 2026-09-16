@@ -1,4 +1,4 @@
-name: Lieferung ausführen
+name: Lieferablauf
 
 # Dieser Workflow prüft die Freigabe, übernimmt den Lieferstand aus dem Issue und
 # führt die Lieferung im Mandanten-Repository aus. Freigabe und Wiederholung

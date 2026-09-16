@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   test:
-    name: Tests
+    name: Ausführen
     runs-on: [self-hosted, linux]
     timeout-minutes: 5
     steps:

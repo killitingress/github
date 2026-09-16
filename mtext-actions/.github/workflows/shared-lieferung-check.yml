@@ -1,4 +1,4 @@
-name: Lieferung vorbereiten
+name: Lieferprüfung
 
 # Dieser Workflow bereitet den ausgewählten Branchstand für eine spätere
 # Lieferung vor. Er lädt die festzuhaltende SHA mit ihrer Historie und prüft den
