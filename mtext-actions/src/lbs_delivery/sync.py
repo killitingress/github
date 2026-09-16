@@ -174,8 +174,16 @@ def _workflow_response(
         ausgangs_commit = plan.scope.von[1]
         summary.extend((
             f"- Ausgangsstand: [`{ausgangs_commit[:12]}`]({repository_url}/tree/{ausgangs_commit})",
-            f"- Änderungen: [GitHub-Vergleich]({repository_url}/compare/{ausgangs_commit}..{ziel_commit})",
+            f"- Repository-Änderungen: [GitHub-Vergleich]({repository_url}/compare/{ausgangs_commit}..{ziel_commit})",
         ))
+
+    # Projektumfang knapp benennen, die einzelnen Dateien bleiben im GitHub-Vergleich
+    if plan.scope.von is None:
+        summary.append("- Berücksichtigte Projekte: Alle konfigurierten Projekte.")
+    else:
+        projects = ergebnisse[0]["projekte"]
+        project_names = ", ".join(f"`{e}`" for e in projects) or "Keine."
+        summary.append(f"- Berücksichtigte Projekte: {project_names}")
 
     # vorhandene Ausgaben im Laufartefakt verorten
     if dry_run:

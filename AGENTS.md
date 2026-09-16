@@ -58,6 +58,7 @@
   Sicherheitsprüfungen und mögliche Teilzustände werden an ihrer Wirkungsstelle erklärt.
 - Längere Tests werden nach Vorbereitung, Ausführung und geprüftem Zusammenhang narrativ
   gegliedert. Kommentare wiederholen weder Mock, Assert noch unmittelbar lesbaren Code.
+- Tests verwenden keine Assertions auf fest codierte Zeichenketten.
 - Kurze Stichpunkte, Kleinschreibung und fehlende Satzzeichen sind gegenüber
   grammatikalisch korrekten Voll-Sätzen zu bevorzugen. Kommentare bleiben
   konkret, beschreiben den aktuellen Code und wiederholen weder Namen, Typen

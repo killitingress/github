@@ -17,25 +17,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Freigabe und Wiederholung gehören zum jeweiligen Freigabe-Issue.
+  # Produktive Freigaben und Wiederholungen verwenden den Stand von main.
   lieferung-ausfuehren:
     name: Lieferung ausführen
     if: >-
       github.event.issue.pull_request == null &&
       (
         (contains(github.event.issue.labels.*.name, 'lieferung:freigabe') &&
-         (github.event.comment.body == '/freigabe' ||
-          github.event.comment.body == '/freigabe@test')) ||
+         github.event.comment.body == '/freigabe') ||
         ((contains(github.event.issue.labels.*.name, 'lieferung:gestartet') ||
           contains(github.event.issue.labels.*.name, 'lieferung:abgeschlossen')) &&
-         (github.event.comment.body == '/wiederholung' ||
-          github.event.comment.body == '/wiederholung@test'))
+         github.event.comment.body == '/wiederholung')
       )
     permissions:
       contents: write
       actions: read
       issues: write
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@${{ contains(github.event.comment.body, '@test') && 'test' || 'main' }}
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@main
+    with:
+      freigabe_issue: ${{ github.event.issue.number }}
+    secrets:
+      ize9_ftps_password_mtext: ${{ secrets.IZE9_FTPS_PASSWORD_MTEXT }}
+
+  # Testkommandos verwenden denselben Ablauf aus dem Testbranch.
+  lieferung-ausfuehren-test:
+    name: Lieferung mittels Testbranch
+    if: >-
+      github.event.issue.pull_request == null &&
+      (
+        (contains(github.event.issue.labels.*.name, 'lieferung:freigabe') &&
+         github.event.comment.body == '/freigabe@test') ||
+        ((contains(github.event.issue.labels.*.name, 'lieferung:gestartet') ||
+          contains(github.event.issue.labels.*.name, 'lieferung:abgeschlossen')) &&
+         github.event.comment.body == '/wiederholung@test')
+      )
+    permissions:
+      contents: write
+      actions: read
+      issues: write
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@test
     with:
       freigabe_issue: ${{ github.event.issue.number }}
     secrets:

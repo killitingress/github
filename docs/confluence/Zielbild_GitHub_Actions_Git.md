@@ -191,8 +191,8 @@ M/Text-Funktionstestumgebung, jeweils in Stage 0 (Institut 297).
 Beispiel:
 
 ```text
-en01.ltoms.intern   M/Text-Entwicklung
-fu01.ltoms.intern   M/Text-Funktionstest
+en01.ltom[a|s].intern   M/Text-Entwicklung
+fu01.ltom[a|s].intern   M/Text-Funktionstest
 ```
 
 Die Zielpräfixe und Releaselinien werden in
@@ -277,7 +277,7 @@ Branch, `commit` die zugehörige Commit-SHA und `sha256` die Prüfsumme des
 Archivs.
 
 Bei FULL baut der Workflow das F-Archiv aus dem vollständigen
-Projektverzeichnis. Dafür erstellt er keine Elementliste. Bei DELTA ermittelt
+Projektverzeichnis. Bei DELTA ermittelt
 er die geänderten und gelöschten Projektdateien aus dem Git-Vergleich und baut
 daraus das D-Archiv samt Löschliste. Die Elementliste dient dem Paketbau. Der
 POST-Body enthält sie nicht. Die Löschliste enthält die gelöschten Pfade mit
