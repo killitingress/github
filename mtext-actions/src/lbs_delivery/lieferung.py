@@ -11,7 +11,7 @@ from .project_packages import delivery_report, previous_release_scope, release_s
 
 
 # Name und Repository-Beschreibung der Freigabe-Issue-Labels
-_LABEL_FREIGABE = "lieferung:freigabe"
+_LABEL_VORBEREITET = "lieferung:vorbereitet"
 _LABEL_GESTARTET = "lieferung:gestartet"
 _LABEL_ABGESCHLOSSEN = "lieferung:abgeschlossen"
 _LABEL_DRY_RUN = "dry_run"
@@ -20,7 +20,7 @@ _LABEL_DRY_RUN = "dry_run"
 _COMMIT_PREFIX = "- Commit: `"
 
 _LIEFERUNG_LABELS: dict[str, str] = {
-    _LABEL_FREIGABE: "Vorbereitete Mainframe-Lieferung wartet auf Freigabe",
+    _LABEL_VORBEREITET: "Vorbereitete Mainframe-Lieferung wartet auf Freigabe",
     _LABEL_GESTARTET: "Freigabe angenommen, Lieferung wurde gestartet",
     _LABEL_ABGESCHLOSSEN: "Lieferlauf wurde abgeschlossen",
     _LABEL_DRY_RUN: "Externe Übergabe wird in diesem Lauf übersprungen",
@@ -56,7 +56,7 @@ def _ermittle_lieferung(issue: int) -> dict[str, object]:
 
     # Issue als gemeinsame Grundlage für Freigabe und Wiederholung lesen
     state, labels, title, body = github.issue(issue)
-    if state == "open" and _LABEL_FREIGABE in labels:
+    if state == "open" and _LABEL_VORBEREITET in labels:
         neu = True
     elif _LABEL_GESTARTET in labels or _LABEL_ABGESCHLOSSEN in labels:
         neu = False
@@ -85,7 +85,7 @@ def _ermittle_lieferung(issue: int) -> dict[str, object]:
         source_sha = commits[0]
 
         # Freigabe verbrauchen und den gestarteten Lauf dokumentieren
-        github.replace_issue_label(issue, _LABEL_FREIGABE, _LABEL_GESTARTET, _LIEFERUNG_LABELS[_LABEL_GESTARTET])
+        github.replace_issue_label(issue, _LABEL_VORBEREITET, _LABEL_GESTARTET, _LIEFERUNG_LABELS[_LABEL_GESTARTET])
         github.comment_issue(issue, f"Lieferung `{tag}` wurde gestartet: [Actions-Lauf]({_actions_lauf_url()})")
     else:
         # Wiederholung erhält den Stand aus dem annotierten Tag dieses Issues
@@ -135,7 +135,7 @@ def _erstelle_freigabe_issue(tag: git.LieferTag, summary: str, dry_run: bool) ->
     )
 
     # Dry Runs bereits am Freigabe-Issue sichtbar kennzeichnen
-    labels = {_LABEL_FREIGABE: _LIEFERUNG_LABELS[_LABEL_FREIGABE]}
+    labels = {_LABEL_VORBEREITET: _LIEFERUNG_LABELS[_LABEL_VORBEREITET]}
     if dry_run:
         labels[_LABEL_DRY_RUN] = _LIEFERUNG_LABELS[_LABEL_DRY_RUN]
 

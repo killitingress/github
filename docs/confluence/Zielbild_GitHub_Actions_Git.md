@@ -450,13 +450,13 @@ ein neues Freigabe-Issue.
 
 ### Lieferung freigeben und ausführen
 
-Das mit `lieferung:freigabe` gekennzeichnete Freigabe-Issue zeigt den Stand,
+Das mit `lieferung:vorbereitet` gekennzeichnete Freigabe-Issue zeigt den Stand,
 der geliefert werden soll. Eine Person mit Repository-Berechtigung `maintain`
 (oder `admin`) startet die Lieferung mit dem Kommentar `/freigabe`. Die
 vorbereitende Person darf die Lieferung selbst freigeben. Der Workflow liest
 den Liefer-Tag aus dem Titel und die Commit-SHA aus dem Text. Die Commit-Zeile
 muss eindeutig sein. Bei der ersten gültigen Freigabe wechselt das Label von
-`lieferung:freigabe` zu
+`lieferung:vorbereitet` zu
 `lieferung:gestartet`, bevor die Lieferdateien erstellt werden. Nach
 erfolgreichem Abschluss ersetzt `lieferung:abgeschlossen` das Label
 `lieferung:gestartet`, bevor das Issue geschlossen wird. Danach kann mittels

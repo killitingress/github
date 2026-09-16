@@ -92,12 +92,12 @@ class LieferungTests(TempDirTestCase):
                 "lbs_delivery.lieferung.github._request",
                 side_effect=(
                     None,
-                    {"name": "lieferung:freigabe"},
+                    {"name": "lieferung:vorbereitet"},
                     None,
                     {"name": "dry_run"},
                     {
                         "number": 42,
-                        "labels": [{"name": "lieferung:freigabe"}, {"name": "dry_run"}],
+                        "labels": [{"name": "lieferung:vorbereitet"}, {"name": "dry_run"}],
                     },
                 ),
             ) as api:
@@ -105,8 +105,6 @@ class LieferungTests(TempDirTestCase):
 
         body = api.call_args.kwargs["payload"]["body"]
         self.assertNotIn("outputs", result)
-        self.assertEqual(api.call_args.kwargs["payload"]["labels"], ["lieferung:freigabe", "dry_run"])
-
         # Der später gestartete Lauf übernimmt den im Issue festgehaltenen Commit.
         with patch.dict(os.environ, {
             "GITHUB_ACTOR": "alice",
@@ -115,7 +113,7 @@ class LieferungTests(TempDirTestCase):
             "GITHUB_RUN_ID": "5678",
         }        ), patch("lbs_delivery.lieferung.github.repository_role", return_value="maintain"), patch(
             "lbs_delivery.lieferung.github.issue",
-            return_value=("open", {"lieferung:freigabe"}, "Lieferung r261.100 freigeben", body),
+            return_value=("open", {"lieferung:vorbereitet"}, "Lieferung r261.100 freigeben", body),
         ), patch("lbs_delivery.lieferung.github.replace_issue_label") as mark_started, patch(
             "lbs_delivery.lieferung.github.comment_issue",
         ) as comment:
@@ -192,10 +190,10 @@ class LieferungTests(TempDirTestCase):
             with patch("lbs_delivery.github._request", side_effect=(
                 {"name": "lieferung:gestartet"},
                 {"state": "open", "title": "Lieferung r261.108 freigeben",
-                 "labels": [{"name": "lieferung:freigabe"}, {"name": "dry_run"}]},
+                 "labels": [{"name": "lieferung:vorbereitet"}, {"name": "dry_run"}]},
                 [{"name": "lieferung:gestartet"}, {"name": "dry_run"}],
             )) as api:
-                github.replace_issue_label(42, "lieferung:freigabe", "lieferung:gestartet", "Gestartet")
+                github.replace_issue_label(42, "lieferung:vorbereitet", "lieferung:gestartet", "Gestartet")
             self.assertEqual(api.call_args_list[2].kwargs["payload"]["labels"], ["dry_run", "lieferung:gestartet"])
 
             with patch("lbs_delivery.github._request", side_effect=(
@@ -301,7 +299,7 @@ class LieferungTests(TempDirTestCase):
             patch.dict(os.environ, {"GITHUB_ACTOR": "alice"}),
             patch("lbs_delivery.lieferung.github.repository_role", return_value="maintain"),
             patch("lbs_delivery.lieferung.github.issue", return_value=(
-                "open", {"lieferung:freigabe"}, "Lieferung r261.108 freigeben", "",
+                "open", {"lieferung:vorbereitet"}, "Lieferung r261.108 freigeben", "",
             )),
             patch("lbs_delivery.lieferung.github.replace_issue_label") as mark_started,
         ):

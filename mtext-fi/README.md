@@ -67,7 +67,7 @@ diesen `.100`-Tag. `main` und `release/nnn` ergeben `rnnn.100`. Ein Branch
    `bereitstellung/nnn.nnn` auswählen.
 3. Die Warnungen der Ressourcenprüfung prüfen und das in der Zusammenfassung
    verlinkte Freigabe-Issue öffnen.
-4. Im mit `lieferung:freigabe` gekennzeichneten Issue Branch, Commit,
+4. Im mit `lieferung:vorbereitet` gekennzeichneten Issue Branch, Commit,
    Lieferart, Bezugsstand und Lieferumfang prüfen.
 5. Mit Repository-Berechtigung `maintain` oder `admin` den Kommentar
    `/freigabe` eintragen. Die vorbereitende Person darf selbst freigeben.
