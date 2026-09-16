@@ -1,0 +1,31 @@
+name: Testlieferung
+run-name: Testlieferung für Issue #${{ inputs.freigabe_issue }}
+
+# Ein manueller Start führt die vorbereitete Lieferung mit dem Teststand von
+# mtext_actions aus. Ein erneuter Start mit demselben abgeschlossenen Issue
+# verwendet den vorhandenen Liefer-Tag als Wiederholung.
+'on':
+  workflow_dispatch:
+    inputs:
+      freigabe_issue:
+        description: Nummer des Freigabe-Issues
+        required: true
+        type: number
+
+# Test- und Produktivlieferungen desselben Mandanten nacheinander ausführen.
+concurrency:
+  group: lieferung-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  testlieferung:
+    name: Testlauf
+    permissions:
+      contents: write
+      actions: read
+      issues: write
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@test
+    with:
+      freigabe_issue: ${{ inputs.freigabe_issue }}
+    secrets:
+      ize9_ftps_password_mtext: ${{ secrets.IZE9_FTPS_PASSWORD_MTEXT }}

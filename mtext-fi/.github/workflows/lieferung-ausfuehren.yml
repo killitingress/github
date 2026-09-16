@@ -3,7 +3,6 @@ name: Lieferung ausführen
 # Eine vorbereitete Lieferung beginnt mit `/freigabe` im Freigabe-Issue.
 # `/wiederholung` führt eine bereits getaggte Lieferung aus demselben Issue
 # erneut aus. Der Tag wird aus dem Issue gelesen und mit seiner Annotation geprüft.
-# Mit `@test` im Kommentar wird der Shared Workflow vom Testbranch geladen.
 # Für eine Korrektur ist der Liefer-Tag zu löschen, der Bereitstellungs-Branch zu
 # korrigieren und dann eine erneute Vorbereitung durchzuführen.
 'on':
@@ -17,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Produktive Freigaben und Wiederholungen verwenden den Stand von main.
+  # Freigaben und Wiederholungen verwenden den freigegebenen Stand von main.
   lieferung-ausfuehren:
     name: Lieferung
     if: >-
@@ -39,28 +38,6 @@ jobs:
     secrets:
       ize9_ftps_password_mtext: ${{ secrets.IZE9_FTPS_PASSWORD_MTEXT }}
 
-  # Testkommandos verwenden denselben Ablauf aus dem Testbranch.
-  lieferung-ausfuehren-test:
-    name: Testlieferung
-    if: >-
-      github.event.issue.pull_request == null &&
-      (
-        (contains(github.event.issue.labels.*.name, 'lieferung:vorbereitet') &&
-         github.event.comment.body == '/freigabe@test') ||
-        ((contains(github.event.issue.labels.*.name, 'lieferung:gestartet') ||
-          contains(github.event.issue.labels.*.name, 'lieferung:abgeschlossen')) &&
-         github.event.comment.body == '/wiederholung@test')
-      )
-    permissions:
-      contents: write
-      actions: read
-      issues: write
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-ausfuehren.yml@test
-    with:
-      freigabe_issue: ${{ github.event.issue.number }}
-    secrets:
-      ize9_ftps_password_mtext: ${{ secrets.IZE9_FTPS_PASSWORD_MTEXT }}
-
   # Eine doppelte Freigabe wird abgelehnt und erhält einen Bot-Kommentar
   freigabe-hinweis:
     name: Freigabe melden
@@ -68,8 +45,7 @@ jobs:
       github.event.issue.pull_request == null &&
       (contains(github.event.issue.labels.*.name, 'lieferung:gestartet') ||
       contains(github.event.issue.labels.*.name, 'lieferung:abgeschlossen')) &&
-      (github.event.comment.body == '/freigabe' ||
-       github.event.comment.body == '/freigabe@test')
+      github.event.comment.body == '/freigabe'
     permissions:
       issues: write
     runs-on: [self-hosted, linux]

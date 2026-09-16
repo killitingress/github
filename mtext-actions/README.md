@@ -21,6 +21,10 @@ Die wiederverwendbaren Workflows unter `.github/workflows` sind:
 | `shared-lieferung-ausfuehren.yml` | Lieferstand ermitteln, Lieferdateien bauen, an den Mainframe übertragen und das Freigabe-Issue abschließen |
 | `ci.yml` | Python-Tests bei Pull Requests, Änderungen an `main` oder manuell ausführen |
 
+Der Branch `main` lädt die Composite Action im Lieferablauf mit `@main`. Im
+Branch `test` zeigen diese statischen Referenzen auf `@test`, damit Workflow
+und Python-Implementierung gemeinsam geprüft werden.
+
 ## Python-Anwendung
 
 `src/mtext.py` stellt die von den Workflows verwendeten Kommandos bereit:

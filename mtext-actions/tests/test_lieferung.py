@@ -113,7 +113,7 @@ class LieferungTests(TempDirTestCase):
             "GITHUB_RUN_ID": "5678",
         }        ), patch("lbs_delivery.lieferung.github.repository_role", return_value="maintain"), patch(
             "lbs_delivery.lieferung.github.issue",
-            return_value=("open", {"lieferung:vorbereitet"}, "Lieferung r261.100 freigeben", body),
+            return_value=("open", {"lieferung:vorbereitet"}, "Lieferung r261.100", body),
         ), patch("lbs_delivery.lieferung.github.replace_issue_label") as mark_started, patch(
             "lbs_delivery.lieferung.github.comment_issue",
         ) as comment:
@@ -158,7 +158,7 @@ class LieferungTests(TempDirTestCase):
             with patch("lbs_delivery.lieferung.github._request", side_effect=(
                 {},
                 {"name": "lieferung:abgeschlossen"},
-                {"state": "open", "title": "Lieferung r261.108 freigeben",
+                {"state": "open", "title": "Lieferung r261.108",
                  "labels": [{"name": "lieferung:gestartet"}]},
                 [{"name": "lieferung:abgeschlossen"}],
                 {},
@@ -173,7 +173,7 @@ class LieferungTests(TempDirTestCase):
             with patch("lbs_delivery.github._request", side_effect=(
                 {},
                 {"name": "lieferung:abgeschlossen"},
-                {"state": "closed", "title": "Lieferung r261.108 freigeben",
+                {"state": "closed", "title": "Lieferung r261.108",
                  "labels": [{"name": "lieferung:abgeschlossen"}, {"name": "dry_run"}]},
                 {},
             )) as api:
@@ -189,7 +189,7 @@ class LieferungTests(TempDirTestCase):
 
             with patch("lbs_delivery.github._request", side_effect=(
                 {"name": "lieferung:gestartet"},
-                {"state": "open", "title": "Lieferung r261.108 freigeben",
+                {"state": "open", "title": "Lieferung r261.108",
                  "labels": [{"name": "lieferung:vorbereitet"}, {"name": "dry_run"}]},
                 [{"name": "lieferung:gestartet"}, {"name": "dry_run"}],
             )) as api:
@@ -244,7 +244,7 @@ class LieferungTests(TempDirTestCase):
             "lbs_delivery.lieferung.github._request",
             side_effect=(
                 {"role_name": "admin"},
-                {"state": "closed", "title": "Lieferung r261.108 freigeben",
+                {"state": "closed", "title": "Lieferung r261.108",
                  "labels": [{"name": "lieferung:abgeschlossen"}]},
                 reference, annotation,
             ),
@@ -266,7 +266,7 @@ class LieferungTests(TempDirTestCase):
             "lbs_delivery.lieferung.github._request",
             side_effect=(
                 {"role_name": "admin"},
-                {"state": "closed", "title": "Lieferung r261.108 freigeben",
+                {"state": "closed", "title": "Lieferung r261.108",
                  "labels": [{"name": "lieferung:gestartet"}]},
                 {"object": {"type": "commit", "sha": self.source_sha}},
             ),
@@ -286,7 +286,7 @@ class LieferungTests(TempDirTestCase):
             self.assertEqual(raised.exception.status, Status.FREIGABE_FAILED)
             tag_record.assert_not_called()
 
-            issue_mock.return_value = ("closed", {"lieferung:gestartet"}, "Lieferung r261.108 freigeben", "")
+            issue_mock.return_value = ("closed", {"lieferung:gestartet"}, "Lieferung r261.108", "")
             tag_record.return_value = (self.source_sha, 41)
             with self.assertRaises(DeliveryError) as raised:
                 run("resolve", issue=42)
@@ -299,7 +299,7 @@ class LieferungTests(TempDirTestCase):
             patch.dict(os.environ, {"GITHUB_ACTOR": "alice"}),
             patch("lbs_delivery.lieferung.github.repository_role", return_value="maintain"),
             patch("lbs_delivery.lieferung.github.issue", return_value=(
-                "open", {"lieferung:vorbereitet"}, "Lieferung r261.108 freigeben", "",
+                "open", {"lieferung:vorbereitet"}, "Lieferung r261.108", "",
             )),
             patch("lbs_delivery.lieferung.github.replace_issue_label") as mark_started,
         ):

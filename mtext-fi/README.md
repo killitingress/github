@@ -78,13 +78,15 @@ Das Freigabe-Issue erhält nach erfolgreicher Lieferung Links zum Lauf und zum
 Liefer-Tag sowie eine Tabelle der übertragenen Archivdateien mit
 SHA-256-Prüfsummen. Danach wird es geschlossen. Der annotierte Liefer-Tag
 enthält die Nummer des Freigabe-Issues. Für einen Wiederanlauf im zugehörigen
-Issue `/wiederholung` kommentieren. Mit `/wiederholung@test` wird der
-Shared Workflow vom Testbranch von `mtext_actions` geladen. Eine neue
-Vorbereitung ist nicht erforderlich. Die kommentierende Person benötigt
-`maintain` oder `admin`.
+Issue `/wiederholung` kommentieren. Eine neue Vorbereitung ist nicht
+erforderlich. Die kommentierende Person benötigt `maintain` oder `admin`.
 Vor dem Paketbau wird der Tag aus dem Issue-Titel gelesen und geprüft, ob
 seine Annotation auf dieses Issue verweist. Das Issue erhält danach einen weiteren
 Abschlusskommentar.
+
+Zum Prüfen des Teststands von `mtext_actions` unter **Actions** den Workflow
+**Testlieferung** starten und die Nummer des Freigabe-Issues eingeben. Ein
+erneuter Start mit demselben abgeschlossenen Issue wiederholt die Testlieferung.
 
 ## Workflows
 
@@ -102,10 +104,12 @@ Vergleichsstand geänderten Ressourcen geprüft.
 | `check-resources.yml` | manueller Start auf einem ausgewählten Branch | `shared-check-resources.yml` |
 | `sync-resources.yml` | Push auf `main`, `release/nnn` oder `feature/nnn/**` sowie manueller Start | zuerst `shared-check-resources.yml`, danach `shared-sync-resources.yml` |
 | `lieferung-vorbereiten.yml` | manueller Start auf einem Lieferzweig | zuerst `shared-check-resources.yml`, danach `shared-lieferung-check.yml` |
-| `lieferung-ausfuehren.yml` | `/freigabe` oder `/wiederholung` im Freigabe-Issue, jeweils auch mit `@test` | `shared-lieferung-ausfuehren.yml` |
+| `lieferung-ausfuehren.yml` | `/freigabe` oder `/wiederholung` im Freigabe-Issue | `shared-lieferung-ausfuehren.yml@main` |
+| `lieferung-testen.yml` | manueller Start mit der Nummer des Freigabe-Issues | `shared-lieferung-ausfuehren.yml@test` |
 
-Die Workflow-Aufrufe verwenden jeweils `@main` aus dem Repository
-`FinanzInformatik/fi_lbs_entw_oms_mtext_actions`.
+Die regulären Workflow-Aufrufe verwenden `@main` aus dem Repository
+`FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Die Testlieferung verwendet
+den dortigen Branch `test`.
 
 Für die Mainframe-Übergabe verwendet der Lieferworkflow dieses für das
 Mandanten-Repository freigegebene organisationsweite Secret:

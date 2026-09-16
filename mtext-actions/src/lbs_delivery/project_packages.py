@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import subprocess
 import tempfile
+import urllib.parse
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -113,13 +115,25 @@ def _project_sections(configuration: Configuration, repository: Path, scope: Sco
 
     # jedes betroffene Projekt mit seinen Ressourcen aufführen
     lines: list[str] = []
+    repository_url = (
+        f"{os.environ['GITHUB_SERVER_URL'].rstrip('/')}/{os.environ['GITHUB_REPOSITORY']}"
+    )
     for project in configuration.projects:
         elements = project_elements(repository, project, scope)
         if not elements:
             continue
 
         lines.extend((f"### `{project}`", ""))
-        lines.extend(f"- `{status}` `{path}`" for status, path in elements)
+
+        # vorhandene Elemente am festgehaltenen Ziel-Commit öffnen
+        for status, path in elements:
+            if status == "D":
+                lines.append(f"- `{status}` `{path}`")
+                continue
+
+            repository_path = urllib.parse.quote(f"{project}/{path}", safe="/")
+            file_url = f"{repository_url}/blob/{scope.bis[1]}/{repository_path}"
+            lines.append(f"- `{status}` [`{path}`]({file_url})")
         lines.append("")
     return lines
 

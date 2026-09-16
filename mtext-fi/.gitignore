@@ -1,6 +1,6 @@
 __pycache__/
 *.py[cod]
+*.testcases
 .DS_Store
 .idea/
 .settings/
-.metadate/

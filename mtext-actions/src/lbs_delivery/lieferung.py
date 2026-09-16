@@ -16,8 +16,8 @@ _LABEL_GESTARTET = "lieferung:gestartet"
 _LABEL_ABGESCHLOSSEN = "lieferung:abgeschlossen"
 _LABEL_DRY_RUN = "dry_run"
 
-# Commit-Zeile, die die Vorbereitung schreibt und die Freigabe wiederliest
-_COMMIT_PREFIX = "- Commit: `"
+# Benanntes Feld mit Lieferart, Branch und verlinkter Commit-SHA im Freigabe-Issue
+_LIEFERART_PREFIX = "- Lieferart: `"
 
 _LIEFERUNG_LABELS: dict[str, str] = {
     _LABEL_VORBEREITET: "Vorbereitete Mainframe-Lieferung wartet auf Freigabe",
@@ -65,24 +65,32 @@ def _ermittle_lieferung(issue: int) -> dict[str, object]:
 
     # den Liefer-Tag aus dem Titel lesen
     prefix = "Lieferung "
-    suffix = " freigeben"
-    if not title.startswith(prefix) or not title.endswith(suffix):
+    if not title.startswith(prefix):
         raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue enthält keinen eindeutigen Liefer-Tag")
     try:
-        tag = git.LieferTag.parse(title[len(prefix):-len(suffix)])
+        tag = git.LieferTag.parse(title[len(prefix):])
     except ValueError as exc:
         raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue enthält keinen gültigen Liefer-Tag") from exc
 
     # neue Freigabe braucht den im Issue festgehaltenen Commit
     if neu:
-        commits = [
-            e[len(_COMMIT_PREFIX):-1]
+        standzeilen = [
+            e
             for e in body.splitlines()
-            if e.startswith(_COMMIT_PREFIX) and e.endswith("`")
+            if e.startswith(_LIEFERART_PREFIX)
         ]
-        if len(commits) != 1 or not commits[0]:
+        if len(standzeilen) != 1:
             raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue enthält keinen eindeutigen Lieferstand")
-        source_sha = commits[0]
+
+        link_start = "`@[`"
+        link_end = "`]("
+        lieferstand = standzeilen[0][len(_LIEFERART_PREFIX):]
+        if link_start not in lieferstand or link_end not in lieferstand:
+            raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue enthält keinen eindeutigen Lieferstand")
+
+        source_sha = lieferstand.split(link_start, 1)[1].split(link_end, 1)[0]
+        if not source_sha:
+            raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue enthält keinen eindeutigen Lieferstand")
 
         # Freigabe verbrauchen und den gestarteten Lauf dokumentieren
         github.replace_issue_label(issue, _LABEL_VORBEREITET, _LABEL_GESTARTET, _LIEFERUNG_LABELS[_LABEL_GESTARTET])
@@ -141,7 +149,7 @@ def _erstelle_freigabe_issue(tag: git.LieferTag, summary: str, dry_run: bool) ->
 
     # Issue enthält den geprüften Lieferstand und nimmt später die Freigabe auf
     return github.create_labeled_issue(
-        title=f"Lieferung {tag} freigeben",
+        title=f"Lieferung {tag}",
         body=body,
         labels=labels,
     )
@@ -166,12 +174,11 @@ def _pruefe_lieferung() -> dict[str, object]:
     paket_scope = release_scope(source, tag, sha)
     vorrelease_scope = previous_release_scope(source, tag, sha)
     lieferart = "FULL" if paket_scope.von is None else "DELTA"
+    commit_url = f"{os.environ['GITHUB_SERVER_URL'].rstrip('/')}/{repository}/commit/{sha}"
     summary = delivery_report(
         configuration, source, paket_scope=paket_scope, vorrelease_scope=vorrelease_scope,
         standzeilen=[
-            f"- Lieferart: `{lieferart}`",
-            f"- Branch: `{branch}`",
-            f"{_COMMIT_PREFIX}{sha}`",
+            f"{_LIEFERART_PREFIX}{lieferart}` (`{branch}`@[`{sha}`]({commit_url}))",
         ],
     )
     issue = _erstelle_freigabe_issue(tag, summary, configuration.dry_run)
