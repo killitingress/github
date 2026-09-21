@@ -181,7 +181,7 @@ def _prepare_lieferung() -> dict[str, object]:
     # Lieferumfang, Branch und Commit im Freigabe-Issue festhalten
     scope = lieferumfang(source, tag, sha)
     previous_scope = previous_release_scope(source, tag, sha)
-    lieferart = "FULL" if scope.base is None else "DELTA"
+    lieferart = "FULL" if scope.von is None else "DELTA"
     commit_url = f"{os.environ['GITHUB_SERVER_URL'].rstrip('/')}/{repository}/commit/{sha}"
     summary = lieferbericht(
         configuration, source, lieferumfang=scope, previous_scope=previous_scope,

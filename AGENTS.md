@@ -113,6 +113,8 @@ def upload_archive(path: Path) -> Response:
   `Mandant`, `Mandantenkürzel` und `Synchronisierung`.
 - `previous_release_scope` ist der bestätigte Name für den Vergleichsumfang zur
   vorherigen Lieferung.
+- `Scope.von` und `Scope.bis` gehören wie die gleichnamigen JSON-Felder zum
+  Adaptervertrag und bleiben unverändert.
 - Für den Vorgang und daraus gebildete Begriffe `Synchronisierung` verwenden, nicht
   `Synchronisation`, etwa `Synchronisierungslauf` und `Synchronisierungsauftrag`.
 - Es heißt `Releaselinie` und `Mandantenkürzel`, nicht `Release-Line`, `release_line` oder

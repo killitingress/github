@@ -157,7 +157,7 @@ def _build_mainframe_files(configuration: config.Configuration, *, output_direct
 
         # leeres D-Archiv verhindert, dass der Folgejob ein früheres DELTA einspielt
         archive_paths = [archive]
-        if scope.base is None:
+        if scope.von is None:
             delta_archive = project_archive_path(configuration, project, output_directory, "D")
             build_delta_archive(repository_root, project, delta_archive, [])
             archive_paths.append(delta_archive)

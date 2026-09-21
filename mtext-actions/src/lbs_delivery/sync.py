@@ -130,7 +130,7 @@ def resolve_plan(source: Path, configuration: config.Configuration) -> Synchroni
         git.require_ancestor(source, baseline, commit)
         scope = delta_scope(source, (branch, baseline), (branch, commit))
     else:
-        scope = Scope(base=None, target=(branch, commit), changes=[])
+        scope = Scope(von=None, bis=(branch, commit), changes=[])
     return Synchronisierungsplan(scope, umgebungen, releaselinie)
 
 
@@ -141,21 +141,21 @@ def _workflow_result(
 
     # festgehaltene Commits bleiben auch bei späteren Branchänderungen verlinkbar
     repository_url = f"{os.environ['GITHUB_SERVER_URL'].rstrip('/')}/{os.environ['GITHUB_REPOSITORY']}"
-    commit = plan.scope.target[1]
+    commit = plan.scope.bis[1]
     summary = [
         "## M/Text-Synchronisierung", "",
-        f"- Umfang: {'FULL' if plan.scope.base is None else 'DELTA'}",
+        f"- Umfang: {'FULL' if plan.scope.von is None else 'DELTA'}",
         f"- Zielcommit: [`{commit[:12]}`]({repository_url}/tree/{commit})",
     ]
-    if plan.scope.base is not None:
-        base = plan.scope.base[1]
+    if plan.scope.von is not None:
+        base = plan.scope.von[1]
         summary.extend((
             f"- Ausgangscommit: [`{base[:12]}`]({repository_url}/tree/{base})",
             f"- Repository-Änderungen: [GitHub-Vergleich]({repository_url}/compare/{base}..{commit})",
         ))
 
     # Projektumfang knapp benennen, die einzelnen Dateien bleiben im GitHub-Vergleich
-    if plan.scope.base is None:
+    if plan.scope.von is None:
         summary.append("- Berücksichtigte Projekte: Alle konfigurierten Projekte.")
     else:
         projects = results[0]["projekte"]
@@ -185,7 +185,7 @@ def _synchronisiere_umgebung(
     """Baut und überträgt den Auftrag für eine M/Text-Umgebung."""
 
     # FULL überträgt jedes M/Text-Projekt, DELTA nur geänderte
-    if scope.base is None:
+    if scope.von is None:
         projects = list(configuration.projects)
     else:
         projects = [
@@ -270,13 +270,13 @@ def run() -> dict[str, object]:
     if not configuration.dry_run:
         evidence_path = Path(os.environ["GITHUB_WORKSPACE"]) / "mtext-stand.json"
         evidence_path.write_text(json.dumps({
-            "commit": plan.scope.target[1],
+            "commit": plan.scope.bis[1],
             "releaselinie": plan.releaselinie,
             "umgebungen": plan.umgebungen,
         }, ensure_ascii=False, indent=2), encoding="utf-8")
         outputs["nachweis_path"] = evidence_path.as_posix()
         # Branch für Speicherung und Abfrage identisch kodieren
-        outputs["nachweis_name"] = f"mtext-stand-{urllib.parse.quote(plan.scope.target[0], safe='')}"
+        outputs["nachweis_name"] = f"mtext-stand-{urllib.parse.quote(plan.scope.bis[0], safe='')}"
 
     if report:
         path = Path(os.environ["GITHUB_WORKSPACE"]) / f"{_RESULT_ARTIFACT}.txt"
