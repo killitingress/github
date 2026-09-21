@@ -210,7 +210,7 @@ Für die Requests des Clients gelten folgende Reaktionen:
 | `PUT /sync2/{auftrag_id}/archive/{name}` | HTTP 200 mit `uploading` | Archiv angenommen, weitere Archive fehlen |
 | `PUT /sync2/{auftrag_id}/archive/{name}` | HTTP 200 mit `processing` | letztes Archiv angenommen, Verarbeitung beginnt |
 | `PUT /sync2/{auftrag_id}/archive/{name}` | HTTP 200 mit `failed` und `message` | vollständig empfangenes Archiv hat seine Prüfung nicht bestanden |
-| `DELETE /sync2/{auftrag_id}` | HTTP 200 mit `{"status": "succeeded"}` | unvollständiger oder beendeter Auftrag ist entfernt |
+| `DELETE /sync2/{auftrag_id}` | HTTP 200 mit `{"status": "deleted"}` | unvollständiger oder beendeter Auftrag ist entfernt |
 
 HTTP-Fehler liefern ein JSON-Objekt mit `message` und dem oben beschriebenen
 Statuscode. Der Auftragsstatus `failed` ist dagegen eine erfolgreiche
@@ -236,7 +236,7 @@ enthält folgende Felder:
 
 Alle genannten Felder sind vorhanden. Die Auftrags-ID steht bereits im
 Ressourcenpfad und wird in der Ausführungsantwort nicht wiederholt.
-DELETE bestätigt den Löschvorgang mit `status: "succeeded"` ohne
+DELETE bestätigt den Löschvorgang mit `status: "deleted"` ohne
 Auftrags-ID. Diese Antwort ist eine Löschbestätigung und kein Auftragsstatus.
 Ein erfolgreich abgeschlossener Auftrag darf `result: null` liefern, wenn
 M/Text keine Ausgabe bereitstellt.
@@ -263,7 +263,7 @@ Solange der Auftrag aktiv ist, wartet er zwischen Abfragen fünf Sekunden.
 Nach `succeeded` liest der Client das Ergebnis, nach `failed` die
 Fehlermeldung. Anschließend sendet er
 `DELETE /sync2/{auftrag_id}`. Der Adapter entfernt die Auftragsdaten und
-zugehörigen temporären Dateien und bestätigt mit `{"status": "succeeded"}`.
+zugehörigen temporären Dateien und bestätigt mit `{"status": "deleted"}`.
 Der Projektbestand unter `serverSync/` bleibt erhalten. Laut Zielbild
 überleben Auftragsdaten keinen Adapter-Neustart.
 
@@ -409,7 +409,7 @@ public class SynchronisierungsController {
     public Map<String, String> delete(@PathVariable("auftragId") String auftragId) {
         // Auftrag vor Verarbeitungsbeginn oder nach seinem Endstatus entfernen.
         auftraege.auftragLoeschen(auftragId);
-        return Map.of("status", "succeeded");
+        return Map.of("status", "deleted");
     }
 }
 ```

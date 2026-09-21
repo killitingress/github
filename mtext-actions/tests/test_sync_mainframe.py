@@ -265,7 +265,7 @@ class SyncTests(TempDirTestCase):
                 replies = [execution_reply(status, result="fertig" if status == "succeeded" else None)]
                 if status == "processing":
                     replies.append(execution_reply("succeeded", result="fertig"))
-                replies.append({"status": "succeeded"})
+                replies.append({"status": "deleted"})
 
                 with self.subTest(resume=status), patch.object(
                     adapter.urllib.request, "urlopen", side_effect=[http_reply(e) for e in replies],
@@ -283,13 +283,13 @@ class SyncTests(TempDirTestCase):
                         status,
                         message="M/Text-Fehler" if status == "failed" else None,
                     )),
-                    http_reply({"status": "succeeded"}),
+                    http_reply({"status": "deleted"}),
                 ]
                 replies.extend((
                     http_reply(auftrag_reply("ready"), 201),
                     http_reply(execution_reply("processing")),
                     http_reply(execution_reply("succeeded")),
-                    http_reply({"status": "succeeded"}),
+                    http_reply({"status": "deleted"}),
                 ))
 
                 build.reset_mock()
@@ -349,7 +349,7 @@ class SyncTests(TempDirTestCase):
         uploading = ready | {"status": "uploading"}
         self.response.read.side_effect = [
             json.dumps(e).encode()
-            for e in (created, uploading, processing, succeeded, {"status": "succeeded"})
+            for e in (created, uploading, processing, succeeded, {"status": "deleted"})
         ]
         self.uploaded = []
         with patch.object(adapter.urllib.request, "urlopen", side_effect=self._receive_archive) as http:
@@ -361,14 +361,14 @@ class SyncTests(TempDirTestCase):
         self.assertEqual(self.uploaded, [b"LOMS_Basis", b"LOMS_Autonom"])
 
         for replies, error_status, methods in (
-            ([created, processing, processing, succeeded, {"status": "succeeded"}], None,
+            ([created, processing, processing, succeeded, {"status": "deleted"}], None,
              ["POST", "PUT", "GET", "GET", "DELETE"]),
             ([created, b""], Status.ADAPTER_FAILED, ["POST", "PUT"]),
             ([{"execution": {"status": "ready"}}], Status.ADAPTER_FAILED, ["POST"]),
             ([created, processing, processing | {"status": "unbekannt"}], Status.ADAPTER_FAILED,
              ["POST", "PUT", "GET"]),
-            ([created, failed, {"status": "succeeded"}], Status.ADAPTER_FAILED, ["POST", "PUT", "DELETE"]),
-            ([created, processing, failed, {"status": "succeeded"}], Status.ADAPTER_FAILED,
+            ([created, failed, {"status": "deleted"}], Status.ADAPTER_FAILED, ["POST", "PUT", "DELETE"]),
+            ([created, processing, failed, {"status": "deleted"}], Status.ADAPTER_FAILED,
              ["POST", "PUT", "GET", "DELETE"]),
             ([created, processing, failed, network_error], Status.ADAPTER_FAILED,
              ["POST", "PUT", "GET", "DELETE"]),

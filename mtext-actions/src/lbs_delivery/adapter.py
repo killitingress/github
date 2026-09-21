@@ -223,9 +223,10 @@ def _call_adapter(
     if not isinstance(document, dict):
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort ist ungültig")
 
+    # Löschbestätigung getrennt vom Ergebnis der Ausführung prüfen
     if method == "DELETE":
         match document.get("status"):
-            case "succeeded":
+            case "deleted":
                 return document
             case _:
                 raise DeliveryError(Status.ADAPTER_FAILED, "Adapter bestätigt das Löschen des Auftrags nicht")
