@@ -11,7 +11,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from .process import DeliveryError, Status
 
@@ -45,6 +45,20 @@ ISPW_INSTANZEN = {"T", "P"}
 CODEPIPELINE_STAGES = {"FKTE", "FKTF", "JURJ", "JURP", "SVTS", "VPTV"}
 
 
+class Hostprofil(TypedDict):
+    """Verbindliche CodePipeline-Zuordnung eines Hostprofils."""
+
+    stage: str
+    assignment: str
+
+
+class Releaselinie(TypedDict):
+    """Verbindliche Zielzuordnung einer Releaselinie."""
+
+    etaps_linie: str
+    hostprofil: str
+
+
 @dataclass(frozen=True)
 class Configuration:
     """Enthält die geprüften Angaben eines Mandanten-Repositories.
@@ -71,21 +85,17 @@ class Configuration:
     # Projektverzeichnisse, die weder synchronisiert, geliefert noch als Ressource geprüft werden
     excluded_projects: tuple[str, ...]
     # Hostprofile mit CodePipeline-Stage und Assignment
-    hostprofile: dict[str, dict[str, str]]
+    hostprofile: dict[str, Hostprofil]
     # Zuordnung von Releaselinien zu M/Text-Umgebungsarten
-    releaselinien: dict[str, dict[str, str]]
+    releaselinien: dict[str, Releaselinie]
     # Präfix der M/Text-Umgebung je Umgebungsart
     mtext_umgebung_prefixe: dict[str, str]
-
-    def excludes_project_path(self, relative_path: Path) -> bool:
-        """Gibt Wahr zurück, wenn ein Pfad zu excluded_projects gehört."""
-
-        return bool(relative_path.parts) and relative_path.parts[0] in self.excluded_projects
 
     @classmethod
     def load(cls, repository_root: Path, repository_name: str) -> Configuration:
         """Lädt und prüft die Konfiguration eines ausgecheckten Mandanten-Repositories."""
 
+        # Mandantenangaben mit den zentralen Zuordnungen zusammenführen
         mandant_configuration   = _read_json(repository_root / MANDANT_CONFIG_PATH)
         mandanten_zuordnung     = _read_json(MANDANTEN_ZUORDNUNG_PATH)
         releaselinien_zuordnung = _read_json(RELEASELINIEN_ZUORDNUNG_PATH)
@@ -93,28 +103,34 @@ class Configuration:
         mtext_ziele   = releaselinien_zuordnung["mtext_ziele"]
         releaselinien = releaselinien_zuordnung["releaselinien"]
 
+        # ein Repository darf nicht mehreren Mandanten zugeordnet sein
         repositories = [e["repository"] for e in mandanten_zuordnung.values()]
-        if len(repositories) != len(set(repositories)): # jeder Mandant darf nur einmal definiert sein
+        if len(repositories) != len(set(repositories)):
             raise DeliveryError(Status.VALIDATION_FAILED, "Mandantenzuordnung ist nicht eindeutig")
 
+        # für beide Umgebungsarten muss ein Zielpräfix hinterlegt sein
         if set(mtext_ziele) != {MTEXT_UMGEBUNG_ART_ENTWICKLUNG, MTEXT_UMGEBUNG_ART_FUNKTIONSTEST}:
             raise DeliveryError(Status.VALIDATION_FAILED, "M/Text-Umgebungsarten sind ungültig: " + ", ".join(mtext_ziele))
 
+        # führende Releaselinie und Mandant gegen die zentralen Stammdaten prüfen
         mandant = mandant_configuration["mandant"]
-
         if mandant["releaselinie"] not in releaselinien:
             raise DeliveryError(Status.VALIDATION_FAILED, f"führende Releaselinie #{mandant['releaselinie']} ist ungültig")
 
+        # Repositorybindung vor der Verarbeitung von Projekten prüfen
         stammdaten = mandanten_zuordnung.get(mandant["kuerzel"])
         if stammdaten is None or repository_name != stammdaten["repository"]:
             raise DeliveryError(Status.VALIDATION_FAILED, f"Mandant #{mandant['kuerzel']} passt nicht zum Repository")
 
+        # die Mainframe-Übergabe benötigt eine bekannte CodePipeline-Instanz
         if mandant["ispw"] not in ISPW_INSTANZEN:
             raise DeliveryError(Status.VALIDATION_FAILED, f"ISPW-Instanz #{mandant['ispw']} ist ungültig")
 
+        # ein Textwert darf die Entscheidung über echte Übergaben nicht verändern
         if not isinstance(mandant.get("dry_run", False), bool):
             raise DeliveryError(Status.VALIDATION_FAILED, "dry_run muss true oder false sein")
 
+        # jedes Hostprofil verbindet eine zulässige Stage mit einem Assignment
         for name, profile in mandant["hostprofile"].items():
             if profile["stage"] not in CODEPIPELINE_STAGES or not profile.get("assignment"):
                 raise DeliveryError(Status.VALIDATION_FAILED, f"Hostprofil #{name} ist ungültig")
@@ -126,6 +142,7 @@ class Configuration:
                 continue
             projects[item.name] = item.name.removesuffix(f"[{mandant['kuerzel']}]").removeprefix("LOMS_")[:5].upper()
 
+        # ohne eindeutige Projektcodes würden Lieferarchive einander überschreiben
         if not projects or len(projects) != len(set(projects.values())):
             raise DeliveryError(Status.VALIDATION_FAILED, "abgeleitete Projektcodes sind nicht eindeutig")
 
@@ -134,7 +151,7 @@ class Configuration:
             if values["hostprofil"] not in mandant["hostprofile"]:
                 raise DeliveryError(Status.VALIDATION_FAILED, f"Releaselinie #{linie} ist ungültig")
 
-        # wir erzeugen freundlicher Weise ein Objekt der Klasse Configuration, das alle relevanten Informationen enthält
+        # geprüfte Angaben an Paketbau, Synchronisierung und Übergabe weitergeben
         return cls(
             repository=repository_name,
             kuerzel=mandant["kuerzel"],

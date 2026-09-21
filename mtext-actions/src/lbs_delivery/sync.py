@@ -1,4 +1,17 @@
-"""Bestimmt den Sync-Umfang und übergibt Archive an den M/Text-Adapter."""
+"""Holt den Commit des Branches nach M/Text und merkt sich, wie weit er gekommen ist.
+
+Ein Feature-Push landet in der Entwicklung, ein Merge nach `main` oder
+`release/nnn` im Funktionstest. Manuell darf man die Ziele wählen, dann wird
+FULL gebaut. Automatisch reicht ein DELTA, wenn derselbe Branch, dieselbe
+Umgebung und dieselbe Releaselinie schon einmal erfolgreich übertragen wurden.
+Den Vergleichscommit liest der Lauf aus einem GitHub-Artefakt. Fehlt er, kommt
+der gesamte Projektinhalt.
+
+Jede Umgebung bekommt ihren eigenen Adapterauftrag. Scheitert die zweite,
+steht in der Meldung, dass die erste schon durch ist. Nach einer echten
+Übertragung bleibt `mtext-stand.json` als Lesezeichen für den nächsten Lauf.
+Dry Runs packen mit, ohne etwas zu verbuchen.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +19,7 @@ import json
 import os
 import re
 import tempfile
+import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,9 +27,6 @@ from . import adapter, config, git, github
 from .process import DeliveryError, Status
 from .project_packages import Scope, build_project_package, delta_scope
 
-
-# GitHub liefert für den ersten Push eines Branches diese Null-SHA als Vorgänger
-_LEERER_PUSH_COMMIT = "0" * 40
 
 # Feature-Branches tragen Releaselinie und Bezeichnung im Branch-Namen
 _FEATURE_BRANCH_RE = re.compile(r"feature/([0-9]{3})/(.+)")
@@ -25,184 +36,150 @@ _ERGEBNIS_ARTEFAKT = "mtext-ergebnis"
 
 
 @dataclass(frozen=True)
-class SyncPlan:
+class Synchronisierungsplan:
     """Verbindet den Paketumfang mit den Zielumgebungen eines Sync-Laufs."""
 
     # FULL- oder DELTA-Umfang für alle Pakete des Laufs
     scope: Scope
     # in Ausführungsreihenfolge anzusprechende M/Text-Umgebungen
     umgebungen: list[str]
+    # Releaselinie des übertragenen Commits für spätere DELTA-Abgleiche
+    releaselinie: str
 
 
-def _historische_mandantenkonfiguration(source: Path, reference: str) -> dict[str, object]:
-    """Liest die Mandantenkonfiguration eines früheren Git-Stands."""
-
-    # versionierte Konfiguration lesen, ohne den früheren Stand auszuchecken
-    try:
-        document = json.loads(git.execute(source, "show", f"{reference}:{config.MANDANT_CONFIG_PATH}"))
-    except (UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
-        raise DeliveryError(Status.SOURCE_FAILED, f"Konfiguration kann nicht gelesen werden: {exc}") from exc
-
-    match document.get("mandant"):
-        case dict() as mandant:
-            return mandant
-        case _:
-            raise DeliveryError(Status.SOURCE_FAILED, "Konfiguration enthält keine Mandantenangaben")
-
-
-def _previous_main_release_line(source: Path) -> str | None:
-    """Liest die Releaselinie des letzten erfolgreichen Pushs auf `main`."""
-
-    # letzten erfolgreichen Sync-Stand aus GitHub-Historie lesen oder aus Umgebungsvariable
-    reference = github.last_sync_commit(event="push") or os.environ.get("MTEXT_PREVIOUS_COMMIT", "")
-    if not reference or reference == _LEERER_PUSH_COMMIT:
-        return None
-
-    # Releaselinie aus der damaligen Mandantenkonfiguration übernehmen
-    match _historische_mandantenkonfiguration(source, reference).get("releaselinie"):
-        case str(releaselinie):
-            return releaselinie
-        case _:
-            raise DeliveryError(Status.SOURCE_FAILED, "Historische Konfiguration enthält keine Releaselinie")
-
-
-def _resolve_sync_branch(source_branch: str, main_releaselinie: str) -> tuple[str, str]:
+def _ermittle_synchronisierungszweig(branch: str, main_releaselinie: str) -> tuple[str, str]:
     """Ermittelt die Releaselinie und Art der M/Text-Umgebung aus dem Branch.
 
     `main` und `release/nnn` verwenden die Umgebungsart "Funktionstest",
     `feature/nnn/<Bezeichnung>` die Umgebungsart "Entwicklung".
     """
 
-    match source_branch:
+    match branch:
         case "main":
             return main_releaselinie, config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST
-        case branch if (release_match := git.RELEASE_BRANCH_RE.fullmatch(branch)):
+        case name if (release_match := git.RELEASE_BRANCH_RE.fullmatch(name)):
             return release_match.group(1), config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST
-        case branch if (feature_match := _FEATURE_BRANCH_RE.fullmatch(branch)):
+        case name if (feature_match := _FEATURE_BRANCH_RE.fullmatch(name)):
             return feature_match.group(1), config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG
         case _:
             raise DeliveryError(Status.VALIDATION_FAILED, "Branch ist kein Synchronisierungszweig")
 
 
-def _resolve_comparison_commit(
-    source: Path, commit: str, basis_branch: str | None, letzter_sync: str | None,
-) -> str | None:
-    """Ermittelt den passenden Vergleichscommit für den DELTA-Sync."""
+def letzter_sync_commit(branch: str, umgebung: str, releaselinie: str) -> str | None:
+    """Liest den neuesten Vergleichscommit dieses Branchs für die Zielumgebung aus dem GitHub-Artefakt."""
 
-    # letzten erfolgreichen Sync übernehmen und gegen den aktuellen Stand absichern
-    if letzter_sync:
-        try:
-            git.require_ancestor(source, letzter_sync, commit)
-        except DeliveryError as exc:
-            detail = "Der letzte erfolgreiche Sync-Stand liegt nicht vor diesem Branchstand. "
-            detail += f"Der Lauf ist überholt oder die Branchhistorie wurde geändert. {exc.args[0]}"
-            raise DeliveryError(Status.SOURCE_FAILED, detail) from exc
-        return letzter_sync
+    # URL-Kodierung erhält die Unterscheidung von Schrägstrichen und Unterstrichen
+    for artifact in github.artifacts(f"mtext-stand-{urllib.parse.quote(branch, safe='')}"):
+        if artifact["expired"]:
+            continue
 
-    # ohne früheren Sync beginnt das DELTA eines Feature-Branches am Basis-Branch
-    if basis_branch is not None:
-        return git.execute(
-            source, "merge-base", commit, f"refs/remotes/origin/{basis_branch}",
-        ).decode("ascii").strip()
+        # den ersten Nachweis dieser Umgebung auswerten, ältere Dateien werden nicht mehr gelesen
+        nachweis = github.artifact_document(artifact["id"], "mtext-stand.json")
+        match nachweis:
+            case {"commit": str(commit), "releaselinie": str(linie), "umgebungen": list(ziele)}:
+                if umgebung not in ziele:
+                    continue
+                return commit if linie == releaselinie else None
+            case _:
+                raise DeliveryError(Status.SOURCE_FAILED, "Synchronisierungsnachweis ist ungültig")
     return None
 
 
-def resolve_plan(source: Path, configuration: config.Configuration) -> SyncPlan:
-    """Bestimmt Vergleichsumfang und Zielumgebungen der Synchronisierung."""
+def ermittle_plan(source: Path, configuration: config.Configuration) -> Synchronisierungsplan:
+    """Bestimmt Zielumgebungen und den durch einen erfolgreichen Abgleich belegten Umfang."""
 
-    # Branchstand der Releaselinie und der zugeordneten Umgebungsart zuordnen
+    # Branch und Commit werden vom auslösenden Push, Merge oder manuellen Start festgehalten
     branch = os.environ["GITHUB_REF_NAME"]
     commit = git.resolve(source, "HEAD")
     event = os.environ["GITHUB_EVENT_NAME"]
-    releaselinie, umgebung_art = _resolve_sync_branch(branch, configuration.releaselinie)
+    releaselinie, branch_art = _ermittle_synchronisierungszweig(branch, configuration.releaselinie)
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
-
-    etaps_linie = configuration.releaselinien[releaselinie]["etaps_linie"]
-    prefixe = configuration.mtext_umgebung_prefixe
-    umgebung = f"{prefixe[umgebung_art]}{etaps_linie}"
-    entwicklungsumgebung = f"{prefixe[config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG]}{etaps_linie}"
-
-    # nur den noch aktuellen Stand des Remote-Branches verarbeiten
     git.require_ancestor(source, commit, f"refs/remotes/origin/{branch}")
 
-    # Linienwechsel auf main brauchen ein FULL in Entwicklung und Funktionstest
-    linienwechsel = False
-    if branch == "main" and event != "workflow_dispatch":
-        vorherige = _previous_main_release_line(source)
-        linienwechsel = vorherige is not None and vorherige != configuration.releaselinie
-    umgebungen = [entwicklungsumgebung, umgebung] if linienwechsel else [umgebung]
+    # automatische Läufe verwenden den Branchstandard, manuelle Läufe die ausgewählten Ziele
+    zielumgebung = os.environ.get("MTEXT_ZIELUMGEBUNG", "Branchstandard")
+    entwicklung = config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG
+    funktionstest = config.MTEXT_UMGEBUNG_ART_FUNKTIONSTEST
+    if zielumgebung not in ("Branchstandard", entwicklung, funktionstest, "Beide"):
+        raise DeliveryError(Status.VALIDATION_FAILED, "Zielumgebung ist ungültig")
 
-    # manueller Abgleich und Linienwechsel prüfen und übertragen den Vollstand
-    vergleichsstand = None
-    if event != "workflow_dispatch" and not linienwechsel:
-        basis_branch = None
-        if umgebung_art == config.MTEXT_UMGEBUNG_ART_ENTWICKLUNG:
-            basis_branch = "main" if releaselinie == configuration.releaselinie else f"release/{releaselinie}"
+    # automatische Läufe bleiben an die Zielumgebung ihres Branchs gebunden
+    if event != "workflow_dispatch" and zielumgebung != "Branchstandard":
+        raise DeliveryError(Status.VALIDATION_FAILED, "Zielauswahl erfordert einen manuellen Start")
 
-        letzter_sync = github.last_sync_commit()
-        vergleichsstand = _resolve_comparison_commit(source, commit, basis_branch, letzter_sync)
-
-        # nach einem erfolgreichen Dry Run den Adapter mit einem Vollstand auffüllen
-        if letzter_sync and not configuration.dry_run:
-            vorherige_konfiguration = _historische_mandantenkonfiguration(source, letzter_sync)
-            if vorherige_konfiguration.get("dry_run") is True:
-                vergleichsstand = None
-
-    # derselbe FULL- oder DELTA-Scope steuert Ressourcenprüfung und Paketbau
-    if vergleichsstand is None:
-        scope = Scope(von=None, bis=(branch, commit), changes=[])
+    # bei einem Doppelabgleich Entwicklung vor Funktionstest verarbeiten
+    if zielumgebung == "Beide":
+        umgebung_arten = [entwicklung, funktionstest]
+    elif zielumgebung == "Branchstandard":
+        umgebung_arten = [branch_art]
     else:
-        scope = delta_scope(source, (branch, vergleichsstand), (branch, commit))
-    return SyncPlan(scope, umgebungen)
+        umgebung_arten = [zielumgebung]
+
+    # fachliche Releaselinie in die technischen Umgebungskennungen übersetzen
+    etaps_linie = configuration.releaselinien[releaselinie]["etaps_linie"]
+    umgebungen = [f"{configuration.mtext_umgebung_prefixe[e]}{etaps_linie}" for e in umgebung_arten]
+
+    # automatische Läufe haben ein Ziel, manuelle Läufe und Dry Runs bauen FULL
+    baseline = None
+    if event != "workflow_dispatch" and not configuration.dry_run:
+        baseline = letzter_sync_commit(branch, umgebungen[0], releaselinie)
+
+    # ein DELTA benötigt einen belegten Vorgänger für dasselbe Ziel, sonst wird FULL gebaut
+    if baseline is not None:
+        git.require_ancestor(source, baseline, commit)
+        scope = delta_scope(source, (branch, baseline), (branch, commit))
+    else:
+        scope = Scope(von=None, bis=(branch, commit), changes=[])
+    return Synchronisierungsplan(scope, umgebungen, releaselinie)
 
 
-def _workflow_response(
-    plan: SyncPlan, ergebnisse: list[dict[str, object]], dry_run: bool, ausgabe_umgebungen: set[str],
+def _workflow_result(
+    plan: Synchronisierungsplan, results: list[dict[str, object]], dry_run: bool, reported: set[str],
 ) -> dict[str, object]:
-    """Verknüpft die Git-Stände und fasst die Umgebungsstatus zusammen."""
+    """Verknüpft die Git-Commits und fasst die Umgebungsstatus zusammen."""
 
     # festgehaltene Commits bleiben auch bei späteren Branchänderungen verlinkbar
     repository_url = f"{os.environ['GITHUB_SERVER_URL'].rstrip('/')}/{os.environ['GITHUB_REPOSITORY']}"
-    ziel_commit = plan.scope.bis[1]
+    commit = plan.scope.bis[1]
     summary = [
         "## M/Text-Synchronisierung", "",
         f"- Umfang: {'FULL' if plan.scope.von is None else 'DELTA'}",
-        f"- Zielstand: [`{ziel_commit[:12]}`]({repository_url}/tree/{ziel_commit})",
+        f"- Zielcommit: [`{commit[:12]}`]({repository_url}/tree/{commit})",
     ]
     if plan.scope.von is not None:
-        ausgangs_commit = plan.scope.von[1]
+        base = plan.scope.von[1]
         summary.extend((
-            f"- Ausgangsstand: [`{ausgangs_commit[:12]}`]({repository_url}/tree/{ausgangs_commit})",
-            f"- Repository-Änderungen: [GitHub-Vergleich]({repository_url}/compare/{ausgangs_commit}..{ziel_commit})",
+            f"- Ausgangscommit: [`{base[:12]}`]({repository_url}/tree/{base})",
+            f"- Repository-Änderungen: [GitHub-Vergleich]({repository_url}/compare/{base}..{commit})",
         ))
 
     # Projektumfang knapp benennen, die einzelnen Dateien bleiben im GitHub-Vergleich
     if plan.scope.von is None:
         summary.append("- Berücksichtigte Projekte: Alle konfigurierten Projekte.")
     else:
-        projects = ergebnisse[0]["projekte"]
-        project_names = ", ".join(f"`{e}`" for e in projects) or "Keine."
-        summary.append(f"- Berücksichtigte Projekte: {project_names}")
+        projects = results[0]["projekte"]
+        names = ", ".join(f"`{e}`" for e in projects) or "Keine."
+        summary.append(f"- Berücksichtigte Projekte: {names}")
 
     # vorhandene Ausgaben im Laufartefakt verorten
     if dry_run:
         summary.extend(("", "Dry Run: Adapteraufträge und Archivübertragung wurden übersprungen."))
-    for entry in ergebnisse:
-        umgebung = str(entry["umgebung"])
-        if umgebung not in ausgabe_umgebungen:
+    for item in results:
+        umgebung = str(item["umgebung"])
+        if umgebung not in reported:
             summary.append(f"- {umgebung}: Keine M/Text-Ausgabe.")
             continue
         summary.append(f"- {umgebung}: M/Text-Ausgabe im Laufartefakt `{_ERGEBNIS_ARTEFAKT}`.")
 
     return {
         "status": Status.ADAPTER_SKIPPED if dry_run else Status.ADAPTER_COMPLETED,
-        "ergebnisse": ergebnisse,
+        "ergebnisse": results,
         "summary": "\n".join(summary) + "\n",
     }
 
 
-def _synchronize_umgebung(
+def _synchronisiere_umgebung(
     configuration: config.Configuration, source: Path, scope: Scope, umgebung: str,
 ) -> dict[str, object]:
     """Baut und überträgt den Auftrag für eine M/Text-Umgebung."""
@@ -229,9 +206,9 @@ def _synchronize_umgebung(
             return {"umgebung": umgebung, **result, "projekte": projects}
 
     # Archive gehören zu dieser Umgebung und bestehen bis zum Ende der Übertragung
-    with tempfile.TemporaryDirectory() as temporary:
-        workdir = Path(temporary)
-        pakete = [
+    with tempfile.TemporaryDirectory() as temp:
+        workdir = Path(temp)
+        packages = [
             build_project_package(configuration, source, e, workdir / e, scope)
             for e in projects
         ]
@@ -241,56 +218,69 @@ def _synchronize_umgebung(
             return {
                 "umgebung": umgebung,
                 "auftrag_id": auftrag_id,
-                "result": f"Dry Run: {len(pakete)} Archive erfolgreich durch M/Text verarbeitet.",
+                "result": f"Dry Run: {len(packages)} Archive erfolgreich durch M/Text verarbeitet.",
                 "projekte": projects,
             }
 
-        result = adapter.upload(umgebung, pakete, auftrag_id)
+        result = adapter.upload(umgebung, packages, auftrag_id)
 
     return {"umgebung": umgebung, **result, "projekte": projects}
 
 
 def run() -> dict[str, object]:
-    """Synchronisiert den aktuellen Branchstand mit den zugeordneten M/Text-Umgebungen."""
+    """Synchronisiert den aktuellen Commit des Branches mit den zugeordneten M/Text-Umgebungen."""
 
-    # ausgecheckten Mandantenstand und seine Konfiguration laden
+    # ausgecheckten Mandantencommit und seine Konfiguration laden
     source = config.mandant_source()
     configuration = config.Configuration.load(source, os.environ["GITHUB_REPOSITORY"])
 
     # Vergleichsumfang und Zielumgebungen einmalig planen
-    plan = resolve_plan(source, configuration)
+    plan = ermittle_plan(source, configuration)
 
     # alle Zieladapter prüfen, bevor Archive für die erste Umgebung entstehen
-    for ziel in plan.umgebungen:
-        adapter.check_reachability(ziel)
+    for umgebung in plan.umgebungen:
+        adapter.check_reachability(umgebung)
 
     # jede Umgebung erhält einen eigenständig gebauten und übertragenen Auftrag
-    ergebnisse: list[dict[str, object]] = []
-    ausgaben: list[str] = []
-    ausgabe_umgebungen: set[str] = set()
-    for ziel in plan.umgebungen:
+    results: list[dict[str, object]] = []
+    report: list[str] = []
+    reported: set[str] = set()
+    for umgebung in plan.umgebungen:
         try:
-            ergebnis = _synchronize_umgebung(configuration, source, plan.scope, ziel)
+            result = _synchronisiere_umgebung(configuration, source, plan.scope, umgebung)
         except DeliveryError as exc:
-            message = f"Synchronisierung mit der M/Text-Umgebung {ziel} fehlgeschlagen. {exc.args[0]}"
-            if ergebnisse:
-                message += f" Bereits erfolgreich: {ergebnisse[0]['umgebung']}."
+            message = f"Synchronisierung mit der M/Text-Umgebung {umgebung} fehlgeschlagen. {exc.args[0]}"
+            if results:
+                message += f" Bereits erfolgreich: {results[0]['umgebung']}."
             raise DeliveryError(exc.status, message) from exc
 
         # Adapterausgabe aus dem JSON-Ergebnis nehmen und als Datei vorbereiten
-        if "result" in ergebnis:
-            output = ergebnis.pop("result")
-            rendered = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False, indent=2)
-            ausgaben.extend((f"## {ziel}", "", rendered, ""))
-            ausgabe_umgebungen.add(ziel)
-        ergebnisse.append(ergebnis)
+        if "result" in result:
+            output = result.pop("result")
+            text = output if isinstance(output, str) else json.dumps(output, ensure_ascii=False, indent=2)
+            report.extend((f"## {umgebung}", "", text, ""))
+            reported.add(umgebung)
+        results.append(result)
 
     # vorhandene M/Text-Ausgaben für den Upload im folgenden Workflow-Schritt schreiben
-    response = _workflow_response(plan, ergebnisse, configuration.dry_run, ausgabe_umgebungen)
+    result = _workflow_result(plan, results, configuration.dry_run, reported)
     outputs: dict[str, str] = {}
-    if ausgaben:
+
+    # echte Übertragungen als lesbaren Nachweis speichern, Dry Runs begründen keine DELTA-Basis
+    if not configuration.dry_run:
+        nachweis_path = Path(os.environ["GITHUB_WORKSPACE"]) / "mtext-stand.json"
+        nachweis_path.write_text(json.dumps({
+            "commit": plan.scope.bis[1],
+            "releaselinie": plan.releaselinie,
+            "umgebungen": plan.umgebungen,
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+        outputs["nachweis_path"] = nachweis_path.as_posix()
+        # Branch für Speicherung und Abfrage identisch kodieren
+        outputs["nachweis_name"] = f"mtext-stand-{urllib.parse.quote(plan.scope.bis[0], safe='')}"
+
+    if report:
         path = Path(os.environ["GITHUB_WORKSPACE"]) / f"{_ERGEBNIS_ARTEFAKT}.txt"
-        path.write_text("\n".join(ausgaben), encoding="utf-8")
-        outputs = {"ergebnis_path": path.as_posix(), "ergebnis_name": _ERGEBNIS_ARTEFAKT}
-    response["outputs"] = outputs
-    return response
+        path.write_text("\n".join(report), encoding="utf-8")
+        outputs.update({"ergebnis_path": path.as_posix(), "ergebnis_name": _ERGEBNIS_ARTEFAKT})
+    result["outputs"] = outputs
+    return result

@@ -1,9 +1,14 @@
 name: Synchronisierung
 
-# Dieser Workflow synchronisiert den ausgewählten Branchstand eines
+# Dieser Workflow synchronisiert den ausgewählten Branchcommit eines
 # Mandanten-Repositories mit M/Text.
 'on':
   workflow_call:
+    inputs:
+      zielumgebung:
+        description: Branchstandard, Entwicklung, Funktionstest oder Beide
+        type: string
+        default: Branchstandard
 
 permissions:
   contents: read
@@ -15,10 +20,11 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 30
     steps:
-      # Checkout lädt den zum Push oder manuellen Start gehörenden Branchstand.
-      - name: Check-Out Mandantenstand
+      # Commit des Pushes, Squash Merges oder manuellen Starts laden.
+      - name: Check-Out Mandantencommit
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
           path: source
           persist-credentials: false
@@ -33,7 +39,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
-          MTEXT_PREVIOUS_COMMIT: ${{ github.event.before || '' }}
+          MTEXT_ZIELUMGEBUNG: ${{ inputs.zielumgebung }}
+          GITHUB_REF_NAME: ${{ github.event.pull_request.base.ref || github.ref_name }}
         run: >-
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" resources sync
@@ -47,3 +54,12 @@ jobs:
           path: ${{ steps.sync.outputs.ergebnis_path }}
           if-no-files-found: error
           retention-days: 10
+
+      # Übertragenen Commit als Vergleichsbasis späterer DELTA-Läufe speichern.
+      - name: Vergleichscommit speichern
+        if: steps.sync.outputs.nachweis_path != ''
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ steps.sync.outputs.nachweis_name }}
+          path: ${{ steps.sync.outputs.nachweis_path }}
+          if-no-files-found: error

@@ -1,6 +1,6 @@
 name: Lieferung vorbereiten
 
-# Dieser Workflow bereitet den in GitHub ausgewählten Branchstand für eine
+# Dieser Workflow bereitet den in GitHub ausgewählten Branchcommit für eine
 # Lieferung vor. Zuerst werden Mandantenkonfiguration und Ressourcen im FULL-
 # oder DELTA-Umfang der Lieferung geprüft. Befunde erscheinen als Warnungen und
 # unterbrechen die Vorbereitung nicht. Der Liefer-Tag wird aus dem ausgewählten
@@ -23,15 +23,15 @@ permissions:
   issues: write
 
 jobs:
-  # Prüft bei FULL den Branchstand und bei DELTA die geänderten Ressourcen.
+  # Prüft bei FULL den Branchcommit und bei DELTA die geänderten Ressourcen.
   ressourcen-pruefen:
     name: Prüfung
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@test
     with:
       umfang: lieferung
 
-  # Startet den Shared Workflow für den ausgewählten Branchstand
+  # Startet den Shared Workflow für den ausgewählten Branchcommit
   vorpruefen:
     name: Vorbereitung
     needs: ressourcen-pruefen
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-check.yml@main
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-lieferung-check.yml@test

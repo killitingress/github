@@ -1,6 +1,6 @@
 name: Lieferprüfung
 
-# Dieser Workflow bereitet den ausgewählten Branchstand für eine spätere
+# Dieser Workflow bereitet den ausgewählten Branchcommit für eine spätere
 # Lieferung vor. Er lädt die festzuhaltende SHA mit ihrer Historie und prüft den
 # aus dem Branch abgeleiteten Liefer-Tag und den Lieferumfang. Das Ergebnis steht
 # im Freigabe-Issue, auf das die Actions-Zusammenfassung verweist. In diesem
@@ -17,7 +17,7 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 10
     steps:
-      - name: Check-Out Mandantenstand
+      - name: Check-Out Mandantencommit
         uses: actions/checkout@v4
         with:
           fetch-depth: 0

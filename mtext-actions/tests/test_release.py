@@ -97,7 +97,7 @@ class ReleaseTests(TempDirTestCase):
         git(self.repository, "add", "-u")
         git(self.repository, "commit", "-m", "neues Hauptrelease")
 
-        # FULL erstellt den vollständigen Projektstand und ein leeres D-Archiv
+        # FULL erstellt den vollständigen Projektbestand und ein leeres D-Archiv
         run("build", tag="r270.100")
         shutil.copytree(self.runner_temp / "dist", delivery, dirs_exist_ok=True)
         self.assertEqual(sorted(e.stem for e in delivery.glob("*.tgz")), ["FIBASISD", "FIBASISF"])
@@ -111,7 +111,7 @@ class ReleaseTests(TempDirTestCase):
             )
         with tarfile.open(delivery / "FIBASISD.tgz") as archive:
             self.assertEqual(archive.extractfile("FIBASISD.txt").read(), b"")
-        # FULL übernimmt erst den Projektstand und ersetzt danach das alte D-Archiv
+        # FULL übernimmt erst den Projektbestand und ersetzt danach das alte D-Archiv
         with patch("lbs_delivery.mainframe._submit_archive") as submit:
             run("mainframe")
         self.assertEqual(submit.call_args_list, [call(delivery / "FIBASISF.tgz"), call(delivery / "FIBASISD.tgz")])

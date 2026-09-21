@@ -14,7 +14,8 @@ Basis-URL: `http://<Umgebungskennung>.ltoma.intern/vMtextAdapter`
 |---|---|---|
 | `POST` | `/sync2/{auftrag_id}` | Auftrag anlegen |
 | `PUT` | `/sync2/{auftrag_id}/archive/{name}` | angekündigtes Archiv übertragen |
-| `GET` | `/sync2/{auftrag_id}` | Auftrag suchen sowie Status und Ergebnis lesen |
+| `GET` | `/sync2/{auftrag_id}` | vollständigen Auftrag lesen |
+| `GET` | `/sync2/{auftrag_id}/execution` | Ausführung mit Status und Ergebnis lesen |
 | `DELETE` | `/sync2/{auftrag_id}` | unvollständigen Auftrag abbrechen oder abgeschlossenen Auftrag aufräumen |
 
 Für `/sync2` gelten folgende Anforderungen des Clients:
@@ -23,8 +24,11 @@ Für `/sync2` gelten folgende Anforderungen des Clients:
 - PUT überträgt unveränderte `.tgz`-Bytes als Datenstrom mit
   `Content-Type: application/gzip` und `Content-Length`.
 - `auftrag_id` und `name` werden jeweils als ein URL-Pfadsegment kodiert.
-- Erfolgreiche Antworten haben HTTP-Status 200 und ein JSON-Objekt als Body.
-- Das Socket-Timeout beträgt 15 Sekunden. Die Auftragsverarbeitung muss
+- Ein erfolgreicher POST antwortet mit HTTP 201 und `Location` auf den
+  angelegten Auftrag. GET, PUT und DELETE antworten bei Erfolg mit HTTP 200.
+- Auftrags- und Ausführungsantworten haben feste Felder. Ein derzeit nicht
+  vorhandener Wert wird als `null` ausgegeben und nicht weggelassen.
+- Das Socket-Timeout beträgt 30 Sekunden. Die Auftragsverarbeitung muss
   unabhängig vom HTTP-Request laufen und per GET abfragbar bleiben.
 
 Der Client sendet keinen anwendungsspezifischen Authentifizierungsheader.
@@ -58,12 +62,12 @@ Mandantenkürzel ordnet jedes Mandanten-Repository eindeutig zu. Jeder Adapter
 verwaltet die Aufträge genau einer M/Text-Umgebung, daher gehört die
 Umgebungskennung nicht zur Auftrags-ID.
 
-Vor dem Archivbau fragt der Client mit `GET /sync2/{auftrag_id}` nach einem
+Vor dem Archivbau fragt der Client mit `GET /sync2/{auftrag_id}/execution` nach einem
 bestehenden Auftrag. Die Auftrags-ID bleibt beim Wiederholen desselben
 GitHub-Laufs erhalten. Die Anfrage hat keinen Body.
 
-Der Adapter liefert bei bekannter Auftrags-ID HTTP 200 mit der
-Auftragsantwort. Bei unbekannter Auftrags-ID liefert er HTTP 404 mit `message`.
+Der Adapter liefert bei bekannter Auftrags-ID HTTP 200 mit der Ausführungsantwort.
+Bei unbekannter Auftrags-ID liefert er HTTP 404 mit `message`.
 Fehlt der Auftrag, baut der Client die Archive und legt ihn an. Einen
 vorhandenen Auftrag übernimmt oder entfernt er entsprechend seinem Status.
 
@@ -105,16 +109,47 @@ die Informationsdaten der Synchronisierung.
 | `archive[].information` | Objekt mit den folgenden Projektinformationen |
 | `information.projekt` | String, Name des Projektverzeichnisses |
 | `information.lieferart` | String, `FULL` oder `DELTA`, für alle Archive des Auftrags gleich |
-| `information.scope.bis` | Objekt mit `referenz` und `commit` als Strings für den Zielstand |
-| `information.scope.von` | entsprechendes Objekt für den Ausgangsstand, bei DELTA vorhanden, bei FULL weggelassen |
+| `information.scope.bis` | Objekt mit `referenz` und `commit` als Strings für den Zielcommit |
+| `information.scope.von` | entsprechendes Objekt für den Ausgangscommit, bei DELTA vorhanden, bei FULL weggelassen |
 | `information.sha256` | String, SHA-256 der übertragenen Archivbytes als 64 hexadezimale Zeichen |
 
 Alle aufgeführten Felder außer `scope.von` bei FULL sind vorhanden. Der
 Archivname endet bei FULL auf `F.tgz`, bei DELTA auf `D.tgz`.
 
-Ein neuer Auftrag antwortet mit `{"auftrag_id": "123456-FI", "status": "ready"}`.
-Das Mandantenkürzel am Ende der Auftrags-ID bestimmt den Mandanten des
-Auftrags.
+Ein neuer Auftrag antwortet mit HTTP 201, dem Header
+`Location: /vMtextAdapter/sync2/123456-FI` und der vollständigen
+Auftragsrepräsentation. Das Mandantenkürzel am Ende der Auftrags-ID bestimmt
+den Mandanten des Auftrags.
+
+```json
+{
+  "auftrag_id": "123456-FI",
+  "archive": [
+    {
+      "name": "FIBASISF.tgz",
+      "information": {
+        "projekt": "LOMS_Basis",
+        "lieferart": "FULL",
+        "scope": {
+          "bis": {
+            "referenz": "release/261",
+            "commit": "0123456789abcdef0123456789abcdef0123456789"
+          }
+        },
+        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      }
+    }
+  ],
+  "execution": {
+    "status": "ready",
+    "message": null,
+    "result": null
+  }
+}
+```
+
+`GET /sync2/{auftrag_id}` liefert dieselbe vollständige Repräsentation mit
+der dann aktuellen Ausführung.
 
 ## Archive hochladen und verarbeiten
 
@@ -126,7 +161,8 @@ Content-Type: application/gzip
 Content-Length: 12345
 ```
 
-Die Antwort enthält `auftrag_id` und den aktuellen `status`.
+Die Ausführungsantwort enthält den aktuellen `status` sowie die Felder
+`message` und `result`.
 Bei einem neuen Auftrag sendet der Client die angekündigten Archive.
 Ein PUT mit demselben Archivinhalt darf wiederholt werden und liefert mit
 HTTP 200 den aktuellen Auftrag, ohne eine weitere Verarbeitung zu starten.
@@ -158,18 +194,19 @@ Gemäß Zielbild umfasst ein Lock je Mandantenkürzel und M/Text-Umgebung die
 Aktualisierung des Ressourcen-Caches. Danach wird der Lock freigegeben.
 `serverSync/` ist die gemeinsame Synchronisierungsbasis.
 
-## Status, Ergebnis und Aufräumen
+## Ausführung, Ergebnis und Aufräumen
 
 Für die Requests des Clients gelten folgende Reaktionen:
 
 | Request | Reaktion | Bedeutung für den Client |
 |---|---|---|
-| `GET /sync2/{auftrag_id}` | HTTP 404 mit `message` | kein Auftrag vorhanden, neuen Auftrag beginnen |
-| `GET /sync2/{auftrag_id}` | HTTP 200 mit `ready` oder `uploading` | unvollständigen Auftrag löschen und neu beginnen |
-| `GET /sync2/{auftrag_id}` | HTTP 200 mit `processing` | Verarbeitung läuft, weiter abfragen |
-| `GET /sync2/{auftrag_id}` | HTTP 200 mit `succeeded` und optionalem `result` | Verarbeitung erfolgreich beendet |
-| `GET /sync2/{auftrag_id}` | HTTP 200 mit `failed` und `message` | bei der Suche Auftrag löschen und neu beginnen, nach `processing` mit Fehler beenden |
-| `POST /sync2/{auftrag_id}` | HTTP 200 mit `ready` | neuer Auftrag ist angelegt und erwartet Uploads |
+| `GET /sync2/{auftrag_id}` | HTTP 200 mit vollständiger Auftragsrepräsentation | Auftrag einschließlich Anmeldung und aktueller Ausführung lesen |
+| `GET /sync2/{auftrag_id}/execution` | HTTP 404 mit `message` | kein Auftrag vorhanden, neuen Auftrag beginnen |
+| `GET /sync2/{auftrag_id}/execution` | HTTP 200 mit `ready` oder `uploading` | unvollständigen Auftrag löschen und neu beginnen |
+| `GET /sync2/{auftrag_id}/execution` | HTTP 200 mit `processing` | Verarbeitung läuft, weiter abfragen |
+| `GET /sync2/{auftrag_id}/execution` | HTTP 200 mit `succeeded` | Verarbeitung erfolgreich beendet |
+| `GET /sync2/{auftrag_id}/execution` | HTTP 200 mit `failed` und `message` | bei der Suche Auftrag löschen und neu beginnen, nach `processing` mit Fehler beenden |
+| `POST /sync2/{auftrag_id}` | HTTP 201 mit `Location` und `ready` | neuer Auftrag ist angelegt und erwartet Uploads |
 | `PUT /sync2/{auftrag_id}/archive/{name}` | HTTP 200 mit `uploading` | Archiv angenommen, weitere Archive fehlen |
 | `PUT /sync2/{auftrag_id}/archive/{name}` | HTTP 200 mit `processing` | letztes Archiv angenommen, Verarbeitung beginnt |
 | `PUT /sync2/{auftrag_id}/archive/{name}` | HTTP 200 mit `failed` und `message` | vollständig empfangenes Archiv hat seine Prüfung nicht bestanden |
@@ -179,20 +216,30 @@ HTTP-Fehler liefern ein JSON-Objekt mit `message` und dem oben beschriebenen
 Statuscode. Der Auftragsstatus `failed` ist dagegen eine erfolgreiche
 HTTP-Antwort auf einen bekannten Auftrag.
 
-Die Auftragsantwort für POST, PUT und GET hat folgende Felder:
+Die Auftragsrepräsentation für POST und `GET /sync2/{auftrag_id}` hat
+folgende Felder:
 
 | Feld | Typ und Bedeutung |
 |---|---|
 | `auftrag_id` | nicht leerer String, ID des Auftrags |
-| `status` | einer der unten aufgeführten Strings |
-| `result` | optionaler JSON-Wert bei `succeeded`, wenn eine M/Text-Ausgabe vorliegt |
-| `message` | Fehlermeldung als String bei `failed` |
+| `archive` | beim POST übermittelte Liste der Archive und Projektinformationen |
+| `execution` | Objekt mit der aktuellen Ausführung des Auftrags |
 
-`auftrag_id` und `status` sind erforderlich. Bei `failed` ist zusätzlich
-`message` erforderlich.
+Die Ausführungsantwort für PUT und `GET /sync2/{auftrag_id}/execution`
+enthält folgende Felder:
+
+| Feld | Typ und Bedeutung |
+|---|---|
+| `status` | einer der unten aufgeführten Strings |
+| `message` | nicht leerer String bei `failed`, sonst `null` |
+| `result` | M/Text-Ausgabe als String bei `succeeded` oder `null`, sonst `null` |
+
+Alle genannten Felder sind vorhanden. Die Auftrags-ID steht bereits im
+Ressourcenpfad und wird in der Ausführungsantwort nicht wiederholt.
 DELETE bestätigt den Löschvorgang mit `status: "succeeded"` ohne
 Auftrags-ID. Diese Antwort ist eine Löschbestätigung und kein Auftragsstatus.
-`result` enthält die M/Text-Ausgabe einer erfolgreichen Auftragsantwort.
+Ein erfolgreich abgeschlossener Auftrag darf `result: null` liefern, wenn
+M/Text keine Ausgabe bereitstellt.
 
 | Status | Bedeutung |
 |---|---|
@@ -203,14 +250,14 @@ Auftrags-ID. Diese Antwort ist eine Löschbestätigung und kein Auftragsstatus.
 | `failed` | Prüfung oder Verarbeitung fehlgeschlagen |
 
 ```json
-{"auftrag_id": "123456-FI", "status": "succeeded", "result": "M/Text-Ausgabe"}
+{"status": "succeeded", "message": null, "result": "M/Text-Ausgabe"}
 ```
 
 ```json
-{"auftrag_id": "123456-FI", "status": "failed", "message": "M/Text-Synchronisierung ist fehlgeschlagen"}
+{"status": "failed", "message": "M/Text-Synchronisierung ist fehlgeschlagen", "result": null}
 ```
 
-Der Client fragt mit `GET /sync2/{auftrag_id}` bis zu einem Endstatus ab.
+Der Client fragt mit `GET /sync2/{auftrag_id}/execution` bis zu einem Endstatus ab.
 Solange der Auftrag aktiv ist, wartet er zwischen Abfragen fünf Sekunden.
 
 Nach `succeeded` liest der Client das Ergebnis, nach `failed` die
@@ -270,7 +317,7 @@ public class SynchronisierungsAuftrag {
     private Map<String, ArchivAnmeldung> archive;
     private Map<String, Path> uploads;
     private SynchronisierungsStatus status = SynchronisierungsStatus.READY;
-    private Object result;
+    private String result;
     private String message;
 
     // Enthält die Dateien dieses Auftrags außerhalb von serverSync/.
@@ -302,11 +349,15 @@ public class SynchronisierungsAuftraege {
                 SynchronisierungsAuftrag.anlegen(
                         auftragId, request, uploadBasis);
         nachId.put(auftragId, auftrag);
-        return antwort(auftrag);
+        return auftragAntwort(auftrag);
     }
 
-    public synchronized AuftragAntwort status(String auftragId) {
-        return antwort(lesen(auftragId));
+    public synchronized AuftragAntwort auftrag(String auftragId) {
+        return auftragAntwort(lesen(auftragId));
+    }
+
+    public synchronized ExecutionAntwort execution(String auftragId) {
+        return executionAntwort(lesen(auftragId));
     }
 }
 ```
@@ -337,7 +388,7 @@ public class SynchronisierungsController {
     }
 
     @PutMapping(path = "/{auftragId}/archive/{name}", consumes = "application/gzip", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<AuftragAntwort> upload(
+    public ResponseEntity<ExecutionAntwort> upload(
             @PathVariable("auftragId") String auftragId,
             @PathVariable("name") String name,
             HttpServletRequest request) throws IOException {
@@ -345,8 +396,13 @@ public class SynchronisierungsController {
     }
 
     @GetMapping(path = "/{auftragId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public AuftragAntwort status(@PathVariable("auftragId") String auftragId) {
-        return auftraege.status(auftragId);
+    public AuftragAntwort auftrag(@PathVariable("auftragId") String auftragId) {
+        return auftraege.auftrag(auftragId);
+    }
+
+    @GetMapping(path = "/{auftragId}/execution", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ExecutionAntwort execution(@PathVariable("auftragId") String auftragId) {
+        return auftraege.execution(auftragId);
     }
 
     @DeleteMapping(path = "/{auftragId}", produces = MediaType.APPLICATION_JSON_VALUE)

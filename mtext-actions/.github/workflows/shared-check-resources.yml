@@ -11,10 +11,14 @@ name: Ressourcenprüfung
         required: false
         type: string
         default: ''
+      zielumgebung:
+        description: Zielauswahl für den Synchronisierungsumfang
+        type: string
+        default: Branchstandard
 
 permissions:
   contents: read
-  # Der aufrufende Sync-Workflow gewährt diese Berechtigung für seinen Vergleichsstand.
+  # Der aufrufende Sync-Workflow gewährt diese Berechtigung für seinen Vergleichscommit.
   actions: read
 
 jobs:
@@ -23,9 +27,10 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 15
     steps:
-      - name: Check-Out Mandantenstand
+      - name: Check-Out Mandantencommit
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           path: source
           fetch-depth: ${{ inputs.umfang != '' && '0' || '1' }}
           persist-credentials: false
@@ -37,6 +42,8 @@ jobs:
       # Prüft die Tonic-Ressourcen des Mandanten-Repositories
       - name: Ressourcen prüfen
         env:
+          MTEXT_ZIELUMGEBUNG: ${{ inputs.zielumgebung }}
+          GITHUB_REF_NAME: ${{ github.event.pull_request.base.ref || github.ref_name }}
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           GITHUB_TOKEN: ${{ inputs.umfang == 'synchronisierung' && github.token || '' }}
         run: >-

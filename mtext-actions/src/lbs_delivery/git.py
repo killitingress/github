@@ -1,7 +1,15 @@
-"""Liest die für Synchronisierung und Release benötigten Angaben aus Git.
+"""Spricht das lokale Git-Repository für Synchronisierung und Lieferung an.
 
-Das Modul löst Referenzen in Commit-SHAs auf, prüft Tags und Branchbeziehungen
-und liefert Dateiänderungen für den Paketbau und die Synchronisierung.
+Aus einem Namen wie `HEAD` oder `refs/tags/r261.108` wird die Commit-SHA.
+Bevor ein DELTA entsteht, prüft `require_ancestor`, ob der Vergleichscommit
+ein Vorfahr des aktuellen Commits ist. `changes` liefert Status und Pfade für Paketbau
+und Ressourcenprüfung.
+
+Die Liefer-Tags stecken in derselben Namensfamilie. `r261.100` ist die
+FULL-Basis einer Releaselinie, `r261.108` ein Zwischenrelease. Denselben
+Liefer-Tag liest `LieferTag.from_lieferzweig` aus `main`, `release/261` oder
+`bereitstellung/261.108`. Ein Feature-Branch gehört nicht dazu. Fehlt Git oder
+schlägt ein Befehl fehl, endet der Schritt mit `SOURCE_FAILED`.
 """
 
 from __future__ import annotations
@@ -63,7 +71,13 @@ class LieferTag:
 
     @classmethod
     def from_lieferzweig(cls, branch: str, fuehrende_releaselinie: str) -> LieferTag | None:
-        """Leitet den Liefer-Tag aus einem möglichen Lieferzweig ab."""
+        """Liest den Liefer-Tag, wenn der Branch eine Mainframe-Lieferung starten darf.
+
+        Ein Bereitstellungsbranch wie `bereitstellung/261.108` ergibt `r261.108`.
+        `main` ergibt das `.100` der führenden Releaselinie, bei `270` also `r270.100`.
+        `release/261` ergibt `r261.100`. Andere Branches, etwa `feature/261/kunde`,
+        liefern `None`.
+        """
 
         if tag := cls.from_bereitstellung(branch):
             return tag
@@ -123,7 +137,12 @@ def execute(repository: Path, *arguments: str, returncodes: tuple[int, ...] = (0
 
 
 def resolve(repository: Path, reference: str) -> str:
-    """Löst eine bekannte Referenz in eine Commit-SHA auf."""
+    """Gibt die Commit-SHA eines Git-Namens zurück, der im Repository vorkommen muss.
+
+    `HEAD` ergibt den ausgecheckten Commit. `refs/tags/r261.108` ergibt den
+    Commit des Liefer-Tags. Ein fehlender Name oder ein Objekt, das kein Commit
+    ist, beendet den Schritt mit `SOURCE_FAILED`.
+    """
 
     # `^{commit}` löst die Referenz bis zum Commit auf und lehnt Tree- und Blob-Objekte ab.
     output = execute(
@@ -150,10 +169,9 @@ def reference_exists(repository: Path, reference: str) -> bool:
 
 
 def require_ancestor(repository: Path, ancestor: str, descendant: str) -> None:
-    """Fordert, dass ein Commit oder eine Referenz von einer anderen Referenz
-    erreichbar ist.  """
+    """Prüft, dass der Ausgangscommit vom Zielcommit aus erreichbar ist."""
 
-    # `--is-ancestor` liefert Exit 0 nur bei echter Abstammung.
+    # Git akzeptiert auch identische Commits als unveränderten Vergleichsstand
     execute(
         repository,
         "merge-base",

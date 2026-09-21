@@ -117,7 +117,7 @@ def _relevant_resources(
         relative_path = path.relative_to(root)
 
         # ausgeschlossene Projekte und ungültige Elemente (z.B. gelöschte Dateien oder Symlinks) überspringen
-        if configuration.excludes_project_path(relative_path) or not path.is_file() or path.is_symlink():
+        if relative_path.parts[0] in configuration.excluded_projects or not path.is_file() or path.is_symlink():
             continue
 
         # feststellen ob die Dateiendung zu einem konfigurierten Dateityp passt

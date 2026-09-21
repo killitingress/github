@@ -81,7 +81,7 @@ def setup_release_repository(root: Path) -> Path:
     load_test_configuration(repository)
     git(repository, "add", ".")
     git(repository, "commit", "-m", "full")
-    # der Dummy-Liefer-Tag aus der Migration stellt den ersten Vergleichsstand bereit
+    # der Dummy-Liefer-Tag aus der Migration stellt den ersten Vergleichscommit bereit
     git(repository, "tag", "r260.100")
     git(repository, "tag", "r261.100")
     (project / "baseline.txt").write_text("changed\n", encoding="utf-8")

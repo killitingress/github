@@ -19,7 +19,7 @@ from .project_packages import (
     build_delta_archive,
     build_project_archive,
     project_archive_path,
-    release_scope,
+    lieferumfang,
 )
 
 
@@ -116,20 +116,23 @@ def _submit_mainframe_files(*, release_directory: Path, dry_run: bool) -> dict[s
     # vollständige Paare aus Archiv und JCL im Release-Verzeichnis voraussetzen
     archives = sorted(release_directory.glob("*.tgz"))
     if not archives:
-        raise DeliveryError(Status.PACKAGE_FAILED, "Archive oder JCL fehlen")
+        raise DeliveryError(Status.PACKAGE_FAILED, "Archive fehlen")
     for archive in archives:
-        if not archive.with_suffix(_MAINFRAME_JCL_SUFFIX).is_file():
-            raise DeliveryError(Status.PACKAGE_FAILED, "Archive oder JCL fehlen")
+        jcl = archive.with_suffix(_MAINFRAME_JCL_SUFFIX)
+        if not jcl.is_file():
+            raise DeliveryError(Status.PACKAGE_FAILED, f"JCL fehlt: {jcl.name}")
 
-    # Dry Run bestätigt den geprüften Paketbestand ohne externe Übergabe
+    # ein Dry Run endet hier, ohne FTPS- und JES-Übergabe
     if dry_run:
-        return {
-            "status": Status.MAINFRAME_SKIPPED,
-        }
+        return {"status": Status.MAINFRAME_SKIPPED}
 
-    # je Projekt zuerst F übertragen, danach mit D den alten Delta-Stand ersetzen
-    for archive in sorted(archives, key=lambda e: (e.stem[:-1], e.stem[-1] == "D")):
-        _submit_archive(archive)
+    # zuerst alle F-Archive übertragen, danach die D-Archive ersetzen
+    for archive in archives:
+        if archive.stem.endswith("F"):
+            _submit_archive(archive)
+    for archive in archives:
+        if archive.stem.endswith("D"):
+            _submit_archive(archive)
 
     return {"status": Status.MAINFRAME_SUBMITTED}
 
@@ -139,7 +142,7 @@ def _build_mainframe_files(configuration: config.Configuration, *, output_direct
 
     # Paketumfang aus dem vorbereiteten Commit ableiten
     repository_root = config.mandant_source()
-    paket_scope = release_scope(repository_root, tag, git.resolve(repository_root, "HEAD"))
+    paket_scope = lieferumfang(repository_root, tag, git.resolve(repository_root, "HEAD"))
 
     # Hostprofil und JCL-Vorlage für diese Releaselinie laden
     hostprofil = configuration.hostprofile[configuration.releaselinien[tag.releaselinie]["hostprofil"]]
@@ -152,7 +155,7 @@ def _build_mainframe_files(configuration: config.Configuration, *, output_direct
     for project in configuration.projects:
         archive = build_project_archive(configuration, repository_root, project, output_directory, paket_scope)
 
-        # FULL-Archiv um ein leeres D-Archiv ergänzen (für duseligen Travic-Link Folgejob)
+        # leeres D-Archiv verhindert, dass der Folgejob ein früheres DELTA einspielt
         archive_paths = [archive]
         if paket_scope.von is None:
             delta_archive = project_archive_path(configuration, project, output_directory, "D")
@@ -160,7 +163,7 @@ def _build_mainframe_files(configuration: config.Configuration, *, output_direct
             archive_paths.append(delta_archive)
 
         for archive_path in archive_paths:
-            # Archivname und Hostprofil in eine eigene JCL-Datei rendern
+            # Archivname und Hostprofil in eine JCL-Datei rendern
             member = archive_path.stem
             rendered = _render_jcl(jcl_template, configuration.ispw, hostprofil["stage"], configuration.subsystem, hostprofil["assignment"], member)
 

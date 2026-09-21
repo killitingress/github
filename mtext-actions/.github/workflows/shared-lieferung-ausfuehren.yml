@@ -55,7 +55,7 @@ jobs:
     outputs:
       dry_run: ${{ steps.package.outputs.dry_run }}
     steps:
-      # Lädt den in der Vorbereitung festgehaltenen Stand mit seiner Historie.
+      # Lädt den in der Vorbereitung festgehaltenen Commit mit seiner Historie.
       - name: Check-Out Lieferstand
         uses: actions/checkout@v4
         with:
@@ -125,7 +125,7 @@ jobs:
           "${{ steps.automation.outputs.python }}"
           "$ACTION_PATH/src/mtext.py" release mainframe
 
-  # Kennzeichnet den verarbeiteten Stand und schließt das Freigabe-Issue ab.
+  # Kennzeichnet den verarbeiteten Commit und schließt das Freigabe-Issue ab.
   report:
     name: Abschließen
     needs: [check, publish]
@@ -140,7 +140,7 @@ jobs:
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
-      # Der Tag zeigt auf die verarbeitete SHA, im Dry Run ohne Mainframe-Übergabe.
+      # Der Tag zeigt auf die verarbeitete SHA
       - name: Liefer-Tag erstellen
         if: needs.check.outputs.wiederholung != 'true'
         env:
@@ -174,7 +174,7 @@ jobs:
           "$ACTION_PATH/src/mtext.py" delivery complete
           --tag "$LIEFER_TAG" --issue "$FREIGABE_ISSUE"
 
-  # Das Freigabe-Issue verweist auch bei einem fehlgeschlagenen Folgejob auf den Lauf.
+  # Das Freigabe-Issue verweist auf einen fehlgeschlagenen Lauf.
   rueckmeldung:
     name: Abbruch melden
     needs: [check, publish, report]

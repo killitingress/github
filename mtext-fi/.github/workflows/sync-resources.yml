@@ -1,36 +1,52 @@
 name: Ressourcen synchronisieren
 
-# Dieser Workflow startet die Ressourcensynchronisierung für Feature-, main- und
-# Release-Branches. Zuerst werden Mandantenkonfiguration und Ressourcen im
-# FULL- oder DELTA-Umfang der Synchronisierung geprüft. Befunde erscheinen als
-# Warnungen und unterbrechen die Synchronisierung nicht. Der Shared Workflow
-# verwendet den Branchstand des auslösenden Ereignisses. Ein manueller Start
-# gleicht den in GitHub ausgewählten Branch vollständig ab. Die Läufe können
-# ihre Aufträge parallel an den Adapter übergeben.
+# Feature-Pushes synchronisieren Entwicklung, zusammengeführte PRs Funktionstest.
+# Manuelle Läufe gleichen die ausgewählten Zielumgebungen vollständig ab.
 'on':
   push:
     branches:
+      - feature/[0-9][0-9][0-9]/**
+  pull_request:
+    types: [closed]
+    branches:
       - main
       - release/[0-9][0-9][0-9]
-      - feature/[0-9][0-9][0-9]/**
-  # Der manuelle Start verwendet die Branchwahl von GitHub.
   workflow_dispatch:
+    inputs:
+      zielumgebung:
+        description: Zielumgebung für den Vollabgleich
+        type: choice
+        default: Branchstandard
+        options:
+          - Branchstandard
+          - Entwicklung
+          - Funktionstest
+          - Beide
+
+# Die Gruppe umfasst Prüfung, Planung und Übertragung des gesamten Laufs.
+# GHES hält einen wartenden Lauf. Weitere Starts können diesen ersetzen.
+concurrency:
+  group: mtext-synchronisierung
+  cancel-in-progress: false
 
 permissions:
   contents: read
-  # Der Shared Workflow liest den letzten erfolgreichen Vergleichsstand.
   actions: read
 
 jobs:
   # Verwendet denselben FULL- oder DELTA-Umfang wie die Synchronisierung.
   ressourcen-pruefen:
     name: Prüfung
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
+    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@test
     with:
       umfang: synchronisierung
+      zielumgebung: ${{ inputs.zielumgebung || 'Branchstandard' }}
 
   # Der Shared Workflow führt die Synchronisierung aus
   sync:
     name: Synchronisierung
     needs: ressourcen-pruefen
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-sync-resources.yml@main
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-sync-resources.yml@test
+    with:
+      zielumgebung: ${{ inputs.zielumgebung || 'Branchstandard' }}

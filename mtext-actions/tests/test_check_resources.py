@@ -38,7 +38,7 @@ class CheckResourcesTests(TempDirTestCase):
     def test_full_and_delta_resource_checks(self) -> None:
         """Prüft Vollstand und einen übergebenen DELTA-Scope mit Warnungen."""
 
-        # gemischten Branchstand für die vollständige manuelle Prüfung aufbauen
+        # gemischten Branchcommit für die vollständige manuelle Prüfung aufbauen
         self.write("formular.formio", '{"components": [{"type": "textfield"}]}')
         self.write("brief.model", "<brief><absatz>Text</absatz></brief>")
         self.write("start.pageLayout", "<seite />")

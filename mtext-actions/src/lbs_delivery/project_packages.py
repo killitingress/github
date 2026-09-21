@@ -11,6 +11,7 @@ import urllib.parse
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, NotRequired, TypedDict
 
 from . import git
 from .config import Configuration
@@ -19,18 +20,41 @@ from .process import DeliveryError, Status
 
 @dataclass(frozen=True)
 class Scope:
-    """Hält Bezugsstand, Zielstand und die Änderungen eines Git-Vergleichs."""
+    """Hält Bezugscommit, Zielcommit und die Änderungen eines Git-Vergleichs."""
 
     von: tuple[str, str] | None
     bis: tuple[str, str]
     changes: list[git.GitChange]
 
 
+class GitCommit(TypedDict):
+    """Referenz und festgehaltener Commit im Informationsdokument des Adapters."""
+
+    referenz: str
+    commit: str
+
+
+class Paketumfang(TypedDict):
+    """Zielcommit und optionaler Bezugscommit im Informationsdokument des Adapters."""
+
+    bis: GitCommit
+    von: NotRequired[GitCommit]
+
+
+class Paketinformation(TypedDict):
+    """Verbindliche Metadaten eines beim Adapter angemeldeten Projektarchivs."""
+
+    projekt: str
+    lieferart: Literal["FULL", "DELTA"]
+    scope: Paketumfang
+    sha256: str
+
+
 @dataclass(frozen=True)
 class ProjectPackage:
     """Kapselt das Informations-Dokument (dict) und Archiv (Path) für ein Projekt."""
 
-    information: dict[str, object]
+    information: Paketinformation
     archive: Path
 
 
@@ -40,15 +64,15 @@ def delta_scope(repository: Path, von: tuple[str, str], bis: tuple[str, str]) ->
     return Scope(von=von, bis=bis, changes=git.changes(repository, von[1], bis[1]))
 
 
-def release_scope(repository_root: Path, tag: git.LieferTag, commit: str) -> Scope:
+def lieferumfang(repository_root: Path, tag: git.LieferTag, commit: str) -> Scope:
     """Ermittelt den Scope für ein Liefer-Tag.
 
-    Ein FULL hat keinen Bezugsstand und keine Changes, und umfasst später alle
+    Ein FULL hat keinen Bezugscommit und keine Changes, und umfasst später alle
     Dateien des Projekts. Ein DELTA vergleicht gegen das FULL der passenden
     Releaselinie.
     """
 
-    # FULL hat keinen Bezugsstand und keinen Diff, Release Scope ist dadurch alles
+    # FULL hat keinen Bezugscommit und keinen Diff, Release Scope ist dadurch alles
     if tag.ist_hauptrelease:
         return Scope(von=None, bis=(str(tag), commit), changes=[])
 
@@ -86,7 +110,7 @@ def project_elements(repository_root: Path, project: str, scope: Scope) -> list[
     ]
 
 
-def previous_release_scope(repository: Path, tag: git.LieferTag, commit: str) -> Scope:
+def vorrelease_umfang(repository: Path, tag: git.LieferTag, commit: str) -> Scope:
     """Bestimmt den Vergleich zum vorherigen Liefer-Tag.
 
     Vorheriger Tag ist der höchste vorhandene Liefer-Tag, der namentlich vor
@@ -104,7 +128,11 @@ def previous_release_scope(repository: Path, tag: git.LieferTag, commit: str) ->
         except ValueError:
             continue
 
-    previous = max(e for e in tags if e < tag)
+    # ohne früheren Lieferstand kann der zugesagte Vergleich nicht erstellt werden
+    previous = max((e for e in tags if e < tag), default=None)
+    if previous is None:
+        raise DeliveryError(Status.SOURCE_FAILED, "Vorheriger Liefer-Tag für den Vergleich fehlt")
+
     previous_sha = git.resolve(repository, f"refs/tags/{previous}")
 
     return delta_scope(repository, (str(previous), previous_sha), (str(tag), commit))
@@ -138,7 +166,7 @@ def _project_sections(configuration: Configuration, repository: Path, scope: Sco
     return lines
 
 
-def delivery_report(
+def lieferbericht(
     configuration: Configuration, repository: Path, *, paket_scope: Scope,
     vorrelease_scope: Scope, standzeilen: list[str],
 ) -> str:
@@ -158,7 +186,7 @@ def delivery_report(
     # tatsächlichen Archivinhalt getrennt vom Vergleich zum vorherigen Liefer-Tag zeigen
     lines.extend(("## Inhalt der Projektarchive", ""))
     if paket_scope.von is None:
-        lines.extend(("Vollständiger Projektstand (FULL).", ""))
+        lines.extend(("Vollständiger Projektinhalt (FULL).", ""))
     else:
         lines.extend((f"Vergleich: `{paket_scope.von[0]}` → `{paket_scope.bis[0]}`", ""))
 
@@ -279,9 +307,9 @@ def build_project_archive(
 def build_project_package(configuration: Configuration, repository_root: Path, project: str, output_directory: Path, scope: Scope) -> ProjectPackage:
     """Ergänzt das Projektarchiv um die Informationsdaten für den Adapter."""
 
-    # Auftrag auf Bezugsstand, Zielstand und Archivart beziehen
-    lieferart = "FULL" if scope.von is None else "DELTA"
-    scope_json: dict[str, object] = {"bis": {"referenz": scope.bis[0], "commit": scope.bis[1]}}
+    # Auftrag auf Bezugscommit, Zielcommit und Archivart beziehen
+    lieferart: Literal["FULL", "DELTA"] = "FULL" if scope.von is None else "DELTA"
+    scope_json: Paketumfang = {"bis": {"referenz": scope.bis[0], "commit": scope.bis[1]}}
     if scope.von is not None:
         scope_json["von"] = {"referenz": scope.von[0], "commit": scope.von[1]}
 

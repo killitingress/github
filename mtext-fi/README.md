@@ -47,13 +47,40 @@ bearbeitet:
    Feature-Branch gehören dabei zur selben Releaselinie.
 6. Das Review abschließen und die Änderung mit **Squash and merge**
    zusammenführen.
-7. Den Synchronisierungslauf des Zielbranches prüfen und den Stand in
-   M/Text-Funktionstest abnehmen.
+7. Den Synchronisierungslauf des Zielbranches prüfen und den M/Text-Stand in
+   Funktionstest abnehmen.
 
 Korrekturen werden auf demselben Feature-Branch ergänzt und erneut nach
 M/Text-Entwicklung übertragen. Soll eine zusammengeführte Änderung in eine
 weitere Releaselinie übernommen werden, wird ihr Squash-Commit in einen neuen
 Feature-Branch dieser Releaselinie übernommen.
+
+## Manuelle Synchronisierung und Releasewechsel
+
+Unter **Actions → Ressourcen synchronisieren → Run workflow** den Branch und
+die Zielumgebung auswählen. `Branchstandard` bedeutet Entwicklung für
+Feature-Branches und Funktionstest für `main` und `release/nnn`. Alternativ
+`Entwicklung`, `Funktionstest` oder `Beide` wählen. Ein manueller Lauf überträgt
+FULL, bei `Beide` zuerst nach Entwicklung und dann nach Funktionstest.
+
+Beim Releasewechsel werden Branches, `.github/config.json` und die zentrale
+`config/releaselinien.json` manuell vorbereitet. Die Zielzuordnungen müssen
+vor den ersten Feature-Pushes und vor dem Merge nach `main` bereitstehen:
+Feature-Pushes übertragen automatisch nach Entwicklung, PR-Merges nach
+`main` oder `release/nnn` nach Funktionstest. Das gilt auch für den
+Vorbereitungs-Merge. Bei fehlender passender DELTA-Basis erfolgt FULL.
+Das Anlegen oder direkte Pushen eines Release-Branches startet keinen Abgleich.
+
+Anschließend die gewünschten Branches, etwa `main`, `release/261` und
+`release/271`, mit ihrer Zielauswahl manuell synchronisieren. Commit,
+Zielumgebungen und Ergebnisse je Lauf kontrollieren. Branches und Zuordnungen
+werden durch die Synchronisierung nicht verändert.
+
+Läufe werden im Repository nacheinander ausgeführt. GHES 3.20 hält einen
+wartenden Lauf vor, der durch einen weiteren Start ersetzt werden kann.
+Deshalb die manuellen Abgleiche nacheinander starten und ihren Abschluss
+kontrollieren. Bei einem Fehler nennt die Meldung eine bereits erfolgreich
+verarbeitete Umgebung. Eine Wiederholung kann diese erneut übertragen.
 
 ## Mainframe-Lieferung
 
@@ -68,7 +95,7 @@ diesen `.100`-Tag. `main` und `release/nnn` ergeben `rnnn.100`. Ein Branch
 3. Die Warnungen der Ressourcenprüfung prüfen und das in der Zusammenfassung
    verlinkte Freigabe-Issue öffnen.
 4. Im mit `lieferung:vorbereitet` gekennzeichneten Issue Branch, Commit,
-   Lieferart, Bezugsstand und Lieferumfang prüfen.
+   Lieferart, Bezugscommit und Lieferumfang prüfen.
 5. Mit Repository-Berechtigung `maintain` oder `admin` den Kommentar
    `/freigabe` eintragen. Die vorbereitende Person darf selbst freigeben.
 6. Nach dem ausgelösten Lauf die Mainframe-Übergabe und den Abschlusskommentar
@@ -84,32 +111,27 @@ Vor dem Paketbau wird der Tag aus dem Issue-Titel gelesen und geprüft, ob
 seine Annotation auf dieses Issue verweist. Das Issue erhält danach einen weiteren
 Abschlusskommentar.
 
-Zum Prüfen des Teststands von `mtext_actions` unter **Actions** den Workflow
-**Testlieferung** starten und die Nummer des Freigabe-Issues eingeben. Ein
-erneuter Start mit demselben abgeschlossenen Issue wiederholt die Testlieferung.
-
 ## Workflows
 
 Die Dateien unter `.github/workflows` stellen die manuellen und automatischen
 Einstiege des Repositories bereit. Die Verarbeitungsschritte werden aus
 `FinanzInformatik/fi_lbs_entw_oms_mtext_actions` geladen.
 
-Die eigenständige Ressourcenprüfung umfasst den ausgewählten Branchstand. In
+Die eigenständige Ressourcenprüfung umfasst den ausgewählten Branchcommit. In
 der Synchronisierung und Liefervorbereitung folgt ihr Umfang der jeweiligen
 FULL- oder DELTA-Verarbeitung. Bei einem DELTA werden die seit dem fachlichen
-Vergleichsstand geänderten Ressourcen geprüft.
+Vergleichscommit geänderten Ressourcen geprüft.
 
 | Datei | Auslöser | Aufgerufener Shared Workflow |
 |---|---|---|
 | `check-resources.yml` | manueller Start auf einem ausgewählten Branch | `shared-check-resources.yml` |
-| `sync-resources.yml` | Push auf `main`, `release/nnn` oder `feature/nnn/**` sowie manueller Start | zuerst `shared-check-resources.yml`, danach `shared-sync-resources.yml` |
+| `sync-resources.yml` | Push auf `feature/nnn/**`, PR-Merge nach `main` oder `release/nnn` sowie manueller Start | zuerst `shared-check-resources.yml`, danach `shared-sync-resources.yml` |
 | `lieferung-vorbereiten.yml` | manueller Start auf einem Lieferzweig | zuerst `shared-check-resources.yml`, danach `shared-lieferung-check.yml` |
-| `lieferung-ausfuehren.yml` | `/freigabe` oder `/wiederholung` im Freigabe-Issue | `shared-lieferung-ausfuehren.yml@main` |
-| `lieferung-testen.yml` | manueller Start mit der Nummer des Freigabe-Issues | `shared-lieferung-ausfuehren.yml@test` |
+| `lieferung-ausfuehren.yml` | `/freigabe` oder `/wiederholung` im Freigabe-Issue | `shared-lieferung-ausfuehren.yml` |
 
-Die regulären Workflow-Aufrufe verwenden `@main` aus dem Repository
-`FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Die Testlieferung verwendet
-den dortigen Branch `test`.
+Die Workflow-Aufrufe verwenden `@test` aus dem Repository
+`FinanzInformatik/fi_lbs_entw_oms_mtext_actions`. Die dort geladene Workflow-Datei
+lädt die Python-Implementierung vom selben Branch.
 
 Für die Mainframe-Übergabe verwendet der Lieferworkflow dieses für das
 Mandanten-Repository freigegebene organisationsweite Secret:

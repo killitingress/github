@@ -54,10 +54,14 @@ class DeliveryError(RuntimeError):
     """Enthält Status und Meldung eines erwarteten Fehlers im Workflow."""
 
     def __init__(self, status: Status, message: str) -> None:
+        """Verknüpft die Fehlerursache mit dem Status für den Workflow."""
+
         super().__init__(message)
         self.status = status
 
     def __str__(self) -> str:
+        """Stellt Status und Ursache gemeinsam für die Fehlerausgabe bereit."""
+
         return f"{self.status}: {super().__str__()}"
 
 

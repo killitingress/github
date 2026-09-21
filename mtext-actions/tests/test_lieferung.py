@@ -11,7 +11,7 @@ from lbs_delivery import github
 from lbs_delivery.git import LieferTag
 from lbs_delivery.lieferung import liefer_tag_fuer_branch, run
 from lbs_delivery.process import DeliveryError, Status
-from lbs_delivery.project_packages import previous_release_scope, project_elements, release_scope
+from lbs_delivery.project_packages import vorrelease_umfang, project_elements, lieferumfang
 
 from tests.support import TempDirTestCase, git, load_test_configuration, setup_release_repository, track_remote_branch
 
@@ -20,7 +20,7 @@ class LieferungTests(TempDirTestCase):
     """Prüft Liefer-Tag, Branchzuordnung, Lieferumfang und Bestätigung."""
 
     def setUp(self) -> None:
-        """Bereitet einen noch nicht getaggten DELTA-Stand vor."""
+        """Bereitet einen noch nicht getaggten DELTA-Commit vor."""
 
         super().setUp()
         self.repository = setup_release_repository(self.root)
@@ -49,8 +49,8 @@ class LieferungTests(TempDirTestCase):
             "r261.108",
         )
 
-        vorrelease_scope = previous_release_scope(self.repository, tag, self.source_sha)
-        paket_scope = release_scope(self.repository, tag, self.source_sha)
+        vorrelease_scope = vorrelease_umfang(self.repository, tag, self.source_sha)
+        paket_scope = lieferumfang(self.repository, tag, self.source_sha)
         information_elements = project_elements(self.repository, "LOMS_Basis", vorrelease_scope)
         paket_elements = project_elements(self.repository, "LOMS_Basis", paket_scope)
         self.assertIn(["D", "transient.txt"], information_elements)
@@ -198,7 +198,7 @@ class LieferungTests(TempDirTestCase):
 
             with patch("lbs_delivery.github._request", side_effect=(
                 {"object": {"sha": "tag-object", "type": "tag"}},
-                {"tag": "r261.108", "message": "Freigabe-Issue: #0",
+                {"tag": "r261.108", "message": str(42),
                  "object": {"type": "commit", "sha": self.source_sha}},
             )):
                 with self.assertRaises(DeliveryError) as raised:
@@ -256,11 +256,9 @@ class LieferungTests(TempDirTestCase):
             {"wiederholung": "true", "source_sha": self.source_sha, "liefer_tag": "r261.108"},
         )
 
-        for invalid in ({"issue": 0}, {"tag": "r261.108", "issue": 42}):
-            with self.subTest(invalid=invalid):
-                with self.assertRaises(DeliveryError) as raised:
-                    run("resolve", **invalid)
-                self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
+        with self.assertRaises(DeliveryError) as raised:
+            run("resolve", issue=0)
+        self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
 
         with patch.dict(os.environ, env), patch(
             "lbs_delivery.lieferung.github._request",

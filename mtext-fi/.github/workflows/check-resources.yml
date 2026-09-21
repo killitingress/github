@@ -1,7 +1,7 @@
 name: Ressourcen prüfen
 
-# Dieser Workflow prüft bei einem manuellen Start den ausgewählten Branchstand.
-# Die Verarbeitung erfolgt im Shared Workflow aus der freigegebenen Version von
+# Dieser Workflow prüft bei einem manuellen Start den ausgewählten Branchcommit.
+# Die Verarbeitung erfolgt im Shared Workflow aus dem Testbranch von
 # mtext_actions.
 'on':
   workflow_dispatch:
@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Startet den Shared Workflow für den gewählten Mandantenstand
+  # Startet den Shared Workflow für den gewählten Mandantencommit
   check:
     name: Prüfung
-    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@main
+    uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions/.github/workflows/shared-check-resources.yml@test

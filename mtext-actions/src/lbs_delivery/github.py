@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 from typing import Any
 
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
@@ -78,26 +80,54 @@ def _request(*, method: str, url: str, failure: Status, payload: dict[str, objec
         raise DeliveryError(failure, f"GitHub-Antwort ist ungültig: {ex}") from ex
 
 
-def last_sync_commit(*, event: str | None = None) -> str | None:
-    """Liest den Commit des jüngsten erfolgreichen Sync-Laufs dieses Branches."""
+def artifacts(name: str) -> list[dict[str, Any]]:
+    """Liefert die neuesten Artefakte mit diesem Namen."""
 
-    parameters = {"branch": os.environ["GITHUB_REF_NAME"], "status": "success", "per_page": 1}
-    if event:
-        parameters["event"] = event
+    query = urllib.parse.urlencode({"name": name, "per_page": 100})
+    return _request(
+        method="GET", url=f"{_repository_url('actions/artifacts')}?{query}", failure=Status.SOURCE_FAILED,
+    )["artifacts"]
 
-    # GitHub Abfrage durchführen
-    query = urllib.parse.urlencode(parameters) # Parameter in die Query-String-Notation umwandeln
-    url = f"{_repository_url('actions/workflows/sync-resources.yml/runs')}?{query}"
-    document = _request(method="GET", url=url, failure=Status.SOURCE_FAILED)
 
-    # Workflow-Läufe aus der Antwort lesen
-    runs = document["workflow_runs"]
+def artifact_document(artifact_id: int, filename: str) -> Any:
+    """Lädt eine JSON-Datei aus einem Artefakt, ohne das Archiv ins Dateisystem zu entpacken.
 
-    # wenn es keine erfolgreichen Läufe gibt, wird None zurückgegeben
-    if not runs:
+    Die Download-Grenze trennt den authentifizierten API-Aufruf vom signierten
+    Speicherlink, damit das GitHub-Token nicht an den Speicherdienst gelangt.
+    """
+
+    # die API liefert eine kurzlebige Download-Adresse als Redirect
+    request = urllib.request.Request(
+        _repository_url(f"actions/artifacts/{artifact_id}/zip"),
+        headers={"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+                 "Accept": _JSON_MEDIA_TYPE, "X-GitHub-Api-Version": _API_VERSION},
+    )
+    opener = urllib.request.build_opener(_OhneWeiterleitung())
+    try:
+        try:
+            with opener.open(request, timeout=NETWORK_TIMEOUT) as response:
+                archive = response.read()
+        except urllib.error.HTTPError as redirect:
+            with redirect:
+                if redirect.code != 302:
+                    raise
+                location = redirect.headers["Location"]
+            with urllib.request.urlopen(location, timeout=NETWORK_TIMEOUT) as response:
+                archive = response.read()
+
+        # die benannte Datei lesen, JSON- und Archivfehler an dieser I/O-Grenze melden
+        with zipfile.ZipFile(io.BytesIO(archive)) as document:
+            return json.loads(document.read(filename))
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
+        raise DeliveryError(Status.SOURCE_FAILED, f"GitHub-Artefakt kann nicht gelesen werden: {exc}") from exc
+
+
+class _OhneWeiterleitung(urllib.request.HTTPRedirectHandler):
+    """Hält Download-Redirects an der authentifizierten API-Grenze an."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        """Überlässt die Weiterleitung dem Aufrufer ohne Übernahme der Zugangsdaten."""
         return None
-
-    return runs[0]["head_sha"] # Commit-SHA des jüngsten erfolgreichen Sync-Laufs
 
 
 def _label_names(labels: object) -> set[str]:
@@ -180,7 +210,9 @@ def tag_record(tag: str) -> tuple[str, int] | None:
             raise DeliveryError(Status.SOURCE_FAILED, "Liefer-Tag ist nicht annotiert")
 
     match document:
-        case {"tag": str(name), "message": str(message), "object": {"type": "commit", "sha": str(sha)}} if name == tag:
+        case {"tag": str(name), "message": str(message), "object": {"type": "commit", "sha": str(sha)}} if (
+            name == tag and message.startswith(_TAG_ISSUE_PREFIX)
+        ):
             issue_text = message.strip().removeprefix(_TAG_ISSUE_PREFIX)
             if issue_text.isdecimal() and (issue_number := int(issue_text)) > 0:
                 return sha, issue_number

@@ -1,4 +1,17 @@
-"""Führt M/Text-Synchronisierungen über die HTTP-Schnittstelle des Adapters aus."""
+"""Spricht den M/Text-Adapter über HTTP `/sync2` an.
+
+Die Basis-URL ist `http://{umgebung}.ltoma.intern/vMtextAdapter`. Die
+Auftrags-ID verbindet GitHub-Lauf und Mandantenkürzel. Vor dem Paketbau fragt
+der Client die Ausführung ab. HTTP 404 heißt, dass noch kein Auftrag liegt.
+Sonst übernimmt oder entfernt er ihn je nach Status.
+
+Ein neuer Auftrag entsteht mit POST (HTTP 201) und den angekündigten Archiven.
+PUT überträgt die `.tgz`-Bytes unverändert. GET `/execution` wird alle fünf
+Sekunden wiederholt, bis `succeeded` oder `failed` vorliegt. Danach folgt
+DELETE. Fachliche Fehler kommen als HTTP 200 mit `status: failed`. Netz- und
+Protokollfehler beenden den Schritt mit `ADAPTER_FAILED`. Das Socket-Timeout
+beträgt 30 Sekunden.
+"""
 
 from __future__ import annotations
 
@@ -31,23 +44,22 @@ _POLL_INTERVAL_SECONDS = 5
 # URL-Muster des Adapters. `{umgebung}` ist Präfix und ETAPS-Linie.
 _ADAPTER_URL = "http://{umgebung}.ltoma.intern/vMtextAdapter"
 
-# dokumentierte Auftragsstatus der sync2-Schnittstelle
-_AUFTRAG_STATUS = frozenset({"ready", "uploading", "processing", "succeeded", "failed"})
+# Statusgruppen der sync2-Ausführung
 _ABBRUCH_STATUS = frozenset({"ready", "uploading", "failed"})
 _UPLOAD_STATUS = frozenset({"ready", "uploading"})
 _END_STATUS = frozenset({"succeeded", "failed"})
 
 
-def _sync2_url(umgebung: str) -> str:
-    """Gibt die sync2-Basis-URL einer M/Text-Umgebung zurück."""
-
-    return f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2"
-
-
 def _auftrag_url(umgebung: str, auftrag_id: str) -> str:
     """Gibt die URL eines konkreten Adapterauftrags zurück."""
 
-    return f"{_sync2_url(umgebung)}/{urllib.parse.quote(auftrag_id, safe='')}"
+    return f"{_ADAPTER_URL.format(umgebung=umgebung)}/sync2/{urllib.parse.quote(auftrag_id, safe='')}"
+
+
+def _execution_url(umgebung: str, auftrag_id: str) -> str:
+    """Gibt die URL der Ausführung eines Adapterauftrags zurück."""
+
+    return f"{_auftrag_url(umgebung, auftrag_id)}/execution"
 
 
 def check_reachability(umgebung: str) -> None:
@@ -62,17 +74,16 @@ def check_reachability(umgebung: str) -> None:
 
 
 def resume_existing(umgebung: str, auftrag_id: str) -> dict[str, object] | None:
-    """Sucht Auftrag per id und schließt diesen ab, falls er noch am Leben ist,
-    oder schießt ihn ab, wenn er im Wald steht. Gibt None zurück wenn es keinen
-    solchen Auftrag (mehr) gibt."""
+    """Übernimmt einen laufenden Auftrag oder entfernt einen unvollständigen.
+
+    Gibt `None` zurück, wenn kein Auftrag vorhanden ist oder ein neuer Auftrag
+    begonnen werden muss.
+    """
 
     auftrag_url = _auftrag_url(umgebung, auftrag_id)
 
-    # Das ist etwas seltsam hier: der Adapter antwortet HTTP 404, wenn es den
-    # Auftrag nicht gibt - und anders als sonst ist 404 hier OK, da es sowieso
-    # das erwartete Ergebnis ist (wieso sollte der Auftrag schon existieren?) -
-    # daher wird mittels not_found_ok=True das 404 auf None umgesetzt...
-    result = _call_adapter("GET", auftrag_url, not_found_ok=True)
+    # ein fehlender Auftrag ist der erwartete Neubaufall
+    result = _call_adapter("GET", _execution_url(umgebung, auftrag_id), not_found_ok=True)
     if result is None:
         return None
 
@@ -83,7 +94,7 @@ def resume_existing(umgebung: str, auftrag_id: str) -> dict[str, object] | None:
         return None
 
     # Auftrag regulär abschließen
-    return _finish_job(umgebung, result)
+    return _finish_job(umgebung, auftrag_id, result)
 
 
 def upload(umgebung: str, pakete: list[ProjectPackage], auftrag_id: str) -> dict[str, object]:
@@ -91,7 +102,7 @@ def upload(umgebung: str, pakete: list[ProjectPackage], auftrag_id: str) -> dict
 
     # Pakete unter der Auftrags-ID beim Adapter anmelden
     archive_list = [
-        {"name": paket.archive.name, "information": paket.information} for paket in pakete
+        {"name": e.archive.name, "information": e.information} for e in pakete
     ]
     auftrag_url = _auftrag_url(umgebung, auftrag_id)
     result = _call_adapter("POST", auftrag_url, {"archive": archive_list})
@@ -103,40 +114,42 @@ def upload(umgebung: str, pakete: list[ProjectPackage], auftrag_id: str) -> dict
             if result["status"] not in _UPLOAD_STATUS:
                 break
 
-    return _finish_job(umgebung, result)
+    return _finish_job(umgebung, auftrag_id, result)
 
 
-def _finish_job(umgebung: str, result: dict[str, object]) -> dict[str, object]:
+def _finish_job(umgebung: str, auftrag_id: str, result: dict[str, object]) -> dict[str, object]:
     """Wartet auf das Auftragsergebnis und räumt nach Erfolg oder Fehler auf.
 
     Neubau und Wiederanlauf verwenden denselben Abschluss. Ein inzwischen
     fehlgeschlagener Auftrag beendet den Versuch ohne erneute Verarbeitung.
     """
 
-    auftrag_id = result["auftrag_id"]
-    auftrag_url = _auftrag_url(umgebung, str(auftrag_id))
+    auftrag_url = _auftrag_url(umgebung, auftrag_id)
+    execution_url = _execution_url(umgebung, auftrag_id)
 
     # Verarbeitung nach dem Upload bis zu einem Endstatus abfragen
     while result["status"] not in _END_STATUS:
-        result = _call_adapter("GET", auftrag_url)
+        result = _call_adapter("GET", execution_url)
         if result["status"] not in _END_STATUS:
             time.sleep(_POLL_INTERVAL_SECONDS)
 
     # Auftrag entfernen, ohne eine M/Text-Fehlermeldung zu überschreiben
-    message = result.get("message") or "M/Text-Synchronisierung ist fehlgeschlagen"
     try:
         _call_adapter("DELETE", auftrag_url)
     except DeliveryError as exc:
         if result["status"] == "failed":
-            detail = f"{message}. Auftrag konnte nicht entfernt werden: {exc.args[0]}"
+            detail = f"{result['message']}. Auftrag konnte nicht entfernt werden: {exc.args[0]}"
             raise DeliveryError(Status.ADAPTER_FAILED, detail) from exc
         raise
 
     if result["status"] == "failed":
-        raise DeliveryError(Status.ADAPTER_FAILED, message)
+        raise DeliveryError(Status.ADAPTER_FAILED, result["message"])
 
     # Auftrags-ID und optionales M/Text-Ergebnis an den Workflow zurückgeben
-    return {"auftrag_id": auftrag_id} | ({"result": result["result"]} if "result" in result else {})
+    ergebnis: dict[str, object] = {"auftrag_id": auftrag_id}
+    if result["result"] is not None:
+        ergebnis["result"] = result["result"]
+    return ergebnis
 
 
 def _upload_archive(auftrag_url: str, archive: Path) -> dict[str, object]:
@@ -150,25 +163,6 @@ def _upload_archive(auftrag_url: str, archive: Path) -> dict[str, object]:
         return _call_adapter("PUT", archive_url, data, headers)
 
 
-def _validate_auftrag_response(document: dict[str, object]) -> dict[str, object]:
-    """Prüft eine sync2-Auftragsantwort gegen die dokumentierte Schnittstelle."""
-
-    match document:
-        case {"status": str(status), "auftrag_id": str(auftrag_id)} if status and auftrag_id:
-            if status not in _AUFTRAG_STATUS:
-                raise DeliveryError(Status.ADAPTER_FAILED, "Adapter meldet einen unbekannten Auftragsstatus")
-            message = document.get("message")
-            if message is not None and not isinstance(message, str):
-                raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort ist ungültig")
-            return document
-        case {"status": str(status)} if status:
-            if status not in _AUFTRAG_STATUS:
-                raise DeliveryError(Status.ADAPTER_FAILED, "Adapter meldet einen unbekannten Auftragsstatus")
-            raise DeliveryError(Status.ADAPTER_FAILED, "Adapter liefert keine gültige Auftrags-ID")
-        case _:
-            raise DeliveryError(Status.ADAPTER_FAILED, "Adapter meldet keinen Auftragsstatus")
-
-
 def _call_adapter(
     method: Literal["GET", "POST", "PUT", "DELETE"],
     url: str,
@@ -177,11 +171,12 @@ def _call_adapter(
     *,
     not_found_ok: bool = False,
 ) -> dict[str, object] | None:
-    """Liefert eine geprüfte Adapterantwort.
+    """Liefert die geprüfte Ausführung oder eine Löschbestätigung.
 
     Bei HTTP 404 gibt die Funktion mit `not_found_ok` `None` zurück. Der
     Wiederanlauf nutzt das, wenn unter der Lauf-ID noch kein Auftrag liegt.
-    Andere HTTP-Fehler beenden den Schritt mit `ADAPTER_FAILED`.
+    POST entnimmt die Ausführung aus dem angelegten Auftrag. Andere
+    HTTP-Fehler beenden den Schritt mit `ADAPTER_FAILED`.
     """
 
     # JSON-Anfragen serialisieren, Archivdaten unverändert durchreichen
@@ -212,7 +207,8 @@ def _call_adapter(
     if not_found_ok and http_status == 404:
         return None
 
-    if not 200 <= http_status < 300:
+    expected_status = 201 if method == "POST" else 200
+    if http_status != expected_status:
         detail = body[:1000].decode(errors="replace")
         raise DeliveryError(
             Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {http_status}: {detail}",
@@ -234,7 +230,22 @@ def _call_adapter(
             case _:
                 raise DeliveryError(Status.ADAPTER_FAILED, "Adapter bestätigt das Löschen des Auftrags nicht")
 
-    return _validate_auftrag_response(document)
+    # POST liefert den Auftrag, weitere Aufrufe direkt dessen Ausführung
+    if method == "POST":
+        document = document.get("execution")
+        if not isinstance(document, dict):
+            raise DeliveryError(Status.ADAPTER_FAILED, "Adapter liefert keine gültige Ausführung")
+
+    # zulässige Kombinationen der festen Ausführungsfelder übernehmen
+    match document:
+        case {"status": "failed", "message": str(message), "result": None} if message:
+            return document
+        case {"status": "succeeded", "message": None, "result": str() | None}:
+            return document
+        case {"status": "ready" | "uploading" | "processing", "message": None, "result": None}:
+            return document
+        case _:
+            raise DeliveryError(Status.ADAPTER_FAILED, "Adapter liefert keine gültige Ausführung")
 
 
 def _iter_file(path: Path) -> Iterator[bytes]:

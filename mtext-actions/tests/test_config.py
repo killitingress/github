@@ -37,8 +37,7 @@ class ConfigTests(TempDirTestCase):
         )
         self.assertTrue(configuration.dry_run)
         self.assertNotIn(excluded_project.name, configuration.projects)
-        excluded_resource = excluded_project.relative_to(self.repository) / "daten.xml"
-        self.assertTrue(configuration.excludes_project_path(excluded_resource))
+        self.assertIn(excluded_project.name, configuration.excluded_projects)
         excluded_project.rmdir()
 
         # Mandant, Repository und Releaselinie müssen zusammenpassen
