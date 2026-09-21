@@ -34,13 +34,13 @@ M/Text-Funktionstestumgebung. Dort soll das Feature dann von der LBS getestet
 und fachlich freigegeben werden. Danach kann der Feature-Branch wieder gelöscht
 werden.
 
-Eine Mainframe-Lieferung kann entweder auf `main` oder `release/nnn`
-durchgeführt werden und verwendet dann dessen vollständigen Commit, oder auf
-einer in `bereitstellung/nnn.nnn` zusammengestellten Teillieferung. Ein
-Vorbereitungs-Workflow hält Branch, Commit-SHA und Lieferumfang fest und
-zeigt sie in einem Freigabe-Issue. Der Freigabekommentar startet anschließend
-Paketbau und Mainframe-Übergabe. Nach erfolgreicher Übergabe entsteht der
-Liefer-Tag.
+Eine Mainframe-Lieferung kann entweder von `main` oder `release/nnn`
+durchgeführt werden und verwendet dann den dort vorbereiteten Ressourcenstand,
+oder auf einer in `bereitstellung/nnn.nnn` zusammengestellten Teillieferung. Ein
+Vorbereitungs-Workflow nutzt ein Gihub-Issue um die Details zur Lieferung
+festzuhalten. Mittels Kommentar wird eine Lieferung freigegeben und dadurch die
+Pakete gebaut und an den Mainframe übergeben. Nach erfolgreicher Übergabe
+entsteht der Liefer-Tag im Mandantenrepository.
 
 Die **M/Workbench** ist dabei das zentrale Arbeitsmittel für die Bearbeitung
 der M/Text-Ressourcen und die Arbeit mit Git über das Eclipse-Plugin `EGit`.
@@ -69,7 +69,7 @@ Branchcommit ist für eine Lieferung bereit
 
 ```text
 Lieferung vorbereiten
-    │ Branch auswählen (bereitstellung/nnn.nnn, release/nnn oder main)
+    │ Branch auswählen (bereitstellung/nnn.nnn, main oder release/nnn)
     ▼
 Freigabe-Issue prüfen
     │ /freigabe

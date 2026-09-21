@@ -81,7 +81,7 @@ Ressourcenstand ist für eine Lieferung bereit
 
 ```text
 Lieferung vorbereiten
-    │ Branch auswählen (bereitstellung/nnn.nnn, release/nnn oder main)
+    │ Branch auswählen (bereitstellung/nnn.nnn, main oder release/nnn)
     ▼
 Freigabe-Issue prüfen
     │ /freigabe
