@@ -98,7 +98,7 @@ class SyncTests(TempDirTestCase):
 
         # Ereignis und Zielauswahl bestimmen den Umfang unabhängig von der Speicherung
         with (
-            patch.object(sync, "letzter_sync_commit") as history,
+            patch.object(sync, "latest_sync_commit") as history,
             patch.object(sync.git, "resolve", return_value="current"),
             patch.object(sync.git, "require_ancestor") as ancestor,
             patch.object(sync.git, "changes", return_value=[]) as changes,
@@ -108,7 +108,7 @@ class SyncTests(TempDirTestCase):
             patch.object(sync.adapter, "upload", return_value={}) as transfer,
         ):
             configuration = load_test_configuration(self.repository)
-            for branch, event, ziel, basis, targets in (
+            for branch, event, target, baseline, targets in (
                 ("feature/261/test", "push", "Branchstandard", "previous", ["en01"]),
                 ("feature/261/test", "push", "Branchstandard", None, ["en01"]),
                 ("release/261", "pull_request", "Branchstandard", None, ["fu01"]),
@@ -118,36 +118,36 @@ class SyncTests(TempDirTestCase):
                 ("main", "workflow_dispatch", "Branchstandard", None, ["fu02"]),
                 ("feature/261/test", "workflow_dispatch", "Funktionstest", None, ["fu01"]),
             ):
-                with self.subTest(branch=branch, event=event, ziel=ziel), patch.dict(os.environ, {
+                with self.subTest(branch=branch, event=event, target=target), patch.dict(os.environ, {
                     "GITHUB_REF_NAME": branch, "GITHUB_EVENT_NAME": event,
-                    "MTEXT_ZIELUMGEBUNG": ziel,
+                    "MTEXT_ZIELUMGEBUNG": target,
                 }):
                     history.reset_mock()
-                    history.return_value = basis
+                    history.return_value = baseline
                     changes.reset_mock()
                     result = sync.run()
                     self.assertEqual([e["umgebung"] for e in result["ergebnisse"]], targets)
-                    if basis:
-                        changes.assert_called_once_with(self.repository, basis, sync.git.resolve.return_value)
+                    if baseline:
+                        changes.assert_called_once_with(self.repository, baseline, sync.git.resolve.return_value)
                     else:
                         changes.assert_not_called()
                     if event == "workflow_dispatch":
                         history.assert_not_called()
-                    nachweis = json.loads(Path(result["outputs"]["nachweis_path"]).read_text())
-                    self.assertEqual(set(nachweis), {"commit", "releaselinie", "umgebungen"})
-                    self.assertEqual(nachweis["commit"], sync.git.resolve.return_value)
-                    self.assertEqual(nachweis["umgebungen"], targets)
+                    evidence = json.loads(Path(result["outputs"]["nachweis_path"]).read_text())
+                    self.assertEqual(set(evidence), {"commit", "releaselinie", "umgebungen"})
+                    self.assertEqual(evidence["commit"], sync.git.resolve.return_value)
+                    self.assertEqual(evidence["umgebungen"], targets)
 
             # Die normale Planung lehnt eine manuelle Zielauswahl im automatischen Lauf ab.
             with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push", "MTEXT_ZIELUMGEBUNG": "Beide"}):
                 with self.assertRaises(DeliveryError) as raised:
-                    sync.ermittle_plan(self.repository, configuration)
+                    sync.resolve_plan(self.repository, configuration)
                 self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
 
             # Ein überholter Vergleichscommit wird vor der Übertragung zurückgewiesen.
             ancestor.side_effect = [None, DeliveryError(Status.SOURCE_FAILED, "kein Vorfahr")]
             transfer.reset_mock()
-            with patch.object(sync, "letzter_sync_commit", return_value="previous"):
+            with patch.object(sync, "latest_sync_commit", return_value="previous"):
                 with self.assertRaises(DeliveryError) as raised:
                     sync.run()
             self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
@@ -160,20 +160,20 @@ class SyncTests(TempDirTestCase):
             {"id": 1, "expired": True},
             {"id": 2, "expired": False},
         ]
-        nachweis = {"commit": previous, "releaselinie": releaselinie, "umgebungen": [umgebung]}
-        for erwartung, aktuelle_linie in ((previous, releaselinie), (None, "271")):
+        evidence = {"commit": previous, "releaselinie": releaselinie, "umgebungen": [umgebung]}
+        for expected, current_releaselinie in ((previous, releaselinie), (None, "271")):
             with (
                 patch.object(github, "artifacts", return_value=artifacts) as listed,
-                patch.object(github, "artifact_document", return_value=nachweis),
+                patch.object(github, "artifact_document", return_value=evidence),
             ):
-                self.assertEqual(sync.letzter_sync_commit(branch, umgebung, aktuelle_linie), erwartung)
+                self.assertEqual(sync.latest_sync_commit(branch, umgebung, current_releaselinie), expected)
                 listed.assert_called_once_with(f"mtext-stand-{urllib.parse.quote(branch, safe='')}")
 
         # Der Archivinhalt wird gelesen, beim Speicherabruf wird das API-Token nicht weitergegeben.
         archive = io.BytesIO()
         filename = "mtext-stand.json"
         with zipfile.ZipFile(archive, "w") as document:
-            document.writestr(filename, json.dumps(nachweis))
+            document.writestr(filename, json.dumps(evidence))
         response = http_reply({})
         response.read.return_value = archive.getvalue()
         location = "https://storage.test/stand.zip"
@@ -183,17 +183,17 @@ class SyncTests(TempDirTestCase):
             patch.object(github.urllib.request, "urlopen", return_value=response) as download,
         ):
             opener.return_value.open.side_effect = redirect
-            self.assertEqual(github.artifact_document(artifacts[1]["id"], filename), nachweis)
+            self.assertEqual(github.artifact_document(artifacts[1]["id"], filename), evidence)
             self.assertEqual(download.call_args.args, (location,))
 
-    def _capture_packages(self, _umgebung, pakete, _auftrag_id) -> dict[str, object]:
+    def _capture_packages(self, _umgebung, packages, _auftrag_id) -> dict[str, object]:
         """Prüft Informations-Dokumente und Archive während ihrer Übergabe."""
 
-        for paket in pakete:
-            self.documents.append(paket.information)
+        for package in packages:
+            self.documents.append(package.information)
             # die Information muss die Prüfsumme des jeweiligen Uploads tragen
             self.assertEqual(
-                self.documents[-1]["sha256"], hashlib.sha256(paket.archive.read_bytes()).hexdigest(),
+                self.documents[-1]["sha256"], hashlib.sha256(package.archive.read_bytes()).hexdigest(),
             )
         return {"auftrag_id": "auftrag", "result": "Geändert: beispiel.xml\nGelöscht: alt.xml"}
 
@@ -205,7 +205,7 @@ class SyncTests(TempDirTestCase):
         self.documents = []
 
         with (
-            patch.object(sync, "letzter_sync_commit", return_value=baseline),
+            patch.object(sync, "latest_sync_commit", return_value=baseline),
             patch.object(adapter, "check_reachability") as reachability,
             patch.object(adapter, "resume_existing", return_value=None) as resume,
             patch.object(adapter, "upload", side_effect=self._capture_packages) as transfer,
@@ -223,9 +223,9 @@ class SyncTests(TempDirTestCase):
             self.assertEqual(self.documents[0]["scope"]["bis"]["commit"], commit)
             self.assertTrue(all("elemente" not in e for e in self.documents))
             self.assertNotIn("von", self.documents[1]["scope"])
-            ergebnis_path = self.root / "mtext-ergebnis.txt"
-            self.assertEqual(result["outputs"]["ergebnis_path"], str(ergebnis_path))
-            self.assertIn("Geändert: beispiel.xml\nGelöscht: alt.xml", ergebnis_path.read_text())
+            result_path = self.root / "mtext-ergebnis.txt"
+            self.assertEqual(result["outputs"]["ergebnis_path"], str(result_path))
+            self.assertIn("Geändert: beispiel.xml\nGelöscht: alt.xml", result_path.read_text())
             self.assertNotIn("Geändert: beispiel.xml", result["summary"])
             self.assertNotIn("result", result["ergebnisse"][0])
             self.assertIn("Laufartefakt `mtext-ergebnis`", result["summary"])
@@ -239,7 +239,7 @@ class SyncTests(TempDirTestCase):
             self.assertEqual(result["status"], Status.ADAPTER_SKIPPED)
             self.assertEqual(result["ergebnisse"][0]["auftrag_id"], "test-FI")
             self.assertNotIn("result", result["ergebnisse"][0])
-            self.assertIn("Dry Run", ergebnis_path.read_text())
+            self.assertIn("Dry Run", result_path.read_text())
             reachability.assert_called_once()
             resume.assert_not_called()
             transfer.assert_not_called()
@@ -250,14 +250,14 @@ class SyncTests(TempDirTestCase):
             git(self.repository, "commit", "-m", "Konfiguration")
             git(self.repository, "update-ref", "refs/remotes/origin/release/261", "HEAD")
             transfer.reset_mock()
-            with patch.object(sync, "letzter_sync_commit", return_value=commit):
+            with patch.object(sync, "latest_sync_commit", return_value=commit):
                 result = sync.run()
             self.assertEqual(result["ergebnisse"][0]["projekte"], [])
             transfer.assert_not_called()
 
         load_test_configuration(self.repository, mandant={"dry_run": False})
         with (
-            patch.object(sync, "letzter_sync_commit", return_value=baseline),
+            patch.object(sync, "latest_sync_commit", return_value=baseline),
             patch.object(adapter, "check_reachability"),
             patch.object(sync, "build_project_package", return_value=self.project_package) as build,
         ):
@@ -273,7 +273,7 @@ class SyncTests(TempDirTestCase):
                     result = sync.run()
 
                 build.assert_not_called()
-                self.assertIn("fertig", ergebnis_path.read_text())
+                self.assertIn("fertig", result_path.read_text())
                 self.assertEqual([e.args[0].get_method() for e in http.call_args_list],
                                  ["GET", "GET", "DELETE"] if status == "processing" else ["GET", "DELETE"])
 
@@ -331,7 +331,7 @@ class SyncTests(TempDirTestCase):
         network_error = urllib.error.URLError("Verbindung abgebrochen")
         self.response = http_reply({})
 
-        pakete = []
+        packages = []
         for project in ("LOMS_Basis", "LOMS_Autonom"):
             information = {
                 "projekt": project,
@@ -344,7 +344,7 @@ class SyncTests(TempDirTestCase):
             }
             archive = self.root / f"{project}D.tgz"
             archive.write_bytes(project.encode())
-            pakete.append(ProjectPackage(information, archive))
+            packages.append(ProjectPackage(information, archive))
 
         uploading = ready | {"status": "uploading"}
         self.response.read.side_effect = [
@@ -353,7 +353,7 @@ class SyncTests(TempDirTestCase):
         ]
         self.uploaded = []
         with patch.object(adapter.urllib.request, "urlopen", side_effect=self._receive_archive) as http:
-            result = adapter.upload("en01", pakete, "test-FI")
+            result = adapter.upload("en01", packages, "test-FI")
         payload = json.loads(http.call_args_list[0].args[0].data)
         self.assertEqual([e["information"]["sha256"] for e in payload["archive"]],
                          ["checksum-LOMS_Basis", "checksum-LOMS_Autonom"])
@@ -380,7 +380,7 @@ class SyncTests(TempDirTestCase):
             self.response.read.side_effect = [
                 e if isinstance(e, (bytes, Exception)) else json.dumps(e).encode() for e in replies
             ]
-            pakete = [self.project_package]
+            packages = [self.project_package]
             self.uploaded = []
             with (
                 self.subTest(replies=replies),
@@ -390,7 +390,7 @@ class SyncTests(TempDirTestCase):
                 outcome = self.assertRaises(DeliveryError) if error_status else nullcontext()
                 with outcome:
                     adapter_result = adapter.upload(
-                        "en01", pakete, "test-FI",
+                        "en01", packages, "test-FI",
                     )
                     self.assertEqual(adapter_result["auftrag_id"], "test-FI")
                     self.assertEqual(adapter_result["result"], succeeded["result"])

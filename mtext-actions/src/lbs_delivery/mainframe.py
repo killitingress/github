@@ -110,11 +110,11 @@ def _submit_archive(archive_path: Path) -> None:
         raise DeliveryError(Status.MAINFRAME_TRANSFER_FAILED, f"FTPS-/JES-Übergabe fehlgeschlagen: {exc}") from exc
 
 
-def _submit_mainframe_files(*, release_directory: Path, dry_run: bool) -> dict[str, object]:
+def _submit_mainframe_files(*, lieferung_directory: Path, dry_run: bool) -> dict[str, object]:
     """Übergibt alle vorbereiteten Archive und JCL-Dateien an den Mainframe."""
 
     # vollständige Paare aus Archiv und JCL im Release-Verzeichnis voraussetzen
-    archives = sorted(release_directory.glob("*.tgz"))
+    archives = sorted(lieferung_directory.glob("*.tgz"))
     if not archives:
         raise DeliveryError(Status.PACKAGE_FAILED, "Archive fehlen")
     for archive in archives:
@@ -142,10 +142,10 @@ def _build_mainframe_files(configuration: config.Configuration, *, output_direct
 
     # Paketumfang aus dem vorbereiteten Commit ableiten
     repository_root = config.mandant_source()
-    paket_scope = lieferumfang(repository_root, tag, git.resolve(repository_root, "HEAD"))
+    scope = lieferumfang(repository_root, tag, git.resolve(repository_root, "HEAD"))
 
     # Hostprofil und JCL-Vorlage für diese Releaselinie laden
-    hostprofil = configuration.hostprofile[configuration.releaselinien[tag.releaselinie]["hostprofil"]]
+    host_profile = configuration.hostprofile[configuration.releaselinien[tag.releaselinie]["hostprofil"]]
     try:
         jcl_template = _MAINFRAME_JCL_TEMPLATE.read_text(encoding="ascii")
     except (OSError, UnicodeError) as exc:
@@ -153,11 +153,11 @@ def _build_mainframe_files(configuration: config.Configuration, *, output_direct
 
     # Projektarchive erstellen und je Archiv-Member eine JCL-Datei generieren
     for project in configuration.projects:
-        archive = build_project_archive(configuration, repository_root, project, output_directory, paket_scope)
+        archive = build_project_archive(configuration, repository_root, project, output_directory, scope)
 
         # leeres D-Archiv verhindert, dass der Folgejob ein früheres DELTA einspielt
         archive_paths = [archive]
-        if paket_scope.von is None:
+        if scope.base is None:
             delta_archive = project_archive_path(configuration, project, output_directory, "D")
             build_delta_archive(repository_root, project, delta_archive, [])
             archive_paths.append(delta_archive)
@@ -165,7 +165,7 @@ def _build_mainframe_files(configuration: config.Configuration, *, output_direct
         for archive_path in archive_paths:
             # Archivname und Hostprofil in eine JCL-Datei rendern
             member = archive_path.stem
-            rendered = _render_jcl(jcl_template, configuration.ispw, hostprofil["stage"], configuration.subsystem, hostprofil["assignment"], member)
+            rendered = _render_jcl(jcl_template, configuration.ispw, host_profile["stage"], configuration.subsystem, host_profile["assignment"], member)
 
             try:
                 # JCL-Datei für das Archiv-Member erstellen
@@ -195,8 +195,8 @@ def run(subcommand: str, tag: str | None = None) -> dict[str, object]:
     # Mainframe-Schritt übergibt das zuvor heruntergeladene Release-Verzeichnis
     if subcommand == "mainframe":
         return _submit_mainframe_files(
-            release_directory=Path(os.environ["RUNNER_TEMP"]) / "release",
+            lieferung_directory=Path(os.environ["RUNNER_TEMP"]) / "release",
             dry_run=os.environ.get("DRY_RUN") == "true",
         )
 
-    raise DeliveryError(Status.VALIDATION_FAILED, "unbekannter Releasebefehl")
+    raise DeliveryError(Status.VALIDATION_FAILED, "unbekannter Lieferbefehl")

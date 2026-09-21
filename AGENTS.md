@@ -107,6 +107,12 @@ def upload_archive(path: Path) -> Response:
 
 - In Dokumentation und Betrieb verwendete deutsche Fachbegriffe übernehmen. Keine neuen
   englischen Übersetzungen für bestehende Begriffe einführen.
+- Allgemeine Variablen-, Funktions- und Klassennamen im Code englisch benennen.
+  Bestätigte Fachbegriffe bleiben deutsch, darunter `Lieferung`, `Lieferumfang`,
+  `Lieferart`, `LieferTag`, `Auftrag`, `auftrag_id`, `Umgebung`, `Releaselinie`,
+  `Mandant`, `Mandantenkürzel` und `Synchronisierung`.
+- `previous_release_scope` ist der bestätigte Name für den Vergleichsumfang zur
+  vorherigen Lieferung.
 - Für den Vorgang und daraus gebildete Begriffe `Synchronisierung` verwenden, nicht
   `Synchronisation`, etwa `Synchronisierungslauf` und `Synchronisierungsauftrag`.
 - Es heißt `Releaselinie` und `Mandantenkürzel`, nicht `Release-Line`, `release_line` oder

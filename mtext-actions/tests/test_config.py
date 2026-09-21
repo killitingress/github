@@ -61,7 +61,7 @@ class ConfigTests(TempDirTestCase):
             ),
             encoding="utf-8",
         )
-        with patch("lbs_delivery.config.MANDANTEN_ZUORDNUNG_PATH", mandanten_path):
+        with patch("lbs_delivery.config.MANDANT_MAPPING_PATH", mandanten_path):
             with self.assertRaises(DeliveryError) as raised:
                 load_test_configuration(self.repository)
             self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
@@ -76,7 +76,7 @@ class ConfigTests(TempDirTestCase):
             ),
             encoding="utf-8",
         )
-        with patch("lbs_delivery.config.RELEASELINIEN_ZUORDNUNG_PATH", releaselinien_path):
+        with patch("lbs_delivery.config.RELEASELINIEN_MAPPING_PATH", releaselinien_path):
             with self.assertRaises(DeliveryError) as raised:
                 load_test_configuration(self.repository)
             self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)

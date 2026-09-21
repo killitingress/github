@@ -85,8 +85,8 @@ class CheckResourcesTests(TempDirTestCase):
         # eine Ressource für den explizit übergebenen DELTA-Scope ändern
         self.write("brief.model", "<brief>")
         scope = Scope(
-            von=("release/261", "basis"),
-            bis=("release/261", "ziel"),
+            base=("release/261", "basis"),
+            target=("release/261", "ziel"),
             changes=[GitChange("M", "brief.model")],
         )
         output = io.StringIO()

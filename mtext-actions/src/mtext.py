@@ -14,15 +14,15 @@ def run() -> dict[str, object]:
     """Liest Bereich und Schritt und ruft das zugehörige Modul auf."""
 
     parser = argparse.ArgumentParser(prog="mtext")
-    parser.add_argument("bereich") # z.B. "resources" oder "delivery" oder "release"
-    parser.add_argument("schritt") # z.B. "check" oder "sync" oder "mainframe"
+    parser.add_argument("section") # z.B. "resources" oder "delivery" oder "release"
+    parser.add_argument("subcommand") # z.B. "check" oder "sync" oder "mainframe"
     parser.add_argument("--tag")
     parser.add_argument("--issue", type=int) # Freigabe-Issue einer Lieferung
     parser.add_argument("--delivery-scope", action="store_true") # Umfang der folgenden Lieferung
     parser.add_argument("--sync-scope", action="store_true") # Umfang der folgenden Synchronisierung
     args = parser.parse_args()
 
-    if args.bereich == "resources" and args.schritt == "check":
+    if args.section == "resources" and args.subcommand == "check":
         # Der Workflow-Aufruf legt genau einen fachlichen Prüfungsumfang fest.
         if args.delivery_scope and args.sync_scope:
             raise DeliveryError(Status.VALIDATION_FAILED, "Prüfungsumfang ist nicht eindeutig")
@@ -34,26 +34,26 @@ def run() -> dict[str, object]:
         if args.delivery_scope:
             source = config.mandant_source()
             configuration = config.Configuration.load(source, os.environ["GITHUB_REPOSITORY"])
-            tag = lieferung.liefer_tag_fuer_branch(configuration, os.environ["GITHUB_REF_NAME"])
+            tag = lieferung.liefer_tag_for_branch(configuration, os.environ["GITHUB_REF_NAME"])
             scope = lieferumfang(source, tag, git.resolve(source, "HEAD"))
         elif args.sync_scope:
             source = config.mandant_source()
             configuration = config.Configuration.load(source, os.environ["GITHUB_REPOSITORY"])
-            scope = sync.ermittle_plan(source, configuration).scope
+            scope = sync.resolve_plan(source, configuration).scope
 
         # Der Syntaxprüfer verarbeitet den fertigen Scope ohne Kenntnis des Folgejobs.
         return resource_check.run(scope)
 
-    if args.bereich == "resources" and args.schritt == "sync":
+    if args.section == "resources" and args.subcommand == "sync":
         return sync.run()
 
-    if args.bereich == "delivery":
-        return lieferung.run(args.schritt, args.tag, args.issue)
+    if args.section == "delivery":
+        return lieferung.run(args.subcommand, args.tag, args.issue)
 
-    if args.bereich == "release" and args.schritt in ("build", "mainframe"):
-        return mainframe.run(args.schritt, args.tag)
+    if args.section == "release" and args.subcommand in ("build", "mainframe"):
+        return mainframe.run(args.subcommand, args.tag)
 
-    raise DeliveryError(Status.VALIDATION_FAILED, f"unbekanntes Kommando: {args.bereich} {args.schritt}")
+    raise DeliveryError(Status.VALIDATION_FAILED, f"unbekanntes Kommando: {args.section} {args.subcommand}")
 
 
 if __name__ == "__main__":

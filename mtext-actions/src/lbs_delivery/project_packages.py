@@ -22,8 +22,8 @@ from .process import DeliveryError, Status
 class Scope:
     """Hält Bezugscommit, Zielcommit und die Änderungen eines Git-Vergleichs."""
 
-    von: tuple[str, str] | None
-    bis: tuple[str, str]
+    base: tuple[str, str] | None
+    target: tuple[str, str]
     changes: list[git.GitChange]
 
 
@@ -34,19 +34,19 @@ class GitCommit(TypedDict):
     commit: str
 
 
-class Paketumfang(TypedDict):
+class PackageScope(TypedDict):
     """Zielcommit und optionaler Bezugscommit im Informationsdokument des Adapters."""
 
     bis: GitCommit
     von: NotRequired[GitCommit]
 
 
-class Paketinformation(TypedDict):
+class PackageInformation(TypedDict):
     """Verbindliche Metadaten eines beim Adapter angemeldeten Projektarchivs."""
 
     projekt: str
     lieferart: Literal["FULL", "DELTA"]
-    scope: Paketumfang
+    scope: PackageScope
     sha256: str
 
 
@@ -54,14 +54,14 @@ class Paketinformation(TypedDict):
 class ProjectPackage:
     """Kapselt das Informations-Dokument (dict) und Archiv (Path) für ein Projekt."""
 
-    information: Paketinformation
+    information: PackageInformation
     archive: Path
 
 
-def delta_scope(repository: Path, von: tuple[str, str], bis: tuple[str, str]) -> Scope:
+def delta_scope(repository: Path, base: tuple[str, str], target: tuple[str, str]) -> Scope:
     """Ermittelt den Scope eines Deltas."""
 
-    return Scope(von=von, bis=bis, changes=git.changes(repository, von[1], bis[1]))
+    return Scope(base=base, target=target, changes=git.changes(repository, base[1], target[1]))
 
 
 def lieferumfang(repository_root: Path, tag: git.LieferTag, commit: str) -> Scope:
@@ -74,7 +74,7 @@ def lieferumfang(repository_root: Path, tag: git.LieferTag, commit: str) -> Scop
 
     # FULL hat keinen Bezugscommit und keinen Diff, Release Scope ist dadurch alles
     if tag.ist_hauptrelease:
-        return Scope(von=None, bis=(str(tag), commit), changes=[])
+        return Scope(base=None, target=(str(tag), commit), changes=[])
 
     # DELTA vergleicht kumulativ mit der `.100`-Lieferung derselben Releaselinie
     base_reference = str(git.LieferTag(tag.releaselinie, "100"))
@@ -96,7 +96,7 @@ def project_elements(repository_root: Path, project: str, scope: Scope) -> list[
     """
 
     # FULL: alle Projektdateien als hinzugefügt melden.
-    if scope.von is None:
+    if scope.base is None:
         return [
             ["A", e.relative_to(repository_root / project).as_posix()]
             for e in sorted((repository_root / project).rglob("*"))
@@ -110,7 +110,7 @@ def project_elements(repository_root: Path, project: str, scope: Scope) -> list[
     ]
 
 
-def vorrelease_umfang(repository: Path, tag: git.LieferTag, commit: str) -> Scope:
+def previous_release_scope(repository: Path, tag: git.LieferTag, commit: str) -> Scope:
     """Bestimmt den Vergleich zum vorherigen Liefer-Tag.
 
     Vorheriger Tag ist der höchste vorhandene Liefer-Tag, der namentlich vor
@@ -160,24 +160,24 @@ def _project_sections(configuration: Configuration, repository: Path, scope: Sco
                 continue
 
             repository_path = urllib.parse.quote(f"{project}/{path}", safe="/")
-            file_url = f"{repository_url}/blob/{scope.bis[1]}/{repository_path}"
+            file_url = f"{repository_url}/blob/{scope.target[1]}/{repository_path}"
             lines.append(f"- `{status}` [`{path}`]({file_url})")
         lines.append("")
     return lines
 
 
 def lieferbericht(
-    configuration: Configuration, repository: Path, *, paket_scope: Scope,
-    vorrelease_scope: Scope, standzeilen: list[str],
+    configuration: Configuration, repository: Path, *, lieferumfang: Scope,
+    previous_scope: Scope, status_lines: list[str],
 ) -> str:
     """Erstellt den Lieferumfang für das Freigabe-Issue als Markdown-Text."""
 
-    lines = ["## Lieferung", "", *standzeilen, ""]
+    lines = ["## Lieferung", "", *status_lines, ""]
 
     # Abweichungen vom vorherigen Lieferstand ohne leere Projektabschnitte zeigen
-    lines.extend((f"## Abweichungen gegenüber `{vorrelease_scope.von[0]}`", ""))
-    lines.extend((f"Vergleich: `{vorrelease_scope.von[0]}` → `{vorrelease_scope.bis[0]}`", ""))
-    changes = _project_sections(configuration, repository, vorrelease_scope)
+    lines.extend((f"## Abweichungen gegenüber `{previous_scope.base[0]}`", ""))
+    lines.extend((f"Vergleich: `{previous_scope.base[0]}` → `{previous_scope.target[0]}`", ""))
+    changes = _project_sections(configuration, repository, previous_scope)
     if changes:
         lines.extend(changes)
     else:
@@ -185,15 +185,15 @@ def lieferbericht(
 
     # tatsächlichen Archivinhalt getrennt vom Vergleich zum vorherigen Liefer-Tag zeigen
     lines.extend(("## Inhalt der Projektarchive", ""))
-    if paket_scope.von is None:
+    if lieferumfang.base is None:
         lines.extend(("Vollständiger Projektinhalt (FULL).", ""))
     else:
-        lines.extend((f"Vergleich: `{paket_scope.von[0]}` → `{paket_scope.bis[0]}`", ""))
+        lines.extend((f"Vergleich: `{lieferumfang.base[0]}` → `{lieferumfang.target[0]}`", ""))
 
-    archive_contents = _project_sections(configuration, repository, paket_scope)
+    archive_contents = _project_sections(configuration, repository, lieferumfang)
     if archive_contents:
         lines.extend(archive_contents)
-    elif paket_scope.von is None:
+    elif lieferumfang.base is None:
         lines.extend(("Die Projektarchive enthalten keine Ressourcendateien.", ""))
     else:
         lines.extend(("Die Projektarchive enthalten keine geänderten oder gelöschten Ressourcen.", ""))
@@ -220,10 +220,10 @@ def _write_archive(target_name: Path, source_directory: Path, entries: Iterable[
         raise DeliveryError(Status.PACKAGE_FAILED, f"Archiv kann nicht erzeugt werden: {detail}") from exc
 
 
-def project_archive_path(configuration: Configuration, project: str, directory: Path, art: str) -> Path:
+def project_archive_path(configuration: Configuration, project: str, directory: Path, archive_type: str) -> Path:
     """Gibt den vollen Pfad eines F- oder D-Archivs zurück."""
 
-    return directory / f"{configuration.kuerzel}{configuration.projects[project]}{art}.tgz"
+    return directory / f"{configuration.kuerzel}{configuration.projects[project]}{archive_type}.tgz"
 
 
 def build_delta_archive(source: Path, project: str, target: Path, elements: list[list[str]]) -> None:
@@ -293,7 +293,7 @@ def build_project_archive(
         raise DeliveryError(Status.PACKAGE_FAILED, f"Ausgabeverzeichnis kann nicht erstellt werden: {exc}") from exc
 
     # FULL überträgt den Projektbaum, DELTA die geänderten Dateien
-    if scope.von is None:
+    if scope.base is None:
         archive = project_archive_path(configuration, project, output_directory, "F")
         _write_archive(archive, repository_root, [f"./{project}"])
     else:
@@ -308,10 +308,10 @@ def build_project_package(configuration: Configuration, repository_root: Path, p
     """Ergänzt das Projektarchiv um die Informationsdaten für den Adapter."""
 
     # Auftrag auf Bezugscommit, Zielcommit und Archivart beziehen
-    lieferart: Literal["FULL", "DELTA"] = "FULL" if scope.von is None else "DELTA"
-    scope_json: Paketumfang = {"bis": {"referenz": scope.bis[0], "commit": scope.bis[1]}}
-    if scope.von is not None:
-        scope_json["von"] = {"referenz": scope.von[0], "commit": scope.von[1]}
+    lieferart: Literal["FULL", "DELTA"] = "FULL" if scope.base is None else "DELTA"
+    scope_json: PackageScope = {"bis": {"referenz": scope.target[0], "commit": scope.target[1]}}
+    if scope.base is not None:
+        scope_json["von"] = {"referenz": scope.base[0], "commit": scope.base[1]}
 
     # Archivinhalt bauen, ohne die interne Elementliste an den Adapter zu geben
     archive = build_project_archive(configuration, repository_root, project, output_directory, scope)

@@ -98,7 +98,7 @@ def _relevant_resources(
     """Ermittelt die Ressourcen des Prüfungsumfangs und ihre Parser."""
 
     # DELTA verwendet geänderte Pfade, FULL den sichtbaren Arbeitsbaum
-    if scope is not None and scope.von is not None:
+    if scope is not None and scope.base is not None:
         candidates = [
             root / e.path
             for e in scope.changes

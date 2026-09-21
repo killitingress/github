@@ -32,7 +32,7 @@ from .project_packages import Scope, build_project_package, delta_scope
 _FEATURE_BRANCH_RE = re.compile(r"feature/([0-9]{3})/(.+)")
 
 # Name des Laufartefakts mit der M/Text-Ausgabe
-_ERGEBNIS_ARTEFAKT = "mtext-ergebnis"
+_RESULT_ARTIFACT = "mtext-ergebnis"
 
 
 @dataclass(frozen=True)
@@ -47,7 +47,7 @@ class Synchronisierungsplan:
     releaselinie: str
 
 
-def _ermittle_synchronisierungszweig(branch: str, main_releaselinie: str) -> tuple[str, str]:
+def _resolve_sync_branch(branch: str, main_releaselinie: str) -> tuple[str, str]:
     """Ermittelt die Releaselinie und Art der M/Text-Umgebung aus dem Branch.
 
     `main` und `release/nnn` verwenden die Umgebungsart "Funktionstest",
@@ -65,7 +65,7 @@ def _ermittle_synchronisierungszweig(branch: str, main_releaselinie: str) -> tup
             raise DeliveryError(Status.VALIDATION_FAILED, "Branch ist kein Synchronisierungszweig")
 
 
-def letzter_sync_commit(branch: str, umgebung: str, releaselinie: str) -> str | None:
+def latest_sync_commit(branch: str, umgebung: str, releaselinie: str) -> str | None:
     """Liest den neuesten Vergleichscommit dieses Branchs für die Zielumgebung aus dem GitHub-Artefakt."""
 
     # URL-Kodierung erhält die Unterscheidung von Schrägstrichen und Unterstrichen
@@ -74,25 +74,25 @@ def letzter_sync_commit(branch: str, umgebung: str, releaselinie: str) -> str | 
             continue
 
         # den ersten Nachweis dieser Umgebung auswerten, ältere Dateien werden nicht mehr gelesen
-        nachweis = github.artifact_document(artifact["id"], "mtext-stand.json")
-        match nachweis:
-            case {"commit": str(commit), "releaselinie": str(linie), "umgebungen": list(ziele)}:
-                if umgebung not in ziele:
+        evidence = github.artifact_document(artifact["id"], "mtext-stand.json")
+        match evidence:
+            case {"commit": str(commit), "releaselinie": str(current_releaselinie), "umgebungen": list(targets)}:
+                if umgebung not in targets:
                     continue
-                return commit if linie == releaselinie else None
+                return commit if current_releaselinie == releaselinie else None
             case _:
                 raise DeliveryError(Status.SOURCE_FAILED, "Synchronisierungsnachweis ist ungültig")
     return None
 
 
-def ermittle_plan(source: Path, configuration: config.Configuration) -> Synchronisierungsplan:
+def resolve_plan(source: Path, configuration: config.Configuration) -> Synchronisierungsplan:
     """Bestimmt Zielumgebungen und den durch einen erfolgreichen Abgleich belegten Umfang."""
 
     # Branch und Commit werden vom auslösenden Push, Merge oder manuellen Start festgehalten
     branch = os.environ["GITHUB_REF_NAME"]
     commit = git.resolve(source, "HEAD")
     event = os.environ["GITHUB_EVENT_NAME"]
-    releaselinie, branch_art = _ermittle_synchronisierungszweig(branch, configuration.releaselinie)
+    releaselinie, branch_type = _resolve_sync_branch(branch, configuration.releaselinie)
     if releaselinie not in configuration.releaselinien:
         raise DeliveryError(Status.VALIDATION_FAILED, "Releaselinie ist unbekannt")
     git.require_ancestor(source, commit, f"refs/remotes/origin/{branch}")
@@ -112,7 +112,7 @@ def ermittle_plan(source: Path, configuration: config.Configuration) -> Synchron
     if zielumgebung == "Beide":
         umgebung_arten = [entwicklung, funktionstest]
     elif zielumgebung == "Branchstandard":
-        umgebung_arten = [branch_art]
+        umgebung_arten = [branch_type]
     else:
         umgebung_arten = [zielumgebung]
 
@@ -123,14 +123,14 @@ def ermittle_plan(source: Path, configuration: config.Configuration) -> Synchron
     # automatische Läufe haben ein Ziel, manuelle Läufe und Dry Runs bauen FULL
     baseline = None
     if event != "workflow_dispatch" and not configuration.dry_run:
-        baseline = letzter_sync_commit(branch, umgebungen[0], releaselinie)
+        baseline = latest_sync_commit(branch, umgebungen[0], releaselinie)
 
     # ein DELTA benötigt einen belegten Vorgänger für dasselbe Ziel, sonst wird FULL gebaut
     if baseline is not None:
         git.require_ancestor(source, baseline, commit)
         scope = delta_scope(source, (branch, baseline), (branch, commit))
     else:
-        scope = Scope(von=None, bis=(branch, commit), changes=[])
+        scope = Scope(base=None, target=(branch, commit), changes=[])
     return Synchronisierungsplan(scope, umgebungen, releaselinie)
 
 
@@ -141,21 +141,21 @@ def _workflow_result(
 
     # festgehaltene Commits bleiben auch bei späteren Branchänderungen verlinkbar
     repository_url = f"{os.environ['GITHUB_SERVER_URL'].rstrip('/')}/{os.environ['GITHUB_REPOSITORY']}"
-    commit = plan.scope.bis[1]
+    commit = plan.scope.target[1]
     summary = [
         "## M/Text-Synchronisierung", "",
-        f"- Umfang: {'FULL' if plan.scope.von is None else 'DELTA'}",
+        f"- Umfang: {'FULL' if plan.scope.base is None else 'DELTA'}",
         f"- Zielcommit: [`{commit[:12]}`]({repository_url}/tree/{commit})",
     ]
-    if plan.scope.von is not None:
-        base = plan.scope.von[1]
+    if plan.scope.base is not None:
+        base = plan.scope.base[1]
         summary.extend((
             f"- Ausgangscommit: [`{base[:12]}`]({repository_url}/tree/{base})",
             f"- Repository-Änderungen: [GitHub-Vergleich]({repository_url}/compare/{base}..{commit})",
         ))
 
     # Projektumfang knapp benennen, die einzelnen Dateien bleiben im GitHub-Vergleich
-    if plan.scope.von is None:
+    if plan.scope.base is None:
         summary.append("- Berücksichtigte Projekte: Alle konfigurierten Projekte.")
     else:
         projects = results[0]["projekte"]
@@ -170,7 +170,7 @@ def _workflow_result(
         if umgebung not in reported:
             summary.append(f"- {umgebung}: Keine M/Text-Ausgabe.")
             continue
-        summary.append(f"- {umgebung}: M/Text-Ausgabe im Laufartefakt `{_ERGEBNIS_ARTEFAKT}`.")
+        summary.append(f"- {umgebung}: M/Text-Ausgabe im Laufartefakt `{_RESULT_ARTIFACT}`.")
 
     return {
         "status": Status.ADAPTER_SKIPPED if dry_run else Status.ADAPTER_COMPLETED,
@@ -185,7 +185,7 @@ def _synchronisiere_umgebung(
     """Baut und überträgt den Auftrag für eine M/Text-Umgebung."""
 
     # FULL überträgt jedes M/Text-Projekt, DELTA nur geänderte
-    if scope.von is None:
+    if scope.base is None:
         projects = list(configuration.projects)
     else:
         projects = [
@@ -235,7 +235,7 @@ def run() -> dict[str, object]:
     configuration = config.Configuration.load(source, os.environ["GITHUB_REPOSITORY"])
 
     # Vergleichsumfang und Zielumgebungen einmalig planen
-    plan = ermittle_plan(source, configuration)
+    plan = resolve_plan(source, configuration)
 
     # alle Zieladapter prüfen, bevor Archive für die erste Umgebung entstehen
     for umgebung in plan.umgebungen:
@@ -268,19 +268,19 @@ def run() -> dict[str, object]:
 
     # echte Übertragungen als lesbaren Nachweis speichern, Dry Runs begründen keine DELTA-Basis
     if not configuration.dry_run:
-        nachweis_path = Path(os.environ["GITHUB_WORKSPACE"]) / "mtext-stand.json"
-        nachweis_path.write_text(json.dumps({
-            "commit": plan.scope.bis[1],
+        evidence_path = Path(os.environ["GITHUB_WORKSPACE"]) / "mtext-stand.json"
+        evidence_path.write_text(json.dumps({
+            "commit": plan.scope.target[1],
             "releaselinie": plan.releaselinie,
             "umgebungen": plan.umgebungen,
         }, ensure_ascii=False, indent=2), encoding="utf-8")
-        outputs["nachweis_path"] = nachweis_path.as_posix()
+        outputs["nachweis_path"] = evidence_path.as_posix()
         # Branch für Speicherung und Abfrage identisch kodieren
-        outputs["nachweis_name"] = f"mtext-stand-{urllib.parse.quote(plan.scope.bis[0], safe='')}"
+        outputs["nachweis_name"] = f"mtext-stand-{urllib.parse.quote(plan.scope.target[0], safe='')}"
 
     if report:
-        path = Path(os.environ["GITHUB_WORKSPACE"]) / f"{_ERGEBNIS_ARTEFAKT}.txt"
+        path = Path(os.environ["GITHUB_WORKSPACE"]) / f"{_RESULT_ARTIFACT}.txt"
         path.write_text("\n".join(report), encoding="utf-8")
-        outputs.update({"ergebnis_path": path.as_posix(), "ergebnis_name": _ERGEBNIS_ARTEFAKT})
+        outputs.update({"ergebnis_path": path.as_posix(), "ergebnis_name": _RESULT_ARTIFACT})
     result["outputs"] = outputs
     return result

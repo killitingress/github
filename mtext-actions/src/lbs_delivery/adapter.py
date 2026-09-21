@@ -45,9 +45,9 @@ _POLL_INTERVAL_SECONDS = 5
 _ADAPTER_URL = "http://{umgebung}.ltoma.intern/vMtextAdapter"
 
 # Statusgruppen der sync2-Ausführung
-_ABBRUCH_STATUS = frozenset({"ready", "uploading", "failed"})
-_UPLOAD_STATUS = frozenset({"ready", "uploading"})
-_END_STATUS = frozenset({"succeeded", "failed"})
+_RESTART_STATUSES = frozenset({"ready", "uploading", "failed"})
+_UPLOAD_STATUSES = frozenset({"ready", "uploading"})
+_FINAL_STATUSES = frozenset({"succeeded", "failed"})
 
 
 def _auftrag_url(umgebung: str, auftrag_id: str) -> str:
@@ -89,35 +89,35 @@ def resume_existing(umgebung: str, auftrag_id: str) -> dict[str, object] | None:
 
     # wenn es den Auftrag schon gibt, er aber in einem Status ist, in dem er
     # nicht sauber beendet werden kann, wird er hier entfernt
-    if result["status"] in _ABBRUCH_STATUS:
+    if result["status"] in _RESTART_STATUSES:
         _call_adapter("DELETE", auftrag_url)
         return None
 
     # Auftrag regulär abschließen
-    return _finish_job(umgebung, auftrag_id, result)
+    return _finish_auftrag(umgebung, auftrag_id, result)
 
 
-def upload(umgebung: str, pakete: list[ProjectPackage], auftrag_id: str) -> dict[str, object]:
+def upload(umgebung: str, packages: list[ProjectPackage], auftrag_id: str) -> dict[str, object]:
     """Legt einen Auftrag an, lädt die Pakete hoch und wartet auf das Ergebnis."""
 
     # Pakete unter der Auftrags-ID beim Adapter anmelden
     archive_list = [
-        {"name": e.archive.name, "information": e.information} for e in pakete
+        {"name": e.archive.name, "information": e.information} for e in packages
     ]
     auftrag_url = _auftrag_url(umgebung, auftrag_id)
     result = _call_adapter("POST", auftrag_url, {"archive": archive_list})
 
     # noch erwartete Archive nacheinander als unveränderten Datenstrom übertragen
-    if result["status"] in _UPLOAD_STATUS:
-        for paket in pakete:
-            result = _upload_archive(auftrag_url, paket.archive)
-            if result["status"] not in _UPLOAD_STATUS:
+    if result["status"] in _UPLOAD_STATUSES:
+        for package in packages:
+            result = _upload_archive(auftrag_url, package.archive)
+            if result["status"] not in _UPLOAD_STATUSES:
                 break
 
-    return _finish_job(umgebung, auftrag_id, result)
+    return _finish_auftrag(umgebung, auftrag_id, result)
 
 
-def _finish_job(umgebung: str, auftrag_id: str, result: dict[str, object]) -> dict[str, object]:
+def _finish_auftrag(umgebung: str, auftrag_id: str, result: dict[str, object]) -> dict[str, object]:
     """Wartet auf das Auftragsergebnis und räumt nach Erfolg oder Fehler auf.
 
     Neubau und Wiederanlauf verwenden denselben Abschluss. Ein inzwischen
@@ -128,9 +128,9 @@ def _finish_job(umgebung: str, auftrag_id: str, result: dict[str, object]) -> di
     execution_url = _execution_url(umgebung, auftrag_id)
 
     # Verarbeitung nach dem Upload bis zu einem Endstatus abfragen
-    while result["status"] not in _END_STATUS:
+    while result["status"] not in _FINAL_STATUSES:
         result = _call_adapter("GET", execution_url)
-        if result["status"] not in _END_STATUS:
+        if result["status"] not in _FINAL_STATUSES:
             time.sleep(_POLL_INTERVAL_SECONDS)
 
     # Auftrag entfernen, ohne eine M/Text-Fehlermeldung zu überschreiben
@@ -146,10 +146,10 @@ def _finish_job(umgebung: str, auftrag_id: str, result: dict[str, object]) -> di
         raise DeliveryError(Status.ADAPTER_FAILED, result["message"])
 
     # Auftrags-ID und optionales M/Text-Ergebnis an den Workflow zurückgeben
-    ergebnis: dict[str, object] = {"auftrag_id": auftrag_id}
+    output: dict[str, object] = {"auftrag_id": auftrag_id}
     if result["result"] is not None:
-        ergebnis["result"] = result["result"]
-    return ergebnis
+        output["result"] = result["result"]
+    return output
 
 
 def _upload_archive(auftrag_url: str, archive: Path) -> dict[str, object]:

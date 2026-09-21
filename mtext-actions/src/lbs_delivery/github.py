@@ -102,7 +102,7 @@ def artifact_document(artifact_id: int, filename: str) -> Any:
         headers={"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
                  "Accept": _JSON_MEDIA_TYPE, "X-GitHub-Api-Version": _API_VERSION},
     )
-    opener = urllib.request.build_opener(_OhneWeiterleitung())
+    opener = urllib.request.build_opener(_NoRedirect())
     try:
         try:
             with opener.open(request, timeout=NETWORK_TIMEOUT) as response:
@@ -122,7 +122,7 @@ def artifact_document(artifact_id: int, filename: str) -> Any:
         raise DeliveryError(Status.SOURCE_FAILED, f"GitHub-Artefakt kann nicht gelesen werden: {exc}") from exc
 
 
-class _OhneWeiterleitung(urllib.request.HTTPRedirectHandler):
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Hält Download-Redirects an der authentifizierten API-Grenze an."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):

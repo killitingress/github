@@ -9,9 +9,9 @@ from unittest.mock import patch
 
 from lbs_delivery import github
 from lbs_delivery.git import LieferTag
-from lbs_delivery.lieferung import liefer_tag_fuer_branch, run
+from lbs_delivery.lieferung import liefer_tag_for_branch, run
 from lbs_delivery.process import DeliveryError, Status
-from lbs_delivery.project_packages import vorrelease_umfang, project_elements, lieferumfang
+from lbs_delivery.project_packages import lieferumfang, previous_release_scope, project_elements
 
 from tests.support import TempDirTestCase, git, load_test_configuration, setup_release_repository, track_remote_branch
 
@@ -42,31 +42,31 @@ class LieferungTests(TempDirTestCase):
         with self.assertRaises(ValueError):
             LieferTag.parse("r261.099")
 
-        self.assertEqual(str(liefer_tag_fuer_branch(self.configuration, "main")), "r270.100")
-        self.assertEqual(str(liefer_tag_fuer_branch(self.configuration, "release/261")), "r261.100")
+        self.assertEqual(str(liefer_tag_for_branch(self.configuration, "main")), "r270.100")
+        self.assertEqual(str(liefer_tag_for_branch(self.configuration, "release/261")), "r261.100")
         self.assertEqual(
-            str(liefer_tag_fuer_branch(self.configuration, "bereitstellung/261.108")),
+            str(liefer_tag_for_branch(self.configuration, "bereitstellung/261.108")),
             "r261.108",
         )
 
-        vorrelease_scope = vorrelease_umfang(self.repository, tag, self.source_sha)
-        paket_scope = lieferumfang(self.repository, tag, self.source_sha)
-        information_elements = project_elements(self.repository, "LOMS_Basis", vorrelease_scope)
-        paket_elements = project_elements(self.repository, "LOMS_Basis", paket_scope)
+        previous_scope = previous_release_scope(self.repository, tag, self.source_sha)
+        scope = lieferumfang(self.repository, tag, self.source_sha)
+        information_elements = project_elements(self.repository, "LOMS_Basis", previous_scope)
+        package_elements = project_elements(self.repository, "LOMS_Basis", scope)
         self.assertIn(["D", "transient.txt"], information_elements)
         self.assertNotIn(["M", "baseline.txt"], information_elements)
-        self.assertNotIn(["D", "transient.txt"], paket_elements)
-        self.assertIn(["M", "baseline.txt"], paket_elements)
+        self.assertNotIn(["D", "transient.txt"], package_elements)
+        self.assertIn(["M", "baseline.txt"], package_elements)
 
         git(self.repository, "checkout", "--detach", "r261.100")
         git(self.repository, "switch", "-c", "bereitstellung/261.100")
         git(self.repository, "tag", "-d", "r261.100")
         with self.assertRaises(DeliveryError) as raised:
-            liefer_tag_fuer_branch(self.configuration, "bereitstellung/261.100")
+            liefer_tag_for_branch(self.configuration, "bereitstellung/261.100")
         self.assertEqual(raised.exception.status, Status.VALIDATION_FAILED)
 
         with self.assertRaises(DeliveryError) as raised:
-            liefer_tag_fuer_branch(self.configuration, "feature/261/beispiel")
+            liefer_tag_for_branch(self.configuration, "feature/261/beispiel")
         self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
 
     def test_prepares_checkout_after_branch_advances(self) -> None:
