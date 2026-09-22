@@ -1,7 +1,0 @@
-- sicherstellen, dass `mtext_actions` in die korrekte Organization umgezogen und von den Mandanten aufrufbar ist
-- Workflows etc. in alle Mandanten-Repositories verteilen
-- `MAINFRAME_FTPS_PASSWORD` als organisationsweites Actions-Secret anlegen lassen
-- Sicherstellen, dass der Runner den Adapter erreichen kann per HTTP
-- Adapter für Synchro-Jobs erweitern...
-- Synchronisation nach M/Text-Entwicklung und M/Text-Funktionstest und Releaselinienwechsel erfolgreich testen
-- Mainframe-Lieferung (FULL und DELTA) erfolgreich testen
