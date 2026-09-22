@@ -15,6 +15,7 @@ ohne den festgehaltenen Stand zu verändern.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import tempfile
@@ -24,6 +25,9 @@ from pathlib import Path
 from . import adapter, config, git, github
 from .process import DeliveryError, Status
 from .project_packages import Scope, build_project_package, delta_scope
+
+
+logger = logging.getLogger(__name__)
 
 
 # Feature-Branches tragen Releaselinie und Bezeichnung im Branch-Namen
@@ -227,6 +231,8 @@ def run() -> dict[str, object]:
         e: f"{configuration.mtext_umgebung_prefixe[e]}{etaps_linie}"
         for e in plan.umgebung_arten
     }
+    scope_name = "FULL" if plan.scope.von is None else "DELTA"
+    logger.info("Synchronisierung geplant: %s nach %s für %s", scope_name, plan.scope.bis[1][:12], ", ".join(umgebungen.values()))
 
     # alle Zieladapter prüfen, bevor Archive für die erste Umgebung entstehen
     for umgebung in umgebungen.values():

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import shutil
 import subprocess
@@ -16,6 +17,9 @@ from typing import Literal, NotRequired, TypedDict
 from . import git
 from .config import Configuration
 from .process import DeliveryError, Status
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -240,6 +244,7 @@ def build_delta_archive(source: Path, project: str, target: Path, elements: list
 
             for status, relative_path in elements:
                 repository_relative = Path(project, relative_path)
+                logger.debug("DELTA-Inhalt %s: %s %r", target.name, status, repository_relative.as_posix())
 
                 if status == "D":
                     deleted.append(repository_relative.as_posix())
@@ -295,10 +300,12 @@ def build_project_archive(
     # FULL überträgt den Projektbaum, DELTA die geänderten Dateien
     if scope.von is None:
         archive = project_archive_path(configuration, project, output_directory, "F")
+        logger.info("Paket %s wird als FULL gebaut", archive.name)
         _write_archive(archive, repository_root, [f"./{project}"])
     else:
         archive = project_archive_path(configuration, project, output_directory, "D")
         elements = project_elements(repository_root, project, scope)
+        logger.info("Paket %s wird als DELTA mit %d Änderungen gebaut", archive.name, len(elements))
         build_delta_archive(repository_root, project, archive, elements)
 
     return archive

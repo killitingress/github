@@ -1,12 +1,14 @@
-"""Gibt die Ergebnisse der Kommandozeilenskripte für GitHub Actions aus.
+"""Gibt Ergebnisse und Fortschritt der Kommandozeilenskripte aus.
 
-Bei Erfolg erscheint ein JSON-Ergebnis auf stdout. Bei einem Fehler erscheinen
-Status und Meldung auf stderr und das Skript endet mit dem zugehörigen Exitcode.
+Bei Erfolg erscheint ein JSON-Ergebnis auf stdout. Fortschritt sowie Fehler
+erscheinen auf stderr. Bei einem Fehler endet das Skript mit dem zugehörigen
+Exitcode.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from collections.abc import Callable
@@ -50,6 +52,13 @@ _EXIT_CODES = {
 NETWORK_TIMEOUT = 30.0
 
 
+def _configure_logging() -> None:
+    """Schreibt Fortschrittsmeldungen nach stderr und aktiviert bei Runner-Debug Details."""
+
+    level = logging.DEBUG if os.environ.get("RUNNER_DEBUG") == "1" else logging.INFO
+    logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
+
+
 class DeliveryError(RuntimeError):
     """Enthält Status und Meldung eines erwarteten Fehlers im Workflow."""
 
@@ -67,6 +76,9 @@ class DeliveryError(RuntimeError):
 
 def execute(operation: Callable[[], dict[str, object]]) -> int:
     """Führt den Schritt aus, schreibt JSON nach stdout und gibt den Exitcode zurück."""
+
+    # stdout für das JSON-Ergebnis freihalten, laufende Meldungen gehen über logging nach stderr
+    _configure_logging()
 
     try:
         result = operation()

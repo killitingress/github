@@ -13,9 +13,12 @@ eines Repositories getätigt und per Push an ein zentrales Repository
 übertragen. Zu jedem Commit gehört eine 40-stellige Commit-SHA, die den
 zugehörigen Entwicklungsstand samt Historie zu einem bestimmten Zeitpunkt
 eindeutig identifiziert und damit am ehesten einer SVN-Revision entspricht.
-Technisch ist ein Branch in Git ein Zeiger auf einen Commit. Beim Push eines
-Branches nach GitHub werden sämtliche fehlenden Commits dorthin übertragen und
-der Branch in GitHub auf den dann aktuellsten Commit *verschoben*.
+Git verwaltet benannte Zeiger als Referenzen. Ein Branch ist eine solche
+Referenz auf einen Commit und wird bei neuen Commits weitergeschoben. Die
+besondere Referenz `HEAD` bezeichnet den aktuell ausgecheckten Stand, meist
+über den aktuellen Branch. Beim Push eines Branches nach GitHub werden
+sämtliche fehlenden Commits dorthin übertragen und der Branch in GitHub auf
+den dann aktuellsten Commit *verschoben*.
 
 Jeder Entwicklungsauftrag (Änderung, Erweiterung, Korrektur, ...) wird als
 Feature in einem eigenen temporären Feature-Branch umgesetzt. Wenn ein Feature
@@ -37,7 +40,7 @@ werden.
 Eine Mainframe-Lieferung kann entweder von `main` oder `release/nnn`
 durchgeführt werden und verwendet dann den dort vorbereiteten Ressourcenstand,
 oder auf einer in `bereitstellung/nnn.nnn` zusammengestellten Teillieferung. Ein
-Vorbereitungs-Workflow nutzt ein Gihub-Issue um die Details zur Lieferung
+Vorbereitungs-Workflow nutzt ein GitHub-Issue, um die Details zur Lieferung
 festzuhalten. Mittels Kommentar wird eine Lieferung freigegeben und dadurch die
 Pakete gebaut und an den Mainframe übergeben. Nach erfolgreicher Übergabe
 entsteht der Liefer-Tag im Mandantenrepository.
@@ -62,7 +65,7 @@ Pull Request nach main (oder release/nnn)
 Synchronisierung mit M/Text-Funktionstest
     │ fachlich freigeben lassen
     ▼
-Branchcommit ist für eine Lieferung bereit
+Ressourcenstand ist für eine Lieferung bereit
 ```
 
 ## Grundablauf einer Mainframe-Lieferung
@@ -314,7 +317,7 @@ werden. Bevor das Freigabe-Issue entsteht, prüft der Workflow die
 Mandantenkonfiguration und die Ressourcen im Lieferumfang. Syntaxbefunde
 erscheinen als Warnungen und werden vor der Freigabe fachlich bewertet.
 
-Das Freigabe-Issue trägt das Label `lieferung:freigabe` und zeigt:
+Das Freigabe-Issue trägt das Label `lieferung:vorbereitet` und zeigt:
 
 - den aus dem Branch abgeleiteten Liefer-Tag
 - Lieferart, Branch und festgehaltene Commit-SHA
@@ -324,8 +327,10 @@ Das Freigabe-Issue trägt das Label `lieferung:freigabe` und zeigt:
 
 Die festgehaltene Commit-SHA bleibt die Grundlage der Lieferung, wenn der
 Branch nach der Vorbereitung weitere Commits erhält. Ist der angezeigte Commit
-nicht freigabefähig, wird der Branch korrigiert und **Lieferung vorbereiten**
-erneut gestartet. Dabei entsteht ein neues Freigabe-Issue.
+nicht freigabefähig, wird das offene Freigabe-Issue bewusst geschlossen und
+der Branch korrigiert. Danach kann **Lieferung vorbereiten** für denselben
+Liefer-Tag erneut gestartet werden. Dabei entsteht ein neues Freigabe-Issue
+für den aktualisierten Commit.
 
 ## Lieferung freigeben
 
@@ -337,7 +342,7 @@ erneut gestartet. Dabei entsteht ein neues Freigabe-Issue.
    kontrollieren.
 
 Auch die vorbereitende Person darf die Lieferung freigeben. Mit einer gültigen
-Freigabe wechselt das Label von `lieferung:freigabe` zu
+Freigabe wechselt das Label von `lieferung:vorbereitet` zu
 `lieferung:gestartet` und weitere `/freigabe`-Kommentare starten aus diesem
 Issue keine zweite Lieferung.
 
@@ -558,8 +563,22 @@ gepusht.
 3. Branch oder Liefer-Tag und verarbeiteten Commit mit dem erwarteten Commit
    vergleichen.
 4. Die Jobs öffnen und die erste aussagekräftige Fehlermeldung prüfen.
-5. Zugangsdaten nicht in Kommentare, Workflow-Eingaben oder Support-Tickets
+5. In längeren Läufen anhand der Fortschrittsmeldungen feststellen, welcher
+   Umfang, welches Paket oder welcher externe Auftrag gerade verarbeitet wird.
+6. Zugangsdaten nicht in Kommentare, Workflow-Eingaben oder Support-Tickets
    kopieren.
+
+Das Standardprotokoll nennt bei einer Synchronisierung FULL oder DELTA,
+Zielcommit und M/Text-Umgebungen. Während der Verarbeitung erscheinen die
+Archivnamen, Übertragungen und Statuswechsel der Adapteraufträge. Beim
+Lieferlauf werden die an den Mainframe übergebenen Pakete genannt.
+
+Einzelne Repository-Dateien stehen nicht im Standardprotokoll. Für die
+Fehlersuche kann ein Repository-Verantwortlicher die
+GitHub-Actions-Debugprotokollierung aktivieren und den betroffenen Lauf erneut
+ausführen. Bei DELTA-Paketen zeigt das Protokoll dann für jedes einbezogene oder
+gelöschte Element den Status und Repository-Pfad. FULL-Pakete führen ihre
+Dateien auch im Debugprotokoll nicht einzeln auf.
 
 Paketbau und Mainframe-Übergabe bleiben Bestandteil des Mandantenlaufs, dessen
 gemeinsame Implementierung aus

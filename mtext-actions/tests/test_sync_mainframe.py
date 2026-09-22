@@ -161,29 +161,30 @@ class SyncTests(TempDirTestCase):
             self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
             transfer.assert_not_called()
 
-        # GitHub ändert direkt und legt den Stand an, wenn die Referenz noch fehlt.
+        # GitHub unterscheidet Anlage und Änderung über die Leseanfrage.
         previous = "previous"
         reference = "refs/mtext/synchronisierungen/en/270/feature/270/test"
-        missing = http_reply({"message": "Reference does not exist"}, 422)
+        missing = http_reply({"message": "Not Found"}, 404)
         created = http_reply({"object": {"type": "commit", "sha": previous}}, 201)
         with patch.object(github.urllib.request, "urlopen", side_effect=(missing, created)) as http:
             github.set_reference(reference, previous)
-        self.assertEqual([e.args[0].method for e in http.call_args_list], ["PATCH", "POST"])
+        self.assertEqual([e.args[0].method for e in http.call_args_list], ["GET", "POST"])
 
         current = http_reply({"object": {"type": "commit", "sha": "current"}})
-        with patch.object(github.urllib.request, "urlopen", return_value=current) as http:
+        updated = http_reply({"object": {"type": "commit", "sha": previous}})
+        with patch.object(github.urllib.request, "urlopen", side_effect=(current, updated)) as http:
             github.set_reference(reference, previous)
-        request = http.call_args.args[0]
+        request = http.call_args_list[1].args[0]
         self.assertEqual(request.method, "PATCH")
         self.assertEqual(json.loads(request.data), {"sha": previous, "force": True})
 
-        # andere Validierungsfehler dürfen keine Anlage der Referenz auslösen
+        # Validierungsfehler beim Ändern dürfen keine Anlage der Referenz auslösen
         rejected = http_reply({"message": "Validation failed"}, 422)
-        with patch.object(github.urllib.request, "urlopen", side_effect=rejected) as http:
+        with patch.object(github.urllib.request, "urlopen", side_effect=(current, rejected)) as http:
             with self.assertRaises(DeliveryError) as raised:
                 github.set_reference(reference, previous)
         self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
-        http.assert_called_once()
+        self.assertEqual(http.call_count, 2)
 
     def _capture_packages(self, _umgebung, packages, _auftrag_id) -> dict[str, object]:
         """Prüft Informations-Dokumente und Archive während ihrer Übergabe."""

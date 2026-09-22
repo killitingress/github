@@ -8,6 +8,7 @@ nach der Dateiprüfung.
 from __future__ import annotations
 
 import ftplib
+import logging
 import os
 import re
 import ssl
@@ -21,6 +22,9 @@ from .project_packages import (
     delivery_scope,
     project_archive_path,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 # F- und D-Archive werden als Member in diesem Mainframe-Dataset abgelegt.
@@ -79,6 +83,7 @@ def _submit_archive(archive_path: Path) -> None:
 
     member = archive_path.stem
     jcl_path = archive_path.with_suffix(_MAINFRAME_JCL_SUFFIX)
+    logger.info("Paket %s wird als Mainframe-Member %s übertragen", archive_path.name, member)
 
     # IZE9 ohne Prüfung des Serverzertifikats über TLS erreichen
     password = os.environ["IZE9_FTPS_PASSWORD_MTEXT"]
@@ -124,6 +129,7 @@ def _submit_mainframe_files(*, lieferung_directory: Path, dry_run: bool) -> dict
 
     # ein Dry Run endet hier, ohne FTPS- und JES-Übergabe
     if dry_run:
+        logger.info("Dry Run: %d Mainframe-Pakete wurden geprüft und nicht übertragen", len(archives))
         return {"status": Status.MAINFRAME_SKIPPED}
 
     # zuerst alle F-Archive übertragen, danach die D-Archive ersetzen

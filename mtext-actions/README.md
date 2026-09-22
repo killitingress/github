@@ -91,6 +91,13 @@ ausgegeben und beenden den Job erfolgreich.
 
 Die Mindestversion in `.python-version` ist Python 3.12. Die Runner-Prüfung in
 `scripts/runner-preflight.sh` erwartet außerdem Git, `tar` und `curl`.
+
+Die Kommandos schreiben das abschließende JSON-Ergebnis nach stdout und
+Fortschrittsmeldungen nach stderr. Standardmäßig nennt das Protokoll die
+fachlichen Phasen und erzeugten Pakete. Ist die GitHub-Actions-Debugprotokollierung
+aktiv, erscheinen bei DELTA-Paketen zusätzlich Status und Repository-Pfad jedes
+aufgenommenen oder gelöschten Elements.
+
 Die Lieferung liest den Liefer-Tag aus dem Titel des Freigabe-Issues und den
 vorbereiteten Commit aus
 `refs/mtext/lieferungen/<Liefer-Tag>`. Solange für diesen Tag ein Issue mit

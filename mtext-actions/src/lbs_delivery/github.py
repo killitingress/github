@@ -31,9 +31,9 @@ def _repository_url(path: str) -> str:
 
 def _request(
     *, method: str, url: str, failure: Status, payload: dict[str, object] | None = None,
-    missing_errors: tuple[tuple[int, str | None], ...] = (),
+    missing_ok: bool = False,
 ) -> Any:
-    """Sendet eine Anfrage und behandelt einen erwarteten HTTP-Fehler als fehlende Ressource."""
+    """Sendet eine Anfrage und behandelt optional HTTP 404 als fehlende Ressource."""
 
     # JSON-Inhalt in den gemeinsamen GitHub-Request übernehmen
     body = json.dumps(payload).encode() if payload is not None else None
@@ -60,8 +60,8 @@ def _request(
             except (UnicodeError, json.JSONDecodeError, KeyError, TypeError):
                 detail = ex.reason
 
-            # Status und optionale GitHub-Meldung müssen das erwartete Fehlen belegen
-            if (ex.code, None) in missing_errors or (ex.code, detail) in missing_errors:
+            # ausschließlich der dokumentierte Status belegt eine fehlende Ressource
+            if missing_ok and ex.code == 404:
                 return None
 
             raise DeliveryError(failure, f"GitHub antwortet mit HTTP {ex.code}: {detail}") from ex
@@ -77,16 +77,20 @@ def _request(
         raise DeliveryError(failure, f"GitHub-Antwort ist ungültig: {ex}") from ex
 
 
-def _reference_url(reference: str, *, collection: bool = False) -> str:
-    """Baut die Lese- oder Änderungsadresse einer Git-Referenz."""
+def _reference_url(reference: str) -> str:
+    """Baut die Leseadresse einer Git-Referenz."""
     path = urllib.parse.quote(reference.removeprefix("refs/"), safe="/")
-    return _repository_url(f"git/{'refs' if collection else 'ref'}/{path}")
+    return _repository_url(f"git/ref/{path}")
 
 
 def _reference_object(reference: str) -> tuple[str, str] | None:
     """Liest Typ und SHA des Objekts hinter einer Git-Referenz."""
-    document = _request(method="GET", url=_reference_url(reference), failure=Status.SOURCE_FAILED,
-                        missing_errors=((404, None),))
+    document = _request(
+        method="GET",
+        url=_reference_url(reference),
+        failure=Status.SOURCE_FAILED,
+        missing_ok=True,
+    )
     if document is None:
         return None
 
@@ -116,20 +120,34 @@ def create_reference(reference: str, sha: str) -> None:
 
 def set_reference(reference: str, sha: str) -> None:
     """Erzeugt eine technische Git-Referenz oder setzt sie auf den neuen Commit."""
-    # vorhandenen Stand direkt fortschreiben, ohne vorherige Leseanfrage und Zeitfenster
-    updated = _request(method="PATCH", url=_reference_url(reference, collection=True),
-                       failure=Status.SOURCE_FAILED, payload={"sha": sha, "force": True},
-                       missing_errors=((404, None), (422, "Reference does not exist")))
 
-    # GitHub kennzeichnet eine beim PATCH fehlende Referenz als nicht vorhanden
-    if updated is None:
+    # 404 der Leseanfrage unterscheidet die Anlage von der Änderung
+    if reference_commit(reference) is None:
         create_reference(reference, sha)
+        return
+
+    path = urllib.parse.quote(reference.removeprefix("refs/"), safe="/")
+    _request(
+        method="PATCH",
+        url=_repository_url(f"git/refs/{path}"),
+        failure=Status.SOURCE_FAILED,
+        payload={"sha": sha, "force": True},
+    )
 
 
 def delete_reference(reference: str) -> None:
     """Entfernt eine vorhandene technische Git-Referenz."""
-    _request(method="DELETE", url=_reference_url(reference, collection=True), failure=Status.SOURCE_FAILED,
-             missing_errors=((404, None), (422, "Reference does not exist")))
+
+    # eine bereits entfernte technische Referenz benötigt keine weitere Anfrage
+    if reference_commit(reference) is None:
+        return
+
+    path = urllib.parse.quote(reference.removeprefix("refs/"), safe="/")
+    _request(
+        method="DELETE",
+        url=_repository_url(f"git/refs/{path}"),
+        failure=Status.SOURCE_FAILED,
+    )
 
 
 def _label_names(labels: object) -> set[str]:
@@ -144,7 +162,7 @@ def _ensure_label(name: str, description: str) -> None:
     """Legt ein fachliches Label im Repository bei Bedarf an."""
 
     url = _repository_url(f"labels/{urllib.parse.quote(name, safe='')}")
-    if _request(method="GET", url=url, failure=Status.FREIGABE_FAILED, missing_errors=((404, None),)) is None:
+    if _request(method="GET", url=url, failure=Status.FREIGABE_FAILED, missing_ok=True) is None:
         payload = {"name": name, "color": "1f883d", "description": description}
         _request(method="POST", url=_repository_url("labels"), failure=Status.FREIGABE_FAILED, payload=payload)
 

@@ -16,7 +16,7 @@ beträgt 30 Sekunden.
 from __future__ import annotations
 
 import json
-import sys
+import logging
 import time
 import urllib.error
 import urllib.parse
@@ -29,6 +29,9 @@ from typing import Literal
 
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
 from .project_packages import ProjectPackage
+
+
+logger = logging.getLogger(__name__)
 
 
 # Adapterantworten werden erstmal auf 10 MB begrenzt
@@ -63,12 +66,12 @@ def _execution_url(umgebung: str, auftrag_id: str) -> str:
 
 
 def check_reachability(umgebung: str) -> None:
-    """Prüft Erreichbarkeit des /version Endpunkts und protokolliert die Antwort."""
+    """Prüft die Erreichbarkeit des /version-Endpunkts."""
 
     url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/version"
     try:
         with urllib.request.urlopen(url, timeout=NETWORK_TIMEOUT) as response:
-            print(response.read().decode().strip(), file=sys.stderr)
+            response.read()
     except (urllib.error.URLError, OSError, HTTPException) as exc:
         raise DeliveryError(Status.ADAPTER_FAILED, f"Versionsabfrage unter {url} ist fehlgeschlagen: {exc}") from exc
 
@@ -90,10 +93,12 @@ def resume_existing(umgebung: str, auftrag_id: str) -> dict[str, object] | None:
     # wenn es den Auftrag schon gibt, er aber in einem Status ist, in dem er
     # nicht sauber beendet werden kann, wird er hier entfernt
     if result["status"] in _RESTART_STATUSES:
+        logger.info("Vorhandener Auftrag %s in %s wird nach Status %s neu begonnen", auftrag_id, umgebung, result["status"])
         _call_adapter("DELETE", auftrag_url)
         return None
 
     # Auftrag regulär abschließen
+    logger.info("Vorhandener Auftrag %s in %s wird mit Status %s fortgesetzt", auftrag_id, umgebung, result["status"])
     return _finish_auftrag(umgebung, auftrag_id, result)
 
 
@@ -105,11 +110,13 @@ def upload(umgebung: str, packages: list[ProjectPackage], auftrag_id: str) -> di
         {"name": e.archive.name, "information": e.information} for e in packages
     ]
     auftrag_url = _auftrag_url(umgebung, auftrag_id)
+    logger.info("Auftrag %s wird in %s mit %d Paketen angelegt", auftrag_id, umgebung, len(packages))
     result = _call_adapter("POST", auftrag_url, {"archive": archive_list})
 
     # noch erwartete Archive nacheinander als unveränderten Datenstrom übertragen
     if result["status"] in _UPLOAD_STATUSES:
         for package in packages:
+            logger.info("Paket %s wird nach %s übertragen", package.archive.name, umgebung)
             result = _upload_archive(auftrag_url, package.archive)
             if result["status"] not in _UPLOAD_STATUSES:
                 break
@@ -127,8 +134,16 @@ def _finish_auftrag(umgebung: str, auftrag_id: str, result: dict[str, object]) -
     auftrag_url = _auftrag_url(umgebung, auftrag_id)
     execution_url = _execution_url(umgebung, auftrag_id)
 
-    # Verarbeitung nach dem Upload bis zu einem Endstatus abfragen
-    while result["status"] not in _FINAL_STATUSES:
+    # Status bei Wechsel melden, denselben Stand zwischen den Abfragen nicht wiederholen
+    logged_status = None
+    while True:
+        if result["status"] != logged_status:
+            logger.info("Auftrag %s in %s hat Status %s", auftrag_id, umgebung, result["status"])
+            logged_status = result["status"]
+
+        if result["status"] in _FINAL_STATUSES:
+            break
+
         result = _call_adapter("GET", execution_url)
         if result["status"] not in _FINAL_STATUSES:
             time.sleep(_POLL_INTERVAL_SECONDS)
