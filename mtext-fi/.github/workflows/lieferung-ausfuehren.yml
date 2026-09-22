@@ -22,7 +22,8 @@ jobs:
     if: >-
       github.event.issue.pull_request == null &&
       (
-        (contains(github.event.issue.labels.*.name, 'lieferung:vorbereitet') &&
+        (github.event.issue.state == 'open' &&
+         contains(github.event.issue.labels.*.name, 'lieferung:vorbereitet') &&
          github.event.comment.body == '/freigabe') ||
         ((contains(github.event.issue.labels.*.name, 'lieferung:gestartet') ||
           contains(github.event.issue.labels.*.name, 'lieferung:abgeschlossen')) &&

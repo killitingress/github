@@ -59,19 +59,15 @@ für manuelle Vollabgleiche. Feature-Pushes verwenden Entwicklung, PR-Merges nac
 Merge-Commit ausgecheckt. Die Prüfung erhält dieselbe Zielauswahl.
 
 Ein automatisches DELTA benötigt einen erfolgreichen Zielnachweis desselben
-Branches, derselben M/Text-Umgebung und derselben Releaselinie. Andernfalls
+Branches, derselben M/Text-Umgebungsart und derselben Releaselinie. Andernfalls
 erfolgt FULL. `hostprofil` gehört zur Mainframe-Übergabe und beeinflusst diese
 Basis nicht. Dry Runs bauen FULL und erzeugen keinen Übertragungsnachweis.
 
-Nach einer echten Übertragung speichert der Workflow `mtext-stand.json` als
-lesbares Artefakt, etwa `mtext-stand-feature%2F261%2Ftest`. Der Branchname wird
-URL-kodiert. Die Datei nennt `commit`, `releaselinie` und die
-übertragenen `umgebungen`. Der Commit stammt aus dem Nachweis, weil der
-übertragene Merge-Commit vom `head_sha` eines PR-Laufs abweichen kann.
-
-Die Abfrage filtert auf diesen Namen und nimmt das neueste nicht abgelaufene
-Artefakt, das die Zielumgebung enthält. Eine andere Releaselinie verlangt FULL,
-ebenso ein fehlender Nachweis. Ein Dry Run erzeugt keinen Vergleichscommit.
+Nach einer echten Übertragung setzt der Workflow die technische Git-Referenz
+`refs/mtext/synchronisierungen/<Präfix>/<Releaselinie>/<Branch>` auf den
+übertragenen Commit. Das Präfix stammt aus `mtext_umgebung_prefixe` der
+Mandantenkonfiguration, etwa `en` für Entwicklung und `fu` für Funktionstest.
+Fehlt die Referenz, erfolgt FULL. Ein Dry Run verändert sie nicht.
 
 Die Concurrency-Gruppe `mtext-synchronisierung` mit
 `cancel-in-progress: false` umfasst den gesamten Ablauf. GHES 3.20 ersetzt
@@ -96,7 +92,13 @@ ausgegeben und beenden den Job erfolgreich.
 Die Mindestversion in `.python-version` ist Python 3.12. Die Runner-Prüfung in
 `scripts/runner-preflight.sh` erwartet außerdem Git, `tar` und `curl`.
 Die Lieferung liest den Liefer-Tag aus dem Titel des Freigabe-Issues und den
-vorbereiteten Commit aus dessen Text.
+vorbereiteten Commit aus
+`refs/mtext/lieferungen/<Liefer-Tag>`. Solange für diesen Tag ein Issue mit
+`lieferung:vorbereitet` oder `lieferung:gestartet` offen ist, bricht eine neue
+Vorbereitung mit einem Link auf das Issue ab. Nach dem bewussten Schließen darf
+eine neue Vorbereitung die Referenz ersetzen. Nach dem Erstellen des
+dauerhaften Liefer-Tags wird die technische Referenz entfernt. Schlägt die
+Bereinigung fehl, bleibt der Liefer-Tag gültig und der Lauf meldet eine Warnung.
 
 Ist Node.js auf dem Runner verfügbar, zeigt die Runner-Prüfung seine Version an
 und `resources check` prüft zusätzlich JavaScript-Dateien mit `node --check`.

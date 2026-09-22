@@ -7,7 +7,7 @@ import os
 
 from lbs_delivery import config, git, lieferung, mainframe, resource_check, sync
 from lbs_delivery.process import DeliveryError, Status, execute
-from lbs_delivery.project_packages import Scope, lieferumfang
+from lbs_delivery.project_packages import Scope, delivery_scope
 
 
 def run() -> dict[str, object]:
@@ -35,7 +35,7 @@ def run() -> dict[str, object]:
             source = config.mandant_source()
             configuration = config.Configuration.load(source, os.environ["GITHUB_REPOSITORY"])
             tag = lieferung.liefer_tag_for_branch(configuration, os.environ["GITHUB_REF_NAME"])
-            scope = lieferumfang(source, tag, git.resolve(source, "HEAD"))
+            scope = delivery_scope(source, tag, git.resolve(source, "HEAD"))
         elif args.sync_scope:
             source = config.mandant_source()
             configuration = config.Configuration.load(source, os.environ["GITHUB_REPOSITORY"])

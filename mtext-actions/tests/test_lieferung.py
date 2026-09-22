@@ -11,7 +11,7 @@ from lbs_delivery import github
 from lbs_delivery.git import LieferTag
 from lbs_delivery.lieferung import liefer_tag_for_branch, run
 from lbs_delivery.process import DeliveryError, Status
-from lbs_delivery.project_packages import lieferumfang, previous_release_scope, project_elements
+from lbs_delivery.project_packages import delivery_scope, previous_release_scope, project_elements
 
 from tests.support import TempDirTestCase, git, load_test_configuration, setup_release_repository, track_remote_branch
 
@@ -49,12 +49,12 @@ class LieferungTests(TempDirTestCase):
             "r261.108",
         )
 
-        previous_scope = previous_release_scope(self.repository, tag, self.source_sha)
-        scope = lieferumfang(self.repository, tag, self.source_sha)
-        information_elements = project_elements(self.repository, "LOMS_Basis", previous_scope)
-        package_elements = project_elements(self.repository, "LOMS_Basis", scope)
-        self.assertIn(["D", "transient.txt"], information_elements)
-        self.assertNotIn(["M", "baseline.txt"], information_elements)
+        comparison_scope = previous_release_scope(self.repository, tag, self.source_sha)
+        package_scope = delivery_scope(self.repository, tag, self.source_sha)
+        comparison_elements = project_elements(self.repository, "LOMS_Basis", comparison_scope)
+        package_elements = project_elements(self.repository, "LOMS_Basis", package_scope)
+        self.assertIn(["D", "transient.txt"], comparison_elements)
+        self.assertNotIn(["M", "baseline.txt"], comparison_elements)
         self.assertNotIn(["D", "transient.txt"], package_elements)
         self.assertIn(["M", "baseline.txt"], package_elements)
 
@@ -88,24 +88,38 @@ class LieferungTests(TempDirTestCase):
             "GITHUB_RUN_ID": "1234",
             "GITHUB_TOKEN": "secret",
         }):
-            with patch(
-                "lbs_delivery.lieferung.github._request",
-                side_effect=(
-                    None,
-                    {"name": "lieferung:vorbereitet"},
-                    None,
-                    {"name": "dry_run"},
-                    {
-                        "number": 42,
-                        "labels": [{"name": "lieferung:vorbereitet"}, {"name": "dry_run"}],
-                    },
-                ),
-            ) as api:
+            with (
+                patch("lbs_delivery.lieferung.github.create_labeled_issue", return_value=42) as create_issue,
+                patch("lbs_delivery.lieferung.github.open_labeled_issue", return_value=None) as open_issue,
+                patch("lbs_delivery.lieferung.github.set_reference") as set_reference,
+            ):
                 result = run("check")
 
-        body = api.call_args.kwargs["payload"]["body"]
+            body = create_issue.call_args.kwargs["body"]
+            self.assertEqual(
+                set(create_issue.call_args.kwargs["labels"]),
+                {"lieferung:vorbereitet", "dry_run"},
+            )
+            open_issue.assert_called_once_with(
+                "Lieferung r261.100", ("lieferung:vorbereitet", "lieferung:gestartet"),
+            )
+            set_reference.assert_called_once_with("refs/mtext/lieferungen/r261.100", self.source_sha)
+
+            # ein offener Vorgang sperrt Ref und weiteres Freigabe-Issue bis zur Bereinigung
+            with (
+                patch("lbs_delivery.lieferung.github.open_labeled_issue", return_value=41),
+                patch("lbs_delivery.lieferung.github.set_reference") as blocked_reference,
+                patch("lbs_delivery.lieferung.github.create_labeled_issue") as blocked_issue,
+            ):
+                with self.assertRaises(DeliveryError) as raised:
+                    run("check")
+            self.assertEqual(raised.exception.status, Status.FREIGABE_FAILED)
+            self.assertIn("/issues/41", raised.exception.args[0])
+            blocked_reference.assert_not_called()
+            blocked_issue.assert_not_called()
+
         self.assertNotIn("outputs", result)
-        # Der später gestartete Lauf übernimmt den im Issue festgehaltenen Commit.
+        # Der später gestartete Lauf übernimmt den technisch festgehaltenen Commit.
         with patch.dict(os.environ, {
             "GITHUB_ACTOR": "alice",
             "GITHUB_SERVER_URL": "https://github.example",
@@ -116,7 +130,9 @@ class LieferungTests(TempDirTestCase):
             return_value=("open", {"lieferung:vorbereitet"}, "Lieferung r261.100", body),
         ), patch("lbs_delivery.lieferung.github.replace_issue_label") as mark_started, patch(
             "lbs_delivery.lieferung.github.comment_issue",
-        ) as comment:
+        ) as comment, patch(
+            "lbs_delivery.lieferung.github.reference_commit", return_value=self.source_sha,
+        ):
             confirmed = run("resolve", issue=42)
         self.assertEqual(confirmed["status"], Status.LIEFERSTAND_ERMITTELT)
         self.assertEqual(confirmed["outputs"]["source_sha"], self.source_sha)
@@ -144,6 +160,17 @@ class LieferungTests(TempDirTestCase):
                 incomplete = run("incomplete", issue=42)
             self.assertEqual(incomplete["status"], Status.LIEFERUNG_NICHT_ABGESCHLOSSEN)
             api.assert_called_once()
+
+            # offene Vorgänge werden über beide aktiven Status-Labels gefunden
+            with patch("lbs_delivery.github._request", side_effect=(
+                [{"number": 40, "title": "Lieferung r261.108", "pull_request": {}}],
+                [{"number": 42, "title": "Lieferung r261.108"}],
+            )) as api:
+                active_issue = github.open_labeled_issue(
+                    "Lieferung r261.108", ("lieferung:vorbereitet", "lieferung:gestartet"),
+                )
+            self.assertEqual(active_issue, 42)
+            self.assertEqual(len(api.call_args_list), 2)
 
             with patch("lbs_delivery.lieferung.github._request", return_value={"role_name": "write"}):
                 with self.assertRaises(DeliveryError) as raised:
@@ -186,6 +213,10 @@ class LieferungTests(TempDirTestCase):
             with patch("lbs_delivery.github._request", side_effect=({"sha": "tag-object"}, {})) as api:
                 github.create_tag("r261.108", self.source_sha, 42)
             self.assertEqual(api.call_args_list[0].kwargs["payload"]["message"], "Freigabe-Issue: #42")
+            self.assertEqual(
+                api.call_args_list[1].kwargs["payload"],
+                {"ref": "refs/tags/r261.108", "sha": "tag-object"},
+            )
 
             with patch("lbs_delivery.github._request", side_effect=(
                 {"name": "lieferung:gestartet"},
@@ -209,17 +240,21 @@ class LieferungTests(TempDirTestCase):
                 with (
                     patch("lbs_delivery.lieferung.github.tag_record", return_value=None),
                     patch("lbs_delivery.lieferung.github.create_tag") as create_tag,
+                    patch("lbs_delivery.lieferung.github.delete_reference") as delete_reference,
                 ):
                     result = run("tag", "r261.108", issue=42)
                 self.assertEqual(result["status"], Status.LIEFERUNG_TAGGED)
                 create_tag.assert_called_once_with("r261.108", self.source_sha, 42)
+                delete_reference.assert_called_once_with("refs/mtext/lieferungen/r261.108")
 
                 with (
                     patch("lbs_delivery.lieferung.github.tag_record", return_value=(self.source_sha, 42)),
                     patch("lbs_delivery.lieferung.github.create_tag") as create_tag,
+                    patch("lbs_delivery.lieferung.github.delete_reference") as delete_reference,
                 ):
                     run("tag", "r261.108", issue=42)
                 create_tag.assert_not_called()
+                delete_reference.assert_called_once_with("refs/mtext/lieferungen/r261.108")
 
                 for record in (("anderer-commit", 42), (self.source_sha, 41)):
                     with patch("lbs_delivery.lieferung.github.tag_record", return_value=record):
@@ -290,8 +325,8 @@ class LieferungTests(TempDirTestCase):
                 run("resolve", issue=42)
             self.assertEqual(raised.exception.status, Status.FREIGABE_FAILED)
 
-    def test_invalid_issue_body_does_not_start_delivery(self) -> None:
-        """Ein Issue ohne festgehaltenen Lieferstand startet keine Lieferung."""
+    def test_missing_delivery_reference_does_not_start_delivery(self) -> None:
+        """Ein Issue ohne vorbereiteten Git-Verweis startet keine Lieferung."""
 
         with (
             patch.dict(os.environ, {"GITHUB_ACTOR": "alice"}),
@@ -299,6 +334,7 @@ class LieferungTests(TempDirTestCase):
             patch("lbs_delivery.lieferung.github.issue", return_value=(
                 "open", {"lieferung:vorbereitet"}, "Lieferung r261.108", "",
             )),
+            patch("lbs_delivery.lieferung.github.reference_commit", return_value=None),
             patch("lbs_delivery.lieferung.github.replace_issue_label") as mark_started,
         ):
             with self.assertRaises(DeliveryError) as raised:

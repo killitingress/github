@@ -8,7 +8,8 @@ name: Lieferprüfung
 'on':
   workflow_call:
 permissions:
-  contents: read
+  # Der vorbereitete Commit wird als technische Git-Referenz festgehalten.
+  contents: write
   issues: write
 
 jobs:

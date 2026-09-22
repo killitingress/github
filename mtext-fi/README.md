@@ -78,6 +78,11 @@ werden durch die Synchronisierung nicht verändert.
 
 Läufe werden im Repository nacheinander ausgeführt. GHES 3.20 hält einen
 wartenden Lauf vor, der durch einen weiteren Start ersetzt werden kann.
+Der letzte erfolgreiche Stand wird je Umgebungsart, Releaselinie und Branch
+unter `refs/mtext/synchronisierungen/<Präfix>/<Releaselinie>/<Branch>`
+festgehalten. Das Präfix liefert `mtext_umgebung_prefixe` aus
+`config/releaselinien.json`. Diese technischen Referenzen verändern die
+Arbeitsbranches nicht.
 Deshalb die manuellen Abgleiche nacheinander starten und ihren Abschluss
 kontrollieren. Bei einem Fehler nennt die Meldung eine bereits erfolgreich
 verarbeitete Umgebung. Eine Wiederholung kann diese erneut übertragen.
@@ -110,6 +115,14 @@ erforderlich. Die kommentierende Person benötigt `maintain` oder `admin`.
 Vor dem Paketbau wird der Tag aus dem Issue-Titel gelesen und geprüft, ob
 seine Annotation auf dieses Issue verweist. Das Issue erhält danach einen weiteren
 Abschlusskommentar.
+
+Bis zum Tagging hält
+`refs/mtext/lieferungen/<Liefer-Tag>` den vorbereiteten Commit fest. Ein offenes
+Issue mit `lieferung:vorbereitet` oder `lieferung:gestartet` sperrt eine neue
+Vorbereitung dieses Tags. Soll stattdessen ein neuer Stand vorbereitet werden,
+muss ein Maintainer das bisherige Issue zuvor schließen. Nach erfolgreichem
+Tagging wird die technische Referenz entfernt. Ein Fehler bei dieser
+Bereinigung erscheint als Warnung und ändert den Liefer-Tag nicht.
 
 ## Workflows
 

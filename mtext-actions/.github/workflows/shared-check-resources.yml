@@ -18,8 +18,6 @@ name: Ressourcenprüfung
 
 permissions:
   contents: read
-  # Der aufrufende Sync-Workflow gewährt diese Berechtigung für seinen Vergleichscommit.
-  actions: read
 
 jobs:
   check:

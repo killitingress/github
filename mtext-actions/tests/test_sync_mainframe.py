@@ -9,8 +9,6 @@ import os
 from pathlib import Path
 import unittest
 import urllib.error
-import urllib.parse
-import zipfile
 from contextlib import nullcontext
 from unittest.mock import MagicMock, call, patch
 
@@ -98,7 +96,7 @@ class SyncTests(TempDirTestCase):
 
         # Ereignis und Zielauswahl bestimmen den Umfang unabhängig von der Speicherung
         with (
-            patch.object(sync, "latest_sync_commit") as history,
+            patch.object(github, "reference_commit") as history,
             patch.object(sync.git, "resolve", return_value="current"),
             patch.object(sync.git, "require_ancestor") as ancestor,
             patch.object(sync.git, "changes", return_value=[]) as changes,
@@ -106,17 +104,18 @@ class SyncTests(TempDirTestCase):
             patch.object(sync.adapter, "check_reachability"),
             patch.object(sync.adapter, "resume_existing", return_value=None),
             patch.object(sync.adapter, "upload", return_value={}) as transfer,
+            patch.object(github, "set_reference") as save_reference,
         ):
             configuration = load_test_configuration(self.repository)
-            for branch, event, target, baseline, targets in (
-                ("feature/261/test", "push", "Branchstandard", "previous", ["en01"]),
-                ("feature/261/test", "push", "Branchstandard", None, ["en01"]),
-                ("release/261", "pull_request", "Branchstandard", None, ["fu01"]),
-                ("main", "pull_request", "Branchstandard", "previous", ["fu02"]),
-                ("main", "workflow_dispatch", "Beide", None, ["en02", "fu02"]),
-                ("main", "workflow_dispatch", "Entwicklung", None, ["en02"]),
-                ("main", "workflow_dispatch", "Branchstandard", None, ["fu02"]),
-                ("feature/261/test", "workflow_dispatch", "Funktionstest", None, ["fu01"]),
+            for branch, event, target, baseline, targets, umgebung_arten in (
+                ("feature/261/test", "push", "Branchstandard", "previous", ["en01"], ["Entwicklung"]),
+                ("feature/261/test", "push", "Branchstandard", None, ["en01"], ["Entwicklung"]),
+                ("release/261", "pull_request", "Branchstandard", None, ["fu01"], ["Funktionstest"]),
+                ("main", "pull_request", "Branchstandard", "previous", ["fu02"], ["Funktionstest"]),
+                ("main", "workflow_dispatch", "Beide", None, ["en02", "fu02"], ["Entwicklung", "Funktionstest"]),
+                ("main", "workflow_dispatch", "Entwicklung", None, ["en02"], ["Entwicklung"]),
+                ("main", "workflow_dispatch", "Branchstandard", None, ["fu02"], ["Funktionstest"]),
+                ("feature/261/test", "workflow_dispatch", "Funktionstest", None, ["fu01"], ["Funktionstest"]),
             ):
                 with self.subTest(branch=branch, event=event, target=target), patch.dict(os.environ, {
                     "GITHUB_REF_NAME": branch, "GITHUB_EVENT_NAME": event,
@@ -125,18 +124,27 @@ class SyncTests(TempDirTestCase):
                     history.reset_mock()
                     history.return_value = baseline
                     changes.reset_mock()
+                    save_reference.reset_mock()
                     result = sync.run()
                     self.assertEqual([e["umgebung"] for e in result["ergebnisse"]], targets)
                     if baseline:
                         changes.assert_called_once_with(self.repository, baseline, sync.git.resolve.return_value)
                     else:
                         changes.assert_not_called()
+                    releaselinie = "270" if branch == "main" else "261"
+                    expected_references = [
+                        call(
+                            f"refs/mtext/synchronisierungen/"
+                            f"{configuration.mtext_umgebung_prefixe[e]}/{releaselinie}/{branch}",
+                            sync.git.resolve.return_value,
+                        )
+                        for e in umgebung_arten
+                    ]
                     if event == "workflow_dispatch":
                         history.assert_not_called()
-                    evidence = json.loads(Path(result["outputs"]["nachweis_path"]).read_text())
-                    self.assertEqual(set(evidence), {"commit", "releaselinie", "umgebungen"})
-                    self.assertEqual(evidence["commit"], sync.git.resolve.return_value)
-                    self.assertEqual(evidence["umgebungen"], targets)
+                    else:
+                        history.assert_called_once_with(expected_references[0].args[0])
+                    self.assertEqual(save_reference.call_args_list, expected_references)
 
             # Die normale Planung lehnt eine manuelle Zielauswahl im automatischen Lauf ab.
             with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push", "MTEXT_ZIELUMGEBUNG": "Beide"}):
@@ -147,44 +155,35 @@ class SyncTests(TempDirTestCase):
             # Ein überholter Vergleichscommit wird vor der Übertragung zurückgewiesen.
             ancestor.side_effect = [None, DeliveryError(Status.SOURCE_FAILED, "kein Vorfahr")]
             transfer.reset_mock()
-            with patch.object(sync, "latest_sync_commit", return_value="previous"):
+            with patch.object(github, "reference_commit", return_value="previous"):
                 with self.assertRaises(DeliveryError) as raised:
                     sync.run()
             self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
             transfer.assert_not_called()
 
-        # Der Namensindex wählt den Branch. Der erste Nachweis der Umgebung entscheidet.
-        branch, umgebung, releaselinie = "feature/270/test_unterordner", "en02", "270"
+        # GitHub ändert direkt und legt den Stand an, wenn die Referenz noch fehlt.
         previous = "previous"
-        artifacts = [
-            {"id": 1, "expired": True},
-            {"id": 2, "expired": False},
-        ]
-        evidence = {"commit": previous, "releaselinie": releaselinie, "umgebungen": [umgebung]}
-        for expected, current_releaselinie in ((previous, releaselinie), (None, "271")):
-            with (
-                patch.object(github, "artifacts", return_value=artifacts) as listed,
-                patch.object(github, "artifact_document", return_value=evidence),
-            ):
-                self.assertEqual(sync.latest_sync_commit(branch, umgebung, current_releaselinie), expected)
-                listed.assert_called_once_with(f"mtext-stand-{urllib.parse.quote(branch, safe='')}")
+        reference = "refs/mtext/synchronisierungen/en/270/feature/270/test"
+        missing = http_reply({"message": "Reference does not exist"}, 422)
+        created = http_reply({"object": {"type": "commit", "sha": previous}}, 201)
+        with patch.object(github.urllib.request, "urlopen", side_effect=(missing, created)) as http:
+            github.set_reference(reference, previous)
+        self.assertEqual([e.args[0].method for e in http.call_args_list], ["PATCH", "POST"])
 
-        # Der Archivinhalt wird gelesen, beim Speicherabruf wird das API-Token nicht weitergegeben.
-        archive = io.BytesIO()
-        filename = "mtext-stand.json"
-        with zipfile.ZipFile(archive, "w") as document:
-            document.writestr(filename, json.dumps(evidence))
-        response = http_reply({})
-        response.read.return_value = archive.getvalue()
-        location = "https://storage.test/stand.zip"
-        redirect = urllib.error.HTTPError("https://github.test/artifact", 302, "Found", {"Location": location}, io.BytesIO())
-        with (
-            patch.object(github.urllib.request, "build_opener") as opener,
-            patch.object(github.urllib.request, "urlopen", return_value=response) as download,
-        ):
-            opener.return_value.open.side_effect = redirect
-            self.assertEqual(github.artifact_document(artifacts[1]["id"], filename), evidence)
-            self.assertEqual(download.call_args.args, (location,))
+        current = http_reply({"object": {"type": "commit", "sha": "current"}})
+        with patch.object(github.urllib.request, "urlopen", return_value=current) as http:
+            github.set_reference(reference, previous)
+        request = http.call_args.args[0]
+        self.assertEqual(request.method, "PATCH")
+        self.assertEqual(json.loads(request.data), {"sha": previous, "force": True})
+
+        # andere Validierungsfehler dürfen keine Anlage der Referenz auslösen
+        rejected = http_reply({"message": "Validation failed"}, 422)
+        with patch.object(github.urllib.request, "urlopen", side_effect=rejected) as http:
+            with self.assertRaises(DeliveryError) as raised:
+                github.set_reference(reference, previous)
+        self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
+        http.assert_called_once()
 
     def _capture_packages(self, _umgebung, packages, _auftrag_id) -> dict[str, object]:
         """Prüft Informations-Dokumente und Archive während ihrer Übergabe."""
@@ -205,10 +204,11 @@ class SyncTests(TempDirTestCase):
         self.documents = []
 
         with (
-            patch.object(sync, "latest_sync_commit", return_value=baseline),
+            patch.object(github, "reference_commit", return_value=baseline),
             patch.object(adapter, "check_reachability") as reachability,
             patch.object(adapter, "resume_existing", return_value=None) as resume,
             patch.object(adapter, "upload", side_effect=self._capture_packages) as transfer,
+            patch.object(github, "set_reference"),
         ):
             for event in ("push", "workflow_dispatch"):
                 with patch.dict(os.environ, {"GITHUB_EVENT_NAME": event}):
@@ -250,16 +250,17 @@ class SyncTests(TempDirTestCase):
             git(self.repository, "commit", "-m", "Konfiguration")
             git(self.repository, "update-ref", "refs/remotes/origin/release/261", "HEAD")
             transfer.reset_mock()
-            with patch.object(sync, "latest_sync_commit", return_value=commit):
+            with patch.object(github, "reference_commit", return_value=commit):
                 result = sync.run()
             self.assertEqual(result["ergebnisse"][0]["projekte"], [])
             transfer.assert_not_called()
 
         load_test_configuration(self.repository, mandant={"dry_run": False})
         with (
-            patch.object(sync, "latest_sync_commit", return_value=baseline),
+            patch.object(github, "reference_commit", return_value=baseline),
             patch.object(adapter, "check_reachability"),
             patch.object(sync, "build_project_package", return_value=self.project_package) as build,
+            patch.object(github, "set_reference"),
         ):
             for status in ("processing", "succeeded"):
                 replies = [execution_reply(status, result="fertig" if status == "succeeded" else None)]

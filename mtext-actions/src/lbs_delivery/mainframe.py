@@ -18,8 +18,8 @@ from .process import DeliveryError, NETWORK_TIMEOUT, Status
 from .project_packages import (
     build_delta_archive,
     build_project_archive,
+    delivery_scope,
     project_archive_path,
-    lieferumfang,
 )
 
 
@@ -142,7 +142,7 @@ def _build_mainframe_files(configuration: config.Configuration, *, output_direct
 
     # Paketumfang aus dem vorbereiteten Commit ableiten
     repository_root = config.mandant_source()
-    scope = lieferumfang(repository_root, tag, git.resolve(repository_root, "HEAD"))
+    package_scope = delivery_scope(repository_root, tag, git.resolve(repository_root, "HEAD"))
 
     # Hostprofil und JCL-Vorlage für diese Releaselinie laden
     host_profile = configuration.hostprofile[configuration.releaselinien[tag.releaselinie]["hostprofil"]]
@@ -153,11 +153,11 @@ def _build_mainframe_files(configuration: config.Configuration, *, output_direct
 
     # Projektarchive erstellen und je Archiv-Member eine JCL-Datei generieren
     for project in configuration.projects:
-        archive = build_project_archive(configuration, repository_root, project, output_directory, scope)
+        archive = build_project_archive(configuration, repository_root, project, output_directory, package_scope)
 
         # leeres D-Archiv verhindert, dass der Folgejob ein früheres DELTA einspielt
         archive_paths = [archive]
-        if scope.von is None:
+        if package_scope.von is None:
             delta_archive = project_archive_path(configuration, project, output_directory, "D")
             build_delta_archive(repository_root, project, delta_archive, [])
             archive_paths.append(delta_archive)

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import urllib.error
 import urllib.parse
 import urllib.request
-import zipfile
 from typing import Any
 
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
@@ -31,13 +29,11 @@ def _repository_url(path: str) -> str:
     return f"{os.environ['GITHUB_API_URL'].rstrip('/')}/repos/{repository}/{path}"
 
 
-def _request(*, method: str, url: str, failure: Status, payload: dict[str, object] | None = None, missing_ok: bool = False) -> Any:
-    """Sendet eine Anfrage an GitHub und liest die JSON-Antwort.
-
-    Bei einer fehlenden Ressource (404) gibt die Funktion mit `missing_ok`
-    `None` zurück. Andere HTTP- und Verbindungsfehler beenden den Schritt mit
-    dem vom Aufrufer festgelegten Status.
-    """
+def _request(
+    *, method: str, url: str, failure: Status, payload: dict[str, object] | None = None,
+    missing_errors: tuple[tuple[int, str | None], ...] = (),
+) -> Any:
+    """Sendet eine Anfrage und behandelt einen erwarteten HTTP-Fehler als fehlende Ressource."""
 
     # JSON-Inhalt in den gemeinsamen GitHub-Request übernehmen
     body = json.dumps(payload).encode() if payload is not None else None
@@ -58,15 +54,16 @@ def _request(*, method: str, url: str, failure: Status, payload: dict[str, objec
             body = response.read()
     except urllib.error.HTTPError as ex:
         with ex:
-            # fehlende Ressourcen darf der Aufrufer als leeres Ergebnis behandeln
-            if missing_ok and ex.code == 404:
-                return None
-
             # technische GitHub-Meldung für die Workflow-Diagnose erhalten
             try:
                 detail = json.loads(ex.read())["message"]
             except (UnicodeError, json.JSONDecodeError, KeyError, TypeError):
                 detail = ex.reason
+
+            # Status und optionale GitHub-Meldung müssen das erwartete Fehlen belegen
+            if (ex.code, None) in missing_errors or (ex.code, detail) in missing_errors:
+                return None
+
             raise DeliveryError(failure, f"GitHub antwortet mit HTTP {ex.code}: {detail}") from ex
     except (urllib.error.URLError, TimeoutError) as ex:
         raise DeliveryError(failure, f"GitHub ist nicht erreichbar: {ex}") from ex
@@ -80,54 +77,59 @@ def _request(*, method: str, url: str, failure: Status, payload: dict[str, objec
         raise DeliveryError(failure, f"GitHub-Antwort ist ungültig: {ex}") from ex
 
 
-def artifacts(name: str) -> list[dict[str, Any]]:
-    """Liefert die neuesten Artefakte mit diesem Namen."""
-
-    query = urllib.parse.urlencode({"name": name, "per_page": 100})
-    return _request(
-        method="GET", url=f"{_repository_url('actions/artifacts')}?{query}", failure=Status.SOURCE_FAILED,
-    )["artifacts"]
+def _reference_url(reference: str, *, collection: bool = False) -> str:
+    """Baut die Lese- oder Änderungsadresse einer Git-Referenz."""
+    path = urllib.parse.quote(reference.removeprefix("refs/"), safe="/")
+    return _repository_url(f"git/{'refs' if collection else 'ref'}/{path}")
 
 
-def artifact_document(artifact_id: int, filename: str) -> Any:
-    """Lädt eine JSON-Datei aus einem Artefakt, ohne das Archiv ins Dateisystem zu entpacken.
-
-    Die Download-Grenze trennt den authentifizierten API-Aufruf vom signierten
-    Speicherlink, damit das GitHub-Token nicht an den Speicherdienst gelangt.
-    """
-
-    # die API liefert eine kurzlebige Download-Adresse als Redirect
-    request = urllib.request.Request(
-        _repository_url(f"actions/artifacts/{artifact_id}/zip"),
-        headers={"Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
-                 "Accept": _JSON_MEDIA_TYPE, "X-GitHub-Api-Version": _API_VERSION},
-    )
-    opener = urllib.request.build_opener(_NoRedirect())
-    try:
-        try:
-            with opener.open(request, timeout=NETWORK_TIMEOUT) as response:
-                archive = response.read()
-        except urllib.error.HTTPError as redirect:
-            with redirect:
-                if redirect.code != 302:
-                    raise
-                location = redirect.headers["Location"]
-            with urllib.request.urlopen(location, timeout=NETWORK_TIMEOUT) as response:
-                archive = response.read()
-
-        # die benannte Datei lesen, JSON- und Archivfehler an dieser I/O-Grenze melden
-        with zipfile.ZipFile(io.BytesIO(archive)) as document:
-            return json.loads(document.read(filename))
-    except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
-        raise DeliveryError(Status.SOURCE_FAILED, f"GitHub-Artefakt kann nicht gelesen werden: {exc}") from exc
-
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Hält Download-Redirects an der authentifizierten API-Grenze an."""
-
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        """Überlässt die Weiterleitung dem Aufrufer ohne Übernahme der Zugangsdaten."""
+def _reference_object(reference: str) -> tuple[str, str] | None:
+    """Liest Typ und SHA des Objekts hinter einer Git-Referenz."""
+    document = _request(method="GET", url=_reference_url(reference), failure=Status.SOURCE_FAILED,
+                        missing_errors=((404, None),))
+    if document is None:
         return None
+
+    match document:
+        case {"object": {"type": str(object_type), "sha": str(sha)}}:
+            return object_type, sha
+    raise DeliveryError(Status.SOURCE_FAILED, "Git-Referenz ist ungültig")
+
+
+def reference_commit(reference: str) -> str | None:
+    """Gibt den Commit einer technischen Git-Referenz zurück, falls sie existiert."""
+    target = _reference_object(reference)
+    if target is None:
+        return None
+
+    object_type, sha = target
+    if object_type != "commit":
+        raise DeliveryError(Status.SOURCE_FAILED, "Git-Referenz zeigt nicht auf einen Commit")
+    return sha
+
+
+def create_reference(reference: str, sha: str) -> None:
+    """Erzeugt eine technische Git-Referenz auf den angegebenen Commit."""
+    payload = {"ref": reference, "sha": sha}
+    _request(method="POST", url=_repository_url("git/refs"), failure=Status.SOURCE_FAILED, payload=payload)
+
+
+def set_reference(reference: str, sha: str) -> None:
+    """Erzeugt eine technische Git-Referenz oder setzt sie auf den neuen Commit."""
+    # vorhandenen Stand direkt fortschreiben, ohne vorherige Leseanfrage und Zeitfenster
+    updated = _request(method="PATCH", url=_reference_url(reference, collection=True),
+                       failure=Status.SOURCE_FAILED, payload={"sha": sha, "force": True},
+                       missing_errors=((404, None), (422, "Reference does not exist")))
+
+    # GitHub kennzeichnet eine beim PATCH fehlende Referenz als nicht vorhanden
+    if updated is None:
+        create_reference(reference, sha)
+
+
+def delete_reference(reference: str) -> None:
+    """Entfernt eine vorhandene technische Git-Referenz."""
+    _request(method="DELETE", url=_reference_url(reference, collection=True), failure=Status.SOURCE_FAILED,
+             missing_errors=((404, None), (422, "Reference does not exist")))
 
 
 def _label_names(labels: object) -> set[str]:
@@ -142,7 +144,7 @@ def _ensure_label(name: str, description: str) -> None:
     """Legt ein fachliches Label im Repository bei Bedarf an."""
 
     url = _repository_url(f"labels/{urllib.parse.quote(name, safe='')}")
-    if _request(method="GET", url=url, failure=Status.FREIGABE_FAILED, missing_ok=True) is None:
+    if _request(method="GET", url=url, failure=Status.FREIGABE_FAILED, missing_errors=((404, None),)) is None:
         payload = {"name": name, "color": "1f883d", "description": description}
         _request(method="POST", url=_repository_url("labels"), failure=Status.FREIGABE_FAILED, payload=payload)
 
@@ -168,6 +170,24 @@ def create_labeled_issue(*, title: str, body: str, labels: dict[str, str]) -> in
             return number
         case _:
             raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue ist ungültig")
+
+
+def open_labeled_issue(title: str, labels: tuple[str, ...]) -> int | None:
+    """Sucht ein offenes Issue mit dem Titel und einem der angegebenen Labels."""
+    # je Status-Label abfragen, weil GitHub mehrere Labels als UND verknüpft
+    for label in labels:
+        query = urllib.parse.urlencode({"state": "open", "labels": label, "per_page": 100})
+        documents = _request(method="GET", url=f"{_repository_url('issues')}?{query}", failure=Status.FREIGABE_FAILED)
+        if not isinstance(documents, list):
+            raise DeliveryError(Status.FREIGABE_FAILED, "GitHub liefert keine gültige Issue-Liste zurück")
+
+        # Pull Requests stehen ebenfalls in der Issue-Liste und zählen hier nicht
+        for document in documents:
+            if isinstance(document, dict) and document.get("title") == title and "pull_request" not in document:
+                number = document.get("number")
+                if isinstance(number, int):
+                    return number
+    return None
 
 
 def issue(number: int) -> tuple[str, set[str], str, str]:
@@ -197,17 +217,15 @@ def repository_role(username: str) -> str | None:
 def tag_record(tag: str) -> tuple[str, int] | None:
     """Liest Commit-SHA und Freigabe-Issue eines Liefer-Tags."""
 
-    url = _repository_url(f"git/ref/tags/{urllib.parse.quote(tag, safe='')}")
-    reference = _request(method="GET", url=url, failure=Status.SOURCE_FAILED, missing_ok=True)
-    if reference is None:
+    target = _reference_object(f"refs/tags/{tag}")
+    if target is None:
         return None
 
     # Liefer-Tags tragen die Issue-Zuordnung in ihrem annotierten Tag-Inhalt
-    match reference:
-        case {"object": {"type": "tag", "sha": str(tag_sha)}}:
-            document = _request(method="GET", url=_repository_url(f"git/tags/{tag_sha}"), failure=Status.SOURCE_FAILED)
-        case _:
-            raise DeliveryError(Status.SOURCE_FAILED, "Liefer-Tag ist nicht annotiert")
+    object_type, tag_sha = target
+    if object_type != "tag":
+        raise DeliveryError(Status.SOURCE_FAILED, "Liefer-Tag ist nicht annotiert")
+    document = _request(method="GET", url=_repository_url(f"git/tags/{tag_sha}"), failure=Status.SOURCE_FAILED)
 
     match document:
         case {"tag": str(name), "message": str(message), "object": {"type": "commit", "sha": str(sha)}} if (
@@ -228,11 +246,10 @@ def create_tag(tag: str, sha: str, issue: int) -> None:
     payload = {"tag": tag, "message": f"{_TAG_ISSUE_PREFIX}{issue}", "object": sha, "type": "commit"}
     document = _request(method="POST", url=_repository_url("git/tags"), failure=Status.SOURCE_FAILED, payload=payload)
 
-    # prüft ob der Tag-Inhalt erfolgreich erstellt wurde und erstellt die Git-Referenz
+    # Tag-Inhalt prüfen und über denselben Ref-Adapter wie technische Stände benennen
     match document:
         case {"sha": str(tag_sha)}:
-            payload = {"ref": f"refs/tags/{tag}", "sha": tag_sha}
-            _request(method="POST", url=_repository_url("git/refs"), failure=Status.SOURCE_FAILED, payload=payload)
+            create_reference(f"refs/tags/{tag}", tag_sha)
         case _:
             raise DeliveryError(Status.SOURCE_FAILED, "GitHub liefert keinen Tag-Inhalt zurück")
 

@@ -64,8 +64,8 @@ def delta_scope(repository: Path, base: tuple[str, str], target: tuple[str, str]
     return Scope(von=base, bis=target, changes=git.changes(repository, base[1], target[1]))
 
 
-def lieferumfang(repository_root: Path, tag: git.LieferTag, commit: str) -> Scope:
-    """Ermittelt den Scope für ein Liefer-Tag.
+def delivery_scope(repository_root: Path, tag: git.LieferTag, commit: str) -> Scope:
+    """Ermittelt den Paketumfang für einen Liefer-Tag.
 
     Ein FULL hat keinen Bezugscommit und keine Changes, und umfasst später alle
     Dateien des Projekts. Ein DELTA vergleicht gegen das FULL der passenden
@@ -167,17 +167,17 @@ def _project_sections(configuration: Configuration, repository: Path, scope: Sco
 
 
 def lieferbericht(
-    configuration: Configuration, repository: Path, *, lieferumfang: Scope,
-    previous_scope: Scope, status_lines: list[str],
+    configuration: Configuration, repository: Path, *, package_scope: Scope,
+    comparison_scope: Scope, status_lines: list[str],
 ) -> str:
     """Erstellt den Lieferumfang für das Freigabe-Issue als Markdown-Text."""
 
     lines = ["## Lieferung", "", *status_lines, ""]
 
     # Abweichungen vom vorherigen Lieferstand ohne leere Projektabschnitte zeigen
-    lines.extend((f"## Abweichungen gegenüber `{previous_scope.von[0]}`", ""))
-    lines.extend((f"Vergleich: `{previous_scope.von[0]}` → `{previous_scope.bis[0]}`", ""))
-    changes = _project_sections(configuration, repository, previous_scope)
+    lines.extend((f"## Abweichungen gegenüber `{comparison_scope.von[0]}`", ""))
+    lines.extend((f"Vergleich: `{comparison_scope.von[0]}` → `{comparison_scope.bis[0]}`", ""))
+    changes = _project_sections(configuration, repository, comparison_scope)
     if changes:
         lines.extend(changes)
     else:
@@ -185,15 +185,15 @@ def lieferbericht(
 
     # tatsächlichen Archivinhalt getrennt vom Vergleich zum vorherigen Liefer-Tag zeigen
     lines.extend(("## Inhalt der Projektarchive", ""))
-    if lieferumfang.von is None:
+    if package_scope.von is None:
         lines.extend(("Vollständiger Projektinhalt (FULL).", ""))
     else:
-        lines.extend((f"Vergleich: `{lieferumfang.von[0]}` → `{lieferumfang.bis[0]}`", ""))
+        lines.extend((f"Vergleich: `{package_scope.von[0]}` → `{package_scope.bis[0]}`", ""))
 
-    archive_contents = _project_sections(configuration, repository, lieferumfang)
+    archive_contents = _project_sections(configuration, repository, package_scope)
     if archive_contents:
         lines.extend(archive_contents)
-    elif lieferumfang.von is None:
+    elif package_scope.von is None:
         lines.extend(("Die Projektarchive enthalten keine Ressourcendateien.", ""))
     else:
         lines.extend(("Die Projektarchive enthalten keine geänderten oder gelöschten Ressourcen.", ""))

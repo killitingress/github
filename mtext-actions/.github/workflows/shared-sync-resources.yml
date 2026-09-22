@@ -11,8 +11,8 @@ name: Synchronisierung
         default: Branchstandard
 
 permissions:
-  contents: read
-  actions: read
+  # Erfolgreiche Zielstände werden als technische Git-Referenzen fortgeschrieben.
+  contents: write
 
 jobs:
   sync:
@@ -54,12 +54,3 @@ jobs:
           path: ${{ steps.sync.outputs.ergebnis_path }}
           if-no-files-found: error
           retention-days: 10
-
-      # Übertragenen Commit als Vergleichsbasis späterer DELTA-Läufe speichern.
-      - name: Vergleichscommit speichern
-        if: steps.sync.outputs.nachweis_path != ''
-        uses: actions/upload-artifact@v3
-        with:
-          name: ${{ steps.sync.outputs.nachweis_name }}
-          path: ${{ steps.sync.outputs.nachweis_path }}
-          if-no-files-found: error

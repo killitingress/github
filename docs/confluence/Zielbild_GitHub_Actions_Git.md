@@ -25,9 +25,12 @@ eines Repositories getätigt und per Push an ein zentrales Repository
 übertragen. Zu jedem Commit gehört eine 40-stellige Commit-SHA, die den
 zugehörigen Entwicklungsstand samt Historie zu einem bestimmten Zeitpunkt
 eindeutig identifiziert und damit am ehesten einer SVN-Revision entspricht.
-Technisch ist ein Branch in Git ein Zeiger auf einen Commit. Beim Push eines
-Branches nach GitHub werden sämtliche fehlenden Commits dorthin übertragen und
-der Branch in GitHub auf den dann aktuellsten Commit *verschoben*.
+Git verwaltet benannte Zeiger als Referenzen. Ein Branch ist eine solche
+Referenz auf einen Commit und wird bei neuen Commits weitergeschoben. Die
+besondere Referenz `HEAD` bezeichnet den aktuell ausgecheckten Stand, meist
+über den aktuellen Branch. Beim Push eines Branches nach GitHub werden
+sämtliche fehlenden Commits dorthin übertragen und der Branch in GitHub auf
+den dann aktuellsten Commit *verschoben*.
 
 Jeder Entwicklungsauftrag (Änderung, Erweiterung, Korrektur, ...) wird als
 Feature in einem eigenen temporären Feature-Branch umgesetzt. Wenn ein Feature
@@ -223,6 +226,23 @@ wird. Oder es werden nur die vom Vergleich gegenüber der vorherigen
 (erfolgreichen) Synchronisierung abweichenden Inhalte übertragen (DELTA),
 inklusive einer Löschliste, als D-Archiv.
 
+Für erfolgreiche Synchronisierungsstände legt die Automatisierung zusätzliche
+Git-Referenzen an. Wie ein Branch ist eine solche Referenz ein benannter Zeiger
+auf einen Commit. Sie liegt jedoch außerhalb der Arbeitsbranches im Namensraum
+`refs/mtext`. Der letzte erfolgreiche Abgleich von `main` mit der
+Funktionstestumgebung für Releaselinie 270 wird beispielsweise unter folgender
+Referenz festgehalten:
+
+```text
+refs/mtext/synchronisierungen/fu/270/main
+```
+
+Dabei stammt das Präfix `fu` aus `mtext_umgebung_prefixe` der
+Mandantenkonfiguration, `270` bezeichnet die Releaselinie und `main` den
+Branch. Fehlt die passende Referenz, wird ein vollständiger Abgleich (FULL)
+durchgeführt. Nach einer echten erfolgreichen Übertragung wird sie auf den
+Zielcommit gesetzt. Dry Runs verändern den festgehaltenen Stand nicht.
+
 ### Projektarchive
 
 Synchronisierung und Mainframe-Lieferung verwenden dasselbe Archivformat:
@@ -402,7 +422,12 @@ frei ist. `main` und `release/nnn` ergeben `rnnn.100`.
 
 Das dabei entstehende Freigabe-Issue zeigt Branch, Abweichungen gegenüber dem
 vorherigen Liefer-Tag und vorgesehenen Lieferumfang. Der Liefer-Tag steht im
-Titel, Branch und Commit-SHA im Text. Die Laufzusammenfassung verweist darauf.
+Titel. Den vorbereiteten Commit hält die technische Git-Referenz
+`refs/mtext/lieferungen/<Liefer-Tag>` fest. Solange ein Issue dieses Tags mit
+`lieferung:vorbereitet` oder `lieferung:gestartet` offen ist, wird keine weitere
+Vorbereitung angelegt. Der Abbruch verweist auf das vorhandene Issue. Nach dem
+bewussten Schließen kann ein neuer Stand vorbereitet werden. Die
+Laufzusammenfassung verweist auf das Freigabe-Issue.
 
 Sollte auffallen, dass etwas mit der Lieferung fachlich noch nicht stimmt, ist
 der Branch zu korrigieren und der Workflow erneut zu starten. Dabei entsteht
@@ -413,14 +438,17 @@ ein neues Freigabe-Issue.
 Die vorbereitete Lieferung wird mit dem Kommentar `/freigabe` im offenen
 Freigabe-Issue gestartet. Dazu ist die Repository-Berechtigung `maintain`
 oder `admin` erforderlich, wobei auch die vorbereitende Person selbst
-freigeben darf. Die im Issue festgehaltene Commit-SHA bestimmt den zu
-liefernden Ressourcenstand, der Titel den vorgesehenen Liefer-Tag.
+freigeben darf. Die technische Git-Referenz bestimmt den zu liefernden
+Ressourcenstand, der Titel den vorgesehenen Liefer-Tag.
 
 Mit der ersten Freigabe wechselt das Status-Label von `lieferung:vorbereitet`
 zu `lieferung:gestartet`. Anschließend baut der Shared Workflow aus
 `mtext_actions` die Archive und JCL-Dateien, übergibt sie an den Mainframe und
 erzeugt den annotierten Liefer-Tag mit Verweis auf das Freigabe-Issue. Zur
 Kontrolle stehen die Lieferdateien 30 Tage im Laufartefakt `release` bereit.
+Der Liefer-Tag ersetzt die technische Vorbereitungsreferenz, die danach
+entfernt wird. Ein Fehler bei dieser Bereinigung erzeugt eine Warnung und
+ändert den bereits erstellten Liefer-Tag nicht.
 
 Nach erfolgreichem Abschluss dokumentiert ein Kommentar im Issue den
 Liefer-Tag sowie Namen und SHA-256-Prüfsummen der übertragenen Archive. Mit
@@ -614,9 +642,9 @@ gemeinsamen Komponenten ohne eigenes Zugriffstoken.
 
 GitHub stellt jedem Job automatisch einen zeitlich begrenzten Zugangsschlüssel
 namens `GITHUB_TOKEN` bereit. Damit kann der Job auf das Mandanten-Repository
-zugreifen, etwa um Freigabe-Issues zu lesen und anzulegen oder Liefer-Tags zu
-erstellen. Die erlaubten Aktionen werden über `permissions` in den
-Workflow-Dateien festgelegt.
+zugreifen, etwa um Freigabe-Issues zu lesen und anzulegen, technische
+Git-Referenzen fortzuschreiben oder Liefer-Tags zu erstellen. Die erlaubten
+Aktionen werden über `permissions` in den Workflow-Dateien festgelegt.
 
 Auch der aufgerufene Shared Workflow arbeitet mit diesem Zugang zum
 Mandanten-Repository. Er gehört zum selben Lauf und verwendet die vom
@@ -634,7 +662,7 @@ mit dem zugehörigen Exitcode.
 | `RESOURCE_CHECKED` | Die konfigurierten Ressourcen wurden geprüft, Befunde stehen als Warnungen bereit | – |
 | `VALIDATION_FAILED` | Eingaben oder Konfiguration sind ungültig | `2` |
 | `LIEFERSTAND_ERMITTELT` | Der Lieferstand für Freigabe oder Wiederholung wurde ermittelt | – |
-| `LIEFERUNG_CHECKED` | Branch, Commit-SHA und Lieferumfang wurden im Freigabe-Issue festgehalten | – |
+| `LIEFERUNG_CHECKED` | Lieferumfang und technische Referenz des vorbereiteten Commits wurden festgehalten | – |
 | `LIEFERUNG_TAGGED` | Der Liefer-Tag wurde auf der festgehaltenen SHA mit Freigabe-Issue-Zuordnung erstellt | – |
 | `LIEFERUNG_ABGESCHLOSSEN` | Der erfolgreiche Lauf wurde im geschlossenen Freigabe-Issue festgehalten | – |
 | `LIEFERUNG_NICHT_ABGESCHLOSSEN` | Der nicht abgeschlossene Lauf wurde im offenen Freigabe-Issue festgehalten | – |

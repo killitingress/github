@@ -34,8 +34,8 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
-  actions: read
+  # Erfolgreiche Synchronisierungsstände werden als technische Git-Referenzen gespeichert.
+  contents: write
 
 jobs:
   # Verwendet denselben FULL- oder DELTA-Umfang wie die Synchronisierung.
