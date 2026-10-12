@@ -1,17 +1,4 @@
-"""Spricht den M/Text-Adapter über HTTP `/sync2` an.
-
-Die Basis-URL ist `http://{umgebung}.ltoma.intern/vMtextAdapter`. Die
-Auftrags-ID verbindet GitHub-Lauf und Mandantenkürzel. Vor dem Paketbau fragt
-der Client die Ausführung ab. HTTP 404 heißt, dass noch kein Auftrag liegt.
-Sonst übernimmt oder entfernt er ihn je nach Status.
-
-Ein neuer Auftrag entsteht mit POST (HTTP 201) und den angekündigten Archiven.
-PUT überträgt die `.tgz`-Bytes unverändert. GET `/execution` wird alle fünf
-Sekunden wiederholt, bis `succeeded` oder `failed` vorliegt. Danach folgt
-DELETE. Fachliche Fehler kommen als HTTP 200 mit `status: failed`. Netz- und
-Protokollfehler beenden den Schritt mit `ADAPTER_FAILED`. Das Socket-Timeout
-beträgt 30 Sekunden.
-"""
+"""Spricht den M/Text-Adapter über HTTP `/sync2` an."""
 
 from __future__ import annotations
 
@@ -60,7 +47,7 @@ def _auftrag_url(umgebung: str, auftrag_id: str) -> str:
 
 
 def _execution_url(umgebung: str, auftrag_id: str) -> str:
-    """Gibt die URL der Ausführung eines Adapterauftrags zurück."""
+    """Gibt die URL der execution eines Adapterauftrags zurück."""
 
     return f"{_auftrag_url(umgebung, auftrag_id)}/execution"
 
@@ -69,8 +56,10 @@ def check_reachability(umgebung: str) -> None:
     """Prüft die Erreichbarkeit des /version-Endpunkts."""
 
     url = f"{_ADAPTER_URL.format(umgebung=umgebung)}/version"
+    logger.debug("GET %s", url)
     try:
         with urllib.request.urlopen(url, timeout=NETWORK_TIMEOUT) as response:
+            logger.debug("Response = HTTP %s auf GET %s", response.status, url)
             response.read()
     except (urllib.error.URLError, OSError, HTTPException) as exc:
         raise DeliveryError(Status.ADAPTER_FAILED, f"Versionsabfrage unter {url} ist fehlgeschlagen: {exc}") from exc
@@ -186,12 +175,11 @@ def _call_adapter(
     *,
     not_found_ok: bool = False,
 ) -> dict[str, object] | None:
-    """Liefert die geprüfte Ausführung oder eine Löschbestätigung.
-
-    Bei HTTP 404 gibt die Funktion mit `not_found_ok` `None` zurück. Der
-    Wiederanlauf nutzt das, wenn unter der Lauf-ID noch kein Auftrag liegt.
-    POST entnimmt die Ausführung aus dem angelegten Auftrag. Andere
-    HTTP-Fehler beenden den Schritt mit `ADAPTER_FAILED`.
+    """Ruft den Adapter mit der Methode und URL auf und gibt die Antwort zurück.
+    
+    Bei HTTP 404 und `not_found_ok` gibt die Funktion `None` zurück. Andere
+    HTTP-Fehler enden mit `DeliveryError`. Bei HTTP 500 wird außerdem ein DELETE
+    gesendet, damit der Adapter immer hinter sich aufräumt.
     """
 
     # JSON-Anfragen serialisieren, Archivdaten unverändert durchreichen
@@ -202,6 +190,7 @@ def _call_adapter(
         request_headers["Content-Type"] = "application/json"
 
     request = urllib.request.Request(url, method=method, data=data, headers=request_headers)
+    logger.debug("%s %s", method, url)
 
     # Erfolgs- und Fehlerantworten über denselben begrenzten Lesepfad übernehmen
     try:
@@ -213,8 +202,18 @@ def _call_adapter(
         with response:
             http_status = response.code if isinstance(response, urllib.error.HTTPError) else response.status
             body = response.read(_RESPONSE_LIMIT + 1)
+            logger.debug("HTTP %s auf %s %s: %s", http_status, method, url, body[:300].decode(errors="replace"))
     except (urllib.error.URLError, OSError, HTTPException) as exc:
         raise DeliveryError(Status.ADAPTER_FAILED, f"Adapteraufruf ist fehlgeschlagen: {exc}") from exc
+
+    # HTTP 500 lässt den Auftrag liegen, DELETE gibt dem Adapter den Aufräumgrund
+    if http_status == 500 and method != "DELETE":
+        detail = body[:1000].decode(errors="replace")
+        try:
+            _delete_after_http_500(url)
+        except DeliveryError as exc:
+            detail = f"{detail}. Auftrag konnte nicht entfernt werden: {exc.args[0]}"
+        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP 500: {detail}")
 
     if len(body) > _RESPONSE_LIMIT:
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort überschreitet 10 MiB")
@@ -262,6 +261,22 @@ def _call_adapter(
             return document
         case _:
             raise DeliveryError(Status.ADAPTER_FAILED, "Adapter liefert keine gültige Ausführung")
+
+
+def _delete_after_http_500(url: str) -> None:
+    """Entfernt den Auftrag, dessen Aufruf mit HTTP 500 fehlgeschlagen ist."""
+
+    marker = "/sync2/"
+    start = url.find(marker)
+    if start < 0:
+        return
+
+    order_id = url[start + len(marker):].split("/", 1)[0]
+    if not order_id:
+        return
+
+    logger.info("Auftrag %s soll nach HTTP 500 entfernt werden", urllib.parse.unquote(order_id))
+    _call_adapter("DELETE", f"{url[:start + len(marker)]}{order_id}")
 
 
 def _iter_file(path: Path) -> Iterator[bytes]:

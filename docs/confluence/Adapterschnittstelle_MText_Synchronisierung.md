@@ -48,7 +48,8 @@ gelöschte Auftrags-ID zu HTTP 404. Ein POST unter einer vorhandenen
 Auftrags-ID oder ein abweichender PUT für ein bereits angenommenes Archiv
 führt zu HTTP 409 und verändert den Auftrag nicht. Ein unpassender
 `Content-Type` führt zu HTTP 415 und ein unerwarteter Adapterfehler bei der
-Bearbeitung des HTTP-Requests zu HTTP 500.
+Bearbeitung des HTTP-Requests zu HTTP 500. Darauf sendet der Client DELETE
+für diesen Auftrag.
 
 Prüfsummen-, Archivinhalts- und Verarbeitungsfehler eines bekannten Auftrags
 werden dagegen mit HTTP 200, Auftragsstatus `failed` und `message`
@@ -211,6 +212,7 @@ Für die Requests des Clients gelten folgende Reaktionen:
 | `PUT /sync2/{auftrag_id}/archive/{name}` | HTTP 200 mit `processing` | letztes Archiv angenommen, Verarbeitung beginnt |
 | `PUT /sync2/{auftrag_id}/archive/{name}` | HTTP 200 mit `failed` und `message` | vollständig empfangenes Archiv hat seine Prüfung nicht bestanden |
 | `DELETE /sync2/{auftrag_id}` | HTTP 200 mit `{"status": "deleted"}` | unvollständiger oder beendeter Auftrag ist entfernt |
+| Aufruf unter `/sync2/{auftrag_id}` | HTTP 500 | Auftrag per DELETE entfernen und den Lauf mit `ADAPTER_FAILED` beenden |
 
 HTTP-Fehler liefern ein JSON-Objekt mit `message` und dem oben beschriebenen
 Statuscode. Der Auftragsstatus `failed` ist dagegen eine erfolgreiche
@@ -272,8 +274,10 @@ die zugehörige Uploadannahme und verhindert einen anschließenden
 Verarbeitungsstart. In `processing` wartet der Client auf den Endstatus und
 sendet kein DELETE.
 
-Andere HTTP-Fehler, Netzwerkfehler und ungültige Antworten beenden
-den Clientlauf mit `ADAPTER_FAILED`. Das gilt auch bei fehlgeschlagenem DELETE.
+Bei HTTP 500 auf einen Aufruf des Auftrags sendet der Client danach DELETE
+und beendet den Lauf mit `ADAPTER_FAILED`. Andere HTTP-Fehler, Netzwerkfehler
+und ungültige Antworten beenden den Clientlauf ebenfalls mit `ADAPTER_FAILED`.
+Das gilt auch bei fehlgeschlagenem DELETE.
 Der Client legt das inhaltliche Format von `result` nicht fest.
 
 ## Java-Idee
