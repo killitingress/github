@@ -405,7 +405,7 @@ class SyncTests(TempDirTestCase):
             self.assertEqual(payload["archive"][0]["information"], self.project_package.information)
             self.assertTrue(all(e == b"F-Archiv" for e in self.uploaded))
             self.assertEqual([e.get_method() for e in requests], methods)
-            self.assertEqual(requests[0].full_url, "http://en01.ltoma.intern/vMtextAdapter/sync2/test-FI")
+            self.assertEqual(requests[0].full_url, "https://en01.ltoma.intern/vMtextAdapter/sync2/test-FI")
             self.assertTrue(all(
                 e.full_url.endswith("/execution") for e in requests if e.get_method() == "GET"
             ))

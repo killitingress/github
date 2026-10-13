@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from contextlib import closing
 from http.client import HTTPException
 from pathlib import Path
-from typing import Literal
+from typing import Literal, NoReturn
 
 from .process import DeliveryError, NETWORK_TIMEOUT, Status
 from .project_packages import ProjectPackage
@@ -32,7 +32,7 @@ _UPLOAD_BLOCK_SIZE = 1024 * 1024
 _POLL_INTERVAL_SECONDS = 5
 
 # URL-Muster des Adapters. `{umgebung}` ist Präfix und ETAPS-Linie.
-_ADAPTER_URL = "http://{umgebung}.ltoma.intern/vMtextAdapter"
+_ADAPTER_URL = "https://{umgebung}.ltoma.intern/vMtextAdapter"
 
 # Statusgruppen der sync2-Ausführung
 _RESTART_STATUSES = frozenset({"ready", "uploading", "failed"})
@@ -75,7 +75,10 @@ def resume_existing(umgebung: str, auftrag_id: str) -> dict[str, object] | None:
     auftrag_url = _auftrag_url(umgebung, auftrag_id)
 
     # ein fehlender Auftrag ist der erwartete Neubaufall
-    result = _call_adapter("GET", _execution_url(umgebung, auftrag_id), not_found_ok=True)
+    try:
+        result = _call_adapter("GET", _execution_url(umgebung, auftrag_id), not_found_ok=True)
+    except DeliveryError as exc:
+        _reraise_after_http_500(auftrag_url, auftrag_id, exc)
     if result is None:
         return None
 
@@ -100,15 +103,18 @@ def upload(umgebung: str, packages: list[ProjectPackage], auftrag_id: str) -> di
     ]
     auftrag_url = _auftrag_url(umgebung, auftrag_id)
     logger.info("Auftrag %s wird in %s mit %d Paketen angelegt", auftrag_id, umgebung, len(packages))
-    result = _call_adapter("POST", auftrag_url, {"archive": archive_list})
+    try:
+        result = _call_adapter("POST", auftrag_url, {"archive": archive_list})
 
-    # noch erwartete Archive nacheinander als unveränderten Datenstrom übertragen
-    if result["status"] in _UPLOAD_STATUSES:
-        for package in packages:
-            logger.info("Paket %s wird nach %s übertragen", package.archive.name, umgebung)
-            result = _upload_archive(auftrag_url, package.archive)
-            if result["status"] not in _UPLOAD_STATUSES:
-                break
+        # noch erwartete Archive nacheinander als unveränderten Datenstrom übertragen
+        if result["status"] in _UPLOAD_STATUSES:
+            for package in packages:
+                logger.info("Paket %s wird nach %s übertragen", package.archive.name, umgebung)
+                result = _upload_archive(auftrag_url, package.archive)
+                if result["status"] not in _UPLOAD_STATUSES:
+                    break
+    except DeliveryError as exc:
+        _reraise_after_http_500(auftrag_url, auftrag_id, exc)
 
     return _finish_auftrag(umgebung, auftrag_id, result)
 
@@ -133,7 +139,10 @@ def _finish_auftrag(umgebung: str, auftrag_id: str, result: dict[str, object]) -
         if result["status"] in _FINAL_STATUSES:
             break
 
-        result = _call_adapter("GET", execution_url)
+        try:
+            result = _call_adapter("GET", execution_url)
+        except DeliveryError as exc:
+            _reraise_after_http_500(auftrag_url, auftrag_id, exc)
         if result["status"] not in _FINAL_STATUSES:
             time.sleep(_POLL_INTERVAL_SECONDS)
 
@@ -176,10 +185,9 @@ def _call_adapter(
     not_found_ok: bool = False,
 ) -> dict[str, object] | None:
     """Ruft den Adapter mit der Methode und URL auf und gibt die Antwort zurück.
-    
+
     Bei HTTP 404 und `not_found_ok` gibt die Funktion `None` zurück. Andere
-    HTTP-Fehler enden mit `DeliveryError`. Bei HTTP 500 wird außerdem ein DELETE
-    gesendet, damit der Adapter immer hinter sich aufräumt.
+    HTTP-Fehler enden mit `DeliveryError`.
     """
 
     # JSON-Anfragen serialisieren, Archivdaten unverändert durchreichen
@@ -206,14 +214,12 @@ def _call_adapter(
     except (urllib.error.URLError, OSError, HTTPException) as exc:
         raise DeliveryError(Status.ADAPTER_FAILED, f"Adapteraufruf ist fehlgeschlagen: {exc}") from exc
 
-    # HTTP 500 lässt den Auftrag liegen, DELETE gibt dem Adapter den Aufräumgrund
-    if http_status == 500 and method != "DELETE":
+    # Aufrufer erkennen daran HTTP 500 und entfernen den Auftrag
+    if http_status == 500:
         detail = body[:1000].decode(errors="replace")
-        try:
-            _delete_after_http_500(url)
-        except DeliveryError as exc:
-            detail = f"{detail}. Auftrag konnte nicht entfernt werden: {exc.args[0]}"
-        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP 500: {detail}")
+        raise DeliveryError(
+            Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP 500: {detail}", http_status=500,
+        )
 
     if len(body) > _RESPONSE_LIMIT:
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort überschreitet 10 MiB")
@@ -263,20 +269,19 @@ def _call_adapter(
             raise DeliveryError(Status.ADAPTER_FAILED, "Adapter liefert keine gültige Ausführung")
 
 
-def _delete_after_http_500(url: str) -> None:
-    """Entfernt den Auftrag, dessen Aufruf mit HTTP 500 fehlgeschlagen ist."""
+def _reraise_after_http_500(auftrag_url: str, auftrag_id: str, error: DeliveryError) -> NoReturn:
+    """Entfernt den Auftrag nach HTTP 500 und wirft den Fehler weiter."""
 
-    marker = "/sync2/"
-    start = url.find(marker)
-    if start < 0:
-        return
+    if error.http_status != 500:
+        raise error
 
-    order_id = url[start + len(marker):].split("/", 1)[0]
-    if not order_id:
-        return
-
-    logger.info("Auftrag %s soll nach HTTP 500 entfernt werden", urllib.parse.unquote(order_id))
-    _call_adapter("DELETE", f"{url[:start + len(marker)]}{order_id}")
+    logger.info("Auftrag %s soll nach HTTP 500 entfernt werden", auftrag_id)
+    try:
+        _call_adapter("DELETE", auftrag_url)
+    except DeliveryError as exc:
+        detail = f"{error.args[0]}. Auftrag konnte nicht entfernt werden: {exc.args[0]}"
+        raise DeliveryError(Status.ADAPTER_FAILED, detail) from exc
+    raise error
 
 
 def _iter_file(path: Path) -> Iterator[bytes]:

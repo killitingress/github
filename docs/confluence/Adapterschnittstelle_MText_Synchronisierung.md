@@ -8,7 +8,7 @@ HTTP-Client.
 Der neue Ablauf verwendet `/sync2`. Der bestehende Endpunkt `/sync` bleibt
 aus Kompatibilitätsgründen unverändert.
 
-Basis-URL: `http://<Umgebungskennung>.ltoma.intern/vMtextAdapter`
+Basis-URL: `https://<Umgebungskennung>.ltoma.intern/vMtextAdapter`
 
 | Methode | Pfad relativ zur Basis-URL | Zweck |
 |---|---|---|

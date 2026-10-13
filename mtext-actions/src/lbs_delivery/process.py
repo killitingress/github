@@ -62,11 +62,13 @@ def _configure_logging() -> None:
 class DeliveryError(RuntimeError):
     """Enthält Status und Meldung eines erwarteten Fehlers im Workflow."""
 
-    def __init__(self, status: Status, message: str) -> None:
+    def __init__(self, status: Status, message: str, http_status: int | None = None) -> None:
         """Verknüpft die Fehlerursache mit dem Status für den Workflow."""
 
         super().__init__(message)
         self.status = status
+        # gesetzt, wenn der Adapter einen HTTP-Status geliefert hat
+        self.http_status = http_status
 
     def __str__(self) -> str:
         """Stellt Status und Ursache gemeinsam für die Fehlerausgabe bereit."""
