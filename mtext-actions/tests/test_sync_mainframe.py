@@ -366,7 +366,7 @@ class SyncTests(TempDirTestCase):
             ([created, processing, processing, succeeded, {"status": "deleted"}], None,
              ["POST", "PUT", "GET", "GET", "DELETE"]),
             ([created, b""], Status.ADAPTER_FAILED, ["POST", "PUT"]),
-            ([{"execution": {"status": "ready"}}], Status.ADAPTER_FAILED, ["POST"]),
+            ([{"execution": {"status": "unbekannt"}}], Status.ADAPTER_FAILED, ["POST"]),
             ([created, processing, processing | {"status": "unbekannt"}], Status.ADAPTER_FAILED,
              ["POST", "PUT", "GET"]),
             ([created, failed, {"status": "deleted"}], Status.ADAPTER_FAILED, ["POST", "PUT", "DELETE"]),

@@ -1,9 +1,4 @@
-"""Erzeugt und übergibt FULL- und DELTA-Lieferungen an den Mainframe.
-
-Der Paketbau prüft die Git-Quelle und erstellt Archive und JCL. Die Übergabe
-lädt die Archive per FTPS, reicht ihre JCL bei JES ein oder endet im Dry Run
-nach der Dateiprüfung.
-"""
+"""Erzeugt und übergibt FULL- und DELTA-Lieferungen an den Mainframe."""
 
 from __future__ import annotations
 
@@ -27,25 +22,22 @@ from .project_packages import (
 logger = logging.getLogger(__name__)
 
 
-# F- und D-Archive werden als Member in diesem Mainframe-Dataset abgelegt.
+# F- und D-Archive werden als Member in diesem Mainframe-Dataset abgelegt
 _MAINFRAME_DATASET = "IEA.LOMS.TONICZ"
 
-# Die erzeugte JCL wird an dieses JES-Ziel übergeben.
+# Die erzeugte JCL wird an dieses JES-Ziel übergeben
 _MAINFRAME_JES_TARGET = "LIT9028A"
 
-# Alle Mandanten übertragen ihre Archive an diesen zentralen Mainframe-Host.
-_MAINFRAME_FTPS_HOST = "ize9.lbs-it.de"
+# Hostname bzw. IP-Adresse der IZE9
+_MAINFRAME_FTPS_HOST = "172.22.1.1"
 
-# Explizites FTPS verwendet den FTP-Standardport des zentralen Mainframe-Zugangs.
+# Explizites FTPS verwendet den FTP-Standardport
 _MAINFRAME_FTPS_PORT = 21
 
-# Dieser technische Benutzer führt die zentrale FTPS- und JES-Übergabe aus.
-_MAINFRAME_FTPS_USER = "LIT9028"
+# Technischer FTPS-User für GitHub -> IZE9
+_MAINFRAME_FTPS_USER = "LIT9036"
 
-# Dateierweiterung der JCL-Datei zum jeweiligen Archiv-Member im Lieferartefakt.
-_MAINFRAME_JCL_SUFFIX = ".jcl"
-
-# Vorlage für die JCL-Übergabe eines Archiv-Members an JES.
+# Lokation des JCL Templates
 _MAINFRAME_JCL_TEMPLATE = config.ACTION_ROOT / "templates/mainframe-upload.jcl"
 
 # Reguläre Ausdrücke
@@ -55,9 +47,9 @@ _ASSIGNMENT_RE = re.compile(r"[A-Z0-9]{1,12}")
 
 
 def _render_jcl(template: str, ispw: str, level: str, subsystem: str, assignment: str, member: str) -> str:
-    """Prüft die Mainframe-Werte und setzt sie in die JCL-Vorlage ein."""
+    """Rendert die JCL-Vorlage mit den übergebenen Werten."""
 
-    # nur Werte einsetzen, die von Vorlage und Mainframe akzeptiert werden
+    # nur Werte einsetzen, die von Template und Mainframe akzeptiert werden
     for value, pattern in (
         (subsystem, _SUBSYSTEM_RE),
         (assignment, _ASSIGNMENT_RE),
@@ -66,7 +58,7 @@ def _render_jcl(template: str, ispw: str, level: str, subsystem: str, assignment
         if pattern.fullmatch(value) is None:
             raise DeliveryError(Status.VALIDATION_FAILED, "JCL-Werte sind ungültig")
 
-    # geprüfte Werte in die JCL-Vorlage einsetzen
+    # geprüfte Werte in das Template einsetzen
     rendered = (
         template.replace("@@ISPW@@", ispw)
         .replace("@@LEVEL@@", level)
@@ -82,8 +74,7 @@ def _submit_archive(archive_path: Path) -> None:
     """Lädt ein Archiv-Member per FTPS hoch und übergibt die gerenderte JCL an JES."""
 
     member = archive_path.stem
-    jcl_path = archive_path.with_suffix(_MAINFRAME_JCL_SUFFIX)
-    logger.info("Paket %s wird als Mainframe-Member %s übertragen", archive_path.name, member)
+    jcl_path = archive_path.with_suffix(".jcl")
 
     # IZE9 ohne Prüfung des Serverzertifikats über TLS erreichen
     password = os.environ["IZE9_FTPS_PASSWORD_MTEXT"]
@@ -92,6 +83,7 @@ def _submit_archive(archive_path: Path) -> None:
     context.verify_mode = ssl.CERT_NONE
     session = ftplib.FTP_TLS(context=context)
     try:
+        logger.info("Paket '%s' wird als Member '%s' auf '%s' übertragen", archive_path.name, member, _MAINFRAME_FTPS_HOST)
         session.connect(_MAINFRAME_FTPS_HOST, _MAINFRAME_FTPS_PORT, timeout=NETWORK_TIMEOUT)
         session.login(_MAINFRAME_FTPS_USER, password)
         session.prot_p()
@@ -100,19 +92,24 @@ def _submit_archive(archive_path: Path) -> None:
         # Archiv als Member in das Mainframe-Dataset übertragen
         with archive_path.open("rb") as archive:
             session.storbinary(f"STOR '{_MAINFRAME_DATASET}({member})'", archive)
+            logger.debug("Archiv '%s' gespeichert", archive_path.name)
 
         # Sitzung auf JES umstellen und die zum Member gerenderte JCL einreichen
         session.sendcmd("SITE FILETYPE=JES")
-
+        logger.debug("Auf JES umgestellt")
         with jcl_path.open("rb") as jcl:
             session.storlines(f"STOR {_MAINFRAME_JES_TARGET}", jcl)
+            logger.debug("JCL '%s' gespeichert", jcl_path.name)
 
-        # FTPS-Sitzung beenden
+        # FTPS-Sitzung beenden. quit schließt die Sitzung, close nur nach einem Fehler
+        logger.info("FTPS-/JES-Übergabe erfolgreich für '%s' auf '%s'", member, _MAINFRAME_FTPS_HOST)
         session.quit()
-
     except ftplib.all_errors as exc:
         session.close()
-        raise DeliveryError(Status.MAINFRAME_TRANSFER_FAILED, f"FTPS-/JES-Übergabe fehlgeschlagen: {exc}") from exc
+        raise DeliveryError(
+            Status.MAINFRAME_TRANSFER_FAILED,
+            f"FTPS-/JES-Übergabe für {member} fehlgeschlagen: {exc}",
+        ) from exc
 
 
 def _submit_mainframe_files(*, lieferung_directory: Path, dry_run: bool) -> dict[str, object]:
@@ -121,18 +118,18 @@ def _submit_mainframe_files(*, lieferung_directory: Path, dry_run: bool) -> dict
     # vollständige Paare aus Archiv und JCL im Release-Verzeichnis voraussetzen
     archives = sorted(lieferung_directory.glob("*.tgz"))
     if not archives:
-        raise DeliveryError(Status.PACKAGE_FAILED, "Archive fehlen")
+        raise DeliveryError(Status.PACKAGE_FAILED, f"Archive fehlen in {lieferung_directory}")
     for archive in archives:
-        jcl = archive.with_suffix(_MAINFRAME_JCL_SUFFIX)
+        jcl = archive.with_suffix(".jcl")
         if not jcl.is_file():
             raise DeliveryError(Status.PACKAGE_FAILED, f"JCL fehlt: {jcl.name}")
 
     # ein Dry Run endet hier, ohne FTPS- und JES-Übergabe
     if dry_run:
-        logger.info("Dry Run: %d Mainframe-Pakete wurden geprüft und nicht übertragen", len(archives))
+        logger.info("Dry Run: %d Archive wurden geprüft und nicht übertragen", len(archives))
         return {"status": Status.MAINFRAME_SKIPPED}
 
-    # zuerst alle F-Archive übertragen, danach die D-Archive ersetzen
+    # zuerst alle F-Archive übertragen, danach die D-Archive
     for archive in archives:
         if archive.stem.endswith("F"):
             _submit_archive(archive)
@@ -140,17 +137,18 @@ def _submit_mainframe_files(*, lieferung_directory: Path, dry_run: bool) -> dict
         if archive.stem.endswith("D"):
             _submit_archive(archive)
 
+    logger.info("Alle Archive erfolgreich übertragen")
     return {"status": Status.MAINFRAME_SUBMITTED}
 
 
 def _build_mainframe_files(configuration: config.Configuration, *, output_directory: Path, tag: git.LieferTag) -> None:
     """Erzeugt Archive und JCL für den Liefer-Tag."""
 
-    # Paketumfang aus dem vorbereiteten Commit ableiten
+    # Paketumfang aus dem zum Liefertag gehörenden Commit ableiten
     repository_root = config.mandant_source()
     package_scope = delivery_scope(repository_root, tag, git.resolve(repository_root, "HEAD"))
 
-    # Hostprofil und JCL-Vorlage für diese Releaselinie laden
+    # Hostprofil und JCL-Template für diese Releaselinie laden
     host_profile = configuration.hostprofile[configuration.releaselinien[tag.releaselinie]["hostprofil"]]
     try:
         jcl_template = _MAINFRAME_JCL_TEMPLATE.read_text(encoding="ascii")
@@ -159,23 +157,22 @@ def _build_mainframe_files(configuration: config.Configuration, *, output_direct
 
     # Projektarchive erstellen und je Archiv-Member eine JCL-Datei generieren
     for project in configuration.projects:
-        archive = build_project_archive(configuration, repository_root, project, output_directory, package_scope)
+        archive_path = build_project_archive(configuration, repository_root, project, output_directory, package_scope)
 
-        # leeres D-Archiv verhindert, dass der Folgejob ein früheres DELTA einspielt
-        archive_paths = [archive]
+        archive_paths = [archive_path]
         if package_scope.von is None:
+            # leeres D-Archiv verhindert, dass der TL-Folgejob ein veraltetes DELTA einspielt
             delta_archive = project_archive_path(configuration, project, output_directory, "D")
             build_delta_archive(repository_root, project, delta_archive, [])
             archive_paths.append(delta_archive)
 
-        for archive_path in archive_paths:
-            # Archivname und Hostprofil in eine JCL-Datei rendern
+        for archive_path in archive_paths: # für jedes Archiv eine JCL-Datei generieren
             member = archive_path.stem
             rendered = _render_jcl(jcl_template, configuration.ispw, host_profile["stage"], configuration.subsystem, host_profile["assignment"], member)
 
             try:
                 # JCL-Datei für das Archiv-Member erstellen
-                archive_path.with_suffix(_MAINFRAME_JCL_SUFFIX).write_text(rendered, encoding="ascii")
+                archive_path.with_suffix(".jcl").write_text(rendered, encoding="ascii")
             except OSError as exc:
                 raise DeliveryError(Status.PACKAGE_FAILED, f"JCL kann nicht geschrieben werden: {exc}") from exc
 
@@ -190,6 +187,8 @@ def run(subcommand: str, tag: str | None = None) -> dict[str, object]:
         except ValueError as exc:
             raise DeliveryError(Status.VALIDATION_FAILED, str(exc)) from exc
 
+        logger.info("Baue Archive für Mainframe-Lieferung für Liefertag '%s'", tag)
+
         configuration = config.Configuration.load(config.mandant_source(), os.environ["GITHUB_REPOSITORY"])
         _build_mainframe_files(configuration, output_directory=Path(os.environ["RUNNER_TEMP"]) / "dist", tag=tag)
 
@@ -200,6 +199,8 @@ def run(subcommand: str, tag: str | None = None) -> dict[str, object]:
 
     # Mainframe-Schritt übergibt das zuvor heruntergeladene Release-Verzeichnis
     if subcommand == "mainframe":
+        logger.info("Übergabe der vorbereiteten Archive und JCLs an den Host")
+
         return _submit_mainframe_files(
             lieferung_directory=Path(os.environ["RUNNER_TEMP"]) / "release",
             dry_run=os.environ.get("DRY_RUN") == "true",

@@ -1,16 +1,4 @@
-"""Spricht das lokale Git-Repository für Synchronisierung und Lieferung an.
-
-Aus einem Namen wie `HEAD` oder `refs/tags/r261.108` wird die Commit-SHA.
-Bevor ein DELTA entsteht, prüft `require_ancestor`, ob der Vergleichscommit
-ein Vorfahr des aktuellen Commits ist. `changes` liefert Status und Pfade für Paketbau
-und Ressourcenprüfung.
-
-Die Liefer-Tags stecken in derselben Namensfamilie. `r261.100` ist die
-FULL-Basis einer Releaselinie, `r261.108` ein Zwischenrelease. Denselben
-Liefer-Tag liest `LieferTag.from_lieferzweig` aus `main`, `release/261` oder
-`bereitstellung/261.108`. Ein Feature-Branch gehört nicht dazu. Fehlt Git oder
-schlägt ein Befehl fehl, endet der Schritt mit `SOURCE_FAILED`.
-"""
+"""Spricht das lokale Git-Repository für Synchronisierung und Lieferung an."""
 
 from __future__ import annotations
 
@@ -23,30 +11,15 @@ from pathlib import Path
 from .process import DeliveryError, Status
 
 
-# Reguläre Ausdrücke prüfen die von Git und den Workflows gelieferten Namen.
-# Prüft einen Lieferstand aus Hauptrelease als dreistelliger Releaselinie und
-# Zwischenrelease von 100 bis 999. Dieselbe Regel gilt für Tag und Bereitstellungsbranch.
 _LIEFERSTAND_PATTERN = r"(?P<releaselinie>[0-9]{3})\.(?P<zwischenrelease>[1-9][0-9]{2})"
-
-# Prüft einen Liefer-Tag wie `r260.108`. `.100` bezeichnet das Hauptrelease
-# und ist die FULL-Basis für die späteren Zwischenreleases.
 LIEFER_TAG_RE = re.compile("r" + _LIEFERSTAND_PATTERN)
-
-# Prüft den temporären Arbeitsbranch einer Teillieferung und erfasst
-# Releaselinie sowie Zwischenrelease, zum Beispiel `bereitstellung/261.108`.
 BEREITSTELLUNG_BRANCH_RE = re.compile("bereitstellung/" + _LIEFERSTAND_PATTERN)
-
-# Prüft einen Release-Branch und erfasst dessen Releaselinie.
 RELEASE_BRANCH_RE = re.compile(r"release/([0-9]{3})")
 
 
 @dataclass(frozen=True, order=True)
 class LieferTag:
-    """Beschreibt den Lieferstand eines Liefer-Tags."""
-
-    # dreistellige Releaselinie aus dem Liefer-Tag
     releaselinie: str
-    # dreistelliges Zwischenrelease aus dem Liefer-Tag
     zwischenrelease: str
 
     @classmethod
@@ -92,13 +65,9 @@ class LieferTag:
 
     @property
     def ist_hauptrelease(self) -> bool:
-        """Gibt an, ob der Tag die FULL-Basis seiner Releaselinie bezeichnet."""
-
         return self.zwischenrelease == "100"
 
     def __str__(self) -> str:
-        """Gibt den Namen der Git-Referenz zurück."""
-
         return f"r{self.releaselinie}.{self.zwischenrelease}"
 
 

@@ -9,7 +9,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Iterator
-from contextlib import closing
 from http.client import HTTPException
 from pathlib import Path
 from typing import Literal, NoReturn
@@ -170,10 +169,17 @@ def _upload_archive(auftrag_url: str, archive: Path) -> dict[str, object]:
 
     archive_url = f"{auftrag_url}/archive/{urllib.parse.quote(archive.name, safe='')}"
 
-    # Dateigröße ankündigen und Datei während des PUT blockweise lesen
-    headers = {"Content-Type": "application/gzip", "Content-Length": str(archive.stat().st_size)}
-    with closing(_iter_file(archive)) as data:
-        return _call_adapter("PUT", archive_url, data, headers)
+    # Größe ankündigen und den Inhalt blockweise lesen, statt die Datei vollständig zu laden
+    size = archive.stat().st_size
+    headers = {"Content-Type": "application/gzip", "Content-Length": str(size)}
+    block_count = (size + _UPLOAD_BLOCK_SIZE - 1) // _UPLOAD_BLOCK_SIZE
+    logger.debug(
+        "Archiv %s (%d Bytes) wird in %d Blöcken zu je %d Bytes übertragen",
+        archive.name, size, block_count, _UPLOAD_BLOCK_SIZE,
+    )
+    with archive.open("rb") as stream:
+        blocks = iter(lambda: stream.read(_UPLOAD_BLOCK_SIZE), b"")
+        return _call_adapter("PUT", archive_url, blocks, headers)
 
 
 def _call_adapter(
@@ -188,6 +194,7 @@ def _call_adapter(
 
     Bei HTTP 404 und `not_found_ok` gibt die Funktion `None` zurück. Andere
     HTTP-Fehler enden mit `DeliveryError`.
+    TODO: ggf. fachliche Überfrachtung des 404 entfernen
     """
 
     # JSON-Anfragen serialisieren, Archivdaten unverändert durchreichen
@@ -198,75 +205,66 @@ def _call_adapter(
         request_headers["Content-Type"] = "application/json"
 
     request = urllib.request.Request(url, method=method, data=data, headers=request_headers)
-    logger.debug("%s %s", method, url)
+    logger.debug("Rufe Adapter-Endpunkt '%s' mit Methode '%s' auf", url, method)
 
-    # Erfolgs- und Fehlerantworten über denselben begrenzten Lesepfad übernehmen
+    # 4xx/5xx wirft urlopen als HTTPError, Status und Body der Adapterantwort stecken darin
+    # 500 räumt den Auftrag ab, 404 ist beim initialen GET erlaubt
     try:
         try:
             response = urllib.request.urlopen(request, timeout=NETWORK_TIMEOUT)
-        except urllib.error.HTTPError as exc:
+        except urllib.error.HTTPError as exc: # 404 oder 500
             response = exc
 
         with response:
-            http_status = response.code if isinstance(response, urllib.error.HTTPError) else response.status
+            http_status = response.status
             body = response.read(_RESPONSE_LIMIT + 1)
-            logger.debug("HTTP %s auf %s %s: %s", http_status, method, url, body[:300].decode(errors="replace"))
+            logger.debug("Adapter-Antwort: HTTP %s auf %s %s: %s", http_status, method, url, body[:300].decode(errors="replace"))
     except (urllib.error.URLError, OSError, HTTPException) as exc:
         raise DeliveryError(Status.ADAPTER_FAILED, f"Adapteraufruf ist fehlgeschlagen: {exc}") from exc
 
-    # Aufrufer erkennen daran HTTP 500 und entfernen den Auftrag
+    # bei HTTP 500 raise, damit der Aufrufer den Auftrag per DELETE entfernen kann
     if http_status == 500:
         detail = body[:1000].decode(errors="replace")
-        raise DeliveryError(
-            Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP 500: {detail}", http_status=500,
-        )
+        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP 500: {detail}", http_status=500)
 
     if len(body) > _RESPONSE_LIMIT:
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort überschreitet 10 MiB")
 
+    # bei HTTP 404 ist der Auftrag noch nicht angelegt, der Aufrufer kann ihn neu anlegen
     if not_found_ok and http_status == 404:
         return None
 
-    expected_status = 201 if method == "POST" else 200
-    if http_status != expected_status:
+    # bei HTTP 201 oder 200 ist der Auftrag angelegt oder die Ausführung gestartet
+    if http_status not in (200, 201):
         detail = body[:1000].decode(errors="replace")
-        raise DeliveryError(
-            Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {http_status}: {detail}",
-        )
+        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet mit HTTP {http_status}: {detail}")
 
-    # erfolgreichen Body als JSON-Objekt übernehmen
+    # Body von relevanten Antworten als JSON-Objekt übernehmen
     try:
         document = json.loads(body)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortet nicht mit gültigem JSON: {exc}") from exc
+        raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortete mit ungültigem JSON: {exc.args[0]}") from exc
 
     if not isinstance(document, dict):
         raise DeliveryError(Status.ADAPTER_FAILED, "Adapterantwort ist ungültig")
 
-    # Löschbestätigung getrennt vom Ergebnis der Ausführung prüfen
+    # Prüfung ob der Auftrag ggf. gelöscht wurde
     if method == "DELETE":
         match document.get("status"):
             case "deleted":
                 return document
-            case _:
-                raise DeliveryError(Status.ADAPTER_FAILED, "Adapter bestätigt das Löschen des Auftrags nicht")
+            case status:
+                raise DeliveryError(Status.ADAPTER_FAILED, f"Adapter antwortete auf DELETE nicht mit 'deleted' sondern mit '{status}'")
 
-    # POST liefert den Auftrag, weitere Aufrufe direkt dessen Ausführung
-    if method == "POST":
-        document = document.get("execution")
-        if not isinstance(document, dict):
-            raise DeliveryError(Status.ADAPTER_FAILED, "Adapter liefert keine gültige Ausführung")
+    # POST kapselt die Ausführung im Auftrag, GET und PUT liefern sie direkt
+    execution = document.get("execution") if method == "POST" else document
+    if not isinstance(execution, dict) or execution.get("status") not in ("failed", "succeeded", "ready", "uploading", "processing"):
+        raise DeliveryError(
+            Status.ADAPTER_FAILED,
+            f"Adapter liefert keine gültige Execution: {json.dumps(execution)[:300]}",
+        )
 
-    # zulässige Kombinationen der festen Ausführungsfelder übernehmen
-    match document:
-        case {"status": "failed", "message": str(message), "result": None} if message:
-            return document
-        case {"status": "succeeded", "message": None, "result": str() | None}:
-            return document
-        case {"status": "ready" | "uploading" | "processing", "message": None, "result": None}:
-            return document
-        case _:
-            raise DeliveryError(Status.ADAPTER_FAILED, "Adapter liefert keine gültige Ausführung")
+    return execution
 
 
 def _reraise_after_http_500(auftrag_url: str, auftrag_id: str, error: DeliveryError) -> NoReturn:
@@ -275,18 +273,10 @@ def _reraise_after_http_500(auftrag_url: str, auftrag_id: str, error: DeliveryEr
     if error.http_status != 500:
         raise error
 
-    logger.info("Auftrag %s soll nach HTTP 500 entfernt werden", auftrag_id)
+    logger.info("Der Adapter hat HTTP 500 zurückgegeben, wir sollen die Löschung des Auftrags veranlassen...")
     try:
         _call_adapter("DELETE", auftrag_url)
     except DeliveryError as exc:
-        detail = f"{error.args[0]}. Auftrag konnte nicht entfernt werden: {exc.args[0]}"
+        detail = f"{error.args[0]}. Der Auftrag konnte nicht entfernt werden: {exc.args[0]}"
         raise DeliveryError(Status.ADAPTER_FAILED, detail) from exc
     raise error
-
-
-def _iter_file(path: Path) -> Iterator[bytes]:
-    """Liefert eine Archivdatei blockweise, statt sie vollständig zu laden."""
-
-    with path.open("rb") as stream:
-        while block := stream.read(_UPLOAD_BLOCK_SIZE):
-            yield block

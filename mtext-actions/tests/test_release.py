@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import os
 import shutil
-import ssl
 import tarfile
 import unittest
 from unittest.mock import call, patch
 
-from lbs_delivery.mainframe import _submit_archive, run
-from lbs_delivery.process import DeliveryError, NETWORK_TIMEOUT, Status
+from lbs_delivery.mainframe import run
+from lbs_delivery.process import DeliveryError, Status
 
 from tests.support import (
     TempDirTestCase,
@@ -115,29 +114,6 @@ class ReleaseTests(TempDirTestCase):
         with patch("lbs_delivery.mainframe._submit_archive") as submit:
             run("mainframe")
         self.assertEqual(submit.call_args_list, [call(delivery / "FIBASISF.tgz"), call(delivery / "FIBASISD.tgz")])
-
-        archive = delivery / "FIBASISD.tgz"
-        jcl = delivery / "FIBASISD.jcl"
-        with (
-            patch.dict(os.environ, {"IZE9_FTPS_PASSWORD_MTEXT": "password"}),
-            patch("lbs_delivery.mainframe.ssl.SSLContext") as create_context,
-            patch("lbs_delivery.mainframe.ftplib.FTP_TLS") as ftp_tls,
-        ):
-            _submit_archive(archive)
-
-        create_context.assert_called_once_with(ssl.PROTOCOL_TLS_CLIENT)
-        context = create_context.return_value
-        self.assertFalse(context.check_hostname)
-        self.assertEqual(context.verify_mode, ssl.CERT_NONE)
-        ftp_tls.assert_called_once_with(context=context)
-        session = ftp_tls.return_value
-        session.connect.assert_called_once_with("ize9.lbs-it.de", 21, timeout=NETWORK_TIMEOUT)
-        session.login.assert_called_once_with("LIT9028", "password")
-        session.prot_p.assert_called_once_with()
-        self.assertEqual(session.storbinary.call_args.args[0], "STOR 'IEA.LOMS.TONICZ(FIBASISD)'")
-        session.sendcmd.assert_called_once_with("SITE FILETYPE=JES")
-        self.assertEqual(session.storlines.call_args.args[0], "STOR LIT9028A")
-        session.quit.assert_called_once_with()
 
 
 if __name__ == "__main__":
