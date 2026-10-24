@@ -263,7 +263,7 @@ class LieferungTests(TempDirTestCase):
                     self.assertEqual(raised.exception.status, Status.SOURCE_FAILED)
 
     def test_resolve_repetition(self) -> None:
-        """Ermittelt Wiederholungen und lehnt ungültige Aufrufe ab."""
+        """Ermittelt Wiederholungen, setzt abgebrochene Starts fort und lehnt ungültige Aufrufe ab."""
 
         env = {
             "GITHUB_REPOSITORY": "FI/mandant",
@@ -288,7 +288,7 @@ class LieferungTests(TempDirTestCase):
         self.assertEqual(repeated["status"], Status.LIEFERSTAND_ERMITTELT)
         self.assertEqual(
             repeated["outputs"],
-            {"wiederholung": "true", "source_sha": self.source_sha, "liefer_tag": "r261.108"},
+            {"liefer_tag_vorhanden": "true", "source_sha": self.source_sha, "liefer_tag": "r261.108"},
         )
 
         with self.assertRaises(DeliveryError) as raised:
@@ -324,6 +324,51 @@ class LieferungTests(TempDirTestCase):
             with self.assertRaises(DeliveryError) as raised:
                 run("resolve", issue=42)
             self.assertEqual(raised.exception.status, Status.FREIGABE_FAILED)
+
+            issue_mock.return_value = ("closed", {"lieferung:abgeschlossen"}, "Lieferung r261.108", "")
+            tag_record.return_value = None
+            with self.assertRaises(DeliveryError) as raised:
+                run("resolve", issue=42)
+            self.assertEqual(raised.exception.status, Status.FREIGABE_FAILED)
+
+        # abgebrochener Lauf: gestartet, aber noch kein annotierter Tag — Commit aus der Vorbereitungsreferenz
+        with patch.dict(os.environ, env), patch(
+            "lbs_delivery.lieferung.github.repository_role", return_value="maintain",
+        ), patch(
+            "lbs_delivery.lieferung.github.issue",
+            return_value=("open", {"lieferung:gestartet"}, "Lieferung r261.108", ""),
+        ), patch(
+            "lbs_delivery.lieferung.github.tag_record", return_value=None,
+        ), patch(
+            "lbs_delivery.lieferung.github.reference_commit", return_value=self.source_sha,
+        ) as prepared, patch(
+            "lbs_delivery.lieferung.github.replace_issue_label",
+        ) as mark_started, patch(
+            "lbs_delivery.lieferung.github.comment_issue",
+        ) as comment:
+            continued = run("resolve", issue=42)
+        self.assertEqual(continued["status"], Status.LIEFERSTAND_ERMITTELT)
+        self.assertEqual(
+            continued["outputs"],
+            {"liefer_tag_vorhanden": "false", "source_sha": self.source_sha, "liefer_tag": "r261.108"},
+        )
+        prepared.assert_called_once_with("refs/mtext/lieferungen/r261.108")
+        mark_started.assert_not_called()
+        comment.assert_not_called()
+
+        with patch.dict(os.environ, env), patch(
+            "lbs_delivery.lieferung.github.repository_role", return_value="maintain",
+        ), patch(
+            "lbs_delivery.lieferung.github.issue",
+            return_value=("open", {"lieferung:gestartet"}, "Lieferung r261.108", ""),
+        ), patch(
+            "lbs_delivery.lieferung.github.tag_record", return_value=None,
+        ), patch(
+            "lbs_delivery.lieferung.github.reference_commit", return_value=None,
+        ):
+            with self.assertRaises(DeliveryError) as raised:
+                run("resolve", issue=42)
+        self.assertEqual(raised.exception.status, Status.FREIGABE_FAILED)
 
     def test_missing_delivery_reference_does_not_start_delivery(self) -> None:
         """Ein Issue ohne vorbereiteten Git-Verweis startet keine Lieferung."""

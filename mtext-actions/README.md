@@ -100,7 +100,9 @@ aufgenommenen oder gelöschten Elements.
 
 Die Lieferung liest den Liefer-Tag aus dem Titel des Freigabe-Issues und den
 vorbereiteten Commit aus
-`refs/mtext/lieferungen/<Liefer-Tag>`. Solange für diesen Tag ein Issue mit
+`refs/mtext/lieferungen/<Liefer-Tag>`. Ein erneuter Lauf mit dem Label
+`lieferung:gestartet` verwendet diese Referenz, bis der annotierte Liefer-Tag
+existiert. Danach bestimmt der Tag den Commit. Solange für diesen Tag ein Issue mit
 `lieferung:vorbereitet` oder `lieferung:gestartet` offen ist, bricht eine neue
 Vorbereitung mit einem Link auf das Issue ab. Nach dem bewussten Schließen darf
 eine neue Vorbereitung die Referenz ersetzen. Nach dem Erstellen des

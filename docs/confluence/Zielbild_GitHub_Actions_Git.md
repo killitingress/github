@@ -444,8 +444,11 @@ Ressourcenstand, der Titel den vorgesehenen Liefer-Tag.
 Mit der ersten Freigabe wechselt das Status-Label von `lieferung:vorbereitet`
 zu `lieferung:gestartet`. Anschließend baut der Shared Workflow aus
 `mtext_actions` die Archive und JCL-Dateien, übergibt sie an den Mainframe und
-erzeugt den annotierten Liefer-Tag mit Verweis auf das Freigabe-Issue. Zur
-Kontrolle stehen die Lieferdateien 30 Tage im Laufartefakt `release` bereit.
+erzeugt den annotierten Liefer-Tag mit Verweis auf das Freigabe-Issue. Schlägt
+ein Lauf fehl, bevor dieser Tag existiert, bleibt `lieferung:gestartet` gesetzt
+und die technische Referenz erhalten. Ein erneuter Lauf liest den Commit daraus
+und erzeugt den Tag erst im Abschluss. Zur Kontrolle stehen die Lieferdateien
+30 Tage im Laufartefakt `release` bereit.
 Der Liefer-Tag ersetzt die technische Vorbereitungsreferenz, die danach
 entfernt wird. Ein Fehler bei dieser Bereinigung erzeugt eine Warnung und
 ändert den bereits erstellten Liefer-Tag nicht.

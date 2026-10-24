@@ -1,8 +1,9 @@
 name: Lieferung ausführen
 
 # Eine vorbereitete Lieferung beginnt mit `/freigabe` im Freigabe-Issue.
-# `/wiederholung` führt eine bereits getaggte Lieferung aus demselben Issue
-# erneut aus. Der Tag wird aus dem Issue gelesen und mit seiner Annotation geprüft.
+# `/wiederholung` startet denselben Issue-Lauf erneut. Fehlt der Liefer-Tag noch,
+# gilt weiter die technische Vorbereitungsreferenz. Ist er vorhanden, prüft der
+# Lauf seine Annotation und lässt den Tag unverändert.
 # Für eine Korrektur ist der Liefer-Tag zu löschen, der Bereitstellungs-Branch zu
 # korrigieren und dann eine erneute Vorbereitung durchzuführen.
 'on':

@@ -53,7 +53,13 @@ def liefer_tag_for_branch(configuration: config.Configuration, branch: str) -> g
 
 
 def _resolve_lieferung(issue: int) -> dict[str, object]:
-    """Bestätigt eine Freigabe aus dem Issue oder ermittelt den Wiederholungstag."""
+    """Bestätigt eine Freigabe oder liest den Commit für einen weiteren Lauf.
+
+    Eine neue Freigabe übernimmt den vorbereiteten Commit und setzt
+    `lieferung:gestartet`. Bleibt der Liefer-Tag nach einem Abbruch aus, gilt
+    derselbe Commit bei einem erneuten Lauf weiter. Ein vorhandener annotierter
+    Tag kennzeichnet die Wiederholung und bleibt unverändert.
+    """
 
     # jede neue Lieferung und Wiederholung erfordert Maintain oder Admin
     role = github.repository_role(os.environ["GITHUB_ACTOR"])
@@ -78,7 +84,8 @@ def _resolve_lieferung(issue: int) -> dict[str, object]:
     except ValueError as exc:
         raise DeliveryError(Status.FREIGABE_FAILED, "Freigabe-Issue enthält keinen gültigen Liefer-Tag") from exc
 
-    # neue Freigabe übernimmt den vorbereiteten Commit aus Git
+    # Lieferstand lesen und merken, ob der Abschluss noch einen Liefer-Tag erzeugen muss
+    liefer_tag_vorhanden = "false"
     if is_new:
         source_sha = github.reference_commit(_lieferung_reference(tag))
         if source_sha is None:
@@ -88,17 +95,24 @@ def _resolve_lieferung(issue: int) -> dict[str, object]:
         github.replace_issue_label(issue, _LABEL_VORBEREITET, _LABEL_GESTARTET, _LIEFERUNG_LABELS[_LABEL_GESTARTET])
         github.comment_issue(issue, f"Lieferung `{tag}` wurde gestartet: [Actions-Lauf]({_actions_run_url()})")
     else:
-        # Wiederholung erhält den Commit aus dem annotierten Tag dieses Issues
         recorded = github.tag_record(str(tag))
-        if recorded is None or recorded[1] != issue:
+        if recorded is not None:
+            if recorded[1] != issue:
+                raise DeliveryError(Status.FREIGABE_FAILED, "Liefer-Tag fehlt oder gehört nicht zu diesem Freigabe-Issue")
+            source_sha, _ = recorded
+            liefer_tag_vorhanden = "true"
+        elif _LABEL_GESTARTET in labels:
+            source_sha = github.reference_commit(_lieferung_reference(tag))
+            if source_sha is None:
+                raise DeliveryError(Status.FREIGABE_FAILED, "Vorbereiteter Lieferstand fehlt")
+        else:
             raise DeliveryError(Status.FREIGABE_FAILED, "Liefer-Tag fehlt oder gehört nicht zu diesem Freigabe-Issue")
-        source_sha, _ = recorded
 
     return {
         "status": Status.LIEFERSTAND_ERMITTELT,
         "summary": _issue_link(issue),
         "outputs": {
-            "wiederholung": "false" if is_new else "true",
+            "liefer_tag_vorhanden": liefer_tag_vorhanden,
             "source_sha": source_sha,
             "liefer_tag": str(tag),
         },

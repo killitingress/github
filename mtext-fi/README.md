@@ -109,11 +109,13 @@ diesen `.100`-Tag. `main` und `release/nnn` ergeben `rnnn.100`. Ein Branch
 Das Freigabe-Issue erhält nach erfolgreicher Lieferung Links zum Lauf und zum
 Liefer-Tag sowie eine Tabelle der übertragenen Archivdateien mit
 SHA-256-Prüfsummen. Danach wird es geschlossen. Der annotierte Liefer-Tag
-enthält die Nummer des Freigabe-Issues. Für einen Wiederanlauf im zugehörigen
-Issue `/wiederholung` kommentieren. Eine neue Vorbereitung ist nicht
-erforderlich. Die kommentierende Person benötigt `maintain` oder `admin`.
-Vor dem Paketbau wird der Tag aus dem Issue-Titel gelesen und geprüft, ob
-seine Annotation auf dieses Issue verweist. Das Issue erhält danach einen weiteren
+enthält die Nummer des Freigabe-Issues. Für einen erneuten Lauf im zugehörigen
+Issue `/wiederholung` kommentieren oder den fehlgeschlagenen Actions-Lauf erneut
+starten. Eine neue Vorbereitung ist nicht erforderlich. Die auslösende Person
+benötigt `maintain` oder `admin`. Solange der Liefer-Tag noch fehlt, übernimmt
+der Lauf den Commit aus der technischen Referenz und erzeugt den Tag beim
+Abschluss. Ist der Tag vorhanden, wird seine Annotation auf dieses Issue geprüft
+und der Tag bleibt unverändert. Das Issue erhält danach einen weiteren
 Abschlusskommentar.
 
 Bis zum Tagging hält

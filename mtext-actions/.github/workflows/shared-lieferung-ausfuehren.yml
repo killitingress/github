@@ -25,14 +25,16 @@ jobs:
     timeout-minutes: 10
     outputs:
       source_sha: ${{ steps.resolve.outputs.source_sha }}
-      wiederholung: ${{ steps.resolve.outputs.wiederholung }}
+      # true, wenn ein annotierter Liefer-Tag zum Issue existiert und der Abschluss keinen neuen Tag erzeugt
+      liefer_tag_vorhanden: ${{ steps.resolve.outputs.liefer_tag_vorhanden }}
       liefer_tag: ${{ steps.resolve.outputs.liefer_tag }}
     steps:
       - name: mtext_actions laden
         id: automation
         uses: FinanzInformatik/fi_lbs_entw_oms_mtext_actions@main
 
-      # Prüft Rolle und Issue und bestätigt eine neue Freigabe direkt.
+      # Prüft Rolle und Issue. Eine neue Freigabe wird bestätigt. Ein bereits
+      # gestarteter Lauf ohne Liefer-Tag bleibt am vorbereiteten Commit.
       - name: Freigabe und Lieferstand prüfen
         id: resolve
         env:
@@ -142,7 +144,7 @@ jobs:
 
       # Der Tag zeigt auf die verarbeitete SHA
       - name: Liefer-Tag erstellen
-        if: needs.check.outputs.wiederholung != 'true'
+        if: needs.check.outputs.liefer_tag_vorhanden != 'true'
         env:
           ACTION_PATH: ${{ steps.automation.outputs.action_path }}
           GITHUB_TOKEN: ${{ github.token }}
